@@ -40,6 +40,7 @@ async function api(path, method = 'GET', payload) {
   return data;
 }
 async function syncInit() {
+  if (isOfflineAndroid()) return; // The packaged Android edition has no server.
   try { const result = await api('api/session'); syncUser = result.user; syncUser.aiAvailable = result.aiAvailable; await refreshCloud(); syncPushConfig = await api('api/push/config');
     if (syncMeta && syncMeta.enabled && syncMeta.userId === syncUser.id && !syncMeta.dirty && !syncMeta.conflict && syncRemote.snapshot && syncRemote.revision === syncMeta.revision) await saveSyncBase(syncRemote.snapshot,syncUser.id,syncRemote.revision);
     scheduleSync(); }

@@ -1,0 +1,43 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.hsc2027.study'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'com.hsc2027.study'
+        minSdk 23
+        targetSdk 34
+        versionCode 1
+        versionName '1.0.0'
+    }
+    sourceSets.main.assets.srcDir(layout.buildDirectory.dir('generated/webAssets'))
+
+    // Optional private, stable key: never store a keystore or password in Git.
+    if (System.getenv('HSC_KEYSTORE_PATH')) {
+        signingConfigs {
+            personal {
+                storeFile file(System.getenv('HSC_KEYSTORE_PATH'))
+                storePassword System.getenv('HSC_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('HSC_KEY_ALIAS')
+                keyPassword System.getenv('HSC_KEY_PASSWORD')
+            }
+        }
+        buildTypes.release.signingConfig signingConfigs.personal
+    }
+}
+
+dependencies {
+    implementation 'androidx.webkit:webkit:1.12.1'
+}
+
+// The APK includes only the local app shell, not the backend or repository data.
+tasks.register('copyWebAssets', Sync) {
+    from("${rootDir}/..") {
+        include 'index.html', 'manifest.webmanifest', 'sw.js', 'css/**', 'js/**', 'icons/**'
+    }
+    into(layout.buildDirectory.dir('generated/webAssets'))
+}
+tasks.named('preBuild').configure { dependsOn 'copyWebAssets' }

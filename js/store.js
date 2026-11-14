@@ -363,13 +363,30 @@ function exportCSV(kind) {
   }
   return '';
 }
-function download(filename, content, mime) {
-  const blob = new Blob([content], { type: mime || 'text/plain;charset=utf-8' });
+function downloadBlob(filename, blob) {
+  if (isOfflineAndroid()) {
+    // Android WebView cannot reliably download blob: URLs. The native bridge opens
+    // the system document picker; cancellation or failure never changes app data.
+    const reader = new FileReader();
+    reader.onerror = () => alert('Could not prepare export. Your data is unchanged.');
+    reader.onload = () => {
+      try {
+        const data = String(reader.result || '');
+        if (!data.includes(';base64,')) throw new Error('Invalid export');
+        HSCAndroid.saveFile(filename, blob.type, data.slice(data.indexOf(',') + 1));
+      } catch { alert('Could not prepare export. Your data is unchanged.'); }
+    };
+    reader.readAsDataURL(blob);
+    return;
+  }
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+function download(filename, content, mime) {
+  downloadBlob(filename, new Blob([content], { type: mime || 'text/plain;charset=utf-8' }));
 }
 
 /* ---------- Demo data (opt-in, clearly labelled, resettable) ---------- */

@@ -151,6 +151,9 @@ function applyTheme() {
 function updateOnlineStatus() {
   const el = document.getElementById('online-status');
   if (!el) return;
+  if (isOfflineAndroid()) {
+    el.textContent = '● Local-only app'; el.classList.add('offline'); return;
+  }
   const online = navigator.onLine;
   el.textContent = online ? '● Online' : '● Offline — data is saved on this device';
   el.classList.toggle('offline', !online);
@@ -224,6 +227,15 @@ function updateLearningRecord(key, id, patch) {
   if (!item) return false;
   return replaceLearningCollection(key, st[key].map(x => x.id === id ? {...x, ...patch(item)} : x));
 }
+
+/* Open external links in the device browser, never inside the privileged app WebView. */
+document.addEventListener('click', (e) => {
+  if (!isOfflineAndroid()) return;
+  const link = e.target.closest('a[href]');
+  if (!link) return;
+  const url = sanitizeUrl(link.href);
+  if (url) { e.preventDefault(); HSCAndroid.openExternal(url); }
+}, true);
 
 /* ---------- Global click delegation ---------- */
 document.addEventListener('click', (e) => {
@@ -878,6 +890,7 @@ document.getElementById('more-btn').addEventListener('click', () => {
        ['weaknesses', '⚠ Weaknesses'], ['review', '✅ Weekly review'], ['journal', '📓 Journal'],
        ['calendar', '📅 Calendar'], ['search', '🔍 Search'], ['sync', '☁ Account & sync'], ['ai', '🤖 AI assistant'],
        ['backup', '💾 Backup & restore'], ['settings', '⚙ Settings']]
+      .filter(([r]) => !isOfflineAndroid() || !['sync','ai'].includes(r))
       .map(([r, l]) => `<button class="menu-item" data-nav="${r}"><span data-i18n="menu-${r}">${l}</span></button>`).join('')}
   </div>`, () => true);
 });
@@ -908,7 +921,7 @@ syncInit();
 setInterval(() => { updateExamTimerDisplay(); checkQuizExpiry(); checkWrittenExpiry(); }, 1000);
 
 // Register service worker for offline PWA support
-if ('serviceWorker' in navigator) {
+if (!isOfflineAndroid() && 'serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline still works via cache if previously registered */ });
   });

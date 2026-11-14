@@ -223,7 +223,7 @@ function renderSettings() {
 
     <section class="card">
       <h2 data-i18n="notifications">Notifications</h2>
-      <p class="muted small">In-app reminders appear while the app is open. Browser permission is used for timer phase alerts while open. Optional background push needs a configured, running server and a device subscription under Account &amp; sync; it uses the latest synced preferences.</p>
+      <p class="muted small">${isOfflineAndroid() ? 'Reminders appear only while the app is open. This offline edition does not provide background notifications.' : 'In-app reminders appear while the app is open. Browser permission is used for timer phase alerts while open. Optional background push needs a configured, running server and a device subscription under Account &amp; sync; it uses the latest synced preferences.'}</p>
       <form id="notif-form" class="form">
         <label class="check"><input type="checkbox" name="enabled" ${n.enabled ? 'checked' : ''}> Enable reminders</label>
         <label class="check"><input type="checkbox" name="sessionReminder" ${n.sessionReminder ? 'checked' : ''}> Study session reminder</label>
@@ -235,7 +235,7 @@ function renderSettings() {
         <label class="field"><span data-i18n="extra95">Daily reminder time (Bangladesh time)</span><input name="reminderTime" type="time" value="${esc(n.reminderTime || '20:00')}"></label>
         <div class="row gap wrap">
           <button class="btn primary" type="submit" data-i18n="extra96">Save preferences</button>
-          <button class="btn" type="button" id="enable-browser-notif" data-i18n="extra97">Enable browser notifications</button>
+          ${isOfflineAndroid() ? '' : '<button class="btn" type="button" id="enable-browser-notif" data-i18n="extra97">Enable browser notifications</button>'}
         </div>
         <p class="muted small" id="notif-status"></p>
       </form>

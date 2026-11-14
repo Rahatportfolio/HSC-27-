@@ -109,11 +109,7 @@ function downloadNotePdf(id) {
     const bytes = atob(file.base64);
     if (!bytes.startsWith('%PDF-') || bytes.length > PDF_MAX_BYTES) throw new Error();
     const blob = new Blob([Uint8Array.from(bytes, (ch) => ch.charCodeAt(0))], { type: 'application/pdf' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url;
-    a.download = (sanitizeText(file.name, 180) || 'document.pdf').replace(/[\\/]/g, '_');
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 60000);
+    downloadBlob((sanitizeText(file.name, 180) || 'document.pdf').replace(/[\\/]/g, '_'), blob);
   } catch (error) { toast('This saved PDF could not be opened.'); }
 }
 

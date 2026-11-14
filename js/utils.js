@@ -5,6 +5,8 @@
 'use strict';
 
 const TZ = 'Asia/Dhaka';
+// The Android package supplies this bridge only to its bundled local app.
+function isOfflineAndroid() { return typeof HSCAndroid !== 'undefined' && typeof HSCAndroid.saveFile === 'function'; }
 
 /* ---------- HTML escaping (XSS protection for all user content) ---------- */
 function esc(value) {

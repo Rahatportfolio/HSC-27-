@@ -2,6 +2,16 @@
 
 A local-first, mobile-oriented study tracker for a Bangladesh HSC Science student. The app starts with 13 subject names, a 480-minute daily target and **no official chapters**. Enter chapters yourself or import a trusted CSV/JSON syllabus. Priorities are personal judgments, not official statistics. Demonstration data is opt-in and labelled. Chapter CSV/JSON import matches existing subject names, skips invalid, ambiguous or duplicate rows, and accepts at most 5,000 rows and 2,097,152 characters per file. Chapter deletion warns which linked records will be deleted; export a backup first. See [AUDIT.md](AUDIT.md) for scope, limitations and test evidence. A GPA 5.00/Golden A+ is a goal, not a prediction or guarantee.
 
+## Offline Android APK with GitHub Actions (no server or deployment)
+
+The repository includes an Android WebView wrapper that packages the local app assets inside the APK. In GitHub, open **Actions → Build offline Android APK → Run workflow**, select your branch, wait for success, and download the APK artifact from that run. Extract the ZIP and install the APK on your Android phone; Android may ask you to allow installs from the source you used. No server is needed, including on first launch. The project uses Android 6.0+ and an up-to-date Android System WebView. The local-only APK hides account sync/AI and does not supply background push or timer alerts; links open in an external browser and require internet. Web app and APK have separate local storage. Use JSON backup/restore to move data between them.
+
+**Important: back up before updating or uninstalling.** Without signing configuration, each Actions run produces a **debug APK with a temporary signing key**. Android may reject a later APK as an update; uninstalling removes the app's data. Back up first and verify your exported backup before reinstalling. Debug builds are for personal testing, not secure distribution.
+
+For updatable personal builds, create and safely back up your own Android signing keystore and passwords; never commit them or share them in chat. In GitHub repository Settings → Secrets and variables → Actions, add all four repository secrets: `ANDROID_KEYSTORE_BASE64` (base64-encoded keystore bytes), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`, and `ANDROID_KEY_PASSWORD`. The action then builds a signed release APK. All future updates must use **the same package ID and key**, and losing the key prevents updates. Changing from a debug APK to a release APK also requires uninstall/reinstall and restoring a backup. Do not expose signing secrets to untrusted branches/actions. The artifact expires after 14 days; download and preserve it yourself.
+
+The Android app stores data on the device, and uninstalling/clearing app data erases it. Backup files are unencrypted; use More → Backup & restore to export them somewhere safe outside the app, and retain original PDFs. The system file picker is used for imports/exports. Actual Android installation, picker behavior, update and low-end performance must still be verified on a real device; a successful CI build alone does not establish these.
+
 ## Start locally
 
 For local-only use, serve the files over HTTP (opening `index.html` directly does not provide PWA features):
@@ -56,7 +66,7 @@ Progress compares the latest two valid results only for the same exam and markin
 
 ## Android and testing
 
-Deploy to an HTTPS host, open the stable URL in Android Chrome and choose Install app/Add to Home screen. Static hosting supports only local features; use the optional backend for its API features. No public deployment URL, actual Android installation, lock-screen behavior or real offline/browser push delivery has been verified.
+For a server-free APK, use the GitHub Actions instructions above. Alternatively, deploy the web app to an HTTPS host, open it in Android Chrome and choose Install app/Add to Home screen. Static hosting supports only local features; use the optional backend for its API features. No public deployment URL, actual Android installation, lock-screen behavior or real offline/browser push delivery has been verified.
 
 ```sh
 npm ci
