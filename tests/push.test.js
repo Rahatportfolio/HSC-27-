@@ -6,9 +6,10 @@ const fields=['subjects','chapters','tasks','sessions','revisions','practice','e
  const fake={setVapidDetails(subject,pub,priv){assert.equal(pub,'public');assert.equal(priv,'private');},async sendNotification(subscription,body){sent.push({subscription,body:JSON.parse(body)});}};
  const server=await createServer({dataDir:dir,allowRegistration:true,pushConfig:{subject:'mailto:admin@example.org',publicKey:'public',privateKey:'private'},pushService:fake,schedule:false});
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
- async function req(url,method='GET',data,cookie){const headers={};if(method!=='GET')headers.Origin=base;if(data!==undefined)headers['Content-Type']='application/json';if(cookie)headers.Cookie=cookie;const r=await fetch(base+url,{method,headers,body:data===undefined?undefined:JSON.stringify(data)});return {status:r.status,json:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
+ const ids = new Map();
+ async function req(url,method='GET',data,cookie){const headers={};if(method!=='GET')headers.Origin=base;if(data!==undefined)headers['Content-Type']='application/json';if(cookie){headers.Cookie=cookie;if(ids.has(cookie))headers['X-HSC-User']=ids.get(cookie);}const r=await fetch(base+url,{method,headers,body:data===undefined?undefined:JSON.stringify(data)});return {status:r.status,json:await r.json(),cookie:r.headers.get('set-cookie')?.split(';')[0]};}
  try{
-  const a=await req('/api/register','POST',{username:'alice',password:'long password 123'});const cookie=a.cookie;assert.equal(a.status,201);
+  const a=await req('/api/register','POST',{username:'alice',password:'long password 123'});const cookie=a.cookie;assert.equal(a.status,201);ids.set(cookie,a.json.user.id);
   const config=await req('/api/push/config','GET',undefined,cookie);assert.equal(config.json.publicKey,'public');assert.ok(!JSON.stringify(config.json).includes('private'));
   const keys={p256dh:'A'.repeat(87),auth:'B'.repeat(22)};
   assert.equal((await req('/api/push/subscription','POST',{endpoint:'https://evil.example/internal',keys},cookie)).status,400);

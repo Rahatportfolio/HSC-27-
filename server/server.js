@@ -113,6 +113,9 @@ async function createServer(options = {}) {
       const auth = session(req), u = auth && db.users.find(x=>x.id===auth.userId);
       if (!u) return send(res,401,{error:'Sign in required.'});
       if (pathname === '/api/session' && req.method === 'GET') return send(res,200,{user:{id:u.id,name:u.name}, aiAvailable:!!aiKey && aiAllowed.has(u.name)});
+      // Bind every other authenticated request to the account the client intended.
+      // Cookies are shared across tabs and may have changed since the client signed in.
+      if (req.headers['x-hsc-user'] !== u.id) return send(res,403,{error:'Account session changed. Reload and sign in again.',code:'ACCOUNT_MISMATCH'});
       if (pathname === '/api/logout' && req.method === 'POST') { sessions.delete(cookie(req)); return send(res,200,{ok:true},{'Set-Cookie':setCookie('',0)}); }
       if (pathname === '/api/push/config' && req.method === 'GET') return send(res,200,{enabled:pushEnabled,publicKey:pushEnabled ? pushConfig.publicKey : null});
       if (pathname === '/api/push/subscription' && req.method === 'POST') {

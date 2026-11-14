@@ -22,9 +22,18 @@ function scheduleSync() {
 }
 function syncRefresh() { if (typeof currentRoute !== 'undefined' && ['sync','ai'].includes(currentRoute.name)) render(); }
 async function api(path, method = 'GET', payload) {
-  const response = await fetch(path, { method, credentials:'same-origin', cache:'no-store', headers: payload === undefined ? {} : {'Content-Type':'application/json'}, body: payload === undefined ? undefined : JSON.stringify(payload) });
+  const headers = payload === undefined ? {} : {'Content-Type':'application/json'};
+  if (syncUser && !['api/session','api/login','api/register'].includes(path)) headers['X-HSC-User'] = syncUser.id;
+  const response = await fetch(path, { method, credentials:'same-origin', cache:'no-store', headers, body: payload === undefined ? undefined : JSON.stringify(payload) });
   let data; try { data = await response.json(); } catch { throw new Error('Optional backend is unavailable.'); }
-  if (!response.ok) { const error = new Error(data.error || 'Request failed.'); error.status = response.status; throw error; }
+  if (!response.ok) {
+    const error = new Error(data.error || 'Request failed.'); error.status = response.status; error.code = data.code;
+    if (data.code === 'ACCOUNT_MISMATCH' || (response.status === 401 && syncUser && !['api/login','api/register'].includes(path))) {
+      if (response.status === 401 && !data.code) error.code = 'SESSION_EXPIRED';
+      syncUser = null; syncRemote = null; syncPushConfig = null; aiReply = '';
+    }
+    throw error;
+  }
   return data;
 }
 async function syncInit() {
@@ -54,6 +63,8 @@ async function flushSync() {
   } catch (error) {
     if (syncMeta !== meta) return;
     if (error.status === 409) { meta.conflict = true; writeSyncMeta(); syncMessage = 'Conflict: cloud data changed on another device. Local data is preserved; export it before choosing a cloud copy.'; }
+    else if (error.code === 'ACCOUNT_MISMATCH') syncMessage = 'Account changed in another tab. Sign in again; local data remains on this device.';
+    else if (error.code === 'SESSION_EXPIRED') syncMessage = 'Session expired. Sign in again; local data remains on this device.';
     else syncMessage = 'Sync pending. Check connection and sign-in; local data remains on this device.';
   } finally { syncBusy = false; syncRefresh(); if (syncMeta && syncMeta.dirty && !syncMeta.conflict && !syncMessage.startsWith('Sync pending')) scheduleSync(); }
 }
@@ -63,7 +74,7 @@ function renderSync() {
   const linked = syncMeta && syncMeta.enabled && syncMeta.userId === syncUser.id;
   const mismatch = syncMeta && syncMeta.enabled && syncMeta.userId !== syncUser.id;
   return `<div class="page"><h1>Account &amp; sync</h1><p>Signed in as <strong>${esc(syncUser.name)}</strong>.</p><p class="muted small">Sync transfers a full unencrypted snapshot to your server. Running focus, MCQ, written tests and manual exam timers stay on the current device. Keep independent JSON backups.</p><p>${esc(syncMessage)}</p>
-    ${syncBlocked ? '<p>Sync metadata is unavailable. Export a backup and check device storage.</p>' : mismatch ? '<p>This device is linked to a different account. Sign back into that account or disconnect its link first; queued changes will not be uploaded to this account.</p>' : linked ? `<p>Local changes: ${syncMeta.conflict ? 'conflict — automatic sync paused' : syncMeta.dirty ? 'queued' : 'synced'} · cloud revision ${esc(syncMeta.revision)}</p><div class="row gap wrap"><button class="btn" id="sync-now">Sync now</button><button class="btn" id="sync-pull">Replace local data with cloud copy</button></div>` : `<p>Sync is not connected. ${syncRemote && syncRemote.snapshot ? 'A cloud copy exists. Download it explicitly to connect.' : 'No cloud copy exists. You can upload this device to start.'}</p><button class="btn primary" id="${syncRemote && syncRemote.snapshot ? 'sync-pull' : 'sync-connect'}">${syncRemote && syncRemote.snapshot ? 'Download cloud copy' : 'Connect and upload this device'}</button>`}
+    ${syncBlocked ? '<p>Sync metadata is unavailable. Export a backup and check device storage.</p>' : mismatch ? '<p>This device is linked to a different account. Sign back into that account or disconnect its link first; queued changes will not be uploaded to this account.</p>' : linked ? `<p>Local changes: ${syncMeta.conflict ? 'conflict — automatic sync paused' : syncMeta.dirty ? 'queued' : 'synced'} · cloud revision ${esc(syncMeta.revision)}</p><div class="row gap wrap"><button class="btn" id="sync-now">Sync now</button><button class="btn" id="sync-cloud-backup">Download cloud backup</button><button class="btn" id="sync-pull">Replace local data with cloud copy</button>${syncMeta.conflict ? '<button class="btn danger-ghost" id="sync-overwrite-cloud">Replace cloud with this device</button>' : ''}</div>${syncMeta.conflict ? '<p class="muted small">No automatic merge. Back up BOTH copies first: download the cloud backup here and export the local backup from Backup &amp; restore. Then choose which copy to replace. Replacing the cloud deletes cloud-only changes.</p>' : ''}` : `<p>Sync is not connected. ${syncRemote && syncRemote.snapshot ? 'A cloud copy exists. Download it explicitly to connect.' : 'No cloud copy exists. You can upload this device to start.'}</p><button class="btn primary" id="${syncRemote && syncRemote.snapshot ? 'sync-pull' : 'sync-connect'}">${syncRemote && syncRemote.snapshot ? 'Download cloud copy' : 'Connect and upload this device'}</button>`}
     <section class="card"><h2>Background reminders</h2><p class="muted small">Optional push reminders require browser permission, a running server with push configured, and synced notification preferences. They use the last cloud snapshot and may be delayed or blocked by Android/browser settings.</p>${syncPushConfig && syncPushConfig.enabled ? '<button class="btn" id="push-enable">Enable on this device</button> <button class="btn" id="push-disable">Disable on this device</button>' : '<p>Push is not configured on the server.</p>'}</section>
     <div class="row gap wrap"><button class="btn" id="sync-disconnect">Disconnect this device</button><button class="btn" id="sync-logout">Sign out</button></div><p class="muted small">No automatic merging: conflicting changes remain local until you choose what to do. Signing out removes this device’s push subscription but leaves local data on this device.</p></div>`;
 }
@@ -97,7 +108,7 @@ document.addEventListener('submit', async (e) => {
   finally { delete form.dataset.busy; if (button) button.disabled = false; syncRefresh(); }
 });
 document.addEventListener('click', async (e) => {
-  const target = e.target.closest('#sync-connect,#sync-pull,#sync-disconnect,#sync-logout,#sync-now,#push-enable,#push-disable');
+  const target = e.target.closest('#sync-connect,#sync-pull,#sync-disconnect,#sync-logout,#sync-now,#sync-cloud-backup,#sync-overwrite-cloud,#push-enable,#push-disable');
   if (!target || !syncUser) return;
   if (syncBusy || syncActionBusy) { toast('A sync request is already running.'); return; }
   syncActionBusy = true; target.disabled = true;
@@ -139,11 +150,42 @@ document.addEventListener('click', async (e) => {
       if (!confirm('Upload this device data to this account? Timers remain device-local.')) return;
       syncMeta = {userId:syncUser.id,enabled:true,revision:0,dirty:true,change:1,conflict:false};
       if (!writeSyncMeta()) return; await flushSync(); return;
+    } else if (target.id === 'sync-cloud-backup') {
+      if (!syncMeta || !syncMeta.enabled || syncMeta.userId !== syncUser.id) throw new Error('Connect the correct account first.');
+      await refreshCloud();
+      if (!syncRemote.snapshot) throw new Error('No cloud copy exists.');
+      download('hsc27-cloud-backup-' + todayKey() + '.json', JSON.stringify(syncRemote.snapshot,null,2), 'application/json');
+      syncMessage = 'Cloud backup download started. Check your downloads and store it privately; it is not encrypted.';
+    } else if (target.id === 'sync-overwrite-cloud') {
+      if (syncBlocked || storageBlocked || !syncMeta || !syncMeta.enabled || !syncMeta.conflict || syncMeta.userId !== syncUser.id) throw new Error('The linked account must have an active conflict and working storage.');
+      const meta = syncMeta, userId = syncUser.id;
+      await refreshCloud();
+      if (syncMeta !== meta || !syncUser || syncUser.id !== userId || !meta.conflict) throw new Error('Sync state changed; review it again.');
+      if (!syncRemote.snapshot) throw new Error('No cloud copy exists.');
+      const revision = syncRemote.revision;
+      if (!confirm('Replace ALL cloud data with this device? Cloud-only changes will be lost. First download a cloud backup and export a local backup.')) return;
+      const change = meta.change, snapshot = cloudSnapshot();
+      try {
+        const result = await api('api/state','PUT',{baseRevision:revision,snapshot});
+        if (syncMeta !== meta || !syncUser || syncUser.id !== userId) return;
+        meta.revision = result.revision; meta.conflict = false; meta.dirty = meta.change !== change;
+        syncRemote = {revision:result.revision,snapshot:true};
+        if (!writeSyncMeta()) return;
+        syncMessage = meta.dirty ? 'Cloud replaced; newer local changes are queued.' : 'Cloud replaced with this device.';
+        if (meta.dirty) scheduleSync();
+      } catch (error) {
+        if (error.status === 409) { syncMessage = 'Cloud changed again; neither copy was replaced. Download a fresh backup and retry.'; return; }
+        throw error;
+      }
     } else if (target.id === 'sync-pull') {
       if (syncMeta && syncMeta.enabled && syncMeta.userId !== syncUser.id) throw new Error('Disconnect the previous account first.');
       if (!canReplaceLocal()) throw new Error('Stop the focus and exam timers and finish active tests before replacing local data.');
+      // Detect local edits while the network request is in flight, including writes from another tab.
+      const before = localStorage.getItem(STORAGE_KEY), localBefore = JSON.stringify(cloudSnapshot());
       await refreshCloud(); if (!syncRemote.snapshot) throw new Error('No cloud copy exists.');
+      if (!canReplaceLocal() || localStorage.getItem(STORAGE_KEY) !== before || JSON.stringify(cloudSnapshot()) !== localBefore) throw new Error('Local data changed during download. Back up and retry.');
       if (!confirm('Replace ALL local study data with the cloud copy? Export a local backup first. This discards unsynced local changes.')) return;
+      if (!canReplaceLocal() || localStorage.getItem(STORAGE_KEY) !== before || JSON.stringify(cloudSnapshot()) !== localBefore) throw new Error('Local data changed during confirmation. Back up and retry.');
       syncSuppress = true;
       try { importJSON(JSON.stringify(syncRemote.snapshot)); resetTimer(false); focusState.subjectId = null; focusState.chapterId = null; restoreFocusTimer(); } finally { syncSuppress = false; }
       syncMeta = {userId:syncUser.id,enabled:true,revision:syncRemote.revision,dirty:false,change:0,conflict:false};
