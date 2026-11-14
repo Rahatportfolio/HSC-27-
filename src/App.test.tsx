@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { CHAPTERS } from './data';
 import { buildPlan, chapterTasks, freshData, STORAGE_KEY } from './planner';
@@ -55,6 +55,27 @@ describe('application shell', () => {
     act(() => { dark.click(); });
     await waitFor(() => expect(document.documentElement.dataset.theme).toBe('dark'));
   });
+  it('renders the English shell when the saved language is English', async () => {
+    const data = freshData();
+    data.settings.language = 'en';
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    expect((await screen.findAllByText("Today's study")).length).toBeGreaterThan(0);
+    go('calendar');
+    expect(await screen.findByText('One day. One step.')).toBeTruthy();
+    expect(document.documentElement.lang).toBe('en');
+  });
+  it('switches the interface language from settings', async () => {
+    render(<App />);
+    go('settings');
+    const english = await screen.findByRole('button', { name: /English/ });
+    act(() => { english.click(); });
+    const save = screen.getByRole('button', { name: /সেভ করো/ });
+    await act(async () => { save.click(); });
+    await waitFor(() => expect(document.documentElement.lang).toBe('en'));
+    expect(await screen.findByText("Today's study")).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').settings.language).toBe('en');
+  });
   it('creates revision cards for a completed chapter and shows them', async () => {
     const data = freshData();
     const plan = buildPlan();
@@ -64,6 +85,63 @@ describe('application shell', () => {
     go('revision');
     expect(await screen.findByText(CHAPTERS[0].title)).toBeTruthy();
     expect((await screen.findAllByText(/১ দিন পরের রিভিশন/)).length).toBeGreaterThan(0);
+  });
+  it('adds a custom weekly routine block from the calendar', async () => {
+    render(<App />);
+    go('calendar');
+    expect(await screen.findByText('কাস্টম সাপ্তাহিক রুটিন')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('শুরু'), { target: { value: '20:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /ব্লক যোগ করো/ }));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      expect(stored.routineBlocks).toHaveLength(1);
+      expect(stored.routineBlocks[0]).toMatchObject({ startMinute: 1200, minutes: 60, subject: 'physics' });
+    });
+    expect(await screen.findByText(/২০:০০/)).toBeTruthy();
+  });
+  it('reorders custom routine blocks with the move buttons', async () => {
+    const data = freshData();
+    const at = '2026-11-01T06:00:00.000Z';
+    const weekday = new Date('2026-11-14T00:00:00Z').getUTCDay();
+    data.routineBlocks = [
+      { id: 'block-a', weekday, startMinute: 1200, minutes: 60, subject: 'physics', title: 'পদার্থ', createdAt: at },
+      { id: 'block-b', weekday, startMinute: 1260, minutes: 45, subject: 'chemistry', title: 'রসায়ন', createdAt: at },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('calendar');
+    fireEvent.click(await screen.findByRole('button', { name: 'শনি' }));
+    const upButtons = await screen.findAllByRole('button', { name: 'ব্লক উপরে সরাও' });
+    expect((upButtons[0] as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(upButtons[1]);
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      const first = stored.routineBlocks.find((block: { id: string }) => block.id === 'block-a');
+      const second = stored.routineBlocks.find((block: { id: string }) => block.id === 'block-b');
+      expect(first.startMinute).toBe(1260);
+      expect(second.startMinute).toBe(1200);
+    });
+  });
+  it('adds an important date and shows it on the dashboard', async () => {
+    render(<App />);
+    go('calendar');
+    expect(await screen.findByText('গুরুত্বপূর্ণ তারিখ')).toBeTruthy();
+    fireEvent.change(screen.getByLabelText('তারিখ'), { target: { value: '2027-01-15' } });
+    fireEvent.change(screen.getByLabelText('নাম', { exact: true }), { target: { value: 'রসায়ন মডেল টেস্ট' } });
+    fireEvent.click(screen.getByRole('button', { name: /তারিখ যোগ করো/ }));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      expect(stored.importantDates).toHaveLength(1);
+    });
+    go('today');
+    expect(await screen.findByText(/রসায়ন মডেল টেস্ট/)).toBeTruthy();
+  });
+  it('toggles focus mode on the timer page', async () => {
+    render(<App />);
+    go('timer');
+    const toggle = await screen.findByRole('button', { name: /ফোকাস মোড/ });
+    act(() => { toggle.click(); });
+    expect(document.documentElement.classList.contains('focus-mode')).toBe(true);
   });
   it('starts an MCQ quiz and records the answer', async () => {
     render(<App />);

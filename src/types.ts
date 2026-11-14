@@ -1,4 +1,5 @@
 import type { SubjectId } from './data';
+import type { Language } from './i18n';
 
 /** All additions are optional at the validation layer so old v1 backups keep working. */
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -149,6 +150,26 @@ export interface Carryover {
   completedAt?: string;
 }
 
+export interface RoutineBlock {
+  id: string;
+  /** JavaScript weekday: 0 = Sunday … 6 = Saturday. */
+  weekday: number;
+  startMinute: number;
+  minutes: number;
+  subject: SubjectId;
+  title: string;
+  createdAt: string;
+}
+
+export interface ImportantDate {
+  id: string;
+  date: string;
+  title: string;
+  note: string;
+  notify: boolean;
+  createdAt: string;
+}
+
 export interface SubjectMarks {
   [subject: string]: number | null;
 }
@@ -156,6 +177,7 @@ export interface SubjectMarks {
 /** Fields shared by the v2 settings object. Kept here so storage and planner use one shape. */
 export interface SettingsExtras {
   theme: ThemeMode;
+  language: Language;
   revisionEnabled: boolean;
   carryoverMode: 'manual' | 'auto';
   pomodoroFocus: number;

@@ -3,7 +3,7 @@ import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check,
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS } from './data';
 import type { Chapter, SubjectId } from './data';
-import { bn, buildPlan, diffDays, formatDate, isValidDate, todayKey } from './planner';
+import { applyRoutine, bn, buildPlan, diffDays, formatDate, isValidDate, todayKey } from './planner';
 import type { AppData } from './planner';
 import { loadData, parseBackup, saveData, SAVED_AT_KEY } from './storage';
 import { persistToDatabase, restoreFromDatabase } from './db';
@@ -16,6 +16,7 @@ import { addStudySession, autoCarryover } from './study';
 import { PlannerContext } from './context';
 import type { ConfirmRequest, View } from './context';
 import { Modal } from './components';
+import { setLanguage, t } from './i18n';
 import { ChapterModal, ExamModal, MistakeModal, SearchModal } from './modals';
 import TodayView from './views/Today';
 import CalendarView from './views/Calendar';
@@ -29,23 +30,23 @@ import LibraryView from './views/Library';
 import RemindersView from './views/Reminders';
 import SettingsView from './views/Settings';
 
-type NavItem = { id: View; label: string; short: string; icon: LucideIcon };
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
-  { label: 'তোমার পথচলা', items: [
-    { id: 'today' as const, label: 'আজকের পড়া', short: 'আজ', icon: LayoutDashboard },
-    { id: 'calendar' as const, label: 'রুটিন ও ক্যালেন্ডার', short: 'রুটিন', icon: CalendarDays },
-    { id: 'syllabus' as const, label: 'সিলেবাস ও অধ্যায়', short: 'সিলেবাস', icon: LibraryBig },
-    { id: 'revision' as const, label: 'স্মার্ট রিভিশন', short: 'রিভিশন', icon: RotateCcw },
+type NavItem = { id: View; label: string; labelEn: string; short: string; shortEn: string; icon: LucideIcon };
+const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
+  { label: 'তোমার পথচলা', labelEn: 'Your journey', items: [
+    { id: 'today' as const, label: 'আজকের পড়া', labelEn: "Today's study", short: 'আজ', shortEn: 'Today', icon: LayoutDashboard },
+    { id: 'calendar' as const, label: 'রুটিন ও ক্যালেন্ডার', labelEn: 'Routine & calendar', short: 'রুটিন', shortEn: 'Routine', icon: CalendarDays },
+    { id: 'syllabus' as const, label: 'সিলেবাস ও অধ্যায়', labelEn: 'Syllabus & chapters', short: 'সিলেবাস', shortEn: 'Syllabus', icon: LibraryBig },
+    { id: 'revision' as const, label: 'স্মার্ট রিভিশন', labelEn: 'Smart revision', short: 'রিভিশন', shortEn: 'Revision', icon: RotateCcw },
   ] },
-  { label: 'অনুশীলন ও মূল্যায়ন', items: [
-    { id: 'timer' as const, label: 'স্টাডি টাইমার', short: 'টাইমার', icon: Timer },
-    { id: 'practice' as const, label: 'MCQ ও CQ অনুশীলন', short: 'অনুশীলন', icon: PenLine },
-    { id: 'exams' as const, label: 'পরীক্ষা ও GPA', short: 'পরীক্ষা', icon: ClipboardCheck },
-    { id: 'analytics' as const, label: 'বিশ্লেষণ ও রিভিউ', short: 'বিশ্লেষণ', icon: ChartNoAxesCombined },
+  { label: 'অনুশীলন ও মূল্যায়ন', labelEn: 'Practice & review', items: [
+    { id: 'timer' as const, label: 'স্টাডি টাইমার', labelEn: 'Study timer', short: 'টাইমার', shortEn: 'Timer', icon: Timer },
+    { id: 'practice' as const, label: 'MCQ ও CQ অনুশীলন', labelEn: 'MCQ & CQ practice', short: 'অনুশীলন', shortEn: 'Practice', icon: PenLine },
+    { id: 'exams' as const, label: 'পরীক্ষা ও GPA', labelEn: 'Exams & GPA', short: 'পরীক্ষা', shortEn: 'Exams', icon: ClipboardCheck },
+    { id: 'analytics' as const, label: 'বিশ্লেষণ ও রিভিউ', labelEn: 'Analytics & review', short: 'বিশ্লেষণ', shortEn: 'Analytics', icon: ChartNoAxesCombined },
   ] },
-  { label: 'সংগ্রহ ও সহায়তা', items: [
-    { id: 'library' as const, label: 'লাইব্রেরি', short: 'লাইব্রেরি', icon: FolderOpen },
-    { id: 'reminders' as const, label: 'রিমাইন্ডার', short: 'রিমাইন্ডার', icon: Bell },
+  { label: 'সংগ্রহ ও সহায়তা', labelEn: 'Library & help', items: [
+    { id: 'library' as const, label: 'লাইব্রেরি', labelEn: 'Library', short: 'লাইব্রেরি', shortEn: 'Library', icon: FolderOpen },
+    { id: 'reminders' as const, label: 'রিমাইন্ডার', labelEn: 'Reminders', short: 'রিমাইন্ডার', shortEn: 'Reminders', icon: Bell },
   ] },
 ];
 const NAV: NavItem[] = NAV_GROUPS.flatMap(group => group.items);
@@ -55,6 +56,7 @@ type OpenModal = { type: 'chapter'; chapter: Chapter } | { type: 'exam'; paperId
 export default function App() {
   const [initial] = useState(loadData);
   const [data, setData] = useState<AppData>(initial.data);
+  setLanguage(data.settings.language);
   const [storageOk, setStorageOk] = useState(true);
   const [view, setView] = useState<View>(viewFromHash);
   const now = useNow(); const today = todayKey(now);
@@ -66,7 +68,8 @@ export default function App() {
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; id: number } | null>(initial.warning ? { message: initial.warning, type: 'info', id: 0 } : null);
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => setToast({ message, type, id: Date.now() }), []);
-  const plan = useMemo(() => buildPlan(data.settings), [data.settings]);
+  const basePlan = useMemo(() => buildPlan(data.settings), [data.settings]);
+  const plan = useMemo(() => applyRoutine(basePlan, data.routineBlocks), [basePlan, data.routineBlocks]);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
@@ -147,40 +150,40 @@ export default function App() {
   const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView }[view];
   const examDays = diffDays(today, data.settings.examDate);
   return <PlannerContext.Provider value={context}>
-    <a className="skip-link" href="#main-content" onClick={e => { e.preventDefault(); const main = document.getElementById('main-content'); main?.focus(); main?.scrollIntoView({ block: 'start' }); }}>মূল কনটেন্টে যাও</a>
+    <a className="skip-link" href="#main-content" onClick={e => { e.preventDefault(); const main = document.getElementById('main-content'); main?.focus(); main?.scrollIntoView({ block: 'start' }); }}>{t('মূল কনটেন্টে যাও', 'Skip to main content')}</a>
     <div className="app-shell">
-      {mobileMenu && <button className="sidebar-overlay" aria-label="মেনু বন্ধ করো" onClick={() => setMobileMenu(false)} />}
+      {mobileMenu && <button className="sidebar-overlay" aria-label={t('মেনু বন্ধ করো', 'Close menu')} onClick={() => setMobileMenu(false)} />}
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}>
-        <button className="brand" onClick={() => navigate('today', today)} aria-label="প্রস্তুতি হোম"><span className="brand-mark"><BookOpen size={25} strokeWidth={1.8} /><Check size={12} className="brand-check" /></span><span><strong>প্রস্তুতি<span className="brand-period">.</span></strong><small>HSC 27 · SCIENCE</small></span></button>
-        <button className="sidebar-close icon-button" onClick={() => setMobileMenu(false)} aria-label="মেনু বন্ধ করো"><X size={20} /></button>
-        {NAV_GROUPS.map(group => <div key={group.label}><div className="nav-section-label">{group.label}</div><nav aria-label="মূল নেভিগেশন">{group.items.map(n => <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => navigate(n.id)} aria-current={view === n.id ? 'page' : undefined}><n.icon size={19} strokeWidth={1.7} /><span>{n.label}</span>{n.id === 'today' && <span className="nav-today-dot" />}{n.id === 'revision' && dueRevisions > 0 && <span className="nav-count alert">{bn(dueRevisions)}</span>}{n.id === 'exams' && <span className="nav-count">{bn(Object.keys(data.exams).length + data.tests.length)}</span>}</button>)}</nav></div>)}
+        <button className="brand" onClick={() => navigate('today', today)} aria-label={t('প্রস্তুতি হোম', 'Prostuti home')}><span className="brand-mark"><BookOpen size={25} strokeWidth={1.8} /><Check size={12} className="brand-check" /></span><span><strong>প্রস্তুতি<span className="brand-period">.</span></strong><small>HSC 27 · SCIENCE</small></span></button>
+        <button className="sidebar-close icon-button" onClick={() => setMobileMenu(false)} aria-label={t('মেনু বন্ধ করো', 'Close menu')}><X size={20} /></button>
+        {NAV_GROUPS.map(group => <div key={group.label}><div className="nav-section-label">{t(group.label, group.labelEn)}</div><nav aria-label={t('মূল নেভিগেশন', 'Main navigation')}>{group.items.map(n => <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => navigate(n.id)} aria-current={view === n.id ? 'page' : undefined}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.label, n.labelEn)}</span>{n.id === 'today' && <span className="nav-today-dot" />}{n.id === 'revision' && dueRevisions > 0 && <span className="nav-count alert">{bn(dueRevisions)}</span>}{n.id === 'exams' && <span className="nav-count">{bn(Object.keys(data.exams).length + data.tests.length)}</span>}</button>)}</nav></div>)}
         <div className="sidebar-bottom">
           <div className="dream-card"><Sprout size={27} strokeWidth={1.5} /><strong>স্বপ্নটা তোমার।<br />প্রস্তুতিও তোমার।</strong><p>আজকের ছোট চেষ্টাই<br />আগামীকের বড় আত্মবিশ্বাস।</p><span>A+ এর পথে <ArrowUpRight size={13} /></span></div>
-          <button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><SettingsIcon size={19} strokeWidth={1.7} /><span>সেটিংস ও ব্যাকআপ</span></button>
-          <div className="sidebar-profile"><span className="avatar">{data.settings.name.trim().slice(0, 1) || 'প'}</span><div><strong>{data.settings.name || 'আমার প্রস্তুতি'}</strong><span>{data.settings.board} বোর্ড · বিজ্ঞান</span></div><span className="status-dot" /></div>
+          <button className={`nav-item ${view === 'settings' ? 'active' : ''}`} onClick={() => navigate('settings')}><SettingsIcon size={19} strokeWidth={1.7} /><span>{t('সেটিংস ও ব্যাকআপ', 'Settings & backup')}</span></button>
+          <div className="sidebar-profile"><span className="avatar">{data.settings.name.trim().slice(0, 1) || 'প'}</span><div><strong>{data.settings.name || t('আমার প্রস্তুতি', 'My preparation')}</strong><span>{data.settings.board} {t('বোর্ড · বিজ্ঞান', 'board · Science')}</span></div><span className="status-dot" /></div>
         </div>
       </aside>
       <div className="main-shell">
         <header className="topbar">
-          <div className="topbar-left"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(true)} aria-label="মেনু খুলো"><Menu size={22} /></button><div className="breadcrumb"><span>আমার প্রস্তুতি</span><ChevronRight size={14} /><strong>{currentNav?.label || 'সেটিংস ও ব্যাকআপ'}</strong></div></div>
+          <div className="topbar-left"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(true)} aria-label={t('মেনু খুলো', 'Open menu')}><Menu size={22} /></button><div className="breadcrumb"><span>{t('আমার প্রস্তুতি', 'My preparation')}</span><ChevronRight size={14} /><strong>{currentNav ? t(currentNav.label, currentNav.labelEn) : t('সেটিংস ও ব্যাকআপ', 'Settings & backup')}</strong></div></div>
           <div className="topbar-actions">
-            {examDays >= 0 && <span className="countdown-chip" title={`ব্যক্তিগত লক্ষ্য তারিখ: ${formatDate(data.settings.examDate)} — বোর্ডের সরকারি তারিখ নয়`}><Timer size={13} />HSC লক্ষ্য <strong>{bn(examDays)} দিন</strong></span>}
-            <button className="global-search" aria-label="সব কিছু খুঁজো" onClick={() => setModal({ type: 'search' })}><Search size={16} /><span>অধ্যায়, নোট বা রুটিন খুঁজো…</span><kbd><Command size={11} /> K</kbd></button>
+            {examDays >= 0 && <span className="countdown-chip" title={`ব্যক্তিগত লক্ষ্য তারিখ: ${formatDate(data.settings.examDate)} — বোর্ডের সরকারি তারিখ নয়`}><Timer size={13} />{t('HSC লক্ষ্য', 'HSC target')} <strong>{bn(examDays)} {t('দিন', 'days')}</strong></span>}
+            <button className="global-search" aria-label={t('সব কিছু খুঁজো', 'Search everything')} onClick={() => setModal({ type: 'search' })}><Search size={16} /><span>{t('অধ্যায়, নোট বা রুটিন খুঁজো…', 'Search chapters, notes or routine…')}</span><kbd><Command size={11} /> K</kbd></button>
             <span className="topbar-divider" />
-            <button className="icon-button notification-button" onClick={() => navigate('reminders')} aria-label="রিমাইন্ডার"><Bell size={19} strokeWidth={1.7} />{data.settings.reminderEnabled && <span />}</button>
-            <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label="প্রোফাইল ও সেটিংস">{data.settings.name.trim().slice(0, 1) || 'প'}</button>
+            <button className="icon-button notification-button" onClick={() => navigate('reminders')} aria-label={t('রিমাইন্ডার', 'Reminders')}><Bell size={19} strokeWidth={1.7} />{data.settings.reminderEnabled && <span />}</button>
+            <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label={t('প্রোফাইল ও সেটিংস', 'Profile & settings')}>{data.settings.name.trim().slice(0, 1) || 'প'}</button>
           </div>
         </header>
-        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।</p><button className="text-button" onClick={() => navigate('settings')}>ব্যাকআপ</button></div>}<ViewComponent /></main>
+        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>ব্যাকআপ</button></div>}<ViewComponent /></main>
       </div>
-      <nav className="mobile-bottom-nav" aria-label="মোবাইল নেভিগেশন">{[NAV[0], NAV[1], NAV[4], NAV[3], NAV[6]].map(n => <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}><n.icon size={19} strokeWidth={1.7} /><span>{n.short}</span></button>)}</nav>
+      <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>{[NAV[0], NAV[1], NAV[4], NAV[3], NAV[6]].map(n => <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.short, n.shortEn)}</span></button>)}</nav>
     </div>
     {modal?.type === 'chapter' && <ChapterModal chapter={modal.chapter} onClose={() => setModal(null)} />}
     {modal?.type === 'exam' && <ExamModal paperId={modal.paperId} onClose={() => setModal(null)} />}
     {modal?.type === 'mistake' && <MistakeModal subject={modal.subject} initialText={modal.text} onClose={() => setModal(null)} />}
     {modal?.type === 'search' && <SearchModal onClose={() => setModal(null)} onChapter={chapter => setModal({ type: 'chapter', chapter })} />}
-    {confirmRequest && <Modal title={confirmRequest.title} onClose={() => setConfirmRequest(null)}><p className="confirm-message">{confirmRequest.message}</p><div className="modal-actions"><button className="button secondary" onClick={() => setConfirmRequest(null)}>বাতিল</button><button className={`button ${confirmRequest.danger ? 'danger' : 'primary'}`} onClick={() => { const action = confirmRequest.action; setConfirmRequest(null); action(); }}>{confirmRequest.label || 'নিশ্চিত করো'}</button></div></Modal>}
-    {toast && <div className={`toast ${toast.type}`} role="status" aria-live="polite"><span>{toast.type === 'success' ? <Check size={18} /> : toast.type === 'error' ? <X size={18} /> : <Bell size={18} />}</span><p>{toast.message}</p><button onClick={() => setToast(null)} aria-label="বার্তা বন্ধ করো"><X size={16} /></button></div>}
+    {confirmRequest && <Modal title={confirmRequest.title} onClose={() => setConfirmRequest(null)}><p className="confirm-message">{confirmRequest.message}</p><div className="modal-actions"><button className="button secondary" onClick={() => setConfirmRequest(null)}>{t('বাতিল', 'Cancel')}</button><button className={`button ${confirmRequest.danger ? 'danger' : 'primary'}`} onClick={() => { const action = confirmRequest.action; setConfirmRequest(null); action(); }}>{confirmRequest.label || t('নিশ্চিত করো', 'Confirm')}</button></div></Modal>}
+    {toast && <div className={`toast ${toast.type}`} role="status" aria-live="polite"><span>{toast.type === 'success' ? <Check size={18} /> : toast.type === 'error' ? <X size={18} /> : <Bell size={18} />}</span><p>{toast.message}</p><button onClick={() => setToast(null)} aria-label={t('বার্তা বন্ধ করো', 'Dismiss message')}><X size={16} /></button></div>}
   </PlannerContext.Provider>;
 }
 function subjectIds(s: string): SubjectId { return SUBJECTS.some(x => x.id === s) ? s as SubjectId : 'physics'; }

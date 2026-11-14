@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { AlarmClock, CheckCircle2, Clock3, Coffee, Pause, Play, Plus, RotateCcw, Save, Timer as TimerIcon, Trash2, TrendingUp } from 'lucide-react';
+import { AlarmClock, CheckCircle2, Clock3, Coffee, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, Save, Timer as TimerIcon, Trash2, TrendingUp } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, subjectById } from '../data';
 import type { SubjectId } from '../data';
@@ -21,6 +21,24 @@ export default function TimerView() {
   const [manualSubject, setManualSubject] = useState<SubjectId>('physics');
   const [manualChapter, setManualChapter] = useState('');
   const [manualLabel, setManualLabel] = useState('');
+  const [focusMode, setFocusMode] = useState(false);
+  useEffect(() => {
+    document.documentElement.classList.toggle('focus-mode', focusMode);
+    return () => document.documentElement.classList.remove('focus-mode');
+  }, [focusMode]);
+  useEffect(() => {
+    const onChange = () => { if (!document.fullscreenElement) setFocusMode(false); };
+    document.addEventListener('fullscreenchange', onChange);
+    return () => document.removeEventListener('fullscreenchange', onChange);
+  }, []);
+  const toggleFocusMode = async () => {
+    const next = !focusMode;
+    setFocusMode(next);
+    try {
+      if (next && !document.fullscreenElement) await document.documentElement.requestFullscreen?.();
+      else if (!next && document.fullscreenElement) await document.exitFullscreen();
+    } catch { /* Fullscreen can be blocked; the CSS focus layout still works. */ }
+  };
   const chapters = CHAPTERS.filter(chapter => chapter.subject === timer.subject);
   const todaySessions = data.studySessions.filter(session => session.date === today).sort((a, b) => b.at.localeCompare(a.at));
   const todayMinutes = minutesOn(data.studySessions, today);
@@ -37,7 +55,8 @@ export default function TimerView() {
     notify(`${bn(minutes)} মিনিটের সেশন যোগ হয়েছে।`, 'success');
   };
   return <div className="view timer-view">
-    <PageHeading eyebrow="FOCUS, THEN REST" title="সময় গুনি, মন দিই।" description="স্টপওয়াচ, কাউন্টডাউন বা পোমোডোরো—যেভাবে ভালো লাগে। প্রতিটি সেশন বিষয় ও অধ্যায়ের সঙ্গে অটো সেভ হয়।" action={<div className="timer-header-total"><Clock3 size={17} /><span>আজ</span><strong>{bn(Math.floor(todayMinutes / 60))}ঘ {bn(todayMinutes % 60)}মি</strong></div>} />
+    <button className="focus-toggle button secondary small" onClick={() => void toggleFocusMode()} aria-pressed={focusMode}>{focusMode ? <Minimize2 size={16} /> : <Maximize2 size={16} />}{focusMode ? 'ফোকাস বন্ধ' : 'ফোকাস মোড'}</button>
+    <PageHeading eyebrow="FOCUS, THEN REST" title="সময় গুনি, মন দিই।" titleEn="Count the time, keep the mind." description="স্টপওয়াচ, কাউন্টডাউন বা পোমোডোরো—যেভাবে ভালো লাগে। প্রতিটি সেশন বিষয় ও অধ্যায়ের সঙ্গে অটো সেভ হয়।" descriptionEn="Stopwatch, countdown or Pomodoro. Every session is saved with its subject and chapter." action={<div className="timer-header-total"><Clock3 size={17} /><span>আজ</span><strong>{bn(Math.floor(todayMinutes / 60))}ঘ {bn(todayMinutes % 60)}মি</strong></div>} />
     <div className="timer-layout">
       <section className={`card timer-main-card phase-${timer.phase}`}>
         <div className="mode-switch">{(['pomodoro', 'countdown', 'stopwatch'] as const).map(mode => <button key={mode} className={timer.mode === mode ? 'active' : ''} onClick={() => timer.setMode(mode)} disabled={timer.running}>{mode === 'pomodoro' ? 'পোমোডোরো' : mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</button>)}</div>

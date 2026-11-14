@@ -100,6 +100,22 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
   lines.push('', '## ভুলের খাতা', '');
   if (!data.mistakes.length) lines.push('এখনও কোনো ভুল যোগ করা হয়নি। পড়ার সময় অ্যাপে যোগ করো।');
   for (const m of data.mistakes) lines.push(`- [${m.resolved ? 'x' : ' '}] **${m.date} · ${subjectById[m.subject].name}:** ${mdCell(m.text)}`);
+  lines.push('', '## কাস্টম সাপ্তাহিক রুটিন', '');
+  if (!data.routineBlocks.length) lines.push('কোনো কাস্টম ব্লক নেই। Calendar পেজ থেকে যোগ করা যায়।');
+  else {
+    const weekdayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+    for (const block of [...data.routineBlocks].sort((a, b) => a.weekday - b.weekday || a.startMinute - b.startMinute)) {
+      lines.push(`- **${weekdayNames[block.weekday]}বার ${String(Math.floor(block.startMinute / 60)).padStart(2, '0')}:${String(block.startMinute % 60).padStart(2, '0')} · ${bn(block.minutes)} মিনিট · ${subjectById[block.subject].name}:** ${mdCell(block.title || 'কাস্টম সেশন')}`);
+    }
+  }
+  lines.push('', '## গুরুত্বপূর্ণ তারিখ', '');
+  if (!data.importantDates.length) lines.push('কোনো গুরুত্বপূর্ণ তারিখ যোগ করা হয়নি।');
+  else {
+    for (const item of [...data.importantDates].sort((a, b) => a.date.localeCompare(b.date))) {
+      lines.push(`- **${item.date} — ${mdCell(item.title)}**${item.note ? `: ${mdCell(item.note)}` : ''}${item.notify ? ' · ডিভাইস রিমাইন্ডার চালু' : ''}`);
+    }
+  }
+
   lines.push('', '## রিমাইন্ডার', '',
     '- অ্যাপের Reminders পেজ থেকে `.ics` ডাউনলোড করে Google Calendar / Apple Calendar-এ ইমপোর্ট করো।',
     `- প্রতিটি সেশনে ${bn(settings.reminderLead)} মিনিট আগের VALARM আছে। ক্যালেন্ডার অ্যাপ/ডিভাইসের নোটিফিকেশন অনুমতি চালু রাখো।`,

@@ -9,6 +9,8 @@ describe('validated local backups', () => {
     data.notes['2026-11-14'] = '<script>alert(1)</script>';
     data.exams['physics-1'] = { score: 72, total: 100, at: '2027-04-16T08:00:00Z', mistakes: 'একক ভুল' };
     data.mistakes.push({ id: 'm1', subject: 'physics', text: 'দিক ভুল', date: '2026-11-14', resolved: false });
+    data.routineBlocks.push({ id: 'r1', weekday: 6, startMinute: 1200, minutes: 60, subject: 'math', title: 'কাস্টম গণিত', createdAt: '2026-11-01T00:00:00Z' });
+    data.importantDates.push({ id: 'i1', date: '2027-01-15', title: 'মডেল টেস্ট', note: 'সকাল ১০টা', notify: true, createdAt: '2026-11-14T08:00:00Z' });
     expect(parseBackup(JSON.stringify(data))).toEqual(data);
   });
   it('rejects malformed JSON, wrong versions, invalid dates and impossible scores', () => {
@@ -25,6 +27,8 @@ describe('validated local backups', () => {
     expect(() => parseBackup(JSON.stringify({ ...data, completed: { x: '2026-02-30T08:00:00Z' } }))).toThrow('অগ্রগতির তারিখ');
     expect(() => parseBackup(JSON.stringify({ ...data, exams: { 'physics-1': { score: 1, total: 100, at: '2026-02-30T08:00:00Z', mistakes: '' } } }))).toThrow();
     expect(() => parseBackup(JSON.stringify({ ...data, focus: { minutes: -1, sessions: 0 } }))).toThrow('ফোকাস');
+    expect(() => parseBackup(JSON.stringify({ ...data, routineBlocks: [{ id: 'r1', weekday: 9, startMinute: 0, minutes: 60, subject: 'math', title: '', createdAt: '2026-11-01T00:00:00Z' }] }))).toThrow('রুটিন');
+    expect(() => parseBackup(JSON.stringify({ ...data, importantDates: [{ id: 'i1', date: '2026-02-30', title: 'x', note: '', notify: true, createdAt: '2026-11-14T08:00:00Z' }] }))).toThrow('তারিখ');
     const parsed = parseBackup(JSON.stringify({ ...data, completed: JSON.parse('{"__proto__":"2026-11-14T08:00:00Z"}') }));
     expect(Object.prototype.hasOwnProperty.call(parsed.completed, '__proto__')).toBe(true);
     expect(({} as Record<string, unknown>).polluted).toBeUndefined();

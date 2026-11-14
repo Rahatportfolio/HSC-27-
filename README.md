@@ -13,7 +13,7 @@ A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet
 | Dashboard | Today’s target, daily/weekly progress, measured study hours, syllabus completion, pending work and carryover |
 | Subjects | Physics, Chemistry, Biology, Higher Math (1st/2nd papers), ICT, Bangla, English — 13 papers |
 | Chapters | Checklist, A/B/C priority, completion, CQ/MCQ prep status, chapter note, confidence/weak tracking |
-| Routine | Deterministic 8-hour daily plan, weekly view, subject-wise allocation, editable start time/target hours, missed-session carryover |
+| Routine | Deterministic 8-hour daily plan, weekly view, subject-wise allocation, editable start time/target hours, missed-session carryover, custom weekly blocks with drag-and-drop (or ↑/↓) reordering |
 | Timer | Stopwatch, countdown and Pomodoro; subject/chapter tagging; automatic session logging; short/long breaks |
 | Revision | 1/3/7/14/30-day spaced cards, due/overdue lists, snooze, completion history |
 | Offline data | Autosave, validated JSON backup/import, CSV exports, restart-safe storage, SQLite mirror in the APK |
@@ -37,9 +37,11 @@ A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet
 
 ### Priority 4 — comfort features
 
-Study calendar, HSC countdown, day journal, streak calendar, achievement badges, light/dark/system theme, global search (`Ctrl/⌘ + K`), settings, JSON/CSV import-export and app information.
+Study calendar, HSC countdown, day journal, streak calendar, achievement badges, **focus mode**, **custom weekly routine**, **important dates with native reminders**, light/dark/system theme, Bangla/English toggle, global search (`Ctrl/⌘ + K`), settings, JSON/CSV import-export and app information.
 
-**Not implemented yet:** a complete Bangla/English interface toggle, an arbitrary drag-and-drop timetable editor, and bundled copyrighted board papers. The interface is Bangla-first by design; the other two are honest scope limits, not hidden placeholders.
+**Bangla / English:** Settings → ভাষা / Language switches the shell between বাংলা and English. English mode localises navigation (sidebar, mobile bar, breadcrumb), page headings, dashboard hero, dates, digits and phase names. Chapter names, task titles, the generated plan, notes and hint text stay in Bangla by design — the plan is written as a Bangla study guide, so translating it would be a separate content project, not a string swap. `settings.language` is validated (`bn` | `en`, default `bn`).
+
+**Not implemented yet:** bundled copyrighted board papers (the board-question library is for your own entries).
 
 ## Run locally
 
@@ -53,7 +55,7 @@ npm run dev
 Open http://localhost:3000. The dev server binds to `0.0.0.0` and accepts the Arena preview host.
 
 ```bash
-npm test          # 51 tests: plan, dates, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
+npm test          # 71 tests: plan, dates, i18n, study sessions, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
 npm run typecheck
 npm run build     # production PWA build in dist/
 npm run preview   # serve the production build on port 3000
@@ -89,7 +91,7 @@ A debug APK is self-signed and installable without Play Store or signing secrets
 
 ## Reminders on Android
 
-- **Native local notifications (APK):** Reminders → *ডিভাইস নোটিফিকেশন* → allow permission, then *এখনই সিঙ্ক করো*. The next 14 days of sessions and revision cards are scheduled on the device. The app re-syncs in the background while it is open or after a change. Android may delay exact alarms if battery optimisation is aggressive; disable optimisation for the app if a reminder arrives late. All of this is local — there is no push server.
+- **Native local notifications (APK):** Reminders → *ডিভাইস নোটিফিকেশন* → allow permission, then *এখনই সিঙ্ক করো*. The next 14 days of sessions, revision cards and important dates (day before at 20:00 and on the day at 09:00) are scheduled on the device. The app re-syncs in the background while it is open or after a change. Android may delay exact alarms if battery optimisation is aggressive; disable optimisation for the app if a reminder arrives late. All of this is local — there is no push server.
 - **Browser notifications (PWA):** work on HTTPS/localhost only while the app or tab is open. Closing the tab stops them; this is a browser limitation, not a server.
 - **Calendar alarms:** export an `.ics` file (today, next 7 days or the whole plan) and import it into Google/Apple/Outlook Calendar. Each event contains a `VALARM`. Re-import after a schedule change; old imported events are not updated automatically.
 
@@ -151,11 +153,11 @@ src/revision.ts          1/3/7/14/30-day revision engine
 src/gpa.ts               HSC GPA and Golden A+ rules
 src/analytics.ts         streaks, accuracy, weak chapters, weekly review
 src/db.ts                native SQLite mirror with graceful fallback
-src/native.ts            Android local-notification scheduling
+src/native.ts            Android local-notification scheduling (tasks, revisions, important dates)
 src/hooks.ts             timer, theme, reminders
 src/context.ts           shared planner context
 src/modals.tsx           chapter, mistake, exam and global-search dialogs
-src/exports.ts           ICS, Markdown and CSV exports
+src/exports.ts           ICS, Markdown and CSV exports (sessions, tests, MCQ, routine, dates)
 src/views/               Today, Calendar, Syllabus, Revision, Timer, Practice,
                          Exams, Analytics, Library, Reminders, Settings
 android/                 Capacitor Android project (Gradle)

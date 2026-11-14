@@ -18,7 +18,7 @@ export default function PracticeView() {
   const stats = attemptStats(data.attempts);
   const weekStats = attemptStats(data.attempts, attempt => attempt.date >= todayKey(new Date(Date.now() - 6 * 86400000)));
   return <div className="view practice-view">
-    <PageHeading eyebrow="PRACTICE, NOT JUST READING" title="যাচাই করো, তারপর এগোও।" description="অধ্যায়ভিত্তিক MCQ-তে সঙ্গে সঙ্গে উত্তর মিলাও। CQ-এর নম্বর নিজে লেখো। ভুলগুলো আলাদা করে রাখো—সেগুলোই তোমার আসল সিলেবাস।" action={<div className="practice-head-stats"><span><Target size={16} /><strong>{bn(stats.total)}</strong> MCQ</span><span><Check size={16} /><strong>{bn(stats.accuracy)}%</strong> নির্ভুলতা</span></div>} />
+    <PageHeading eyebrow="PRACTICE, NOT JUST READING" title="যাচাই করো, তারপর এগোও।" titleEn="Check yourself, then move on." description="অধ্যায়ভিত্তিক MCQ-তে সঙ্গে সঙ্গে উত্তর মিলাও। CQ-এর নম্বর নিজে লেখো। ভুলগুলো আলাদা করে রাখো—সেগুলোই তোমার আসল সিলেবাস।" descriptionEn="Chapter-wise MCQs with instant checking, CQ marks and a wrong-answer collection." action={<div className="practice-head-stats"><span><Target size={16} /><strong>{bn(stats.total)}</strong> MCQ</span><span><Check size={16} /><strong>{bn(stats.accuracy)}%</strong> নির্ভুলতা</span></div>} />
     <div className="segmented practice-tabs">{(['mcq', 'cq', 'mistakes'] as const).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'mcq' ? 'MCQ অনুশীলন' : item === 'cq' ? 'CQ ট্র্যাকার' : `ভুলের খাতা (${bn(data.mistakes.filter(m => !m.resolved).length)})`}</button>)}</div>
     {tab === 'mcq' && <McqPractice stats={stats} weekStats={weekStats} />}
     {tab === 'cq' && <CqPractice onShowMistakes={() => setTab('mistakes')} />}

@@ -31,7 +31,7 @@ export const SAVED_AT_KEY = `${STORAGE_KEY}-saved-at`;
 export const MISTAKE_LIMIT = 1000;
 export const LIMITS = {
   sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000,
-  libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100,
+  libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 40, importantDates: 200,
 };
 
 const optionalAt = (v: unknown, message: string): string | undefined => {
@@ -71,6 +71,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (!text(examDate, 10) || !isValidDate(examDate)) throw new Error('HSC পরীক্ষার লক্ষ্য তারিখ সঠিক নয়।');
   const theme = raw.theme === undefined ? d.theme : raw.theme;
   if (!['light', 'dark', 'system'].includes(String(theme))) throw new Error('থিম সেটিংস সঠিক নয়।');
+  const language = raw.language === undefined ? d.language : raw.language;
+  if (!['bn', 'en'].includes(String(language))) throw new Error('ভাষার সেটিংস সঠিক নয়।');
   const carryoverMode = raw.carryoverMode === undefined ? d.carryoverMode : raw.carryoverMode;
   if (!['manual', 'auto'].includes(String(carryoverMode))) throw new Error('ব্যাকলগ সেটিংস সঠিক নয়।');
   const pomodoroFocus = raw.pomodoroFocus === undefined ? d.pomodoroFocus : Number(raw.pomodoroFocus);
@@ -83,6 +85,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     calendarRevision: int(raw.calendarRevision, 0, 999999) ? Number(raw.calendarRevision) : 0,
     examDate,
     theme: theme as Settings['theme'],
+    language: language as Settings['language'],
     revisionEnabled: raw.revisionEnabled === undefined ? d.revisionEnabled : raw.revisionEnabled === true,
     carryoverMode: carryoverMode as Settings['carryoverMode'],
     pomodoroFocus, pomodoroBreak, pomodoroLongBreak,
@@ -216,6 +219,18 @@ export function parseBackup(rawText: string): AppData {
     if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.taskId, 180) || !nonEmpty(item.title, 300) || !isSubject(item.subject) || !int(item.minutes, 1, 720) || !text(item.fromDate, 10) || !isValidDate(item.fromDate) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.createdAt)) throw new Error('ব্যাকলগের তথ্য সঠিক নয়।');
     return { id: item.id, taskId: item.taskId, title: item.title, subject: item.subject, minutes: Number(item.minutes), fromDate: item.fromDate, date: item.date, createdAt: item.createdAt, completedAt: optionalAt(item.completedAt, 'ব্যাকলগের তারিখ সঠিক নয়।') };
   });
+
+  result.routineBlocks = listOf(raw.routineBlocks, LIMITS.routineBlocks, 'কাস্টম রুটিন', item => {
+    if (!object(item) || !nonEmpty(item.id, 180) || !int(item.weekday, 0, 6) || !int(item.startMinute, 0, 1439) || !int(item.minutes, 15, 480) || !isSubject(item.subject) || !text(item.title, 120) || !validAt(item.createdAt)) throw new Error('কাস্টম রুটিনের তথ্য সঠিক নয়।');
+    return { id: item.id, weekday: Number(item.weekday), startMinute: Number(item.startMinute), minutes: Number(item.minutes), subject: item.subject, title: item.title.trim(), createdAt: item.createdAt };
+  });
+  if (new Set(result.routineBlocks.map(block => block.id)).size !== result.routineBlocks.length) throw new Error('কাস্টম রুটিনে একই ID দুইবার আছে।');
+
+  result.importantDates = listOf(raw.importantDates, LIMITS.importantDates, 'গুরুত্বপূর্ণ তারিখ', item => {
+    if (!object(item) || !nonEmpty(item.id, 180) || !text(item.date, 10) || !isValidDate(item.date) || !nonEmpty(item.title, 200) || !text(item.note, 2000) || !bool(item.notify) || !validAt(item.createdAt)) throw new Error('গুরুত্বপূর্ণ তারিখের তথ্য সঠিক নয়।');
+    return { id: item.id, date: item.date, title: item.title, note: item.note, notify: item.notify, createdAt: item.createdAt };
+  });
+  if (new Set(result.importantDates.map(item => item.id)).size !== result.importantDates.length) throw new Error('গুরুত্বপূর্ণ তারিখে একই ID দুইবার আছে।');
 
   result.badges = raw.badges === undefined ? [] : listOf(raw.badges, LIMITS.badges, 'ব্যাজ', value => {
     if (!nonEmpty(value, 60)) throw new Error('ব্যাজের তথ্য সঠিক নয়।');

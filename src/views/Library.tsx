@@ -20,7 +20,7 @@ export default function LibraryView() {
   const [tab, setTab] = useState<Tab>('notes');
   const counts: Record<Tab, number> = { notes: data.libraryNotes.length, videos: data.videos.length, formulas: STARTER_FORMULAS.length + data.formulas.length, boards: data.boardQuestions.length };
   return <div className="view library-view">
-    <PageHeading eyebrow="YOUR OWN SHELF" title="নিজের সংগ্রহ, নিজের হাতে।" description="নোট, ভিডিও, সূত্র আর বোর্ড প্রশ্ন—সব এক জায়গায়। ইন্টারনেট লাগবে শুধু ভিডিও দেখতে; বাকি সব অফলাইনে থাকে।" action={<div className="library-total"><strong>{bn(Object.values(counts).reduce((sum, value) => sum + value, 0))}</strong><span>টি সংগ্রহ<br />এই ডিভাইসে</span></div>} />
+    <PageHeading eyebrow="YOUR OWN SHELF" title="নিজের সংগ্রহ, নিজের হাতে।" titleEn="Your own shelf, in your hands." description="নোট, ভিডিও, সূত্র আর বোর্ড প্রশ্ন—সব এক জায়গায়। ইন্টারনেট লাগবে শুধু ভিডিও দেখতে; বাকি সব অফলাইনে থাকে।" descriptionEn="Notes, videos, formulas and board questions in one place. Only video playback needs internet." action={<div className="library-total"><strong>{bn(Object.values(counts).reduce((sum, value) => sum + value, 0))}</strong><span>টি সংগ্রহ<br />এই ডিভাইসে</span></div>} />
     <div className="segmented library-tabs">{TABS.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label} <span className="tab-count">{bn(counts[item.id])}</span></button>)}</div>
     {tab === 'notes' && <NotesTab />}
     {tab === 'videos' && <VideosTab />}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS, CORE, PAPERS } from './data';
-import { addDays, addMonths, buildPlan, chapterTasks, DEFAULT_SETTINGS, diffDays, formatDayOffset, freshData, getPhases, getStats, isChapterDone, isTaskCurrent, isValidDate, taskStart, todayKey } from './planner';
+import { addDays, addMonths, applyRoutine, buildPlan, chapterTasks, DEFAULT_SETTINGS, diffDays, formatDayOffset, freshData, getPhases, getStats, isChapterDone, isTaskCurrent, isValidDate, taskStart, todayKey } from './planner';
 
 describe('Bangladesh date helpers', () => {
   it('uses Dhaka calendar dates at an UTC boundary', () => { expect(todayKey(new Date('2026-11-13T20:00:00Z'))).toBe('2026-11-14'); });
@@ -92,5 +92,25 @@ describe('complete study plan', () => {
     expect(getStats(plan, data, '2026-11-14').streak).toBe(2);
     expect(getStats(plan, data, '2026-11-16').streak).toBe(0);
     expect(diffDays(plan[0].date, plan[plan.length - 1].date)).toBe(180);
+  });
+});
+
+describe('custom weekly routine', () => {
+  it('adds a tagged block to every matching weekday without mutating the base plan', () => {
+    const plan = buildPlan();
+    const date = plan[0].date;
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const block = { id: 'block-1', weekday, startMinute: 20 * 60, minutes: 45, subject: 'math' as const, title: 'নিজের গণিত সেশন', createdAt: '2026-11-01T00:00:00.000Z' };
+    const custom = applyRoutine(plan, [block]);
+    const task = custom[0].tasks.find(item => item.id === `custom-${date}-block-1`);
+    expect(task).toMatchObject({ kind: 'custom', subject: 'math', startMinute: 1200, endMinute: 1245, title: 'নিজের গণিত সেশন' });
+    expect(custom[0].tasks.length).toBe(plan[0].tasks.length + 1);
+    expect(plan[0].tasks.some(item => item.kind === 'custom')).toBe(false);
+    const otherDay = custom.find(day => new Date(`${day.date}T00:00:00Z`).getUTCDay() !== weekday)!;
+    expect(otherDay.tasks.some(item => item.kind === 'custom')).toBe(false);
+  });
+  it('returns the same plan when there are no blocks', () => {
+    const plan = buildPlan();
+    expect(applyRoutine(plan, [])).toBe(plan);
   });
 });

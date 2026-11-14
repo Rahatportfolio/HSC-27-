@@ -747,3 +747,78 @@
 [data-theme="dark"] .chapter-revisions .revision-mini{background:#1d2a23;border-color:#314237;color:#a9bfae}
 [data-theme="dark"] .prep-row{background:#18221c;border-color:#2b3931}
 [data-theme="dark"] .prep-row select{background:#111a15;color:#e7eee4;border-color:#33443a}
+
+/* Focus mode: strip the shell and keep only the timer */
+.focus-toggle{position:fixed;right:20px;top:88px;z-index:60;box-shadow:0 8px 24px rgba(32,54,40,.12)}
+html.focus-mode{background:#eef4e8}
+html.focus-mode .sidebar,html.focus-mode .topbar,html.focus-mode .mobile-bottom-nav,html.focus-mode .sidebar-overlay{display:none!important}
+html.focus-mode .main-shell{margin-left:0}
+html.focus-mode .main-content{max-width:980px;padding:20px 24px 40px}
+html.focus-mode .focus-toggle{top:18px}
+html.focus-mode .page-heading,html.focus-mode .timer-rail,html.focus-mode .sessions-card,html.focus-mode .revision-tip{display:none!important}
+html.focus-mode .timer-layout{grid-template-columns:1fr}
+html.focus-mode .timer-main-card{max-width:680px;margin:36px auto 0}
+@media (max-width:760px){.focus-toggle{top:auto;bottom:86px;right:14px}html.focus-mode .focus-toggle{top:14px;bottom:auto}html.focus-mode .main-content{padding:14px}}
+
+/* Custom weekly routine and important dates */
+.routine-card,.important-dates-card{margin-top:18px}
+.weekday-tabs{display:flex;flex-wrap:wrap;gap:6px;margin:4px 0 14px}
+.weekday-tabs button{border:1px solid #e2e9da;background:#fbfcf8;border-radius:7px;padding:6px 11px;font-size:11px;color:#6f7f69;cursor:pointer}
+.weekday-tabs button.active{background:#2d6750;border-color:#2d6750;color:#fff}
+.routine-form,.important-form{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;align-items:end;margin:4px 0 16px}
+.routine-form label,.important-form label{display:flex;flex-direction:column;gap:5px;font-size:10px;font-weight:600;color:#73826d;letter-spacing:.2px}
+.routine-form input,.routine-form select,.important-form input,.important-form select{min-height:36px;font-size:11px;padding:6px 8px;background:#fff}
+.important-form{grid-template-columns:150px 1fr 1fr auto auto}
+.important-form .checkbox-line{flex-direction:row;align-items:center;gap:7px;min-height:36px;white-space:nowrap}
+.important-form .checkbox-line input{min-height:0;width:15px;height:15px;accent-color:#2d6750}
+.routine-list,.important-list{display:flex;flex-direction:column;gap:7px}
+.routine-row,.important-row{display:flex;align-items:center;gap:10px;border:1px solid #e7ede0;background:#fcfdf9;border-radius:9px;padding:9px 11px}
+.routine-row strong{font-size:12px;color:#34463a;flex:1}
+.routine-row small,.important-row span{font-size:10px;color:#8b9b84}
+.routine-time{font-family:'DM Sans',sans-serif;font-weight:700;font-size:11px;color:#2d6750;background:#eef5e7;border-radius:5px;padding:3px 6px}
+.subject-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.important-row>div{flex:1;display:flex;flex-direction:column;gap:3px;min-width:0}
+.important-row strong{font-size:12px;color:#34463a}
+.important-days{display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:46px;border-radius:7px;background:#f8efe4;color:#9b7440;font-weight:700;font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.05;padding:5px 6px}
+.important-days small{font-family:'Hind Siliguri',sans-serif;font-size:8px;font-weight:500;letter-spacing:.3px}
+.kind-badge.custom{background:#e9f1fb;color:#4c6f96;border-color:#d5e3f5}
+.important-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;border:1px solid #f0dfc4;background:#fdf7ec;border-radius:10px;padding:11px 15px;margin-bottom:12px;font-size:12px;color:#7c6338}
+.important-banner>span{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.important-banner svg{color:#c1934d;flex-shrink:0}
+@media (max-width:900px){.routine-form{grid-template-columns:1fr 1fr}.routine-form .button{grid-column:1/-1}.important-form{grid-template-columns:1fr 1fr}.important-form .button{grid-column:1/-1}}
+@media (max-width:560px){.routine-form,.important-form{grid-template-columns:1fr}.routine-row{flex-wrap:wrap}.routine-row strong{flex-basis:100%}}
+[data-theme="dark"] .weekday-tabs button{background:#18221c;border-color:#2c3a31;color:#a9bfae}
+[data-theme="dark"] .weekday-tabs button.active{background:#3d7a5f;border-color:#3d7a5f;color:#fff}
+[data-theme="dark"] .routine-form input,[data-theme="dark"] .routine-form select,[data-theme="dark"] .important-form input{background:#111a15;color:#e7eee4;border-color:#33443a}
+[data-theme="dark"] .routine-row,[data-theme="dark"] .important-row{background:#18221c;border-color:#2b3931}
+[data-theme="dark"] .routine-row strong,[data-theme="dark"] .important-row strong{color:#dfe9dd}
+[data-theme="dark"] .routine-time{background:#24352c;color:#a9d0b4}
+[data-theme="dark"] .important-days{background:#33291f;color:#dfb87f}
+[data-theme="dark"] .important-banner{background:#2a2419;border-color:#43382a;color:#d8c39d}
+
+/* Fourth data export card and lavender icon */
+.data-actions{grid-template-columns:repeat(4,1fr)}
+.large-icon.lavender{background:#efedf9;color:#7b6fa8}
+.data-action-buttons{display:flex;flex-wrap:wrap;gap:8px}
+@media (max-width:1100px){.data-actions{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:600px){.data-actions{grid-template-columns:1fr}}
+[data-theme="dark"] .large-icon.lavender{background:#2a2638;color:#b8aede}
+
+/* Language picker */
+.language-picker{display:grid;grid-template-columns:1fr 1fr;gap:10px;max-width:420px}
+.language-picker button{display:flex;flex-direction:column;align-items:flex-start;gap:3px;border:1px solid #e2e9da;background:#fbfcf8;border-radius:9px;padding:10px 13px;cursor:pointer;text-align:left}
+.language-picker button strong{font-size:12px;color:#3b5142}
+.language-picker button small{font-size:9px;color:#8b9b84}
+.language-picker button.active{border-color:#8fb573;background:#f2f8eb;box-shadow:inset 0 0 0 1px #8fb573}
+.language-section{margin-top:18px}
+[data-theme="dark"] .language-picker button{background:#18221c;border-color:#2b3931}
+[data-theme="dark"] .language-picker button strong{color:#dfe9dd}
+[data-theme="dark"] .language-picker button.active{background:#203027;border-color:#5c8f6d}
+
+/* Routine drag-and-drop reordering */
+.routine-row{cursor:grab}
+.routine-row.dragging{opacity:.55;outline:1px dashed #8fb573}
+.routine-grip{display:inline-flex;color:#a8b6a0;flex:none}
+.routine-move{display:inline-flex;gap:2px;flex:none}
+.routine-move .icon-button{padding:2px;width:22px;height:22px}
+.routine-move .icon-button:disabled{opacity:.35;cursor:default}

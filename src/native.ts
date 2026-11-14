@@ -95,6 +95,31 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
     });
   }
 
+  for (const item of data.importantDates) {
+    if (!item.notify) continue;
+    if (item.date >= today && item.date <= lastDate) {
+      const at = instant(item.date, 9 * 60);
+      if (at > now) notifications.push({
+        id: idFor(`date-day:${item.id}`),
+        title: 'গুরুত্বপূর্ণ তারিখ',
+        body: `${item.title}${item.note ? ` · ${item.note}` : ''}`,
+        channelId: 'study-reminders',
+        schedule: { at: new Date(at), allowWhileIdle: true },
+      });
+    }
+    const eve = addDays(item.date, -1);
+    if (eve >= today && eve <= lastDate) {
+      const at = instant(eve, 20 * 60);
+      if (at > now) notifications.push({
+        id: idFor(`date-eve:${item.id}`),
+        title: 'আগামীকাল গুরুত্বপূর্ণ তারিখ',
+        body: `${item.title} · ${item.date}`,
+        channelId: 'study-reminders',
+        schedule: { at: new Date(at), allowWhileIdle: true },
+      });
+    }
+  }
+
   const chosen = notifications.sort((a, b) => a.schedule.at.getTime() - b.schedule.at.getTime()).slice(0, LIMIT);
   if (chosen.length) {
     try {

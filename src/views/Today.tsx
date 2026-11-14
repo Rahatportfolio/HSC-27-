@@ -4,6 +4,7 @@ import { chapterById, subjectById } from '../data';
 import { addDays, bn, diffDays, formatDate, getStats, isValidDate, percent, phaseName } from '../planner';
 import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
 import { revisionBuckets, INTERVAL_LABEL } from '../revision';
+import { t } from '../i18n';
 import { carryoversOn, pendingCarryovers, removeCarryover, toggleCarryover } from '../study';
 import { DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
 
@@ -22,6 +23,7 @@ export default function TodayView() {
   const buckets = revisionBuckets(data.revisions, today);
   const due = [...buckets.overdue, ...buckets.today];
   const carryovers = carryoversOn(data, selectedDate);
+  const nextImportant = [...data.importantDates].filter(item => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const shiftDate = (amount: number) => { const next = addDays(selectedDate, amount); if (isValidDate(next)) setSelectedDate(next); };
   const timerText = timer.mode === 'stopwatch'
     ? `${bn(String(Math.floor(timer.elapsedSec / 60)).padStart(2, '0'))}:${bn(String(timer.elapsedSec % 60).padStart(2, '0'))}`
@@ -29,11 +31,11 @@ export default function TodayView() {
   return <div className="view today-view">
     <section className="welcome-hero">
       <div className="hero-copy">
-        <div className="hero-eyebrow"><span className="live-dot" />তোমার HSC 27 পথচলা</div>
-        <h1>{isToday ? 'আজ একটু' : 'প্রতিদিন একটু'}<br /><span>এগিয়ে যাই।</span></h1>
-        <p>{formatDate(selectedDate, 'long')}, {formatDate(selectedDate, 'weekday')} <span className="hero-separator">·</span> {day ? `দিন ${bn(dayNumber)}` : 'নতুন করে শুরু করো'}</p>
-        <div className="hero-chips"><span><BookOpen size={14} />{bn(data.settings.dailyHours)} ঘণ্টার লক্ষ্য</span><span><Clock3 size={14} />আজ মাপা {bn(Math.floor(measured / 60))}ঘ {bn(measured % 60)}মি</span><span><HeartPulse size={14} />{day ? phaseName(day.phase) : 'তোমার পরিকল্পনা'}</span></div>
-        <div className="hero-progress"><div><span>আজকের মাপা পড়ার সময়</span><strong>{bn(percent(measured, target))}%</strong></div><ProgressBar value={percent(measured, target)} /></div>
+        <div className="hero-eyebrow"><span className="live-dot" />{t('তোমার HSC 27 পথচলা', 'Your HSC 27 journey')}</div>
+        <h1>{isToday ? t('আজ একটু', 'A little today') : t('প্রতিদিন একটু', 'A little every day')}<br /><span>{t('এগিয়ে যাই।', 'moves us forward.')}</span></h1>
+        <p>{formatDate(selectedDate, 'long')}, {formatDate(selectedDate, 'weekday')} <span className="hero-separator">·</span> {day ? `${t('দিন', 'Day')} ${bn(dayNumber)}` : t('নতুন করে শুরু করো', 'start fresh')}</p>
+        <div className="hero-chips"><span><BookOpen size={14} />{bn(data.settings.dailyHours)} {t('ঘণ্টার লক্ষ্য', 'hour target')}</span><span><Clock3 size={14} />{t('আজ মাপা', 'Measured today')} {bn(Math.floor(measured / 60))}{t('ঘ', 'h')} {bn(measured % 60)}{t('মি', 'm')}</span><span><HeartPulse size={14} />{day ? phaseName(day.phase) : t('তোমার পরিকল্পনা', 'your plan')}</span></div>
+        <div className="hero-progress"><div><span>{t('আজকের মাপা পড়ার সময়', 'Study time measured today')}</span><strong>{bn(percent(measured, target))}%</strong></div><ProgressBar value={percent(measured, target)} /></div>
       </div>
       <div className="hero-art"><StudyIllustration /><div className="hero-art-note"><span className="small-spark">✦</span> ছোট পদক্ষেপ। বড় স্বপ্ন।</div></div>
     </section>
@@ -45,10 +47,11 @@ export default function TodayView() {
       <button className="stat-card stat-link" onClick={() => navigate('practice')}><span className="stat-icon blue"><ListChecks size={19} /></span><div><span>বাকি কাজ ও ব্যাকলগ</span><strong>{bn(pending)}<small> কাজ</small></strong><p>{due.length ? `${bn(due.length)}টি রিভিশন দরকার` : 'রিভিশন আপাতত শেষ'}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
     </div>
     {due.length > 0 && <div className="recall-banner"><span><RotateCcw size={17} /><strong>{bn(due.length)}টি রিভিশন আজ বা আগেই দরকার।</strong> ছোট করে হলেও ঝালাই করে নাও।</span><button className="text-button" onClick={() => navigate('revision')}>রিভিশন শুরু <ArrowRight size={15} /></button></div>}
+    {nextImportant && <div className="important-banner"><span><Bell size={17} /><strong>{nextImportant.title}</strong> · {formatDate(nextImportant.date, 'long')} · {diffDays(today, nextImportant.date) === 0 ? 'আজ' : `${bn(diffDays(today, nextImportant.date))} দিন বাকি`}{nextImportant.note ? ` — ${nextImportant.note}` : ''}</span><button className="text-button" onClick={() => navigate('calendar')}>সব তারিখ <ArrowRight size={15} /></button></div>}
     {stats.backlog.length > 0 && <div className="backlog-banner"><span><Bell size={17} /><strong>{bn(stats.backlog.length)}টি আগের কাজ বাকি।</strong> একসাথে নয়, প্রতিদিন একটু করে মিটিয়ে নাও।</span><button className="text-button" onClick={() => navigate('calendar')}>ব্যাকলগ দেখো <ArrowRight size={15} /></button></div>}
     <div className="dashboard-grid">
       <section className="card schedule-card">
-        <div className="schedule-heading"><div><h2>{isToday ? 'আজকের রুটিন' : 'দিনের রুটিন'} <span className="count-badge">{bn(day?.tasks.length || 0)}টি সেশন</span></h2><p>একটা কাজ শেষ করো, টিক দাও। এগিয়ে যাও।</p></div><div className="date-switcher"><button className="icon-button" onClick={() => shiftDate(-1)} aria-label="আগের দিন"><ChevronLeft size={17} /></button><label className="date-input-wrap"><CalendarDays size={15} /><input type="date" aria-label="রুটিনের তারিখ" value={selectedDate} min="2020-01-01" max="2041-12-31" onChange={e => { if (isValidDate(e.target.value)) setSelectedDate(e.target.value); }} /></label><button className="icon-button" onClick={() => shiftDate(1)} aria-label="পরের দিন"><ChevronRight size={17} /></button></div></div>
+        <div className="schedule-heading"><div><h2>{isToday ? t('আজকের রুটিন', 'Today’s routine') : t('দিনের রুটিন', 'Day routine')} <span className="count-badge">{bn(day?.tasks.length || 0)}টি সেশন</span></h2><p>{t('একটা কাজ শেষ করো, টিক দাও। এগিয়ে যাও।', 'Finish a task, tick it off, move on.')}</p></div><div className="date-switcher"><button className="icon-button" onClick={() => shiftDate(-1)} aria-label="আগের দিন"><ChevronLeft size={17} /></button><label className="date-input-wrap"><CalendarDays size={15} /><input type="date" aria-label="রুটিনের তারিখ" value={selectedDate} min="2020-01-01" max="2041-12-31" onChange={e => { if (isValidDate(e.target.value)) setSelectedDate(e.target.value); }} /></label><button className="icon-button" onClick={() => shiftDate(1)} aria-label="পরের দিন"><ChevronRight size={17} /></button></div></div>
         {!isToday && <div className="selected-date-bar"><span>{formatDate(selectedDate, 'long')}</span><button className="text-button" onClick={() => setSelectedDate(today)}>আজ ফিরে যাও <ArrowRight size={14} /></button></div>}
         {day?.isCatchup && <div className="catchup-note"><RotateCcw size={16} />আজ নতুন অধ্যায় নয়। ব্যাকলগ, রিকল আর ছোট পরীক্ষার দিন।</div>}
         {carryovers.length > 0 && <div className="carryover-list"><div className="carryover-heading"><strong><ListChecks size={15} />এই দিনের ব্যাকলগ</strong><span>{bn(carryovers.filter(item => !item.completedAt).length)}টি বাকি</span></div>{carryovers.map(item => <div key={item.id} className={`carryover-row ${item.completedAt ? 'done' : ''}`}><button className={`task-check ${item.completedAt ? 'checked' : ''}`} aria-pressed={!!item.completedAt} aria-label={`${item.title} সম্পন্ন`} onClick={() => setData(d => toggleCarryover(d, item.id))}>{item.completedAt && <span>✓</span>}</button><div><strong>{item.title}</strong><span>{phaseName(plan.find(d => d.date === item.fromDate)?.phase || 'learn')} · {formatDate(item.fromDate)} থেকে · {bn(item.minutes)} মি.</span></div><button className="icon-button" aria-label="ব্যাকলগ থেকে সরাও" onClick={() => setData(d => removeCarryover(d, item.id))}><Trash2 size={15} /></button></div>)}</div>}

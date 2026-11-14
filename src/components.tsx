@@ -6,6 +6,7 @@ import type { SubjectId } from './data';
 import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent } from './planner';
 import type { Day, Task } from './planner';
 import { usePlanner } from './context';
+import { t } from './i18n';
 
 export function SubjectBadge({ subject, small = false }: { subject: SubjectId; small?: boolean }) {
   const s = subjectById[subject];
@@ -39,8 +40,8 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
   }, []);
   return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><div ref={ref} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId}><div className="modal-header"><h2 id={titleId}>{title}</h2><button className="icon-button" onClick={onClose} aria-label="বন্ধ করো"><X size={20} /></button></div><div className="modal-body">{children}</div></div></div>;
 }
-export function PageHeading({ eyebrow, title, description, action }: { eyebrow?: string; title: string; description: string; action?: ReactNode }) {
-  return <div className="page-heading"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{title}</h1><p>{description}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>;
+export function PageHeading({ eyebrow, title, titleEn, description, descriptionEn, action }: { eyebrow?: string; title: string; titleEn?: string; description: string; descriptionEn?: string; action?: ReactNode }) {
+  return <div className="page-heading"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{t(title, titleEn || title)}</h1><p>{t(description, descriptionEn || description)}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>;
 }
 export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
   return <div className="empty-state"><div className="empty-icon"><CheckCheck size={28} strokeWidth={1.5} /></div><h3>{title}</h3><p>{description}</p>{action}</div>;
@@ -61,7 +62,7 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
   const current = !done && isTaskCurrent(task, today, minute);
   return <article className={`task-card ${done ? 'done' : ''} ${current ? 'current' : ''} ${compact ? 'compact' : ''}`}>
     <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}{formatDayOffset(task.startMinute)}</span><span className="time-line" /><small>{bn(task.endMinute - task.startMinute)} মি.</small></div>
-    <div className="task-main"><div className="task-topline"><SubjectBadge subject={task.subject} small />{current && <span className="now-badge">এখন চলছে</span>}{task.kind === 'exam' && <span className="kind-badge">মডেল টেস্ট</span>}{task.kind === 'revision' && <span className="kind-badge">রিভিশন</span>}</div>
+    <div className="task-main"><div className="task-topline"><SubjectBadge subject={task.subject} small />{current && <span className="now-badge">এখন চলছে</span>}{task.kind === 'exam' && <span className="kind-badge">মডেল টেস্ট</span>}{task.kind === 'revision' && <span className="kind-badge">রিভিশন</span>}{task.kind === 'custom' && <span className="kind-badge custom">কাস্টম</span>}</div>
       <button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
       {expanded && <div className="task-expanded"><span><Clock3 size={14} />{formatTime(task.startMinute)}{formatDayOffset(task.startMinute)} – {formatTime(task.endMinute)}{formatDayOffset(task.endMinute)}</span><button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />ভুলের খাতায় যোগ করো</button></div>}
