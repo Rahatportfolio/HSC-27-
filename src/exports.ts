@@ -112,3 +112,15 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
     `রপ্তানি: ${new Date().toISOString()} · Prostuti / HSC-27`, '');
   return lines.join('\n');
 }
+
+/** RFC-4180 style CSV with a BOM so Excel opens Bengali text correctly. */
+export function makeCsv(rows: (string | number)[][]): string {
+  const cell = (value: string | number): string => {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+export function downloadCsv(rows: (string | number)[][], filename: string): void {
+  downloadText(makeCsv(rows), filename, 'text/csv;charset=utf-8');
+}

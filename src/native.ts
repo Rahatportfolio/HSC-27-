@@ -1,0 +1,101 @@
+import { chapterById, subjectById } from './data';
+import type { AppData, Day } from './planner';
+import { addDays, taskStart } from './planner';
+
+/**
+ * Native-only helpers. The web build never imports the notification plugin:
+ * it is loaded dynamically and only after Capacitor reports an Android/iOS shell.
+ */
+export type NativePermission = 'granted' | 'denied' | 'prompt' | 'unavailable';
+export type NativeSyncResult = { scheduled: number; permission: NativePermission };
+
+export function isNativeApp(): boolean {
+  if (typeof window === 'undefined') return false;
+  const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+  try { return Boolean(capacitor?.isNativePlatform?.()); } catch { return false; }
+}
+
+/** Stable 31-bit notification id so re-syncing replaces instead of duplicating. */
+function idFor(key: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < key.length; index += 1) {
+    hash ^= key.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) % 2147483647 || 1;
+}
+
+/** Bangladesh has no daylight saving time, so a fixed +06:00 offset is exact. */
+function instant(date: string, minute: number): number {
+  return Date.parse(`${date}T00:00:00+06:00`) + minute * 60000;
+}
+
+const WINDOW_DAYS = 14;
+const LIMIT = 64;
+
+export async function syncNativeReminders(plan: Day[], data: AppData, today: string, options: { requestPermission?: boolean } = {}): Promise<NativeSyncResult> {
+  if (!isNativeApp()) return { scheduled: 0, permission: 'unavailable' };
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
+
+  let permission = await LocalNotifications.checkPermissions();
+  if (permission.display !== 'granted' && options.requestPermission) permission = await LocalNotifications.requestPermissions();
+  if (permission.display !== 'granted') {
+    return { scheduled: 0, permission: permission.display === 'denied' ? 'denied' : 'prompt' };
+  }
+
+  try {
+    await LocalNotifications.createChannel({ id: 'study-reminders', name: 'পড়ার রিমাইন্ডার', description: 'স্টাডি সেশন ও রিভিশনের সময়', importance: 4, visibility: 1, vibration: true });
+  } catch {
+    // Channels exist on Android 8+ only; other platforms ignore this step.
+  }
+
+  const pending = await LocalNotifications.getPending();
+  if (pending.notifications.length) {
+    await LocalNotifications.cancel({ notifications: pending.notifications.map(item => ({ id: item.id })) });
+  }
+
+  const lastDate = addDays(today, WINDOW_DAYS);
+  const now = Date.now() + 60_000;
+  const notifications: {
+    id: number; title: string; body: string; channelId: string;
+    schedule: { at: Date; allowWhileIdle: boolean };
+  }[] = [];
+
+  for (const day of plan) {
+    if (day.date < today) continue;
+    if (day.date > lastDate) break;
+    for (const task of day.tasks) {
+      if (data.completed[task.id]) continue;
+      const start = taskStart(task);
+      const at = instant(start.date, start.minute - data.settings.reminderLead);
+      if (at <= now || at > instant(lastDate, 24 * 60)) continue;
+      const subject = subjectById[task.subject].name;
+      const chapters = task.chapterIds.map(id => chapterById[id]?.title).filter(Boolean).slice(0, 2).join(' · ');
+      notifications.push({
+        id: idFor(`task:${task.id}`),
+        title: `${subject} · পড়ার সময়`,
+        body: chapters || task.title,
+        channelId: 'study-reminders',
+        schedule: { at: new Date(at), allowWhileIdle: true },
+      });
+    }
+  }
+
+  for (const item of data.revisions) {
+    if (item.completedAt) continue;
+    if (item.dueDate < today || item.dueDate > lastDate) continue;
+    const at = instant(item.dueDate, 8 * 60);
+    if (at <= now) continue;
+    notifications.push({
+      id: idFor(`revision:${item.id}`),
+      title: 'রিভিশন দিন',
+      body: `${chapterById[item.chapterId]?.title || 'অধ্যায়'} · ${item.interval} দিন পরের রিভিশন`,
+      channelId: 'study-reminders',
+      schedule: { at: new Date(at), allowWhileIdle: true },
+    });
+  }
+
+  const chosen = notifications.sort((a, b) => a.schedule.at.getTime() - b.schedule.at.getTime()).slice(0, LIMIT);
+  if (chosen.length) await LocalNotifications.schedule({ notifications: chosen });
+  return { scheduled: chosen.length, permission: 'granted' };
+}

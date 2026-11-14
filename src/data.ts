@@ -1,5 +1,5 @@
 export type SubjectId = 'physics' | 'chemistry' | 'biology' | 'math' | 'bangla' | 'english' | 'ict';
-export type Priority = 'A' | 'B';
+export type Priority = 'A' | 'B' | 'C';
 export interface Chapter {
   id: string;
   subject: SubjectId;
@@ -97,7 +97,7 @@ export const CHAPTERS: Chapter[] = [
   chapter('biology', 2, '9', 'মানব জীবনের ধারাবাহিকতা', 'A', 2, 'জননতন্ত্র, গ্যামেট ও ভ্রূণের বিকাশ'),
   chapter('biology', 2, '10', 'মানবদেহের প্রতিরক্ষা', 'A', 2, 'ইমিউনিটি, অ্যান্টিজেন ও টিকা'),
   chapter('biology', 2, '11', 'জিনতত্ত্ব ও বিবর্তন', 'A', 3, 'মেন্ডেলীয় cross, sex linkage ও বিবর্তন'),
-  chapter('biology', 2, '12', 'প্রাণীর আচরণ', 'B', 1, 'সহজাত ও অর্জিত আচরণ', 'সংস্করণভেদে এই অধ্যায় নাও থাকতে পারে। তোমার বই ও পরীক্ষার পাঠ্যসূচি মিলিয়ে নাও; বইয়ে না থাকলে এই সময়ে দুর্বল অধ্যায় অনুশীলন করো।'),
+  chapter('biology', 2, '12', 'প্রাণীর আচরণ', 'C', 1, 'সহজাত ও অর্জিত আচরণ', 'সংস্করণভেদে এই অধ্যায় নাও থাকতে পারে। তোমার বই ও পরীক্ষার পাঠ্যসূচি মিলিয়ে নাও; বইয়ে না থাকলে এই সময়ে দুর্বল অধ্যায় অনুশীলন করো।'),
 
   chapter('math', 1, '1', 'ম্যাট্রিক্স ও নির্ণায়ক', 'A', 3, 'নির্ণায়ক, বিপরীত ম্যাট্রিক্স ও সমীকরণ'),
   chapter('math', 1, '2', 'ভেক্টর', 'A', 3, 'ডট–ক্রস, ক্ষেত্রফল ও জ্যামিতিক প্রয়োগ'),
@@ -180,3 +180,9 @@ export const SOURCES = [
   { name: 'NCTB — পাঠ্যসূচি ও নমুনা প্রশ্ন', url: 'https://nctb.gov.bd/pages/static-pages/6922dff5933eb65569e24d31', note: 'তোমার পরীক্ষার বছরের সর্বশেষ নির্দেশনা এখান থেকে যাচাই করো।' },
   { name: 'পদার্থবিজ্ঞানের অধ্যায় তালিকা — 10 Minute School', url: 'https://10minuteschool.com/content/category/academic-subjects/physics/', note: 'সহায়ক অধ্যায়-নামের রেফারেন্স; সরকারি সিলেবাস নয়।' },
 ];
+
+/** Combined full marks used by the GPA helper: two 100-mark papers, ICT 75+25. */
+export const SUBJECT_FULL_MARKS: Record<SubjectId, number> = {
+  physics: 200, chemistry: 200, biology: 200, math: 200, bangla: 200, english: 200, ict: 100,
+};
+export const FOURTH_SUBJECT: SubjectId = 'math';

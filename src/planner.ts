@@ -1,9 +1,10 @@
 import { CHAPTERS, CORE, PAPERS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
+import type { BoardQuestion, Carryover, ChapterMeta, CqEntry, FormulaEntry, PersonalNote, QuizAttempt, QuizQuestion, RevisionItem, SettingsExtras, StudySession, SubjectMarks, TestRecord, VideoLink } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
 export type TaskKind = 'learn' | 'practice' | 'revision' | 'exam' | 'correction' | 'language' | 'ict' | 'recall' | 'practical';
-export interface Settings {
+export interface Settings extends SettingsExtras {
   startDate: string;
   startTime: string;
   dailyHours: number;
@@ -13,10 +14,14 @@ export interface Settings {
   reminderLead: number;
   syllabusChecked: boolean;
   calendarRevision: number;
+  /** Personal target for the HSC exam; not an official board date. */
+  examDate: string;
 }
 export const DEFAULT_SETTINGS: Settings = {
   startDate: '2026-11-14', startTime: '06:30', dailyHours: 8, board: 'সিলেট', name: '',
   reminderEnabled: false, reminderLead: 10, syllabusChecked: false, calendarRevision: 0,
+  theme: 'light', revisionEnabled: true, carryoverMode: 'manual', examDate: '2027-06-30',
+  pomodoroFocus: 25, pomodoroBreak: 5, pomodoroLongBreak: 15,
 };
 export interface Task {
   id: string; date: string; dayIndex: number; phase: PhaseId; subject: SubjectId;
@@ -28,7 +33,7 @@ export interface Phase { id: PhaseId; name: string; subtitle: string; start: str
 export interface ExamResult { score: number; total: number; at: string; mistakes: string }
 export interface Mistake { id: string; subject: SubjectId; text: string; date: string; resolved: boolean }
 export interface AppData {
-  version: 1;
+  version: 2;
   settings: Settings;
   completed: Record<string, string>;
   confidence: Record<string, 'weak' | 'okay' | 'confident'>;
@@ -36,8 +41,27 @@ export interface AppData {
   exams: Record<string, ExamResult>;
   mistakes: Mistake[];
   focus: { minutes: number; sessions: number };
+  studySessions: StudySession[];
+  revisions: RevisionItem[];
+  chapterMeta: Record<string, ChapterMeta>;
+  questions: QuizQuestion[];
+  attempts: QuizAttempt[];
+  cq: CqEntry[];
+  tests: TestRecord[];
+  libraryNotes: PersonalNote[];
+  videos: VideoLink[];
+  boardQuestions: BoardQuestion[];
+  formulas: FormulaEntry[];
+  formulaFavorites: string[];
+  gpaMarks: SubjectMarks;
+  carryovers: Carryover[];
+  badges: string[];
 }
-export const freshData = (): AppData => ({ version: 1, settings: { ...DEFAULT_SETTINGS }, completed: {}, confidence: {}, notes: {}, exams: {}, mistakes: [], focus: { minutes: 0, sessions: 0 } });
+export const freshData = (): AppData => ({
+  version: 2, settings: { ...DEFAULT_SETTINGS }, completed: {}, confidence: {}, notes: {}, exams: {}, mistakes: [],
+  focus: { minutes: 0, sessions: 0 }, studySessions: [], revisions: [], chapterMeta: {}, questions: [], attempts: [],
+  cq: [], tests: [], libraryNotes: [], videos: [], boardQuestions: [], formulas: [], formulaFavorites: [], gpaMarks: {}, carryovers: [], badges: [],
+});
 export const STORAGE_KEY = 'hsc27-prostuti-v1';
 export const TIMEZONE = 'Asia/Dhaka';
 

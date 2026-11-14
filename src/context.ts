@@ -1,9 +1,12 @@
 import { createContext, useContext } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { AppData, Day } from './planner';
-import type { Chapter } from './data';
-import type { useFocusTimer } from './hooks';
-export type View = 'today' | 'calendar' | 'syllabus' | 'exams' | 'progress' | 'reminders' | 'settings';
+import type { Chapter, SubjectId } from './data';
+import type { useStudyTimer } from './hooks';
+import type { NewSession } from './study';
+import type { ThemeMode } from './types';
+
+export type View = 'today' | 'calendar' | 'syllabus' | 'revision' | 'timer' | 'practice' | 'exams' | 'analytics' | 'library' | 'reminders' | 'settings';
 export interface ConfirmRequest { title: string; message: string; label?: string; danger?: boolean; action: () => void }
 export interface PlannerContextValue {
   data: AppData; setData: Dispatch<SetStateAction<AppData>>; plan: Day[]; today: string; now: Date;
@@ -17,7 +20,10 @@ export interface PlannerContextValue {
   confirm: (request: ConfirmRequest) => void;
   exportICS: (range: 'day' | 'week' | 'all', date?: string) => void;
   storageOk: boolean;
-  timer: ReturnType<typeof useFocusTimer>;
+  timer: ReturnType<typeof useStudyTimer>;
+  logSession: (session: NewSession) => void;
+  startTimer: (subject: SubjectId, chapterId?: string) => void;
+  setTheme: (theme: ThemeMode) => void;
 }
 export const PlannerContext = createContext<PlannerContextValue | null>(null);
 export function usePlanner(): PlannerContextValue { const ctx = useContext(PlannerContext); if (!ctx) throw new Error('PlannerProvider missing'); return ctx; }
