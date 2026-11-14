@@ -9,7 +9,7 @@ import { revisionBuckets, INTERVAL_LABEL } from '../revision';
 import { t } from '../i18n';
 import { motivationFor } from '../motivation';
 import { carryoversOn, pendingCarryovers, removeCarryover, toggleCarryover } from '../study';
-import { DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
+import { ClassLinkRow, DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
 
 export default function TodayView() {
   const { plan, data, setData, storageOk, today, selectedDate, setSelectedDate, navigate, exportICS, timer } = usePlanner();
@@ -49,7 +49,7 @@ export default function TodayView() {
       <div className="card-heading"><h3><ListChecks size={17} />{t('আজকের টার্গেট', 'Today’s targets')}</h3><span className="tiny-muted">{t('এই তারিখের মধ্যে শেষ', 'Finish by this date')}</span></div>
       {targets.length ? <div className="target-list">{targets.map(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id], links = CHAPTER_CLASSES[chapter.id]; return <div className="target-item" key={chapter.id}>
         <div className="target-copy"><strong>{chapter.title}</strong><small>{subjectById[chapter.subject].name} · {bn(slot.hours)} {t('ঘণ্টা', 'h')} · শেষ {formatDate(slot.end)}</small><span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span></div>
-        {links && <div className="class-link-row">{(['oneShot', 'mcq', 'cq'] as const).map(kind => <a key={kind} className={`class-link ${links.kind[kind] === 'search' ? 'search' : ''}`} href={links[kind]} target="_blank" rel="noreferrer"><Play size={13} /><span>{kind === 'oneShot' ? t('ওয়ান শট', 'One shot') : kind === 'mcq' ? 'MCQ' : 'CQ'}</span></a>)}</div>}
+        {links && <ClassLinkRow classes={links} compact />}
       </div>; })}</div> : <p className="tiny-muted">{t('আজ কোনো নতুন অধ্যায়ের টার্গেট নেই — রিভিশন বা ব্যাকলগ দেখে নাও।', 'No new chapter target today — use it for revision or backlog.')}</p>}
     </section>
     <PhaseJourney startDate={data.settings.startDate} activeDate={selectedDate} />

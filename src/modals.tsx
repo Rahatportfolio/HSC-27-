@@ -7,10 +7,10 @@ import { bn, chapterTasks, formatDate, formatDayOffset, formatTime, isChapterDon
 import { MISTAKE_LIMIT, newId, nowIso } from './storage';
 import { chapterMeta, updateChapterMeta } from './study';
 import { scheduleFor } from './schedule';
-import { classLinksFor } from './classLinks';
+import { BANGLA_LESSONS, classLinksFor } from './classLinks';
 import { INTERVAL_LABEL } from './revision';
 import { usePlanner } from './context';
-import { EmptyState, Modal, ProgressBar, SubjectBadge } from './components';
+import { ClassLinkRow, EmptyState, Modal, ProgressBar, SubjectBadge } from './components';
 
 const PRIORITY_LABEL: Record<string, string> = { A: 'আগে পড়ো', B: 'এরপর পড়ো', C: 'সময় থাকলে' };
 const PREP_LABEL = { none: 'শুরু হয়নি', practicing: 'অনুশীলনে', ready: 'প্রস্তুত' } as const;
@@ -25,7 +25,8 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
     <p className="modal-description">{c.focus}</p>
     {(() => { const sch = scheduleFor(c.id); const links = classLinksFor(c.id); return <>
       {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} aria-label={`গুরুত্ব ${sch.star} স্টার`}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span><span>শেষ করতে হবে <strong>{formatDate(sch.end)}</strong></span></div>}
-      {links && <div className="class-block"><div className="class-block-head"><strong>এই অধ্যায়ের ক্লাস</strong><span>{links.channel}</span></div><div className="class-link-row">{(['oneShot', 'mcq', 'cq'] as const).map(kind => <a key={kind} className={`class-link ${links.kind[kind] === 'search' ? 'search' : ''}`} href={links[kind]} target="_blank" rel="noreferrer"><Play size={14} /><span>{kind === 'oneShot' ? 'ওয়ান শট' : kind === 'mcq' ? 'MCQ ক্লাস' : 'CQ ক্লাস'}</span>{links.kind[kind] === 'search' && <em>সার্চ</em>}</a>)}</div></div>}
+      {links && <div className="class-block"><div className="class-block-head"><strong>এই অধ্যায়ের ক্লাস</strong><span>একাধিক শিক্ষক — যেটা ভালো লাগে সেটাই খোলো</span></div><ClassLinkRow classes={links} /></div>}
+    {(() => { const lessons = BANGLA_LESSONS[c.id]; return lessons ? <div className="class-block"><div className="class-block-head"><strong>পাঠভিত্তিক ক্লাস</strong><span>{bn(lessons.length)}টি পাঠ</span></div>{lessons.map(lesson => <div className="lesson-row" key={lesson.title}><span>{lesson.title}</span>{lesson.url ? <a className="class-link" href={lesson.url} target="_blank" rel="noreferrer"><Play size={12} /><span>ক্লাস</span></a> : <span className="lesson-missing">ভিডিও এখনো নেই — চ্যানেলে খুঁজো</span>}</div>)}</div> : null; })()}
     </>; })()}
     {c.note && <div className="notice-box"><BookOpen size={18} /><p>{c.note}</p></div>}
     <div className="chapter-modal-progress"><span>{bn(done)}/{bn(tasks.length)} ধাপ শেষ · {isChapterDone(plan, c.id, data.completed) ? 'অধ্যায় সম্পন্ন' : 'প্রতিটি ধাপ আলাদাভাবে টিক দাও'}</span><ProgressBar value={percent(done, tasks.length)} /></div>

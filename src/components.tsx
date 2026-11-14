@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Sparkles, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Play, Sparkles, X } from 'lucide-react';
 import { subjectById } from './data';
 import type { SubjectId } from './data';
 import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent } from './planner';
 import type { Day, Task } from './planner';
 import { usePlanner } from './context';
 import { isEnglish, t } from './i18n';
+import type { ChapterClasses } from './classLinks';
 
 export function SubjectBadge({ subject, small = false }: { subject: SubjectId; small?: boolean }) {
   const s = subjectById[subject];
@@ -96,4 +97,17 @@ export function DaySummary({ day }: { day: Day }) {
   const { data } = usePlanner();
   const done = day.tasks.filter(t => data.completed[t.id]).length;
   return <div className="day-summary"><span>{bn(done)}/{bn(day.tasks.length)} {t('কাজ শেষ', 'tasks done')}</span><ProgressBar value={percent(done, day.tasks.length)} /></div>;
+}
+
+const CLASS_LABEL = { oneShot: 'ওয়ান শট', mcq: 'MCQ', cq: 'CQ' } as const;
+export function ClassLinkRow({ classes, compact = false }: { classes: ChapterClasses; compact?: boolean }) {
+  return <div className={`class-link-row ${compact ? 'compact' : ''}`}>
+    {(['oneShot', 'mcq', 'cq'] as const).map(kind => classes[kind].slice(0, compact ? 1 : 4).map(option => <a
+      key={`${kind}-${option.channel}-${option.url}`}
+      className={`class-link ${option.kind === 'search' ? 'search' : ''}`}
+      href={option.url} target="_blank" rel="noreferrer"
+      title={`${CLASS_LABEL[kind]} · ${option.channel}${option.kind === 'search' ? ' — চ্যানেলে খুঁজে দেখো' : ''}`}>
+      <Play size={13} /><span>{CLASS_LABEL[kind]}</span><em>{option.channel}</em>
+    </a>))}
+  </div>;
 }
