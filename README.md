@@ -63,11 +63,11 @@ CHROMIUM_PATH=/path/to/chrome node scripts/browser-smoke.mjs
 
 ## GitHub Pages
 
-The workflow in `.github/workflows/deploy-pages.yml` tests and builds the app, then deploys `dist/`.
+The workflow in `.github/workflows/deploy-pages.yml` tests and builds the app on every push. It deploys `dist/` only when GitHub Pages is already enabled, so a missing Pages setup does not fail the build.
 
 1. Push this branch to GitHub.
 2. In the repository, open **Settings → Pages → Build and deployment** and choose **GitHub Actions** as the source.
-3. Run the **Build and deploy Prostuti** workflow (or push to the configured branch).
+3. Run the **Build and deploy Prostuti** workflow again (or push to the configured branch).
 4. Open the URL shown by the deploy job / Pages settings.
 
 Vite uses a relative base (`./`), so project-page URLs such as `https://<user>.github.io/<repo>/` work without changing the router. Navigation uses hashes, not server-side routes.
