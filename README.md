@@ -2,6 +2,8 @@
 
 A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet board), with Higher Mathematics as the fourth subject. Built with React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API is required.
 
+**Version 2.2** adds the chapter plan — every chapter now carries a board-importance rating (5★/3★/1★), planned hours and a finish date from the v3 schedule, plus One-shot / MCQ / CQ class links for each chapter from the channels the student follows (Aloron, Hasnat Shuvro, Apurbo Physics, Fahad's Tutorial, Shakib Sir, Rakib's Classroom, Bondi Pathshala). Links open in the browser; when a channel has no dedicated class yet the button opens that channel's own search.
+
 **Version 2.1** adds the full study loop — measured sessions, spaced revision, MCQ/CQ practice, exams, GPA, analytics and local libraries — plus a Bangla/English shell toggle, a daily motivation line, custom routine blocks with drag-and-drop reordering, and native reminders for important dates. The Android APK is built automatically by GitHub Actions.
 
 ## What is inside

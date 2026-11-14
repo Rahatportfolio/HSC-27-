@@ -1,11 +1,13 @@
 import { useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
-import { ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Check, ChevronRight, Clock3, NotebookPen, Search, Timer } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BookOpen, CalendarDays, Check, ChevronRight, Clock3, NotebookPen, Play, Search, Timer } from 'lucide-react';
 import { CHAPTERS, PAPERS, SUBJECTS, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
 import { bn, chapterTasks, formatDate, formatDayOffset, formatTime, isChapterDone, percent, phaseName } from './planner';
 import { MISTAKE_LIMIT, newId, nowIso } from './storage';
 import { chapterMeta, updateChapterMeta } from './study';
+import { scheduleFor } from './schedule';
+import { classLinksFor } from './classLinks';
 import { INTERVAL_LABEL } from './revision';
 import { usePlanner } from './context';
 import { EmptyState, Modal, ProgressBar, SubjectBadge } from './components';
@@ -21,6 +23,10 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
   return <Modal title={c.title} onClose={onClose} wide>
     <div className="chapter-modal-meta"><SubjectBadge subject={c.subject} /><span>পত্র {bn(c.paper)} · পাঠ/অধ্যায় {bn(c.number)}</span><span className={`priority-badge ${c.priority.toLowerCase()}`}>{c.priority} · {PRIORITY_LABEL[c.priority]}</span>{meta.weak && <span className="weak-pill">দুর্বল</span>}</div>
     <p className="modal-description">{c.focus}</p>
+    {(() => { const sch = scheduleFor(c.id); const links = classLinksFor(c.id); return <>
+      {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} aria-label={`গুরুত্ব ${sch.star} স্টার`}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span><span>শেষ করতে হবে <strong>{formatDate(sch.end)}</strong></span></div>}
+      {links && <div className="class-block"><div className="class-block-head"><strong>এই অধ্যায়ের ক্লাস</strong><span>{links.channel}</span></div><div className="class-link-row">{(['oneShot', 'mcq', 'cq'] as const).map(kind => <a key={kind} className={`class-link ${links.kind[kind] === 'search' ? 'search' : ''}`} href={links[kind]} target="_blank" rel="noreferrer"><Play size={14} /><span>{kind === 'oneShot' ? 'ওয়ান শট' : kind === 'mcq' ? 'MCQ ক্লাস' : 'CQ ক্লাস'}</span>{links.kind[kind] === 'search' && <em>সার্চ</em>}</a>)}</div></div>}
+    </>; })()}
     {c.note && <div className="notice-box"><BookOpen size={18} /><p>{c.note}</p></div>}
     <div className="chapter-modal-progress"><span>{bn(done)}/{bn(tasks.length)} ধাপ শেষ · {isChapterDone(plan, c.id, data.completed) ? 'অধ্যায় সম্পন্ন' : 'প্রতিটি ধাপ আলাদাভাবে টিক দাও'}</span><ProgressBar value={percent(done, tasks.length)} /></div>
     <div className="chapter-session-list">{tasks.map(t => <div key={t.id} className="chapter-session"><button className={`task-check ${data.completed[t.id] ? 'checked' : ''}`} aria-pressed={!!data.completed[t.id]} aria-label={`${formatDate(t.date)} ধাপ সম্পন্ন`} onClick={() => toggleTask(t.id)}>{data.completed[t.id] && <Check size={16} />}</button><div><strong>{formatDate(t.date, 'long')} · ধাপ {bn(t.id.split('-').pop() || '1')}</strong><span>{formatTime(t.startMinute)}{formatDayOffset(t.startMinute)} – {formatTime(t.endMinute)}{formatDayOffset(t.endMinute)}</span><p>{t.detail}</p></div></div>)}</div>

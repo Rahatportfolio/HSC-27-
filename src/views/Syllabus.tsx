@@ -6,6 +6,7 @@ import { CHAPTERS, PAPER_NAMES, SUBJECTS, SYLLABUS_NOTE, subjectById } from '../
 import type { SubjectId } from '../data';
 import { bn, chapterFirstDate, chapterTasks, formatDate, isChapterDone, percent } from '../planner';
 import { chapterMeta } from '../study';
+import { CHAPTER_SCHEDULE } from '../schedule';
 import { EmptyState, PageHeading, ProgressBar, SubjectIcon } from '../components';
 
 const PRIORITY_LABEL: Record<string, string> = { A: 'আগে', B: 'এরপর', C: 'সময় থাকলে' };
@@ -15,6 +16,7 @@ export default function SyllabusView() {
   const [priority, setPriority] = useState<'all' | 'A' | 'B' | 'C'>('all');
   const [query, setQuery] = useState('');
   const [weakOnly, setWeakOnly] = useState(false);
+  const [star, setStar] = useState<'all' | 5 | 3 | 1>('all');
   const s = subjectById[subject];
   const chapters = CHAPTERS.filter(chapter => chapter.subject === subject);
   const done = chapters.filter(chapter => isChapterDone(plan, chapter.id, data.completed)).length;
@@ -22,6 +24,7 @@ export default function SyllabusView() {
   const noted = chapters.filter(chapter => chapterMeta(data, chapter.id).note.trim()).length;
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
   const visible = chapters.filter(chapter => (priority === 'all' || chapter.priority === priority)
+    && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && `${chapter.title} ${chapter.number} ${chapter.focus}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="view">
@@ -30,7 +33,7 @@ export default function SyllabusView() {
     <section className="card syllabus-card">
       <div className="syllabus-subject-heading"><div><h2>{s.name} {s.optional && <span className="optional-badge">চতুর্থ বিষয়</span>}</h2><p>বিষয় কোড {s.code} · {bn(done)} / {bn(chapters.length)} সম্পন্ন</p></div><div className="syllabus-subject-progress"><strong>{bn(percent(done, chapters.length))}%</strong><ProgressBar value={percent(done, chapters.length)} color={s.color} /></div></div>
       <div className="syllabus-summary"><span><Check size={15} /><strong>{bn(done)}</strong> সম্পন্ন</span><span><ShieldAlert size={15} /><strong>{bn(weak)}</strong> দুর্বল</span><span><FileText size={15} /><strong>{bn(noted)}</strong> নোটযুক্ত</span><span><BookOpen size={15} /><strong>{bn(ready)}</strong> CQ+MCQ প্রস্তুত</span></div>
-      <div className="filter-bar"><label className="search-field"><Search size={17} /><input placeholder="অধ্যায় বা টপিক খুঁজো…" aria-label="অধ্যায় খুঁজো" value={query} onChange={e => setQuery(e.target.value)} /></label><div className="segmented">{(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? 'সব অধ্যায়' : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}</div><button className={`button ${weakOnly ? 'primary' : 'secondary'} small`} aria-pressed={weakOnly} onClick={() => setWeakOnly(!weakOnly)}><ShieldAlert size={15} />শুধু দুর্বল</button></div>
+      <div className="filter-bar"><label className="search-field"><Search size={17} /><input placeholder="অধ্যায় বা টপিক খুঁজো…" aria-label="অধ্যায় খুঁজো" value={query} onChange={e => setQuery(e.target.value)} /></label><div className="segmented">{(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? 'সব অধ্যায়' : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}</div><div className="segmented star-filter">{(['all', 5, 3, 1] as const).map(value => <button key={value} className={star === value ? 'active' : ''} aria-pressed={star === value} onClick={() => setStar(value)}>{value === 'all' ? 'সব ★' : `${value}★`}</button>)}</div><button className={`button ${weakOnly ? 'primary' : 'secondary'} small`} aria-pressed={weakOnly} onClick={() => setWeakOnly(!weakOnly)}><ShieldAlert size={15} />শুধু দুর্বল</button></div>
       {[1, 2].map(paper => {
         const rows = visible.filter(chapter => chapter.paper === paper);
         if (!rows.length) return null;
@@ -45,6 +48,7 @@ export default function SyllabusView() {
             return <button key={chapter.id} className={`chapter-row ${isDone ? 'done' : ''} ${isWeak ? 'weak' : ''}`} onClick={() => openChapter(chapter)}>
               <span className={`chapter-number ${isDone ? 'complete' : ''}`}>{isDone ? <Check size={17} /> : chapter.subject === 'english' || chapter.subject === 'bangla' ? <BookOpen size={15} /> : bn(chapter.number)}</span>
               <span className="chapter-copy"><strong>{chapter.title}{isWeak && <span className="weak-pill">দুর্বল</span>}{meta.note.trim() && <span className="note-pill"><FileText size={11} />নোট</span>}</strong><span>{chapter.focus}</span><span className="chapter-prep">{meta.mcq !== 'none' && <em>MCQ {meta.mcq === 'ready' ? '✓' : '…'}</em>}{meta.cq !== 'none' && <em>CQ {meta.cq === 'ready' ? '✓' : '…'}</em>}{meta.note.trim() && <em>{meta.note.trim().slice(0, 36)}…</em>}</span></span>
+              {(() => { const slot = CHAPTER_SCHEDULE[chapter.id]; return slot ? <span className="chapter-plan-cell"><span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span><small>{bn(slot.hours)} ঘণ্টা · শেষ {formatDate(slot.end)}</small></span> : null; })()}
               <span className={`priority-badge ${chapter.priority.toLowerCase()}`}>{chapter.priority}</span>
               <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} ধাপ</small></span>
               <ChevronRight size={17} />

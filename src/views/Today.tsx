@@ -1,6 +1,8 @@
 import { ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, HeartPulse, ListChecks, Pause, Play, RotateCcw, Timer, Trash2 } from 'lucide-react';
 import { usePlanner } from '../context';
-import { chapterById, subjectById } from '../data';
+import { CHAPTERS, chapterById, subjectById } from '../data';
+import { CHAPTER_SCHEDULE } from '../schedule';
+import { CHAPTER_CLASSES } from '../classLinks';
 import { addDays, bn, diffDays, formatDate, getStats, isValidDate, percent, phaseName } from '../planner';
 import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
 import { revisionBuckets, INTERVAL_LABEL } from '../revision';
@@ -25,6 +27,7 @@ export default function TodayView() {
   const due = [...buckets.overdue, ...buckets.today];
   const carryovers = carryoversOn(data, selectedDate);
   const motivation = motivationFor(today);
+  const targets = CHAPTERS.filter(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id]; return !!slot && slot.start <= selectedDate && slot.end >= selectedDate; });
   const nextImportant = [...data.importantDates].filter(item => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const shiftDate = (amount: number) => { const next = addDays(selectedDate, amount); if (isValidDate(next)) setSelectedDate(next); };
   const timerText = timer.mode === 'stopwatch'
@@ -42,6 +45,13 @@ export default function TodayView() {
       <div className="hero-art"><StudyIllustration /><div className="hero-art-note"><span className="small-spark">✦</span> ছোট পদক্ষেপ। বড় স্বপ্ন।</div></div>
     </section>
     <section className="motivation-card"><span className="motivation-mark" aria-hidden="true">✦</span><div><span className="eyebrow">{t('আজকের অনুপ্রেরণা', 'Today’s motivation')}</span><p>{t(motivation.bn, motivation.en)}</p></div></section>
+    <section className="card target-card">
+      <div className="card-heading"><h3><ListChecks size={17} />{t('আজকের টার্গেট', 'Today’s targets')}</h3><span className="tiny-muted">{t('এই তারিখের মধ্যে শেষ', 'Finish by this date')}</span></div>
+      {targets.length ? <div className="target-list">{targets.map(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id], links = CHAPTER_CLASSES[chapter.id]; return <div className="target-item" key={chapter.id}>
+        <div className="target-copy"><strong>{chapter.title}</strong><small>{subjectById[chapter.subject].name} · {bn(slot.hours)} {t('ঘণ্টা', 'h')} · শেষ {formatDate(slot.end)}</small><span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span></div>
+        {links && <div className="class-link-row">{(['oneShot', 'mcq', 'cq'] as const).map(kind => <a key={kind} className={`class-link ${links.kind[kind] === 'search' ? 'search' : ''}`} href={links[kind]} target="_blank" rel="noreferrer"><Play size={13} /><span>{kind === 'oneShot' ? t('ওয়ান শট', 'One shot') : kind === 'mcq' ? 'MCQ' : 'CQ'}</span></a>)}</div>}
+      </div>; })}</div> : <p className="tiny-muted">{t('আজ কোনো নতুন অধ্যায়ের টার্গেট নেই — রিভিশন বা ব্যাকলগ দেখে নাও।', 'No new chapter target today — use it for revision or backlog.')}</p>}
+    </section>
     <PhaseJourney startDate={data.settings.startDate} activeDate={selectedDate} />
     <div className="stats-grid">
       <button className="stat-card stat-link" onClick={() => navigate('calendar')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস এগিয়েছে', 'Syllabus progress')}</span><strong>{bn(percent(stats.chapters, stats.totalChapters))}<small>%</small></strong><p>{bn(stats.chapters)} / {bn(stats.totalChapters)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={percent(stats.chapters, stats.totalChapters)} className="stat-progress" /></button>

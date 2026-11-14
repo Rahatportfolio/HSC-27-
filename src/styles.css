@@ -830,3 +830,28 @@ html.focus-mode .timer-main-card{max-width:680px;margin:36px auto 0}
 .motivation-card p{margin:3px 0 0;font-size:14px;line-height:1.55;color:#3b5142}
 [data-theme="dark"] .motivation-card{background:linear-gradient(90deg,#1a261e,#151f19);border-color:#2b3931;border-left-color:#5c8f6d}
 [data-theme="dark"] .motivation-card p{color:#dfe9dd}
+
+/* v2.2 — chapter plan (★ + hours + finish date) & class links */
+.star-badge{font-size:12px;letter-spacing:.5px;color:#c98a1c;line-height:1;white-space:nowrap}
+.star-badge.s5{color:#c0392b}
+.star-badge.s3{color:#c98a1c}
+.star-badge.s1{color:#8a8f9c}
+.chapter-plan-cell{display:flex;flex-direction:column;gap:2px;align-items:flex-start}
+.chapter-plan-cell small{font-size:11px;color:var(--muted,#6b7280);white-space:nowrap}
+.chapter-plan-strip{display:flex;flex-wrap:wrap;gap:14px;align-items:center;padding:10px 14px;margin:12px 0;border-radius:14px;background:var(--surface-2,#f6f7fb);font-size:13px}
+.chapter-plan-strip strong{font-weight:700}
+.class-block{margin:14px 0}
+.class-block-head{display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:8px;font-size:13px}
+.class-block-head span{color:var(--muted,#6b7280);font-size:12px}
+.class-link-row{display:flex;flex-wrap:wrap;gap:8px}
+.class-link{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:1px solid var(--line,#e3e6ef);background:#fff;color:#b3305a;font-size:13px;font-weight:600;text-decoration:none;transition:transform .12s ease,box-shadow .12s ease}
+.class-link:hover,.class-link:focus-visible{transform:translateY(-1px);box-shadow:0 4px 12px rgba(179,48,90,.18);outline:none}
+.class-link em{font-style:normal;font-size:10px;padding:1px 6px;border-radius:999px;background:var(--surface-2,#f1f2f7);color:var(--muted,#6b7280)}
+.class-link.search{border-style:dashed;color:#4a5568}
+.target-card{margin:14px 0}
+.target-list{display:flex;flex-direction:column;gap:12px}
+.target-item{display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;align-items:center;padding:12px 14px;border-radius:16px;background:var(--surface-2,#f6f7fb)}
+.target-copy{display:flex;flex-direction:column;gap:4px;min-width:180px}
+.target-copy strong{font-size:14px}
+.target-copy small{font-size:12px;color:var(--muted,#6b7280)}
+.star-filter button{min-width:48px}
