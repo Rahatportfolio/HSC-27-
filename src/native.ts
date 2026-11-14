@@ -96,6 +96,14 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
   }
 
   const chosen = notifications.sort((a, b) => a.schedule.at.getTime() - b.schedule.at.getTime()).slice(0, LIMIT);
-  if (chosen.length) await LocalNotifications.schedule({ notifications: chosen });
+  if (chosen.length) {
+    try {
+      await LocalNotifications.schedule({ notifications: chosen });
+    } catch {
+      // Android 14+ can deny exact alarms unless the user grants "Alarms & reminders".
+      // Re-schedule as inexact alarms so the reminder still arrives (possibly a few minutes late).
+      await LocalNotifications.schedule({ notifications: chosen.map(item => ({ ...item, schedule: { at: item.schedule.at, allowWhileIdle: false } })) });
+    }
+  }
   return { scheduled: chosen.length, permission: 'granted' };
 }

@@ -81,14 +81,16 @@ export default function App() {
   useEffect(() => {
     if (!isNativeApp()) return;
     let active = true;
-    void restoreFromDatabase().then(payload => {
+    let timer = 0;
+    const timeout = new Promise<null>(resolve => { timer = window.setTimeout(() => resolve(null), 4000); });
+    void Promise.race([restoreFromDatabase(), timeout]).then(payload => {
       if (!active) return;
       if (payload) {
         try { setData(parseBackup(payload)); notify('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'info'); } catch { /* keep the localStorage copy */ }
       }
       setDbReady(true);
     }).catch(() => setDbReady(true));
-    return () => { active = false; };
+    return () => { active = false; window.clearTimeout(timer); };
   }, [notify]);
   useEffect(() => { if (dbReady) setStorageOk(saveData(data)); }, [data, dbReady]);
   useEffect(() => {
