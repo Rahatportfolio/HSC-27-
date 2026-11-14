@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "test": "node tests/utils.test.js && node tests/store.test.js && node tests/smoke.test.js && node tests/integration.test.js && node tests/sw.test.js && node tests/advanced.test.js && node tests/pdf.test.js && node tests/quiz.test.js && node tests/search-practice.test.js && node tests/question-import.test.js"
+    "test": "node tests/utils.test.js && node tests/store.test.js && node tests/smoke.test.js && node tests/integration.test.js && node tests/sw.test.js && node tests/advanced.test.js && node tests/pdf.test.js && node tests/quiz.test.js && node tests/search-practice.test.js && node tests/question-import.test.js && node tests/server.test.js && node tests/sync.test.js && node tests/push.test.js && node tests/ai.test.js",
+    "start": "node server/server.js"
   },
   "devDependencies": {
     "jsdom": "^26.1.0"
+  },
+  "dependencies": {
+    "web-push": "^3.6.7"
   }
 }

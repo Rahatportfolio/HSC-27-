@@ -74,7 +74,7 @@ function renderProgress() {
   };
 
   return `<div class="page">
-    <div class="page-head"><h1>Progress</h1></div>
+    <div class="page-head"><h1 data-i18n="progress">Progress</h1></div>
 
     <section class="card">
       <h2>Personal study challenge</h2>
@@ -113,14 +113,14 @@ function renderProgress() {
     <section class="card">
       <h2>Practice &amp; tests</h2>
       <ul class="plain-list">
-        <li>MCQ: ${mcqAll.attempted} attempted · accuracy ${mcqAcc === null ? '—' : mcqAcc + '%'}</li>
-        <li>CQ: ${cqAll.marks}/${cqAll.totalMarks} marks recorded</li>
+        <li>MCQ: ${esc(mcqAll.attempted)} attempted · accuracy ${mcqAcc === null ? '—' : mcqAcc + '%'}</li>
+        <li>CQ: ${esc(cqAll.marks)}/${esc(cqAll.totalMarks)} marks recorded</li>
         <li>Exams taken: ${results.length}${avgPct !== null ? ` · average ${avgPct}%` : ''}</li>
         <li>Revisions: ${revDone} done · ${revOverdue} overdue</li>
       </ul>
       ${results.length ? `<h3>Recent results</h3><ul class="plain-list">${results.slice(0, 5).map((r) => {
         const ex = st.exams.find((e) => e.id === r.examId);
-        return `<li>${esc(formatDate(r.date))} — ${esc(ex ? ex.name : 'Exam')}: ${r.obtainedMarks}/${ex ? ex.totalMarks : '?'} (${esc(r.grade || '')})</li>`;
+        return `<li>${esc(formatDate(r.date))} — ${esc(ex ? ex.name : 'Exam')}: ${esc(r.obtainedMarks)}/${esc(ex ? ex.totalMarks : '?')} (${esc(r.grade || '')})</li>`;
       }).join('')}</ul>` : `<p class="muted small">Record exam results in the Exams section to track performance here.</p>`}
     </section>
 

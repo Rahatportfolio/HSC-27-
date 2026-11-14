@@ -1,0 +1,17 @@
+'use strict';
+const assert=require('node:assert/strict');const fs=require('node:fs');const fsp=require('node:fs/promises');const os=require('node:os');const path=require('node:path');const {JSDOM,VirtualConsole}=require('jsdom');const {createServer}=require('../server/server.js');
+(async()=>{
+ const dir=await fsp.mkdtemp(path.join(os.tmpdir(),'hsc-ai-'));let providerCalls=0;
+ const server=await createServer({dataDir:dir,allowRegistration:true,aiKey:'private-test-key',aiAllowedUsers:'alice',providerFetch:async(url,options)=>{providerCalls++;assert.match(options.headers.Authorization,/private-test-key/);return {ok:true,json:async()=>({choices:[{message:{content:'<img src=x onerror=alert(1)> AI explanation'}}]})};}});await new Promise(r=>server.listen(0,'127.0.0.1',r));const base=`http://127.0.0.1:${server.address().port}`;
+ const errors=[];const vc=new VirtualConsole();vc.on('jsdomError',e=>errors.push(e.message));let cookie='';
+ const html=fs.readFileSync('index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'');
+ const dom=new JSDOM(html,{url:base+'/',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.confirm=()=>true;w.alert=msg=>errors.push(msg);w.fetch=async(url,opts={})=>{const headers={...opts.headers};if(cookie)headers.Cookie=cookie;if(opts.method&&opts.method!=='GET')headers.Origin=base;const r=await fetch(new URL(url,base+'/'),{...opts,headers});const c=r.headers.get('set-cookie');if(c)cookie=c.split(';')[0];return r;};}});
+ const w=dom.window,d=w.document;w.addEventListener('error',e=>errors.push(e.error ? e.error.stack : e.message));
+ for(const f of ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/views/quiz.js','js/i18n.js','js/sync.js','js/app.js']){const s=d.createElement('script');s.textContent=fs.readFileSync(f,'utf8');d.body.appendChild(s);}
+ const click=sel=>{const el=d.querySelector(sel);assert.ok(el,sel);el.click();};const set=(sel,v)=>{const el=d.querySelector(sel);assert.ok(el,sel);el.value=v;};const wait=async(fn)=>{for(let i=0;i<100;i++){if(fn())return;await new Promise(r=>setTimeout(r,20));}throw Error('timeout');};
+ try{
+  click('#more-btn');click('[data-nav="sync"]');set('[name="username"]','alice');set('[name="password"]','long secure password');const form=d.querySelector('#sync-auth-form');form.dispatchEvent(new w.SubmitEvent('submit',{bubbles:true,cancelable:true,submitter:d.querySelector('[value="register"]')}));await wait(()=>d.querySelector('#sync-connect'));
+  click('#more-btn');click('[data-nav="ai"]');set('#assistant-form [name="prompt"]','Explain a concept');d.querySelector('#assistant-form').dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));await wait(()=>d.querySelector('#view').textContent.includes('AI explanation'));
+  assert.equal(providerCalls,1);assert.match(d.querySelector('#view').textContent,/AI-generated/);assert.equal(d.querySelector('#view img'),null);assert.ok(!w.localStorage.getItem('hsc27_state_v1').includes('private-test-key'));assert.equal(errors.length,0,errors.join('\n'));console.log('AI client: authenticated server-only provider request, labelling and escaped output passed (mock provider).');
+ }finally{dom.window.close();await new Promise(r=>server.close(r));await fsp.rm(dir,{recursive:true,force:true});}
+})().catch(e=>{console.error(e);process.exitCode=1;});

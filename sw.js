@@ -1,11 +1,10 @@
 /* HSC 2027 Study App — service worker
  * Caches the app shell so the app works fully offline on Android.
- * Data lives in localStorage (local-first), so no sync queue is needed;
- * JSON backup/restore covers multi-device transfer.
+ * Data lives locally; optional authenticated sync uses network-only API requests.
  */
 'use strict';
 
-const CACHE = 'hsc27-v4';
+const CACHE = 'hsc27-v5';
 const SHELL = [
   './',
   'index.html',
@@ -21,6 +20,8 @@ const SHELL = [
   'js/views/library.js',
   'js/views/more.js',
   'js/views/quiz.js',
+  'js/i18n.js',
+  'js/sync.js',
   'js/app.js',
   'icons/icon.svg',
   'icons/icon-192.png',
@@ -46,7 +47,7 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   // Only handle same-origin app files; external links (YouTube, AI) go to network.
-  if (url.origin !== self.location.origin) return;
+  if (url.origin !== self.location.origin || url.pathname.startsWith(new URL('api/', self.registration.scope).pathname)) return;
   event.respondWith(
     caches.match(req, { ignoreSearch: true }).then((cached) => {
       if (cached) return cached;
@@ -56,4 +57,20 @@ self.addEventListener('fetch', (event) => {
       });
     })
   );
+});
+
+// Background delivery is best-effort and requires an explicit push subscription.
+self.addEventListener('push', (event) => {
+  let data = {};
+  try { data = event.data ? event.data.json() : {}; } catch (e) { data = {}; }
+  const title = typeof data.title === 'string' ? data.title.slice(0, 80) : 'Study reminders';
+  const body = typeof data.body === 'string' ? data.body.slice(0, 220) : 'Open the app to review your study plan.';
+  event.waitUntil(self.registration.showNotification(title, { body, icon:'icons/icon-192.png', tag:'hsc27-daily' }));
+});
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(self.clients.matchAll({type:'window', includeUncontrolled:true}).then((windows) => {
+    const client = windows.find((w) => w.url.startsWith(self.registration.scope));
+    return client ? client.focus() : self.clients.openWindow(self.registration.scope);
+  }));
 });

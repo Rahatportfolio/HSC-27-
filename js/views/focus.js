@@ -36,7 +36,7 @@ function renderFocus(prefillChapterId) {
   const modeBtn = (m, label) => `<button class="tab ${focusState.mode === m ? 'active' : ''}" data-focus-mode="${m}">${label}</button>`;
 
   return `<div class="page">
-    <div class="page-head"><h1>Focus timer</h1></div>
+    <div class="page-head"><h1 data-i18n="focusTitle">Focus timer</h1></div>
     <p class="muted">Today: ${formatDuration(todayMins)} of ${formatDuration(target)} · This week: ${formatDuration(weekMins)}</p>
 
     <section class="card focus-card">

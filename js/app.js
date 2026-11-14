@@ -30,6 +30,8 @@ const ROUTES = {
   search: () => renderSearch(),
   settings: () => renderSettings(),
   backup: () => renderBackup(),
+  sync: () => renderSync(),
+  ai: () => renderAiAssistant(),
 };
 
 function navigate(name, param) {
@@ -81,6 +83,7 @@ function afterRender() {
   bindSearch('library-search', (v) => { libraryFilter.q = v; });
   bindSearch('global-search', (v) => { searchQuery = v; });
   updateOnlineStatus();
+  applyLanguage();
   checkReminders();
 }
 
@@ -104,6 +107,7 @@ function openModal(title, html, onSubmit) {
     if (chSelect && !chSelect.value) chSelect.value = chapter.id;
     if (subjectSelect && !subjectSelect.value) subjectSelect.value = chapter.subjectId;
   }
+  applyLanguage(overlay);
   const first = overlay.querySelector('input, select, textarea');
   if (first) first.focus();
 }
@@ -606,7 +610,7 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#load-demo-btn')) { loadDemoData(); toast('Demo data loaded (labelled DEMO).'); render(); return; }
   if (e.target.closest('#clear-demo-btn')) { clearDemoData(); toast('Demo data removed.'); render(); return; }
   if (e.target.closest('#reset-all-btn')) {
-    if (confirm('Delete ALL local data on this device? Export a backup first.')) { resetTimer(); resetState(); toast('All data reset.'); render(); }
+    if (confirm('Delete ALL local data on this device? If sync is connected this reset will also be uploaded. Export a backup first.')) { resetTimer(); if (resetState()) toast('All data reset.'); render(); }
     return;
   }
   if (e.target.closest('#enable-browser-notif')) {
@@ -674,7 +678,7 @@ document.addEventListener('change', (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = () => {
-      try { if (focusState.running || focusState.accumulatedMs > 0) { toast('Stop or reset the current focus timer before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? Export a backup first.')) return; importJSON(String(reader.result)); resetTimer(false); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
+      try { if (focusState.running || focusState.accumulatedMs > 0) { toast('Stop or reset the current focus timer before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? If sync is connected this replacement will also be uploaded. Export a backup first.')) return; importJSON(String(reader.result)); resetTimer(false); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
       render();
     };
     reader.readAsText(file);
@@ -772,11 +776,18 @@ document.getElementById('more-btn').addEventListener('click', () => {
     ${[['notes', '🗒 Notes & documents'], ['formulas', '∑ Formula library'], ['library', '▶ Video library'],
        ['practice', '✍ Practice tracker'], ['exams', '📝 Exams'], ['revisions', '🔁 Revisions'],
        ['weaknesses', '⚠ Weaknesses'], ['review', '✅ Weekly review'], ['journal', '📓 Journal'],
-       ['calendar', '📅 Calendar'], ['search', '🔍 Search'],
+       ['calendar', '📅 Calendar'], ['search', '🔍 Search'], ['sync', '☁ Account & sync'], ['ai', '🤖 AI assistant'],
        ['backup', '💾 Backup & restore'], ['settings', '⚙ Settings']]
-      .map(([r, l]) => `<button class="menu-item" data-nav="${r}">${l}</button>`).join('')}
+      .map(([r, l]) => `<button class="menu-item" data-nav="${r}"><span data-i18n="menu-${r}">${l}</span></button>`).join('')}
   </div>`, () => true);
 });
+
+function updateHeaderDate() {
+  const el = document.getElementById('header-date');
+  if (!el) return;
+  try { el.textContent = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Dhaka', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date()); }
+  catch (e) { el.textContent = ''; }
+}
 
 /* ---------- Init ---------- */
 loadState();
@@ -787,9 +798,12 @@ window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', app
 window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
 render();
+updateHeaderDate();
 checkReminders();
+setInterval(updateHeaderDate, 60000);
 setInterval(() => { if (carryOverMissed()) render(); checkReminders(); }, 60000);
 checkQuizExpiry();
+syncInit();
 setInterval(() => { updateExamTimerDisplay(); checkQuizExpiry(); }, 1000);
 
 // Register service worker for offline PWA support

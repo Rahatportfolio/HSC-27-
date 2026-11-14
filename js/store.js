@@ -105,7 +105,8 @@ function loadState() {
 }
 function persist() {
   if (storageBlocked) return false;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); return true; } catch (e) {
+  const syncMarked = typeof syncBeforeLocalSave === 'function' ? syncBeforeLocalSave() : false;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); if (typeof syncAfterLocalSave === 'function') syncAfterLocalSave(syncMarked); return true; } catch (e) {
     if (typeof alert === 'function') alert('Unable to save data on this device. Export a backup now; free storage space or check browser settings.');
     return false;
   }
@@ -116,7 +117,7 @@ function save() {
 }
 function saveNow() { if (saveTimer) clearTimeout(saveTimer); return persist(); }
 function getState() { if (!state) loadState(); return state; }
-function resetState() { state = defaultState(); saveNow(); return state; }
+function resetState() { const previous = state; state = defaultState(); if (!saveNow()) { state = previous; return null; } return state; }
 
 /* ---------- Lookups ---------- */
 function subjectById(id) { return getState().subjects.find((s) => s.id === id) || null; }
@@ -320,10 +321,12 @@ function importJSON(text) {
   delete candidate.settings.ai;
   // Write before replacing the live state, so quota/security failures cannot
   // turn a failed restore into an apparent success or discard current data.
+  const syncMarked = typeof syncBeforeLocalSave === 'function' ? syncBeforeLocalSave() : false;
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(candidate)); }
   catch (e) { throw new Error('Could not store backup on this device. Current data is unchanged.'); }
   state = candidate;
   storageBlocked = false;
+  if (typeof syncAfterLocalSave === 'function') syncAfterLocalSave(syncMarked);
   return state;
 }
 function exportCSV(kind) {

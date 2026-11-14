@@ -25,7 +25,7 @@ function renderReview() {
   }).filter((x) => x.mins > 0).sort((a, b) => b.mins - a.mins);
 
   return `<div class="page">
-    <div class="page-head"><h1>Weekly review</h1></div>
+    <div class="page-head"><h1 data-i18n="reviewTitle">Weekly review</h1></div>
     <p class="muted">Week of ${esc(formatDate(wStart))} · Studied ${formatDuration(weekMins)} of ${formatDuration(target * 7)} target.</p>
 
     <section class="card">
@@ -90,7 +90,7 @@ function renderJournal() {
   const st = getState();
   const list = st.journal.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return `<div class="page">
-    <div class="page-head"><h1>Study journal</h1>
+    <div class="page-head"><h1 data-i18n="journalTitle">Study journal</h1>
       <button class="btn small primary" id="add-journal-btn">+ New entry</button></div>
     ${list.length ? `<ul class="card-list">${list.map((j) => `
       <li class="card"><strong>${esc(formatDate(j.date))}</strong>${j.mood ? ` <span class="badge">${esc(j.mood)}</span>` : ''}
@@ -155,7 +155,7 @@ function renderCalendar() {
     }).join('');
 
   return `<div class="page">
-    <div class="page-head"><h1>Calendar</h1></div>
+    <div class="page-head"><h1 data-i18n="calendarTitle">Calendar</h1></div>
     <p class="muted small">Green = daily target met. Tap a day to open it in the planner.</p>
     ${monthBlocks}
   </div>`;
@@ -184,7 +184,7 @@ function renderSearch() {
       .forEach((j) => results.push({ type: 'Journal', label: formatDate(j.date), sub: j.text.slice(0, 60) + '…', nav: 'journal', id: j.id }));
   }
   return `<div class="page">
-    <div class="page-head"><h1>Search</h1></div>
+    <div class="page-head"><h1 data-i18n="searchTitle">Search</h1></div>
     <div class="search-row"><input id="global-search" type="search" placeholder="Search chapters, notes, formulas, videos…" value="${esc(searchQuery)}" aria-label="Global search"></div>
     ${q.length < 2 ? `<p class="muted">Type at least 2 characters to search across subjects, notes, formulas, videos, weaknesses and journal.</p>`
     : results.length ? `<ul class="card-list">${results.map((r) => `
@@ -201,27 +201,28 @@ function renderSettings() {
   const s = st.settings;
   const n = s.notifications;
   return `<div class="page">
-    <div class="page-head"><h1>Settings</h1></div>
+    <div class="page-head"><h1 data-i18n="settingsTitle">Settings</h1></div>
 
     <section class="card">
-      <h2>Study target</h2>
+      <h2 data-i18n="targetTitle">Study target</h2>
       <form id="settings-form" class="form">
-        <label class="field"><span>Your name (optional)</span><input name="studentName" value="${esc(s.studentName || '')}"></label>
-        <label class="field"><span>Daily study target (minutes)</span><input name="dailyTargetMinutes" type="number" min="30" max="1440" step="15" value="${s.dailyTargetMinutes}"></label>
-        <label class="field"><span>Preferred study start (optional)</span><input name="preferredStart" type="time" value="${esc(s.preferredStart || '')}"></label>
-        <label class="field"><span>Preferred study end (optional)</span><input name="preferredEnd" type="time" value="${esc(s.preferredEnd || '')}"></label>
-        <label class="field"><span>HSC exam date (set it yourself — never guessed)</span><input name="examDate" type="date" value="${esc(s.examDate || '')}"></label>
-        <label class="field"><span>Revision intervals (days, comma separated)</span>
+        <label class="field"><span data-i18n="studentName">Your name (optional)</span><input name="studentName" value="${esc(s.studentName || '')}"></label>
+        <label class="field"><span data-i18n="dailyTarget">Daily study target (minutes)</span><input name="dailyTargetMinutes" type="number" min="30" max="1440" step="15" value="${esc(s.dailyTargetMinutes)}"></label>
+        <label class="field"><span data-i18n="preferredStart">Preferred study start (optional)</span><input name="preferredStart" type="time" value="${esc(s.preferredStart || '')}"></label>
+        <label class="field"><span data-i18n="preferredEnd">Preferred study end (optional)</span><input name="preferredEnd" type="time" value="${esc(s.preferredEnd || '')}"></label>
+        <label class="field"><span data-i18n="examDate">HSC exam date (set it yourself — never guessed)</span><input name="examDate" type="date" value="${esc(s.examDate || '')}"></label>
+        <label class="field"><span data-i18n="revisionIntervals">Revision intervals (days, comma separated)</span>
           <input name="revisionIntervals" value="${esc((s.revisionIntervals || []).join(', '))}" placeholder="1, 3, 7, 14, 30"></label>
-        <label class="field"><span>Theme</span>
+        <label class="field"><span data-i18n="theme">Theme</span>
           <select name="theme"><option value="auto" ${s.theme === 'auto' ? 'selected' : ''}>System</option><option value="light" ${s.theme === 'light' ? 'selected' : ''}>Light</option><option value="dark" ${s.theme === 'dark' ? 'selected' : ''}>Dark</option></select></label>
-        <button class="btn primary" type="submit">Save settings</button>
+        <label class="field"><span data-i18n="language">Interface language (partial translation)</span><select name="language"><option value="en" ${s.language !== 'bn' ? 'selected' : ''}>English</option><option value="bn" ${s.language === 'bn' ? 'selected' : ''}>বাংলা (আংশিক)</option></select></label>
+        <button class="btn primary" type="submit" data-i18n="saveSettings">Save settings</button>
       </form>
     </section>
 
     <section class="card">
-      <h2>Notifications</h2>
-      <p class="muted small">In-app reminders appear while the app is open. Browser permission is used for timer phase alerts only; background push and scheduled notifications are not supported.</p>
+      <h2 data-i18n="notifications">Notifications</h2>
+      <p class="muted small">In-app reminders appear while the app is open. Browser permission is used for timer phase alerts while open. Optional background push needs a configured, running server and a device subscription under Account &amp; sync; it uses the latest synced preferences.</p>
       <form id="notif-form" class="form">
         <label class="check"><input type="checkbox" name="enabled" ${n.enabled ? 'checked' : ''}> Enable reminders</label>
         <label class="check"><input type="checkbox" name="sessionReminder" ${n.sessionReminder ? 'checked' : ''}> Study session reminder</label>
@@ -230,6 +231,7 @@ function renderSettings() {
         <label class="check"><input type="checkbox" name="missedTaskReminder" ${n.missedTaskReminder ? 'checked' : ''}> Carried or missed tasks</label>
         <label class="check"><input type="checkbox" name="dailySummary" ${n.dailySummary ? 'checked' : ''}> Daily progress summary</label>
         <label class="check"><input type="checkbox" name="weeklyReview" ${n.weeklyReview ? 'checked' : ''}> Weekly review reminder</label>
+        <label class="field"><span>Daily reminder time (Bangladesh time)</span><input name="reminderTime" type="time" value="${esc(n.reminderTime || '20:00')}"></label>
         <div class="row gap wrap">
           <button class="btn primary" type="submit">Save preferences</button>
           <button class="btn" type="button" id="enable-browser-notif">Enable browser notifications</button>
@@ -239,7 +241,7 @@ function renderSettings() {
     </section>
 
     <section class="card">
-      <h2>Data</h2>
+      <h2 data-i18n="data">Data</h2>
       <div class="row gap wrap">
         <button class="btn" data-nav="backup">Backup &amp; restore</button>
         <button class="btn" id="load-demo-btn">Load demo data</button>
@@ -266,6 +268,7 @@ function saveSettingsFromForm(form) {
     .split(',').map((x) => Number(x.trim())).filter((x) => Number.isFinite(x) && x > 0).slice(0, 10);
   if (intervals.length) st.settings.revisionIntervals = intervals;
   st.settings.theme = String(fd.get('theme') || 'auto');
+  st.settings.language = fd.get('language') === 'bn' ? 'bn' : 'en';
   save();
   applyTheme();
   return true;
@@ -281,6 +284,7 @@ function saveNotifFromForm(form) {
   n.weeklyReview = !!fd.get('weeklyReview');
   n.missedTaskReminder = !!fd.get('missedTaskReminder');
   n.dailySummary = !!fd.get('dailySummary');
+  n.reminderTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(fd.get('reminderTime') || '')) ? String(fd.get('reminderTime')) : '20:00';
   save();
   return true;
 }
@@ -289,7 +293,7 @@ function saveNotifFromForm(form) {
 function renderBackup() {
   const st = getState();
   return `<div class="page">
-    <div class="page-head"><h1>Backup &amp; restore</h1></div>
+    <div class="page-head"><h1 data-i18n="backupTitle">Backup &amp; restore</h1></div>
     <section class="card">
       <h2>Full backup (JSON)</h2>
       <p class="muted small">Contains your local study data. Keep it private. Restoring replaces the current data on this device.</p>

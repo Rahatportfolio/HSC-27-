@@ -19,7 +19,7 @@ function renderPlanner() {
   else body = plannerMonthView(plannerCursor, target);
 
   return `<div class="page">
-    <div class="page-head"><h1>Planner</h1>
+    <div class="page-head"><h1 data-i18n="planner">Planner</h1>
       <button class="btn small primary" id="add-task-btn">+ Add task</button></div>
     <div class="tabs">${tabs}</div>
     <div class="row gap">

@@ -5,10 +5,10 @@ const { JSDOM, VirtualConsole } = require('jsdom');
 const errors = [];
 const vc = new VirtualConsole(); vc.on('jsdomError',e=>errors.push(e.message));
 const html=fs.readFileSync('index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'');
-const dom=new JSDOM(html,{url:'https://study.example/',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.confirm=()=>true;w.alert=msg=>errors.push(msg);}});
+const dom=new JSDOM(html,{url:'https://study.example/',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){w.matchMedia=()=>({matches:false,addEventListener(){}});w.scrollTo=()=>{};w.fetch=async()=>{throw Error('offline');};w.confirm=()=>true;w.alert=msg=>errors.push(msg);}});
 const w=dom.window,d=w.document;
 w.addEventListener('error',e=>errors.push(e.error ? e.error.stack : e.message));
-for(const f of ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/views/quiz.js','js/app.js']){const s=d.createElement('script');s.textContent=fs.readFileSync(f,'utf8');d.body.appendChild(s);}
+for(const f of ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/views/quiz.js','js/i18n.js','js/sync.js','js/app.js']){const s=d.createElement('script');s.textContent=fs.readFileSync(f,'utf8');d.body.appendChild(s);}
 const click=sel=>{const x=d.querySelector(sel);assert.ok(x,sel);x.click();};
 const set=(sel,value)=>{const x=d.querySelector(sel);assert.ok(x,sel);x.value=value;x.dispatchEvent(new w.Event('change',{bubbles:true}));};
 const submit=sel=>d.querySelector(sel).dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));

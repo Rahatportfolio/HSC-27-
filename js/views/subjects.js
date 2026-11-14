@@ -23,7 +23,7 @@ function renderSubjects() {
     </button>`;
   };
   return `<div class="page">
-    <div class="page-head"><h1>Subjects</h1>
+    <div class="page-head"><h1 data-i18n="subjects">Subjects</h1>
       <button class="btn small" id="add-subject-btn">+ Custom subject</button></div>
     <p class="muted small">Chapters are added by you — official syllabus data is never invented. Use the import tool to bulk-add chapters.</p>
     <h2 class="section-title">Science</h2>
@@ -69,8 +69,8 @@ function chapterRow(ch) {
       <span class="badge prio-${esc(ch.priority || 'B')}">${esc(ch.priority || 'B')}</span>
       <span class="chapter-body">
         <strong>${esc(ch.number ? 'Ch ' + ch.number + ': ' : '')}${esc(ch.name)}</strong>
-        <span class="muted small">${esc(statusLabel)} · ${ch.status === 'completed' ? 100 : (ch.completionPct || 0)}% · ${formatDuration(mins)} studied</span>
-        <span class="progress-bar sm"><span class="progress-fill" style="width:${ch.status === 'completed' ? 100 : (ch.completionPct || 0)}%"></span></span>
+        <span class="muted small">${esc(statusLabel)} · ${esc(ch.status === 'completed' ? 100 : (ch.completionPct || 0))}% · ${formatDuration(mins)} studied</span>
+        <span class="progress-bar sm"><span class="progress-fill" style="width:${esc(ch.status === 'completed' ? 100 : (ch.completionPct || 0))}%"></span></span>
       </span>
       <span class="chev">›</span>
     </button>
@@ -102,14 +102,14 @@ function renderChapterDetail(chapterId) {
     <button class="btn small ghost" data-nav="subject" data-id="${esc(ch.subjectId)}">← ${esc(s ? s.name : 'Subject')}</button>
     <div class="page-head"><h1>${esc(ch.number ? 'Ch ' + ch.number + ': ' : '')}${esc(ch.name)}</h1>
       <span class="badge prio-${esc(ch.priority || 'B')}">Priority ${esc(ch.priority || 'B')}</span></div>
-    <p class="muted">${formatDuration(mins)} studied · ${ch.status === 'completed' ? 100 : (ch.completionPct || 0)}% complete</p>
+    <p class="muted">${formatDuration(mins)} studied · ${esc(ch.status === 'completed' ? 100 : (ch.completionPct || 0))}% complete</p>
 
     <section class="card">
       <h2>Progress</h2>
       <label class="field"><span>Study status</span>
         <select id="ch-status">${sel(ch.status, statusOpts)}</select></label>
-      <label class="field"><span>Completion: <strong id="ch-pct-label">${ch.completionPct || 0}%</strong></span>
-        <input type="range" id="ch-pct" min="0" max="100" step="5" value="${ch.completionPct || 0}"></label>
+      <label class="field"><span>Completion: <strong id="ch-pct-label">${esc(ch.completionPct || 0)}%</strong></span>
+        <input type="range" id="ch-pct" min="0" max="100" step="5" value="${esc(ch.completionPct || 0)}"></label>
       <label class="field"><span>CQ preparation</span><select id="ch-cq">${sel(ch.cqStatus || 'not-started', prepOpts)}</select></label>
       <label class="field"><span>MCQ preparation</span><select id="ch-mcq">${sel(ch.mcqStatus || 'not-started', prepOpts)}</select></label>
       <label class="field"><span>Written practice</span><select id="ch-written">${sel(ch.writtenStatus || 'not-started', prepOpts)}</select></label>
@@ -127,9 +127,9 @@ function renderChapterDetail(chapterId) {
     <section class="card">
       <div class="card-head"><h2>Practice summary</h2><button class="btn small ghost" data-nav="practice" data-chapter="${esc(ch.id)}">Record practice</button></div>
       <ul class="plain-list">
-        <li>MCQ: ${mcq.attempted} attempted · accuracy ${mcq.accuracy === null ? '—' : mcq.accuracy + '%'} · ${mcq.sessions} sessions</li>
-        <li>CQ: ${cq.attempted} attempted · marks ${cq.marks}/${cq.totalMarks} · ${cq.sessions} sessions</li>
-        <li>Written: ${wr.attempted} attempted · ${wr.sessions} sessions</li>
+        <li>MCQ: ${esc(mcq.attempted)} attempted · accuracy ${mcq.accuracy === null ? '—' : mcq.accuracy + '%'} · ${mcq.sessions} sessions</li>
+        <li>CQ: ${esc(cq.attempted)} attempted · marks ${esc(cq.marks)}/${esc(cq.totalMarks)} · ${cq.sessions} sessions</li>
+        <li>Written: ${esc(wr.attempted)} attempted · ${wr.sessions} sessions</li>
       </ul>
     </section>
 
@@ -144,7 +144,7 @@ function renderChapterDetail(chapterId) {
 
     <section class="card">
       <div class="card-head"><h2>Revisions</h2><button class="btn small ghost" data-nav="revisions">All revisions</button></div>
-      ${revs.length ? `<ul class="plain-list">${revs.map((r) => `<li>Cycle ${r.cycle}: due ${esc(formatDate(r.dueDate))} — ${r.completedAt ? 'done' : (r.dueDate <= todayKey() ? 'OVERDUE' : 'pending')}</li>`).join('')}</ul>`
+      ${revs.length ? `<ul class="plain-list">${revs.map((r) => `<li>Cycle ${esc(r.cycle)}: due ${esc(formatDate(r.dueDate))} — ${r.completedAt ? 'done' : (r.dueDate <= todayKey() ? 'OVERDUE' : 'pending')}</li>`).join('')}</ul>`
       : `<p class="muted">No revisions scheduled. Complete this chapter to start the spaced-revision cycle.</p>`}
     </section>
 

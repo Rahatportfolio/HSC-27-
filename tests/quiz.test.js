@@ -3,12 +3,12 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const { JSDOM, VirtualConsole } = require('jsdom');
 const html = fs.readFileSync('index.html','utf8').replace(/<script[\s\S]*?<\/script>/g,'');
-const files = ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/views/quiz.js','js/app.js'];
+const files = ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/views/quiz.js','js/i18n.js','js/sync.js','js/app.js'];
 const errors=[];
 function create(saved) {
   const vc=new VirtualConsole(); vc.on('jsdomError',e=>errors.push(e.message));
   const dom=new JSDOM(html,{url:'https://study.example/',runScripts:'dangerously',virtualConsole:vc,beforeParse(w){
-    w.matchMedia=()=>({matches:false,addEventListener(){}}); w.scrollTo=()=>{}; w.confirm=()=>true; w.alert=msg=>errors.push(msg);
+    w.matchMedia=()=>({matches:false,addEventListener(){}}); w.scrollTo=()=>{};w.fetch=async()=>{throw Error('offline');}; w.confirm=()=>true; w.alert=msg=>errors.push(msg);
     if(saved) w.localStorage.setItem('hsc27_state_v1',saved);
   }});
   const w=dom.window,d=w.document;

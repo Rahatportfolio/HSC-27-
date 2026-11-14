@@ -20,7 +20,7 @@ function renderNotes(prefillChapterId) {
 
   const cats = ['note', 'formula', 'definition', 'trick', 'pdf', 'board-question'];
   return `<div class="page">
-    <div class="page-head"><h1>Notes &amp; documents</h1>
+    <div class="page-head"><h1 data-i18n="notesTitle">Notes &amp; documents</h1>
       <button class="btn small primary" id="add-note-btn">+ Add note</button></div>
     <div class="search-row">
       <input id="notes-search" type="search" placeholder="Search notes…" value="${esc(notesFilter.q)}" aria-label="Search notes">
@@ -151,7 +151,7 @@ function renderFormulas(prefillChapterId) {
   if (prefillChapterId) list = list.filter((f) => f.chapterId === prefillChapterId);
 
   return `<div class="page">
-    <div class="page-head"><h1>Formula library</h1>
+    <div class="page-head"><h1 data-i18n="formulasTitle">Formula library</h1>
       <button class="btn small primary" id="add-formula-btn">+ Add formula</button></div>
     <div class="search-row">
       <input id="formula-search" type="search" placeholder="Search formulas…" value="${esc(formulaFilter.q)}" aria-label="Search formulas">
@@ -224,7 +224,7 @@ function renderLibrary(prefillChapterId) {
   if (prefillChapterId) list = list.filter((r) => r.chapterId === prefillChapterId);
 
   return `<div class="page">
-    <div class="page-head"><h1>Video library</h1>
+    <div class="page-head"><h1 data-i18n="videosTitle">Video library</h1>
       <button class="btn small primary" id="add-resource-btn">+ Add video</button></div>
     <p class="muted small">Links only — videos play on YouTube. Nothing is scraped.</p>
     <div class="search-row">
@@ -303,7 +303,7 @@ function renderPractice(prefillChapterId) {
   const st = getState();
   const list = st.practice.filter((p) => !prefillChapterId || p.chapterId === prefillChapterId).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return `<div class="page">
-    <div class="page-head"><h1>Practice tracker</h1>
+    <div class="page-head"><h1 data-i18n="practiceTitle">Practice tracker</h1>
       <button class="btn small primary" id="add-practice-btn">+ Record practice</button></div>
     <p class="muted small">Record MCQ, CQ and written practice per chapter. Manual CQ marks are supported. Mistakes go to your mistake notebook.</p>
     ${list.length ? `<ul class="card-list">${list.map((p) => {
@@ -313,10 +313,10 @@ function renderPractice(prefillChapterId) {
           <span class="badge">${esc(p.type)}</span></div>
         <p class="muted small">${esc(formatDate(p.date))} · ${esc(subjectName(p.subjectId))}${p.durationMinutes ? ' · ' + formatDuration(p.durationMinutes) : ''}</p>
         <p>${p.type === 'mcq'
-          ? `${p.attempted} attempted · ${p.correct} correct · ${p.attempted - p.correct} wrong · accuracy ${acc === null ? '—' : acc + '%'}`
+          ? `${esc(p.attempted)} attempted · ${esc(p.correct)} correct · ${p.attempted - p.correct} wrong · accuracy ${acc === null ? '—' : acc + '%'}`
           : p.type === 'cq'
-            ? `Marks ${p.marks ?? '—'}/${p.totalMarks ?? '—'} · ${p.attempted} question(s)`
-            : `${p.attempted} written answer(s) practiced`}</p>
+            ? `Marks ${esc(p.marks ?? '—')}/${esc(p.totalMarks ?? '—')} · ${esc(p.attempted)} question(s)`
+            : `${esc(p.attempted)} written answer(s) practiced`}</p>
         ${p.mistakes && p.mistakes.length ? `<p class="muted small">Mistakes: ${p.mistakes.map((m) => esc(m.q)).join('; ')}</p>` : ''}
         ${p.note ? `<p class="muted small">${esc(p.note)}</p>` : ''}
         <div class="row gap wrap">
@@ -414,8 +414,8 @@ function renderExams() {
     return `<li class="card">
       <div class="row between"><strong>${esc(e.name)}</strong>
         <span class="badge">${daysLeft >= 0 ? daysLeft + 'd left' : 'done'}</span></div>
-      <p class="muted small">${esc(formatDate(e.date))} · ${esc(e.scope)} · ${e.durationMinutes} min · ${e.totalMarks} marks${e.subjectId ? ' · ' + esc(subjectName(e.subjectId)) : ''}${e.chapterId ? ' · ' + esc(chapterLabel(e.chapterId)) : ''}${e.format ? ' · ' + esc(e.format) : ''}</p>
-      ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${r.obtainedMarks}/${e.totalMarks} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}${Array.isArray(r.quizReview) ? ` <button class="btn small" data-nav="quiz-review" data-id="${esc(r.id)}">Review answers</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
+      <p class="muted small">${esc(formatDate(e.date))} · ${esc(e.scope)} · ${esc(e.durationMinutes)} min · ${esc(e.totalMarks)} marks${e.subjectId ? ' · ' + esc(subjectName(e.subjectId)) : ''}${e.chapterId ? ' · ' + esc(chapterLabel(e.chapterId)) : ''}${e.format ? ' · ' + esc(e.format) : ''}</p>
+      ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${esc(r.obtainedMarks)}/${esc(e.totalMarks)} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}${Array.isArray(r.quizReview) ? ` <button class="btn small" data-nav="quiz-review" data-id="${esc(r.id)}">Review answers</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
       <div class="row gap wrap">
         <button class="btn small primary" data-result-add="${esc(e.id)}">Record result</button>
         <button class="btn small" data-quiz-start="${esc(e.id)}">Take MCQ test</button>
@@ -426,7 +426,7 @@ function renderExams() {
   };
 
   return `<div class="page">
-    <div class="page-head"><h1>Exams</h1>
+    <div class="page-head"><h1 data-i18n="examsTitle">Exams</h1>
       <button class="btn small primary" id="add-exam-btn">+ Schedule exam</button></div>
     ${st.activeQuiz ? `<section class="card"><h2>MCQ test in progress</h2><p>${esc(st.activeQuiz.examName)}</p><button class="btn primary" data-nav="quiz">Resume MCQ test</button></section>` : ''}
     ${st.activeExam ? `<section class="card"><h2>Timed test in progress</h2><p>${esc((st.exams.find((e) => e.id === st.activeExam.examId) || {}).name || 'Exam')} · <strong id="exam-timer-display"></strong></p><p class="muted small">Use your own questions. The timer does not submit answers or record marks; enter your result yourself.</p><button class="btn" id="end-timed-exam">End timer</button></section>` : ''}
@@ -483,8 +483,8 @@ function saveExamFromForm(form) {
 
 function resultFormHTML(exam) {
   return `<form id="result-form" class="form">
-    <p><strong>${esc(exam.name)}</strong> — ${exam.totalMarks} marks</p>
-    <label class="field"><span>Marks obtained *</span><input name="obtainedMarks" type="number" min="0" max="${exam.totalMarks}" step="0.5" required></label>
+    <p><strong>${esc(exam.name)}</strong> — ${esc(exam.totalMarks)} marks</p>
+    <label class="field"><span>Marks obtained *</span><input name="obtainedMarks" type="number" min="0" max="${esc(exam.totalMarks)}" step="0.5" required></label>
     <label class="field"><span>Date</span><input name="date" type="date" value="${todayKey()}"></label>
     <label class="field"><span>Notes / weak chapters</span><textarea name="notes" rows="3" placeholder="Which chapters were weak?"></textarea></label>
     <div class="row gap"><button class="btn primary" type="submit">Save result</button>
@@ -519,7 +519,7 @@ function renderRevisions() {
   const row = (r, actions) => `<li class="card">
     <div class="row between"><strong>${esc(chapterLabel(r.chapterId))}</strong>
       <span class="badge ${r.completedAt ? 'ok' : (r.dueDate <= today ? 'overdue' : '')}">${r.completedAt ? 'done' : (r.dueDate <= today ? 'overdue' : 'due ' + formatDate(r.dueDate))}</span></div>
-    <p class="muted small">${esc(subjectName(r.subjectId))} · Cycle ${r.cycle}${r.difficulty ? ' · difficulty ' + r.difficulty + '/5' : ''}</p>
+    <p class="muted small">${esc(subjectName(r.subjectId))} · Cycle ${esc(r.cycle)}${r.difficulty ? ' · difficulty ' + esc(r.difficulty) + '/5' : ''}</p>
     ${actions ? `<div class="row gap wrap">
       <button class="btn small primary" data-revision-done="${esc(r.id)}">Mark revised</button>
       <button class="btn small ghost" data-revision-difficult="${esc(r.id)}">Still difficult → repeat</button>
@@ -527,7 +527,7 @@ function renderRevisions() {
   </li>`;
 
   return `<div class="page">
-    <div class="page-head"><h1>Revisions</h1></div>
+    <div class="page-head"><h1 data-i18n="revisionsTitle">Revisions</h1></div>
     <p class="muted small">Spaced revision every ${esc((st.settings.revisionIntervals || []).join(', '))} days after completing a chapter. Intervals are configurable in Settings.</p>
     <h2 class="section-title">Due &amp; overdue (${due.length})</h2>
     ${due.length ? `<ul class="card-list">${due.map((r) => row(r, true)).join('')}</ul>` : `<p class="muted">Nothing due. Complete a chapter to schedule revisions.</p>`}
@@ -550,7 +550,7 @@ function renderWeaknesses(prefillChapterId) {
   const card = (w) => `<li class="card">
     <div class="row between"><strong>${esc(w.topic)}</strong>
       <span class="badge ${w.status === 'resolved' ? 'ok' : ''}">${esc(w.status)}</span></div>
-    <p class="muted small">${esc(subjectName(w.subjectId))}${w.chapterId ? ' · ' + esc(chapterLabel(w.chapterId)) : ''} · ${esc(w.type)} · practiced ${w.practiceCount || 0}×</p>
+    <p class="muted small">${esc(subjectName(w.subjectId))}${w.chapterId ? ' · ' + esc(chapterLabel(w.chapterId)) : ''} · ${esc(w.type)} · practiced ${esc(w.practiceCount || 0)}×</p>
     ${w.reason ? `<p class="muted small">Reason: ${esc(w.reason)}</p>` : ''}
     ${w.correctionTask ? `<p class="muted small">Correction task: ${esc(w.correctionTask)}</p>` : ''}
     <div class="row gap wrap">
@@ -563,7 +563,7 @@ function renderWeaknesses(prefillChapterId) {
   </li>`;
 
   return `<div class="page">
-    <div class="page-head"><h1>Weaknesses &amp; mistakes</h1>
+    <div class="page-head"><h1 data-i18n="weaknessesTitle">Weaknesses &amp; mistakes</h1>
       <button class="btn small primary" id="add-weakness-btn">+ Add weakness</button></div>
     <p class="muted small">Track difficult topics, wrong MCQs and CQ mistakes with reasons and correction tasks.</p>
     <h2 class="section-title">Active (${active.length})</h2>
