@@ -52,6 +52,7 @@ function render() {
 function afterRender() {
   // Focus view: sync chapter dropdown
   if (currentRoute.name === 'focus') { syncFocusChapterOptions(); updateTimerDisplay(); refreshTimerButtons(); }
+  updateExamTimerDisplay();
   // Task form chapter dropdown depends on subject selection
   const taskSubject = document.querySelector('#task-form select[name="subjectId"]');
   if (taskSubject) {
@@ -78,6 +79,7 @@ function afterRender() {
   bindSearch('library-search', (v) => { libraryFilter.q = v; });
   bindSearch('global-search', (v) => { searchQuery = v; });
   updateOnlineStatus();
+  checkReminders();
 }
 
 /* ---------- Modal ---------- */
@@ -153,6 +155,15 @@ function checkReminders() {
     const d = daysBetween(today, st.settings.examDate);
     if (d >= 0 && d <= 30) items.push(`HSC exam in ${d} day(s).`);
   }
+  if (n.examReminder) {
+    const upcoming = st.exams.filter((exam) => isValidDateKey(exam.date) && daysBetween(today, exam.date) >= 0 && daysBetween(today, exam.date) <= 7);
+    if (upcoming.length) items.push(`${upcoming.length} scheduled test(s) within 7 days.`);
+  }
+  if (n.missedTaskReminder) {
+    const carried = st.tasks.filter((t) => t.status !== 'done' && (t.status === 'carried' || t.date < today)).length;
+    if (carried) items.push(`${carried} missed or carried task(s).`);
+  }
+  if (n.dailySummary) items.push(`Today: ${formatDuration(minutesOn(today))} studied.`);
   if (n.sessionReminder) {
     const actual = minutesOn(today);
     const target = st.settings.dailyTargetMinutes || 480;
@@ -169,6 +180,14 @@ function checkReminders() {
       el.innerHTML = '<strong>Reminders:</strong> ' + esc(items.join(' '));
     }
   }
+}
+
+function updateExamTimerDisplay() {
+  const el = document.getElementById('exam-timer-display');
+  const active = getState().activeExam;
+  if (!el || !active) return;
+  const remaining = Math.max(0, active.endsAt - Date.now());
+  el.textContent = remaining ? formatClock(Math.ceil(remaining / 1000)) + ' remaining' : 'Time is up';
 }
 
 function shiftPlannerMonth(key, delta) {
@@ -206,7 +225,32 @@ document.addEventListener('click', (e) => {
   const jump = e.target.closest('[data-planner-jump]');
   if (jump) { plannerCursor = jump.dataset.plannerJump; plannerMode = 'day'; navigate('planner'); return; }
 
+  if (e.target.closest('#start-challenge')) {
+    openModal('Start a study challenge', `<form id="challenge-form" class="form"><label class="field"><span>Days (1–90)</span><input name="days" type="number" min="1" max="90" value="7" required></label><label class="field"><span>Daily study minutes (1–1440)</span><input name="minutes" type="number" min="1" max="1440" value="${esc(st.settings.dailyTargetMinutes)}" required></label><button class="btn primary" type="submit">Start today</button></form>`, (form) => {
+      const fd = new FormData(form), days = Number(fd.get('days')), minutes = Number(fd.get('minutes'));
+      if (!Number.isInteger(days) || days < 1 || days > 90 || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) { toast('Enter a valid duration and target.'); return false; }
+      st.challenge = { startDate: todayKey(), days, targetMinutes: minutes }; save(); return true;
+    });
+    return;
+  }
+  if (e.target.closest('#end-challenge')) {
+    if (confirm('Remove this challenge? Study sessions will be kept.')) { st.challenge = null; save(); render(); }
+    return;
+  }
+
   // Tasks
+  const reschedule = e.target.closest('[data-task-reschedule]');
+  if (reschedule) {
+    const task = st.tasks.find((t) => t.id === reschedule.dataset.taskReschedule);
+    if (!task) return;
+    openModal('Reschedule task', `<form id="reschedule-form" class="form"><p>${esc(task.title)}</p><label class="field"><span>New date</span><input type="date" name="date" value="${esc(task.date)}" required></label><button class="btn primary" type="submit">Reschedule</button></form>`, (form) => {
+      const date = String(new FormData(form).get('date') || '');
+      if (!isValidDateKey(date)) { toast('Choose a valid date.'); return false; }
+      if (!task.originalDate) task.originalDate = task.date;
+      task.date = date; task.status = 'pending'; save(); return true;
+    });
+    return;
+  }
   const taskDel = e.target.closest('[data-task-delete]');
   if (taskDel) {
     st.tasks = st.tasks.filter((t) => t.id !== taskDel.dataset.taskDelete);
@@ -258,9 +302,14 @@ document.addEventListener('click', (e) => {
     return;
   }
   if (e.target.closest('#ch-delete')) {
+    if (focusState.chapterId === currentRoute.param && (focusState.running || focusState.accumulatedMs > 0)) { toast('Stop the active focus timer before deleting this chapter.'); return; }
     if (confirm('Delete this chapter and its linked data?')) {
       const id = currentRoute.param;
       st.chapters = st.chapters.filter((c) => c.id !== id);
+      st.sessions.forEach((s) => { if (s.chapterId === id) s.chapterId = null; });
+      st.exams.forEach((exam) => { if (exam.chapterId === id) exam.chapterId = null; });
+      st.questionBank.forEach((q) => { if (q.chapterId === id) q.chapterId = null; });
+      if (focusState.chapterId === id) { focusState.chapterId = null; persistFocusTimer(); }
       st.tasks = st.tasks.filter((t) => t.chapterId !== id);
       st.revisions = st.revisions.filter((r) => r.chapterId !== id);
       st.practice = st.practice.filter((p) => p.chapterId !== id);
@@ -331,7 +380,8 @@ document.addEventListener('click', (e) => {
   }
   if (e.target.closest('#delete-subject-btn')) {
     const id = currentRoute.param;
-    if (['chapters', 'tasks', 'sessions', 'revisions', 'practice', 'exams', 'notes', 'formulas', 'resources', 'weaknesses', 'questionBank'].some((key) => st[key].some((item) => item.subjectId === id))) { toast('Remove or reassign linked records before deleting this subject.'); return; }
+    if (focusState.subjectId === id && (focusState.running || focusState.accumulatedMs > 0)) { toast('Stop the active focus timer before deleting this subject.'); return; }
+    if (['chapters', 'tasks', 'sessions', 'revisions', 'practice', 'exams', 'notes', 'formulas', 'resources', 'weaknesses', 'questionBank'].some((key) => st[key].some((item) => item.subjectId === id || (key === 'formulas' && item.subject === id)))) { toast('Remove or reassign linked records before deleting this subject.'); return; }
     if (confirm('Delete this subject?')) {
       st.subjects = st.subjects.filter((s) => s.id !== id);
       st.chapters = st.chapters.filter((c) => c.subjectId !== id);
@@ -368,6 +418,12 @@ document.addEventListener('click', (e) => {
   if (fDel) { st.formulas = st.formulas.filter((f) => f.id !== fDel.dataset.formulaDelete); save(); toast('Formula deleted.'); render(); return; }
   const fFav = e.target.closest('[data-formula-fav]');
   if (fFav) { const f = st.formulas.find((x) => x.id === fFav.dataset.formulaFav); if (f) { f.favorite = !f.favorite; save(); render(); } return; }
+
+  const openedResource = e.target.closest('[data-resource-open]');
+  if (openedResource) {
+    const resource = st.resources.find((x) => x.id === openedResource.dataset.resourceOpen);
+    if (resource) { resource.lastOpenedAt = nowISO(); save(); }
+  }
 
   // Resources
   if (e.target.closest('#add-resource-btn')) { openModal('Add video', resourceFormHTML(null), (form) => saveResourceFromForm(form, null)); return; }
@@ -415,8 +471,22 @@ document.addEventListener('click', (e) => {
 
   // Exams
   if (e.target.closest('#add-exam-btn')) { openModal('Schedule exam', examFormHTML(), (form) => saveExamFromForm(form)); return; }
+  const exStart = e.target.closest('[data-exam-start]');
+  if (exStart) {
+    const exam = st.exams.find((x) => x.id === exStart.dataset.examStart);
+    if (!exam) return;
+    if (st.activeExam) { toast('End the current timed test first.'); return; }
+    st.activeExam = { examId: exam.id, startedAt: Date.now(), endsAt: Date.now() + exam.durationMinutes * 60000 };
+    save(); render(); return;
+  }
+  if (e.target.closest('#end-timed-exam')) {
+    if (confirm('End the timed test? Record your marks separately.')) { st.activeExam = null; save(); render(); }
+    return;
+  }
   const exDel = e.target.closest('[data-exam-delete]');
   if (exDel) {
+    if (!confirm('Delete this exam and its recorded results?')) return;
+    if (st.activeExam && st.activeExam.examId === exDel.dataset.examDelete) st.activeExam = null;
     st.exams = st.exams.filter((x) => x.id !== exDel.dataset.examDelete);
     st.examResults = st.examResults.filter((r) => r.examId !== exDel.dataset.examDelete);
     save(); toast('Exam deleted.'); render(); return;
@@ -462,6 +532,19 @@ document.addEventListener('click', (e) => {
   const wDel = e.target.closest('[data-weakness-delete]');
   if (wDel) { st.weaknesses = st.weaknesses.filter((w) => w.id !== wDel.dataset.weaknessDelete); save(); toast('Weakness deleted.'); render(); return; }
 
+  if (e.target.closest('#review-create-tasks')) {
+    const review = st.weeklyReviews.find((r) => r.weekStart === weekStartKey(todayKey()));
+    if (!review) return;
+    const goals = String(review.answers.goals || '').split('\n').map((v) => v.trim()).filter(Boolean).slice(0, 21);
+    let added = 0;
+    goals.forEach((goal, i) => {
+      if (st.tasks.some((t) => t.reviewId === review.id && t.reviewGoal === goal)) return;
+      st.tasks.push({ id: uid('task'), title: sanitizeText(goal, 300), date: addDays(todayKey(), i % 7 + 1), plannedMinutes: 30, type: 'study', priority: 'B', subjectId: null, chapterId: null, deadline: null, status: 'pending', reviewId: review.id, reviewGoal: goal, createdAt: nowISO() });
+      added++;
+    });
+    save(); toast(added + ' goal task(s) added.'); render(); return;
+  }
+
   // Journal
   if (e.target.closest('#add-journal-btn')) { openModal('New journal entry', journalFormHTML(), (form) => saveJournalFromForm(form)); return; }
   const jDel = e.target.closest('[data-journal-delete]');
@@ -471,7 +554,7 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('#load-demo-btn')) { loadDemoData(); toast('Demo data loaded (labelled DEMO).'); render(); return; }
   if (e.target.closest('#clear-demo-btn')) { clearDemoData(); toast('Demo data removed.'); render(); return; }
   if (e.target.closest('#reset-all-btn')) {
-    if (confirm('Delete ALL local data on this device? Export a backup first.')) { resetState(); toast('All data reset.'); render(); }
+    if (confirm('Delete ALL local data on this device? Export a backup first.')) { resetTimer(); resetState(); toast('All data reset.'); render(); }
     return;
   }
   if (e.target.closest('#enable-browser-notif')) {
@@ -505,10 +588,10 @@ document.addEventListener('change', (e) => {
     if (t) { t.status = taskToggle.checked ? 'done' : 'pending'; save(); render(); }
     return;
   }
-  if (e.target.id === 'focus-subject') { focusState.subjectId = e.target.value || null; focusState.chapterId = null; syncFocusChapterOptions(); return; }
-  if (e.target.id === 'focus-chapter') { focusState.chapterId = e.target.value || null; return; }
+  if (e.target.id === 'focus-subject') { focusState.subjectId = e.target.value || null; focusState.chapterId = null; persistFocusTimer(); syncFocusChapterOptions(); return; }
+  if (e.target.id === 'focus-chapter') { focusState.chapterId = e.target.value || null; persistFocusTimer(); return; }
   if (e.target.id === 'focus-minutes') { focusState.targetMs = Math.max(1, Number(e.target.value) || 25) * 60000; resetTimer(); return; }
-  if (e.target.id === 'focus-break') { focusState.breakMs = Math.max(1, Number(e.target.value) || 5) * 60000; return; }
+  if (e.target.id === 'focus-break') { focusState.breakMs = Math.max(1, Number(e.target.value) || 5) * 60000; persistFocusTimer(); return; }
   if (e.target.id === 'notes-category') { notesFilter.category = e.target.value; render(); return; }
   if (e.target.id === 'formula-subject') { formulaFilter.subject = e.target.value; render(); return; }
   if (e.target.id === 'library-subject') { libraryFilter.subject = e.target.value; render(); return; }
@@ -529,7 +612,7 @@ document.addEventListener('change', (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = () => {
-      try { if (!confirm('Replace all data on this device with this backup? Export a backup first.')) return; importJSON(String(reader.result)); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
+      try { if (focusState.running || focusState.accumulatedMs > 0) { toast('Stop or reset the current focus timer before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? Export a backup first.')) return; resetTimer(); importJSON(String(reader.result)); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
       render();
     };
     reader.readAsText(file);
@@ -604,6 +687,7 @@ document.getElementById('more-btn').addEventListener('click', () => {
 
 /* ---------- Init ---------- */
 loadState();
+restoreFocusTimer();
 carryOverMissed();
 applyTheme();
 window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
@@ -611,7 +695,8 @@ window.addEventListener('online', updateOnlineStatus);
 window.addEventListener('offline', updateOnlineStatus);
 render();
 checkReminders();
-setInterval(checkReminders, 60000);
+setInterval(() => { if (carryOverMissed()) render(); checkReminders(); }, 60000);
+setInterval(updateExamTimerDisplay, 1000);
 
 // Register service worker for offline PWA support
 if ('serviceWorker' in navigator) {

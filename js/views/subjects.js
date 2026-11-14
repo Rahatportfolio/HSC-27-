@@ -134,6 +134,15 @@ function renderChapterDetail(chapterId) {
     </section>
 
     <section class="card">
+      <div class="card-head"><h2>Chapter test results</h2><button class="btn small ghost" data-nav="exams">Exams</button></div>
+      ${(() => {
+        const st = getState();
+        const results = st.examResults.map((r) => ({ r, exam: st.exams.find((e) => e.id === r.examId && e.chapterId === chapterId) })).filter((x) => x.exam);
+        return results.length ? `<ul class="plain-list">${results.map(({ r, exam }) => `<li>${esc(exam.name)} · ${esc(formatDate(r.date))} · ${esc(r.obtainedMarks)}/${esc(exam.totalMarks)} (${esc(r.grade || '')})</li>`).join('')}</ul>` : '<p class="muted">No chapter test results recorded.</p>';
+      })()}
+    </section>
+
+    <section class="card">
       <div class="card-head"><h2>Revisions</h2><button class="btn small ghost" data-nav="revisions">All revisions</button></div>
       ${revs.length ? `<ul class="plain-list">${revs.map((r) => `<li>Cycle ${r.cycle}: due ${esc(formatDate(r.dueDate))} — ${r.completedAt ? 'done' : (r.dueDate <= todayKey() ? 'OVERDUE' : 'pending')}</li>`).join('')}</ul>`
       : `<p class="muted">No revisions scheduled. Complete this chapter to start the spaced-revision cycle.</p>`}
@@ -185,6 +194,7 @@ function saveChapterFromForm(form, existingId) {
   if (existingId) {
     const ch = chapterById(existingId);
     if (!ch) return false;
+    if (ch.subjectId !== subjectId && ['tasks', 'sessions', 'revisions', 'practice', 'exams', 'notes', 'formulas', 'resources', 'weaknesses', 'questionBank'].some((key) => st[key].some((item) => item.chapterId === ch.id))) { toast('Remove or reassign linked records before changing the chapter subject.'); return false; }
     Object.assign(ch, { subjectId, number, name, priority, updatedAt: nowISO() });
   } else {
     const order = chaptersOf(subjectId).length;

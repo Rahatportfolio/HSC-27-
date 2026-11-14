@@ -1,6 +1,5 @@
 /* HSC 2027 Smart Study App — views/more.js
- * Weekly review, journal, calendar, global search, settings, backup/restore,
- * and backup/restore.
+ * Weekly review, journal, calendar, global search, settings and backup/restore.
  */
 'use strict';
 
@@ -14,6 +13,10 @@ function renderReview() {
   const chaptersDone = st.chapters.filter((c) => c.status === 'completed' && c.updatedAt && toDateKey(new Date(c.updatedAt)) >= wStart);
   const missedTasks = st.tasks.filter((t) => t.date >= wStart && t.date <= today && t.status !== 'done');
   const existing = st.weeklyReviews.find((r) => r.weekStart === wStart);
+  const plannedTasks = st.tasks.filter((t) => (t.originalDate || t.date) >= wStart && (t.originalDate || t.date) <= addDays(wStart, 6));
+  const plannedMinutes = plannedTasks.filter((t) => t.type !== 'rest').reduce((sum, t) => sum + (t.plannedMinutes || 0), 0);
+  const previousMinutes = minutesInWeek(addDays(wStart, -7));
+  const recordedPractice = st.practice.filter((p) => p.date >= wStart && p.date <= today);
 
   const subjectProgress = st.subjects.map((s) => {
     const mins = st.sessions.filter((x) => x.subjectId === s.id && x.date >= wStart && x.date <= today)
@@ -29,11 +32,14 @@ function renderReview() {
       <h2>Auto-generated summary (from recorded data only)</h2>
       <ul class="plain-list">
         <li>Chapters completed this week: <strong>${chaptersDone.length}</strong>${chaptersDone.length ? ' — ' + chaptersDone.map((c) => esc(chapterLabel(c.id))).join(', ') : ''}</li>
+        <li>Original weekly plan: ${formatDuration(plannedMinutes)} across ${plannedTasks.length} tasks · ${plannedTasks.filter((t) => t.status === 'done').length} currently marked done.</li>
+        <li>Actual this week: ${formatDuration(weekMins)} · Previous week: ${formatDuration(previousMinutes)}</li>
         <li>Unfinished tasks: <strong>${missedTasks.length}</strong></li>
+        <li>Practice recorded this week: ${recordedPractice.length} sessions.</li>
         <li>Due revisions: <strong>${dueRevisions().length}</strong></li>
         <li>Subject time: ${subjectProgress.length ? subjectProgress.map((x) => `${esc(x.subject.name)} ${formatDuration(x.mins)}`).join(' · ') : 'none recorded'}</li>
       </ul>
-      <p class="muted small">The app never claims progress that was not recorded. Answer the questions below to plan next week.</p>
+      <p class="muted small">Plans reflect current tasks, including their original dates when carried over. Deleted or edited tasks are not historical snapshots. The app never claims progress that was not recorded.</p>
     </section>
 
     <section class="card">
@@ -50,6 +56,11 @@ function renderReview() {
       </form>
     </section>
 
+    <section class="card">
+      <h2>Turn goals into tasks</h2>
+      <p class="muted small">Save your review first. Put one goal per line; this creates one 30-minute task per goal across the next seven days, without replacing existing tasks. You can reschedule them in Planner.</p>
+      ${existing && existing.answers.goals ? `<button class="btn" id="review-create-tasks">Create tasks from saved goals</button>` : '<p class="muted">No saved goals yet.</p>'}
+    </section>
     <section class="card">
       <h2>Past reviews</h2>
       ${st.weeklyReviews.length ? `<ul class="plain-list">${st.weeklyReviews.slice().sort((a, b) => b.weekStart.localeCompare(a.weekStart)).map((r) => `
@@ -69,7 +80,7 @@ function saveReviewFromForm(form) {
   });
   const existing = st.weeklyReviews.find((r) => r.weekStart === wStart);
   if (existing) { existing.answers = answers; existing.updatedAt = nowISO(); }
-  else st.weeklyReviews.push({ id: uid('rev'), weekStart, answers, createdAt: nowISO(), updatedAt: nowISO() });
+  else st.weeklyReviews.push({ id: uid('rev'), weekStart: wStart, answers, createdAt: nowISO(), updatedAt: nowISO() });
   save();
   return true;
 }
@@ -212,6 +223,8 @@ function renderSettings() {
         <label class="check"><input type="checkbox" name="sessionReminder" ${n.sessionReminder ? 'checked' : ''}> Study session reminder</label>
         <label class="check"><input type="checkbox" name="revisionReminder" ${n.revisionReminder ? 'checked' : ''}> Revision due reminder</label>
         <label class="check"><input type="checkbox" name="examReminder" ${n.examReminder ? 'checked' : ''}> Upcoming exam reminder</label>
+        <label class="check"><input type="checkbox" name="missedTaskReminder" ${n.missedTaskReminder ? 'checked' : ''}> Carried or missed tasks</label>
+        <label class="check"><input type="checkbox" name="dailySummary" ${n.dailySummary ? 'checked' : ''}> Daily progress summary</label>
         <label class="check"><input type="checkbox" name="weeklyReview" ${n.weeklyReview ? 'checked' : ''}> Weekly review reminder</label>
         <div class="row gap wrap">
           <button class="btn primary" type="submit">Save preferences</button>
@@ -258,6 +271,8 @@ function saveNotifFromForm(form) {
   n.revisionReminder = !!fd.get('revisionReminder');
   n.examReminder = !!fd.get('examReminder');
   n.weeklyReview = !!fd.get('weeklyReview');
+  n.missedTaskReminder = !!fd.get('missedTaskReminder');
+  n.dailySummary = !!fd.get('dailySummary');
   save();
   return true;
 }

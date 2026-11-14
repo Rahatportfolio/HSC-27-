@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
     examReminder: true,
     weeklyReview: true,
     dailySummary: true,
+    missedTaskReminder: true,
     reminderTime: '20:00',
   },
 };
@@ -196,14 +197,17 @@ function recordSession(data) {
   const st = getState();
   const durationMinutes = Math.max(0, Math.round(data.durationMinutes || 0));
   if (durationMinutes <= 0) return null;
+  // A stable timer run key makes recovery after interruption idempotent.
+  if (data.runId) { const prior = st.sessions.find((s) => s.runId === data.runId); if (prior) return prior; }
   // Prevent accidental duplicate recording (same chapter, overlapping window)
-  const dup = data.source === 'timer' && data.endedAt && st.sessions.find((s) =>
+  const dup = !data.runId && data.source === 'timer' && data.endedAt && st.sessions.find((s) =>
     s.chapterId === data.chapterId && s.subjectId === data.subjectId &&
     Math.abs(new Date(s.endedAt || 0).getTime() - new Date(data.endedAt || 0).getTime()) < 60000 &&
     Math.abs((s.durationMinutes || 0) - durationMinutes) < 1);
   if (dup) return dup;
   const session = {
     id: uid('ses'),
+    runId: data.runId || null,
     subjectId: data.subjectId || null,
     chapterId: data.chapterId || null,
     startedAt: data.startedAt || nowISO(),
@@ -265,6 +269,7 @@ function carryOverMissed() {
   let moved = 0;
   st.tasks.forEach((t) => {
     if ((t.status === 'pending' || t.status === 'carried') && t.date < today) {
+      if (!t.originalDate) t.originalDate = t.date;
       t.date = today;
       t.status = 'carried';
       moved += 1;

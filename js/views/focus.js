@@ -18,11 +18,12 @@ const focusState = {
   phase: 'focus',       // focus | break
   intervalId: null,
   wakeLock: null,
+  runId: null,
 };
 
 function renderFocus(prefillChapterId) {
   const st = getState();
-  if (prefillChapterId && chapterById(prefillChapterId)) {
+  if (prefillChapterId && !focusState.running && !focusState.accumulatedMs && chapterById(prefillChapterId)) {
     const ch = chapterById(prefillChapterId);
     focusState.subjectId = ch.subjectId;
     focusState.chapterId = ch.id;
@@ -61,7 +62,7 @@ function renderFocus(prefillChapterId) {
         <button class="btn lg" id="timer-stop">Stop &amp; save</button>
         <button class="btn ghost lg" id="timer-reset">Reset</button>
       </div>
-      <p class="muted small center">Uses elapsed time while this page remains open; browsers may suspend or close the app. Completed focus periods are saved when the timer can run again.</p>
+      <p class="muted small center">Timer state is saved on this device and recovered when you reopen the app. Browsers may suspend or terminate execution; alerts cannot be guaranteed while closed.</p>
     </section>
 
     <section class="card">
@@ -83,6 +84,21 @@ function renderFocus(prefillChapterId) {
       : `<p class="muted">No sessions recorded yet.</p>`}
     </section>
   </div>`;
+}
+
+// Save only serializable timer data, together with study records in the same store.
+function persistFocusTimer() {
+  const keys = ['mode', 'subjectId', 'chapterId', 'running', 'startedAt', 'accumulatedMs', 'targetMs', 'breakMs', 'phase', 'runId'];
+  const snapshot = {};
+  keys.forEach((key) => { snapshot[key] = focusState[key]; });
+  getState().activeFocus = snapshot;
+  save();
+}
+function restoreFocusTimer() {
+  const snapshot = getState().activeFocus;
+  if (!snapshot || !['stopwatch', 'countdown', 'pomodoro', 'custom'].includes(snapshot.mode) || !['focus', 'break'].includes(snapshot.phase) || !Number.isFinite(snapshot.accumulatedMs) || !Number.isFinite(snapshot.targetMs) || snapshot.targetMs <= 0 || !Number.isFinite(snapshot.breakMs) || snapshot.breakMs <= 0 || (snapshot.running && (!Number.isFinite(snapshot.startedAt) || snapshot.startedAt > Date.now()))) return;
+  Object.assign(focusState, snapshot, { intervalId: null, wakeLock: null });
+  if (focusState.running) { timerTick(); if (focusState.running) startTimerInterval(); }
 }
 
 function focusElapsedMs() {
@@ -134,11 +150,13 @@ function toggleTimer() {
     releaseWakeLock();
   } else {
     if (!focusState.subjectId) { toast('Choose a subject before starting.'); return; }
+    if (focusState.phase === 'focus' && !focusState.runId) focusState.runId = uid('run');
     focusState.running = true;
     focusState.startedAt = Date.now();
     startTimerInterval();
     requestWakeLock();
   }
+  persistFocusTimer();
   refreshTimerButtons();
 }
 function refreshTimerButtons() {
@@ -156,7 +174,9 @@ function refreshTimerButtons() {
 function finishTimerPhase() {
   // Save the focus portion as a session, then switch to break (or finish).
   if (focusState.phase === 'focus') {
-    saveFocusSession(Math.min(focusElapsedMs(), focusState.targetMs));
+    const elapsed = focusElapsedMs();
+    const completedAt = Date.now() - Math.max(0, elapsed - focusState.targetMs);
+    saveFocusSession(Math.min(elapsed, focusState.targetMs), completedAt);
     focusState.phase = 'break';
     focusState.accumulatedMs = 0;
     focusState.startedAt = focusState.running ? Date.now() : null;
@@ -165,18 +185,23 @@ function finishTimerPhase() {
   } else {
     focusState.phase = 'focus';
     focusState.accumulatedMs = 0;
-    focusState.startedAt = focusState.running ? Date.now() : null;
+    focusState.runId = null;
+    focusState.running = false;
+    focusState.startedAt = null;
+    stopTimerInterval();
+    releaseWakeLock();
     toast('Break over. Ready for the next session?');
     notify('Break over', 'Time for the next focus session.');
   }
+  persistFocusTimer();
   refreshTimerButtons();
   updateTimerDisplay();
 }
 
-function saveFocusSession(elapsedMs = focusElapsedMs()) {
+function saveFocusSession(elapsedMs = focusElapsedMs(), endedAt = Date.now()) {
   const minutes = Math.round(elapsedMs / 60000);
   if (minutes <= 0) return null;
-  const ended = new Date();
+  const ended = new Date(endedAt);
   const started = new Date(ended.getTime() - elapsedMs);
   return recordSession({
     subjectId: focusState.subjectId || null,
@@ -186,6 +211,7 @@ function saveFocusSession(elapsedMs = focusElapsedMs()) {
     durationMinutes: minutes,
     mode: focusState.mode,
     source: 'timer',
+    runId: focusState.runId,
     date: toDateKey(ended),
   });
 }
@@ -195,9 +221,14 @@ function stopAndSaveTimer() {
   if (wasRunning) { focusState.accumulatedMs = focusElapsedMs(); focusState.running = false; focusState.startedAt = null; }
   stopTimerInterval();
   releaseWakeLock();
-  const saved = focusState.phase === 'focus' ? saveFocusSession() : null;
+  const elapsed = focusElapsedMs();
+  const limited = focusState.mode === 'stopwatch' ? elapsed : Math.min(elapsed, focusState.targetMs);
+  const ended = Date.now() - Math.max(0, elapsed - limited);
+  const saved = focusState.phase === 'focus' ? saveFocusSession(limited, ended) : null;
   focusState.accumulatedMs = 0;
   focusState.phase = 'focus';
+  focusState.runId = null;
+  persistFocusTimer();
   refreshTimerButtons();
   updateTimerDisplay();
   if (saved) toast(`Saved ${formatDuration(saved.durationMinutes)} study session.`);
@@ -210,8 +241,10 @@ function resetTimer() {
   focusState.startedAt = null;
   focusState.accumulatedMs = 0;
   focusState.phase = 'focus';
+  focusState.runId = null;
   stopTimerInterval();
   releaseWakeLock();
+  persistFocusTimer();
   refreshTimerButtons();
   updateTimerDisplay();
 }

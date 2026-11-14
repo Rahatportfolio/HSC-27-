@@ -168,7 +168,7 @@ let libraryFilter = { q: '', subject: '', bookmarkedOnly: false, unwatchedOnly: 
 
 function renderLibrary(prefillChapterId) {
   const st = getState();
-  let list = st.resources.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  let list = st.resources.slice().sort((a, b) => (b.lastOpenedAt || '').localeCompare(a.lastOpenedAt || '') || (b.createdAt || '').localeCompare(a.createdAt || ''));
   if (libraryFilter.q) {
     const q = libraryFilter.q.toLowerCase();
     list = list.filter((r) => (r.title + ' ' + r.channel + ' ' + r.description).toLowerCase().includes(q));
@@ -195,11 +195,11 @@ function renderLibrary(prefillChapterId) {
       <li class="card">
         <div class="row between"><strong>${esc(r.title)}</strong>
           <button class="btn small ghost" data-resource-bookmark="${esc(r.id)}" aria-label="Bookmark">${r.bookmarked ? '★' : '☆'}</button></div>
-        <p class="muted small">${esc(subjectName(r.subjectId))}${r.chapterId ? ' · ' + esc(chapterLabel(r.chapterId)) : ''}${r.channel ? ' · ' + esc(r.channel) : ''}${r.rating ? ' · ★ ' + esc(r.rating) + '/5' : ''}</p>
+        <p class="muted small">${esc(subjectName(r.subjectId))}${r.chapterId ? ' · ' + esc(chapterLabel(r.chapterId)) : ''}${r.channel ? ' · ' + esc(r.channel) : ''}${r.rating ? ' · ★ ' + esc(r.rating) + '/5' : ''}${r.lastOpenedAt ? ' · opened ' + esc(formatDate(toDateKey(new Date(r.lastOpenedAt)))) : ''}</p>
         <p>${esc(r.description || '')}</p>
         <div class="row gap wrap">
-          <a class="btn small primary" href="${esc(sanitizeUrl(r.url))}" target="_blank" rel="noopener">▶ Watch</a>
-          ${r.playlistUrl ? `<a class="btn small" href="${esc(sanitizeUrl(r.playlistUrl))}" target="_blank" rel="noopener">Playlist</a>` : ''}
+          <a class="btn small primary" href="${esc(sanitizeUrl(r.url))}" data-resource-open="${esc(r.id)}" target="_blank" rel="noopener">▶ Watch</a>
+          ${r.playlistUrl ? `<a class="btn small" href="${esc(sanitizeUrl(r.playlistUrl))}" data-resource-open="${esc(r.id)}" target="_blank" rel="noopener">Playlist</a>` : ''}
           <button class="btn small ${r.watched ? 'primary' : ''}" data-resource-watched="${esc(r.id)}">${r.watched ? '✓ Watched' : 'Mark watched'}</button>
           <button class="btn small" data-resource-edit="${esc(r.id)}">Edit</button>
           <button class="btn small danger-ghost" data-resource-delete="${esc(r.id)}">Delete</button>
@@ -256,7 +256,7 @@ function saveResourceFromForm(form, existingId) {
 /* ================= PRACTICE (CQ / MCQ / written) ================= */
 function renderPractice(prefillChapterId) {
   const st = getState();
-  const list = st.practice.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const list = st.practice.filter((p) => !prefillChapterId || p.chapterId === prefillChapterId).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return `<div class="page">
     <div class="page-head"><h1>Practice tracker</h1>
       <button class="btn small primary" id="add-practice-btn">+ Record practice</button></div>
@@ -365,10 +365,11 @@ function renderExams() {
     return `<li class="card">
       <div class="row between"><strong>${esc(e.name)}</strong>
         <span class="badge">${daysLeft >= 0 ? daysLeft + 'd left' : 'done'}</span></div>
-      <p class="muted small">${esc(formatDate(e.date))} · ${esc(e.scope)} · ${e.durationMinutes} min · ${e.totalMarks} marks${e.subjectId ? ' · ' + esc(subjectName(e.subjectId)) : ''}</p>
+      <p class="muted small">${esc(formatDate(e.date))} · ${esc(e.scope)} · ${e.durationMinutes} min · ${e.totalMarks} marks${e.subjectId ? ' · ' + esc(subjectName(e.subjectId)) : ''}${e.chapterId ? ' · ' + esc(chapterLabel(e.chapterId)) : ''}${e.format ? ' · ' + esc(e.format) : ''}</p>
       ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${r.obtainedMarks}/${e.totalMarks} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
       <div class="row gap wrap">
         <button class="btn small primary" data-result-add="${esc(e.id)}">Record result</button>
+        <button class="btn small" data-exam-start="${esc(e.id)}">Start timed test</button>
         <button class="btn small danger-ghost" data-exam-delete="${esc(e.id)}">Delete exam</button>
       </div>
     </li>`;
@@ -377,6 +378,7 @@ function renderExams() {
   return `<div class="page">
     <div class="page-head"><h1>Exams</h1>
       <button class="btn small primary" id="add-exam-btn">+ Schedule exam</button></div>
+    ${st.activeExam ? `<section class="card"><h2>Timed test in progress</h2><p>${esc((st.exams.find((e) => e.id === st.activeExam.examId) || {}).name || 'Exam')} · <strong id="exam-timer-display"></strong></p><p class="muted small">Use your own questions. The timer does not submit answers or record marks; enter your result yourself.</p><button class="btn" id="end-timed-exam">End timer</button></section>` : ''}
     <p class="muted small">Chapter tests, subject tests and full-syllabus model tests. Record results and add notes about weak chapters. No GPA prediction is made.</p>
     <h2 class="section-title">Upcoming</h2>
     ${upcoming.length ? `<ul class="card-list">${upcoming.map(examCard).join('')}</ul>` : `<p class="muted">No upcoming exams.</p>`}
@@ -393,6 +395,8 @@ function examFormHTML() {
       <select name="scope"><option value="chapter">Chapter test</option><option value="subject">Subject test</option><option value="full">Full syllabus model test</option></select></label>
     <label class="field"><span>Subject</span>
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+    <label class="field"><span>Chapter (required for chapter tests)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}">${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
+    <label class="field"><span>Exam format</span><select name="format"><option value="mixed">Mixed</option><option value="mcq">MCQ</option><option value="written">Written</option></select></label>
     <label class="field"><span>Date</span><input name="date" type="date" value="${todayKey()}" required></label>
     <label class="field"><span>Duration (minutes)</span><input name="durationMinutes" type="number" min="1" value="60"></label>
     <label class="field"><span>Total marks</span><input name="totalMarks" type="number" min="1" value="25"></label>
@@ -406,13 +410,20 @@ function saveExamFromForm(form) {
   const name = sanitizeText(fd.get('name'), 300);
   const date = String(fd.get('date') || '');
   if (!name || !isValidDateKey(date)) { toast('Name and a valid date are required.'); return false; }
+  const scope = String(fd.get('scope') || 'chapter');
+  const subjectId = String(fd.get('subjectId') || '') || null;
+  const chapterId = String(fd.get('chapterId') || '') || null;
+  const durationMinutes = Number(fd.get('durationMinutes'));
+  const totalMarks = Number(fd.get('totalMarks'));
+  const ch = chapterId ? chapterById(chapterId) : null;
+  if (!['chapter', 'subject', 'full'].includes(scope) || (scope !== 'full' && !subjectById(subjectId)) || (scope === 'chapter' && (!ch || ch.subjectId !== subjectId))) { toast('Choose a matching subject and chapter for a chapter test.'); return false; }
+  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(totalMarks) || totalMarks <= 0) { toast('Enter valid duration and total marks.'); return false; }
   getState().exams.push({
-    id: uid('exam'), name, date,
-    scope: String(fd.get('scope') || 'chapter'),
-    subjectId: String(fd.get('subjectId') || '') || null,
-    chapterId: null,
-    durationMinutes: Math.max(1, Number(fd.get('durationMinutes')) || 60),
-    totalMarks: Math.max(1, Number(fd.get('totalMarks')) || 25),
+    id: uid('exam'), name, date, scope,
+    subjectId: scope === 'full' ? null : subjectId,
+    chapterId: scope === 'chapter' ? chapterId : null,
+    format: ['mixed', 'mcq', 'written'].includes(fd.get('format')) ? fd.get('format') : 'mixed',
+    durationMinutes, totalMarks,
     createdAt: nowISO(),
   });
   save();
@@ -435,7 +446,7 @@ function saveResultFromForm(form, examId) {
   if (!exam) return false;
   const fd = new FormData(form);
   const obtained = Number(fd.get('obtainedMarks'));
-  if (Number.isNaN(obtained) || obtained < 0 || obtained > exam.totalMarks) { toast('Marks must be between 0 and total.'); return false; }
+  if (fd.get('obtainedMarks') === '' || !Number.isFinite(obtained) || obtained < 0 || obtained > exam.totalMarks) { toast('Marks must be between 0 and total.'); return false; }
   const g = gradeForMarks(obtained, exam.totalMarks);
   getState().examResults.push({
     id: uid('res'), examId, obtainedMarks: obtained,

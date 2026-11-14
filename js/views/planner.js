@@ -39,9 +39,10 @@ function taskItem(t) {
     <input type="checkbox" data-task-toggle="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''} aria-label="Mark task done">
     <div class="task-body">
       <strong>${esc(t.title)}</strong>
-      <span class="muted small">${esc(subjectName(t.subjectId))}${t.chapterId ? ' · ' + esc(chapterLabel(t.chapterId)) : ''} · planned ${formatDuration(t.plannedMinutes || 0)}${actual ? ' · studied ' + formatDuration(actual) : ''}${t.deadline ? ' · deadline ' + esc(formatDate(t.deadline)) : ''}${t.status === 'carried' ? ' · carried over' : ''}</span>
+      <span class="muted small">${esc(subjectName(t.subjectId))}${t.chapterId ? ' · ' + esc(chapterLabel(t.chapterId)) : ''} · planned ${formatDuration(t.plannedMinutes || 0)}${actual ? ' · studied ' + formatDuration(actual) : ''}${t.deadline ? ' · deadline ' + esc(formatDate(t.deadline)) : ''}${t.status === 'carried' ? ' · carried over' : ''}${t.originalDate ? ' · originally ' + esc(formatDate(t.originalDate)) : ''}</span>
     </div>
     <span class="badge prio-${esc(t.priority || 'B')}">${esc(t.priority || 'B')}</span>
+    <button class="btn small ghost" data-task-reschedule="${esc(t.id)}" aria-label="Reschedule task">↪</button>
     <button class="btn small ghost" data-task-delete="${esc(t.id)}" aria-label="Delete task">✕</button>
   </li>`;
 }

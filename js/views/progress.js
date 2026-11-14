@@ -24,7 +24,8 @@ function renderProgress() {
   const subjectRows = st.subjects.map((s) => ({
     subject: s, minutes: subjectMinutes(s.id), completion: subjectCompletion(s.id),
   })).sort((a, b) => b.minutes - a.minutes);
-  const totalMinutes = subjectRows.reduce((a, r) => a + r.minutes, 0);
+  const totalMinutes = st.sessions.reduce((sum, s) => sum + (s.durationMinutes || 0), 0);
+  const daysInCurrentMonth = new Date(Date.UTC(parseDateKey(today).getUTCFullYear(), parseDateKey(today).getUTCMonth() + 1, 0)).getUTCDate();
 
   // Practice totals
   const mcqAll = { attempted: 0, correct: 0 };
@@ -49,7 +50,7 @@ function renderProgress() {
   const revOverdue = revs.filter((r) => !r.completedAt && r.dueDate <= today).length;
 
   // Missed sessions: days in last 14 with tasks planned but zero study
-  const missedDays = days.filter((d) => d.minutes === 0 && tasksOn(d.key).length > 0).length;
+  const missedDays = days.filter((d) => d.key < today && d.minutes === 0 && st.tasks.some((t) => (t.originalDate || t.date) === d.key && t.type !== 'rest')).length;
 
   // Neglected chapters: chapters with zero study minutes, sorted by priority
   const neglected = st.chapters
@@ -76,16 +77,26 @@ function renderProgress() {
     <div class="page-head"><h1>Progress</h1></div>
 
     <section class="card">
+      <h2>Personal study challenge</h2>
+      ${st.challenge && isValidDateKey(st.challenge.startDate) && Number.isInteger(st.challenge.days) && st.challenge.days > 0 && st.challenge.days <= 90 && Number.isInteger(st.challenge.targetMinutes) && st.challenge.targetMinutes > 0 && st.challenge.targetMinutes <= 1440 ? (() => {
+        const c = st.challenge;
+        const completed = Array.from({ length: c.days }, (_, i) => addDays(c.startDate, i)).filter((d) => d <= today && minutesOn(d) >= c.targetMinutes).length;
+        return `<p>${completed}/${c.days} days met your ${formatDuration(c.targetMinutes)} target · ${esc(formatDate(c.startDate))} to ${esc(formatDate(addDays(c.startDate, c.days - 1)))}</p><p class="muted small">${today > addDays(c.startDate, c.days - 1) ? 'Challenge ended.' : 'Progress comes from recorded sessions.'}</p><button class="btn" id="end-challenge">Remove challenge</button>`;
+      })() : '<p class="muted">Set a daily target and track it from your recorded sessions.</p><button class="btn" id="start-challenge">Start challenge</button>'}
+      <p class="muted small">Milestones: ${overallCompletion().done} chapter(s) marked complete · ${calcStreak(studyDateKeys())}-day current study streak.</p>
+    </section>
+
+    <section class="card">
       <h2>Daily study — last 14 days</h2>
       <p class="muted small">Target ${formatDuration(target)}/day · Green bars met the target</p>
       <div class="bar-chart">${days.map(bar).join('')}</div>
       <div class="stat-grid">
         <div class="stat"><span class="stat-label">This week</span><strong>${formatDuration(minutesInWeek(weekStart))}</strong><span class="muted small">target ${formatDuration(target * 7)}</span></div>
-        <div class="stat"><span class="stat-label">This month</span><strong>${formatDuration(minutesInMonth(mKey))}</strong><span class="muted small">target ${formatDuration(target * 30)}</span></div>
+        <div class="stat"><span class="stat-label">This month</span><strong>${formatDuration(minutesInMonth(mKey))}</strong><span class="muted small">target ${formatDuration(target * daysInCurrentMonth)}</span></div>
         <div class="stat"><span class="stat-label">All time</span><strong>${formatDuration(totalMinutes)}</strong><span class="muted small">${st.sessions.length} sessions</span></div>
         <div class="stat"><span class="stat-label">Streak</span><strong>${calcStreak(studyDateKeys())} days</strong><span class="muted small">current</span></div>
       </div>
-      <p class="muted small">Trend (last 7 days vs previous 7): ${trend > 0 ? `▲ +${formatDuration(trend)}` : trend < 0 ? `▼ ${formatDuration(trend)}` : 'no change'}.</p>
+      <p class="muted small">Trend (last 7 days vs previous 7): ${trend > 0 ? `▲ +${formatDuration(trend)}` : trend < 0 ? `▼ ${formatDuration(Math.abs(trend))}` : 'no change'}.</p>
       ${missedDays ? `<p class="muted small">⚠ ${missedDays} day(s) in the last 14 had planned tasks but no recorded study.</p>` : ''}
     </section>
 
@@ -111,6 +122,18 @@ function renderProgress() {
         const ex = st.exams.find((e) => e.id === r.examId);
         return `<li>${esc(formatDate(r.date))} — ${esc(ex ? ex.name : 'Exam')}: ${r.obtainedMarks}/${ex ? ex.totalMarks : '?'} (${esc(r.grade || '')})</li>`;
       }).join('')}</ul>` : `<p class="muted small">Record exam results in the Exams section to track performance here.</p>`}
+    </section>
+
+    <section class="card">
+      <h2>Chapter test performance</h2>
+      <p class="muted small">Based only on your recorded scores. A low score can identify a topic to revisit, not a prediction.</p>
+      ${(() => {
+        const scores = st.chapters.map((c) => {
+          const rows = st.examResults.map((r) => ({ result: r, exam: st.exams.find((e) => e.id === r.examId && e.chapterId === c.id) })).filter((x) => x.exam && x.exam.totalMarks > 0);
+          return { c, count: rows.length, avg: rows.length ? Math.round(rows.reduce((sum, x) => sum + x.result.obtainedMarks / x.exam.totalMarks * 100, 0) / rows.length) : null };
+        }).filter((x) => x.count).sort((a, b) => a.avg - b.avg);
+        return scores.length ? `<ul class="plain-list">${scores.map((x) => `<li><button class="link" data-nav="chapter" data-id="${esc(x.c.id)}">${esc(subjectName(x.c.subjectId))} — ${esc(chapterLabel(x.c.id))}</button> · ${x.avg}% average · ${x.count} result(s)</li>`).join('')}</ul>` : '<p class="muted">No linked chapter test scores yet.</p>';
+      })()}
     </section>
 
     <section class="card">
