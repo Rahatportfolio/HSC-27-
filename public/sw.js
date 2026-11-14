@@ -2,7 +2,8 @@
 const CACHE = 'prostuti-hsc27-v3';
 const SHELL = ['./', './index.html', './icon.svg', './icon-192.png', './icon-512.png', './manifest.webmanifest'];
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)).then(() => self.skipWaiting()));
+  // Do not skipWaiting: an open tab keeps its old precache until it is safe to activate.
+  event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
 });
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('prostuti-hsc27-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
@@ -12,13 +13,13 @@ self.addEventListener('fetch', event => {
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
     event.respondWith(fetch(request).then(response => {
-      if (response.ok) { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put('./index.html', copy)); }
+      if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put('./index.html', copy)).catch(() => {})); }
       return response;
-    }).catch(() => caches.match('./index.html', { ignoreVary: true }).then(cached => cached || caches.match('./'))));
+    }).catch(() => caches.match('./index.html', { ignoreVary: true }).then(cached => cached || caches.match('./', { ignoreVary: true }))));
     return;
   }
   event.respondWith(caches.match(request, { ignoreVary: true }).then(cached => cached || fetch(request).then(response => {
-    if (response.ok && response.type === 'basic') { const copy = response.clone(); caches.open(CACHE).then(cache => cache.put(request, copy)); }
+    if (response.ok && response.type === 'basic') { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put(request, copy)).catch(() => {})); }
     return response;
   })));
 });

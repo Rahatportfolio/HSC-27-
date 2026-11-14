@@ -1,15 +1,16 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, CalendarDays, ChevronLeft, ChevronRight, ListChecks } from 'lucide-react';
 import { usePlanner } from '../context';
 import { SUBJECTS } from '../data';
 import type { SubjectId } from '../data';
-import { addDays, bn, formatDate, getPhases, percent, phaseName } from '../planner';
+import { addDays, bn, formatDate, getPhases, percent, phaseName, taskStart } from '../planner';
 import type { PhaseId } from '../planner';
 import { DaySummary, EmptyState, PageHeading, ProgressBar, TaskCard } from '../components';
 
 export default function CalendarView() {
   const { plan, data, today, selectedDate, setSelectedDate, navigate, exportICS } = usePlanner();
   const [month, setMonth] = useState(selectedDate.slice(0, 7));
+  useEffect(() => setMonth(selectedDate.slice(0, 7)), [selectedDate]);
   const [phase, setPhase] = useState<PhaseId | 'all'>('all');
   const [subject, setSubject] = useState<SubjectId | 'all'>('all');
   const [backlog, setBacklog] = useState(false);
@@ -20,8 +21,8 @@ export default function CalendarView() {
   const cells = Array.from({ length: 42 }, (_, i) => addDays(first, i - offset));
   const shiftMonth = (n: number) => { const d = new Date(`${first}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() + n); setMonth(d.toISOString().slice(0, 7)); };
   const day = byDate.get(selectedDate);
-  const visibleTasks = day?.tasks.filter(t => subject === 'all' || t.subject === subject) || [];
-  const overdue = plan.flatMap(d => d.tasks).filter(t => t.date < today && !data.completed[t.id] && (subject === 'all' || t.subject === subject) && (phase === 'all' || t.phase === phase));
+  const visibleTasks = day?.tasks.filter(t => (subject === 'all' || t.subject === subject) && (phase === 'all' || t.phase === phase)) || [];
+  const overdue = plan.flatMap(d => d.tasks).filter(t => taskStart(t).date < today && !data.completed[t.id] && (subject === 'all' || t.subject === subject) && (phase === 'all' || t.phase === phase));
   const filteredDates = new Set(plan.filter(d => phase === 'all' || d.phase === phase).flatMap(d => d.tasks.filter(t => subject === 'all' || t.subject === subject).map(() => d.date)));
   return <div className="view"><PageHeading eyebrow="DAY BY DAY" title="এক দিন। এক পদক্ষেপ।" description="কোন দিন কী পড়বে, সব আছে এখানে। তারিখে ক্লিক করে সেই দিনের কাজ দেখো।" action={<button className="button secondary" onClick={() => exportICS('all')}><CalendarDays size={17} />পুরো রুটিন এক্সপোর্ট</button>} />
     <div className="filter-bar"><div className="segmented">{(['all', 'learn', 'revise', 'exam'] as const).map(p => <button key={p} className={phase === p ? 'active' : ''} onClick={() => setPhase(p)}>{p === 'all' ? 'সব ধাপ' : phaseName(p)}</button>)}</div><select aria-label="বিষয় ফিল্টার" value={subject} onChange={e => setSubject(e.target.value as SubjectId | 'all')}><option value="all">সব বিষয়</option>{SUBJECTS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><button className={`button ${backlog ? 'primary' : 'secondary'}`} onClick={() => setBacklog(!backlog)}><ListChecks size={16} />ব্যাকলগ <span className="count-badge">{bn(overdue.length)}</span></button></div>

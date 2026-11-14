@@ -26,6 +26,19 @@ try {
   const nav = label => page.locator('nav[aria-label="মূল নেভিগেশন"] button').filter({ hasText: label }).click();
 
   await page.goto(BASE_URL, { waitUntil: 'networkidle' });
+  // Regression: skip link must not hash-navigate away from the current view.
+  await page.evaluate(() => { location.hash = 'calendar'; });
+  await page.waitForFunction(() => document.querySelector('.breadcrumb strong')?.textContent === 'ক্যালেন্ডার');
+  await page.locator('.skip-link').focus();
+  await page.keyboard.press('Enter');
+  assert.equal(await page.evaluate(() => location.hash), '#calendar');
+  assert.equal(await page.evaluate(() => document.activeElement?.id), 'main-content');
+  await page.evaluate(() => { location.hash = 'today'; });
+  await page.waitForFunction(() => document.querySelector('.task-list'));
+  // Regression: a corrupt running timer with endAt=0 must not credit a free session.
+  await page.evaluate(() => localStorage.setItem('hsc27-focus-timer-v1', JSON.stringify({ duration: 25, remaining: 10, running: true, endAt: 0 })));
+  await page.reload({ waitUntil: 'networkidle' });
+  assert.deepEqual((await stored()).focus, { minutes: 0, sessions: 0 });
   await page.locator('.task-list .task-check').first().click();
   assert.equal(Object.keys((await stored()).completed).length, 1);
   await page.reload({ waitUntil: 'networkidle' });
@@ -93,6 +106,22 @@ try {
   await page.locator('.modal button').filter({ hasText: 'ব্যাকআপ ইমপোর্ট করো' }).click();
   assert.equal((await stored()).settings.name, 'স্মোক টেস্ট');
   console.log('PASS calendar, reschedule preserving progress, JSON backup/import');
+
+  // Regression: completing every task must not download an empty .ics file.
+  await nav('আজকের পড়া');
+  const checks = page.locator('.task-list .task-check');
+  for (let i = 0; i < await checks.count(); i++) {
+    if ((await checks.nth(i).getAttribute('aria-pressed')) !== 'true') await checks.nth(i).click();
+  }
+  let emptyDownload = false;
+  const onDownload = () => { emptyDownload = true; };
+  page.on('download', onDownload);
+  await page.locator('.schedule-footer button').click();
+  await page.waitForTimeout(400);
+  page.off('download', onDownload);
+  assert.equal(emptyDownload, false);
+  assert.ok(await page.locator('.toast').innerText().then(t => t.includes('কোনো অসমাপ্ত সেশন নেই')));
+  console.log('PASS empty calendar export guard');
 
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, null, { timeout: 10000 });
   await context.setOffline(true);

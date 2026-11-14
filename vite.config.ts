@@ -2,6 +2,7 @@ import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { join } from 'node:path';
 
 // Precache the actual hashed build, so even a first-time visitor can reopen offline.
@@ -19,7 +20,10 @@ function offlineShell(): Plugin {
         .filter(file => file !== './sw.js')])];
       const workerPath = join(dist, 'sw.js');
       const worker = await readFile(workerPath, 'utf8');
-      await writeFile(workerPath, worker.replace(/const SHELL = \[[^\]]*\];/, `const SHELL = ${JSON.stringify(shell)};`));
+      const buildId = createHash('sha256').update(JSON.stringify(shell)).digest('hex').slice(0, 12);
+      await writeFile(workerPath, worker
+        .replace(/const SHELL = \[[^\]]*\];/, `const SHELL = ${JSON.stringify(shell)};`)
+        .replace(/const CACHE = '[^']*';/, `const CACHE = 'prostuti-hsc27-${buildId}';`));
     },
   };
 }

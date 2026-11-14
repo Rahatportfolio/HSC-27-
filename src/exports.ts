@@ -1,5 +1,5 @@
 import { CHAPTERS, PAPERS, SOURCES, SUBJECTS, SYLLABUS_NOTE, subjectById } from './data';
-import { bn, chapterTasks, formatDate, formatTime, getPhases, getStats, isChapterDone, phaseName, todayKey } from './planner';
+import { bn, chapterTasks, formatDate, formatDayOffset, formatTime, getPhases, getStats, isChapterDone, phaseName, taskStart, todayKey } from './planner';
 import type { AppData, Day, Task } from './planner';
 
 export function downloadText(content: string, filename: string, type = 'text/plain;charset=utf-8'): void {
@@ -40,7 +40,8 @@ export function makeICS(tasks: Task[], data: AppData, now = new Date()): string 
   return lines.map(foldICSLine).join('\r\n') + '\r\n';
 }
 export function exportCalendar(plan: Day[], data: AppData, range: 'day' | 'week' | 'all', date: string): number {
-  const tasks = plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && (range === 'all' || (range === 'day' ? t.date === date : t.date >= date && t.date < addDaysLocal(date, 7))));
+  const tasks = plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && (range === 'all' || (range === 'day' ? taskStart(t).date === date : taskStart(t).date >= date && taskStart(t).date < addDaysLocal(date, 7))));
+  if (!tasks.length) return 0;
   downloadText(makeICS(tasks, data), `prostuti-${range}-${date}.ics`, 'text/calendar;charset=utf-8');
   return tasks.length;
 }
@@ -52,7 +53,7 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
   const stats = getStats(plan, data, todayKey());
   const lines = [
     '# প্রস্তুতি — HSC 2027 বিজ্ঞান', '',
-    `**শিক্ষার্থী:** ${settings.name || 'আমার প্রস্তুতি'} · **বোর্ড:** ${settings.board} · **চতুর্থ বিষয়:** উচ্চতর গণিত`,
+    `**শিক্ষার্থী:** ${mdCell(settings.name || 'আমার প্রস্তুতি')} · **বোর্ড:** ${mdCell(settings.board)} · **চতুর্থ বিষয়:** উচ্চতর গণিত`,
     `**শুরু:** ${settings.startDate} · **শেষ:** ${plan[plan.length - 1].date} · **সময়:** ${bn(plan.length)} দিন (শেষ দিনসহ)`,
     `**দৈনিক পড়ার লক্ষ্য:** ${bn(settings.dailyHours)} ঘণ্টা পড়া; বিরতি আলাদা। **সময় অঞ্চল:** Asia/Dhaka (UTC+6)।`,
     '**লক্ষ্য:** A+ / GPA 5.00 / Golden — এটি লক্ষ্য, ফলের নিশ্চয়তা নয়।', '',
@@ -68,7 +69,7 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
     '2. বই বন্ধ করে নিজের ভাষায় নোট/সূত্র/চিত্র লেখো। শুধু ভিডিও দেখা পড়া শেষ হওয়া নয়।',
     '3. অধ্যায়ভিত্তিক সিলেট ও অন্য বোর্ডের প্রশ্ন থেকে CQ/MCQ করো। প্রতিটি ভুলের কারণ লেখো।',
     '4. পরের দিন আগের দিনের ১৫ মিনিটের রিকল; প্রতি ৭ম দিন ব্যাকলগ ও ছোট পরীক্ষা।',
-    '5. ঘুমের জন্য রাতের কাজ আগে শেষ করো। ৮ ঘণ্টা পড়ার মাঝে বিরতি যোগ করলে দিনের মোট ব্যাপ্তি বাড়ে।',
+    `5. ঘুমের জন্য রাতের কাজ আগে শেষ করো। ${bn(settings.dailyHours)} ঘণ্টা পড়ার মাঝে বিরতি যোগ করলে দিনের মোট ব্যাপ্তি বাড়ে।`,
     '6. ব্যবহারিক খাতা শিক্ষকের নির্ধারিত তালিকা অনুযায়ী করো; অ্যাপের প্রস্তুতি সহায়ক মাত্র।', '',
     '## বিষয়ভিত্তিক অধ্যায় ও তারিখ', '',
     'A = আগে পড়ার অধ্যায়, B = এরপর। দুই ধরনের অধ্যায়ই রুটিনে আছে। বাংলা/ইংরেজির ইউনিট দক্ষতাভিত্তিক।', '',
@@ -86,7 +87,7 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
   for (const day of plan) {
     const done = day.tasks.filter(t => data.completed[t.id]).length;
     lines.push(`### দিন ${bn(day.index)} — ${day.date}, ${formatDate(day.date, 'weekday')}`, '', `**${phaseName(day.phase)}**${day.isCatchup ? ' · সাপ্তাহিক ব্যাকলগ ও ছোট পরীক্ষা' : ''} · ${bn(done)}/${bn(day.tasks.length)} কাজ শেষ`, '', '| সময় | বিষয় | কী পড়বে / করবে | সম্পন্ন |', '|---|---|---|---|');
-    for (const t of day.tasks) lines.push(`| ${formatTime(t.startMinute)}–${formatTime(t.endMinute)} | ${subjectById[t.subject].name} | ${mdCell(`${t.title} — ${t.detail}`)} | ${data.completed[t.id] ? '[x]' : '[ ]'} |`);
+    for (const t of day.tasks) lines.push(`| ${formatTime(t.startMinute)}${formatDayOffset(t.startMinute)}–${formatTime(t.endMinute)}${formatDayOffset(t.endMinute)} | ${subjectById[t.subject].name} | ${mdCell(`${t.title} — ${t.detail}`)} | ${data.completed[t.id] ? '[x]' : '[ ]'} |`);
     if (data.notes[day.date]) lines.push('', `**দিনের নোট:** ${mdCell(data.notes[day.date])}`);
     lines.push('');
   }

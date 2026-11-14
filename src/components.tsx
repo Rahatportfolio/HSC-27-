@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Sparkles, X } from 'lucide-react';
 import { subjectById } from './data';
 import type { SubjectId } from './data';
-import { bn, dhakaMinutes, formatDate, formatTime, getPhases, percent } from './planner';
+import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent } from './planner';
 import type { Day, Task } from './planner';
 import { usePlanner } from './context';
 
@@ -58,13 +58,13 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
   const [expanded, setExpanded] = useState(false);
   const done = !!data.completed[task.id];
   const minute = dhakaMinutes(now);
-  const current = task.date === today && minute >= task.startMinute && minute < task.endMinute && !done;
+  const current = !done && isTaskCurrent(task, today, minute);
   return <article className={`task-card ${done ? 'done' : ''} ${current ? 'current' : ''} ${compact ? 'compact' : ''}`}>
-    <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}</span><span className="time-line" /><small>{bn(task.endMinute - task.startMinute)} মি.</small></div>
+    <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}{formatDayOffset(task.startMinute)}</span><span className="time-line" /><small>{bn(task.endMinute - task.startMinute)} মি.</small></div>
     <div className="task-main"><div className="task-topline"><SubjectBadge subject={task.subject} small />{current && <span className="now-badge">এখন চলছে</span>}{task.kind === 'exam' && <span className="kind-badge">মডেল টেস্ট</span>}{task.kind === 'revision' && <span className="kind-badge">রিভিশন</span>}</div>
       <button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
-      {expanded && <div className="task-expanded"><span><Clock3 size={14} />{formatTime(task.startMinute)} – {formatTime(task.endMinute)}</span><button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />ভুলের খাতায় যোগ করো</button></div>}
+      {expanded && <div className="task-expanded"><span><Clock3 size={14} />{formatTime(task.startMinute)}{formatDayOffset(task.startMinute)} – {formatTime(task.endMinute)}{formatDayOffset(task.endMinute)}</span><button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />ভুলের খাতায় যোগ করো</button></div>}
     </div>
     <button className={`task-check ${done ? 'checked' : ''}`} onClick={() => toggleTask(task.id)} aria-label={`${task.title} — ${done ? 'অসম্পন্ন করো' : 'সম্পন্ন করো'}`} aria-pressed={done}>{done && <Check size={17} strokeWidth={2.5} />}</button>
   </article>;

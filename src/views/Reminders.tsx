@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ArrowDownToLine, ArrowUpRight, Bell, BellRing, CalendarDays, CheckCircle2, ChevronDown, Clock3, Info, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 import { usePlanner } from '../context';
-import { addDays, bn, formatDate } from '../planner';
+import { addDays, bn, formatDate, taskStart } from '../planner';
 import { showNotification } from '../hooks';
 import { PageHeading } from '../components';
 
@@ -19,7 +19,7 @@ export default function RemindersView() {
   };
   const toggle = async () => { if (data.settings.reminderEnabled) { setData(d => ({ ...d, settings: { ...d.settings, reminderEnabled: false } })); return; } if (permission === 'granted' || await request()) setData(d => ({ ...d, settings: { ...d.settings, reminderEnabled: true } })); };
   const test = async () => { try { await showNotification('প্রস্তুতি · রিমাইন্ডার কাজ করছে', 'এভাবেই পড়ার সেশনের আগে মনে করিয়ে দেওয়া হবে। অ্যাপ খোলা রাখতে হবে।'); notify('টেস্ট নোটিফিকেশন পাঠানো হয়েছে। ডিভাইসের নোটিফিকেশন সেটিংসও দেখো।'); } catch { notify('নোটিফিকেশন পাঠানো যায়নি। অনুমতি ও ডিভাইসের সেটিংস যাচাই করো।', 'error'); } };
-  const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && t.date >= start && (!end || t.date < end)).length;
+  const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && taskStart(t).date >= start && (!end || taskStart(t).date < end)).length;
   const ranges = [
     { id: 'day' as const, title: 'আজকের রুটিন', desc: 'শুধু আজকের বাকি সেশনগুলো', icon: Clock3, count: count(today, addDays(today, 1)), date: today },
     { id: 'week' as const, title: 'আগামী ৭ দিন', desc: 'এই সপ্তাহটা গুছিয়ে রাখো', icon: CalendarDays, count: count(today, addDays(today, 7)), date: `${today} → ${addDays(today, 6)}` },

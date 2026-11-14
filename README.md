@@ -85,6 +85,8 @@ Progress, settings, notes, confidence, scores and mistakes live in this browser'
 
 There is no login, analytics, cloud sync or cross-device account. Use **Settings → ব্যাকআপ রাখো** regularly; import that JSON on another device to transfer your data. Clearing browser storage removes local progress. Reset asks for confirmation and does not remove calendar events you already imported.
 
+If saved data ever fails validation, the app keeps the raw payload under a recovery key when storage allows it and shows a **রিকভারি ফাইল** download in Settings instead of silently discarding it.
+
 ## Syllabus and exam-date caution
 
 This is a **textbook-based planning aid**, not an officially approved syllabus, a prediction of questions, or a guarantee of GPA 5/Golden A+.

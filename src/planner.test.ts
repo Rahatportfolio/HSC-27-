@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS, CORE, PAPERS } from './data';
-import { addDays, addMonths, buildPlan, chapterTasks, DEFAULT_SETTINGS, diffDays, freshData, getPhases, getStats, isChapterDone, isValidDate, todayKey } from './planner';
+import { addDays, addMonths, buildPlan, chapterTasks, DEFAULT_SETTINGS, diffDays, formatDayOffset, freshData, getPhases, getStats, isChapterDone, isTaskCurrent, isValidDate, taskStart, todayKey } from './planner';
 
 describe('Bangladesh date helpers', () => {
   it('uses Dhaka calendar dates at an UTC boundary', () => { expect(todayKey(new Date('2026-11-13T20:00:00Z'))).toBe('2026-11-14'); });
@@ -61,6 +61,26 @@ describe('complete study plan', () => {
     expect(shiftedTasks.filter(t => t.kind === 'exam').map(t => t.id)).toEqual(tasks.filter(t => t.kind === 'exam').map(t => t.id));
     expect(new Set(shiftedTasks.map(t => t.id)).size).toBe(shiftedTasks.length);
     expect(shifted[0].date).toBe('2027-01-31');
+  });
+  it('rotates revision subjects instead of exhausting one subject for days', () => {
+    const firstRevision = plan.find(d => d.phase === 'revise')!;
+    const subjects = firstRevision.tasks.filter(t => t.kind === 'revision').map(t => t.subject);
+    expect(new Set(subjects).size).toBeGreaterThanOrEqual(3);
+    const secondRound = plan.filter(d => d.phase === 'revise').slice(Math.ceil(getPhases(DEFAULT_SETTINGS.startDate)[1].days / 2));
+    expect(secondRound.flatMap(d => d.tasks).filter(t => t.kind === 'revision').every(t => t.id.startsWith('revision-2-'))).toBe(true);
+  });
+  it('handles late-start sessions that cross midnight', () => {
+    const late = buildPlan({ ...DEFAULT_SETTINGS, startTime: '22:00', dailyHours: 10 });
+    const crossing = late[0].tasks.find(t => t.startMinute >= 1440)!;
+    expect(crossing).toBeTruthy();
+    expect(taskStart(crossing).date).toBe(addDays(late[0].date, 1));
+    expect(formatDayOffset(crossing.startMinute)).toContain('+১ দিন');
+    expect(isTaskCurrent(crossing, addDays(late[0].date, 1), crossing.startMinute % 1440)).toBe(true);
+    expect(isTaskCurrent(crossing, late[0].date, 23 * 60)).toBe(false);
+    const data = freshData();
+    expect(getStats(late, data, late[0].date).backlog).toHaveLength(0);
+    expect(getStats(late, data, addDays(late[0].date, 1)).backlog.some(t => t.id === crossing.id)).toBe(false);
+    expect(getStats(late, data, addDays(late[0].date, 2)).backlog.some(t => t.id === crossing.id)).toBe(true);
   });
   it('counts a chapter only after all its parts, and counts active-day streaks', () => {
     const data = freshData(), c = CHAPTERS[0], sessions = chapterTasks(plan, c.id);

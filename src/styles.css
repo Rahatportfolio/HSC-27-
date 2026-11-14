@@ -47,3 +47,8 @@
 .exam-index,.exam-date>span,.exam-stats div>span,.exam-stats>.card>small,.next-exam-card p,.export-date,.export-card strong small,.section-heading>span{color:#87977a}
 @media(max-width:1250px){.stat-card p{font-size:9px}.stat-card div>span{font-size:10px}.phase-copy>span{font-size:10px}.task-title-button h3{font-size:14px}.task-detail{font-size:10px}.hero-copy>p{font-size:12px}.hero-chips>span{font-size:10px}}
 @media(max-width:650px){.hero-copy>p{font-size:11px}.hero-chips>span{font-size:9px}.hero-progress>div:first-child{font-size:10px}.phase-copy>span{font-size:8px}.stat-card div>span{font-size:10px}.stat-card p{font-size:9px}.schedule-heading p{font-size:10px}.task-title-button h3{font-size:14px}.task-detail{font-size:11px}.chapter-copy>span{font-size:10px}}
+
+/* Narrow-phone overflow guards (320px): grid/flex children must be allowed to shrink. */
+.dashboard-grid>*,.dashboard-rail>*,.schedule-card,.task-main{min-width:0}
+@media(max-width:650px){.dashboard-rail{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}.schedule-heading{flex-wrap:wrap}.date-switcher{margin-left:auto}}
+@media(max-width:800px){.sidebar{visibility:hidden}.sidebar.open{visibility:visible}}

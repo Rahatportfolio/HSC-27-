@@ -45,7 +45,7 @@ const DAY_MS = 86400000;
 export function isValidDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const d = new Date(`${value}T00:00:00Z`);
-  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value && value >= '2020-01-01' && value <= '2040-12-31';
+  return Number.isFinite(d.getTime()) && d.toISOString().slice(0, 10) === value && value >= '2020-01-01' && value <= '2041-12-31';
 }
 export function addDays(date: string, count: number): string {
   return new Date(new Date(`${date}T00:00:00Z`).getTime() + count * DAY_MS).toISOString().slice(0, 10);
@@ -77,6 +77,17 @@ export function formatDate(date: string, style: 'long' | 'short' | 'weekday' | '
 export function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60) % 24, m = Math.round(minutes % 60);
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
+}
+/** Sessions may cross midnight when the user chooses a late start time. */
+export function dayOffset(minutes: number): number { return Math.max(0, Math.floor(minutes / 1440)); }
+export function formatDayOffset(minutes: number): string { const d = dayOffset(minutes); return d ? ` (+${bn(d)} দিন)` : ''; }
+export function taskStart(task: Pick<Task, 'date' | 'startMinute'>): { date: string; minute: number } {
+  return { date: addDays(task.date, dayOffset(task.startMinute)), minute: task.startMinute % 1440 };
+}
+export function isTaskCurrent(task: Pick<Task, 'date' | 'startMinute' | 'endMinute'>, today: string, minute: number): boolean {
+  const nowMs = Date.parse(`${today}T00:00:00Z`) + minute * 60000;
+  const startMs = Date.parse(`${task.date}T00:00:00Z`) + task.startMinute * 60000;
+  return nowMs >= startMs && nowMs < startMs + (task.endMinute - task.startMinute) * 60000;
 }
 export const toMinutes = (time: string): number => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
 export const percent = (done: number, total: number): number => total ? Math.round(done / total * 100) : 0;
@@ -136,7 +147,8 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
     return u ? { id: u.id, subject, kind: 'language', title: u.chapter.title, detail: learnDetail(u.chapter, u.part), chapterIds: [u.chapter.id] }
       : { id: `language-${subject}-${dayKey}`, subject, kind: 'practice', title: `${subjectById[subject].name}: টাইমড অনুশীলন`, detail: subject === 'english' ? 'একটি reading section ও একটি writing task নিজে লেখো। ভুলের পুনরাবৃত্তি ঠেকাও।' : 'একটি সাহিত্য CQ ও একটি নির্মিতি লেখো। পাঠ্যবই থেকে ২০টি MCQ অনুশীলন করো।', chapterIds: [] };
   };
-  const revisionGroups = (round: number) => CORE.flatMap(subject => {
+  type RevisionGroup = { id: string; subject: SubjectId; chapters: Chapter[] };
+  const revisionGroups = (round: number, subject: SubjectId): RevisionGroup[] => {
     const chapters = CHAPTERS.filter(c => c.subject === subject).sort((a, b) => a.paper - b.paper || Number(a.number) - Number(b.number));
     const groups: Chapter[][] = [];
     for (const c of chapters) {
@@ -145,9 +157,19 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
       else groups.push([c]);
     }
     return groups.map((g, i) => ({ id: `revision-${round}-${subject}-${i}`, subject, chapters: g }));
-  });
-  const revisionQueues: Record<string, ReturnType<typeof revisionGroups>> = { '1': revisionGroups(1), '2': revisionGroups(2) };
-  const revisionPointers: Record<string, number> = { '1': 0, '2': 0 };
+  };
+  const revisionQueues: Record<string, Record<string, RevisionGroup[]>> = { '1': {}, '2': {} };
+  const revisionPointers: Record<string, Record<string, number>> = { '1': {}, '2': {} };
+  for (const round of ['1', '2']) for (const subject of CORE) {
+    revisionQueues[round][subject] = revisionGroups(Number(round), subject);
+    revisionPointers[round][subject] = 0;
+  }
+  const takeRevisionGroup = (round: string, subject: SubjectId): RevisionGroup | undefined => {
+    const queue = revisionQueues[round][subject] || [];
+    const index = revisionPointers[round][subject] || 0;
+    revisionPointers[round][subject] = index + 1;
+    return queue[index];
+  };
   const phase2Days = phases[1].days;
   let coreSlot = 0;
   for (let i = 0; i < total; i++) {
@@ -181,12 +203,12 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
     } else if (phase.id === 'revise') {
       const round = localDay <= Math.ceil(phase2Days / 2) ? '1' : '2';
       const revisionEntry = (b: number) => {
-        const subject = CORE[coreSlot++ % 4];
-        let group: ReturnType<typeof revisionGroups>[number] | undefined = revisionQueues[round][revisionPointers[round]++];
-        // If a subject is exhausted, use another subject's remaining group before extra practice.
-        if (!group) group = revisionQueues[round].find((_, idx) => idx >= revisionPointers[round]);
+        const slot = coreSlot++ % CORE.length;
+        const subject = CORE[slot];
+        // Rotate subjects daily; if one queue is exhausted, borrow the next subject's remaining group.
+        let group = takeRevisionGroup(round, subject);
+        if (!group) for (let step = 1; step < CORE.length && !group; step++) group = takeRevisionGroup(round, CORE[(slot + step) % CORE.length]);
         if (group) {
-          revisionPointers[round] = Math.max(revisionPointers[round], revisionQueues[round].indexOf(group) + 1);
           return { id: group.id, subject: group.subject, kind: 'revision' as const, title: `${group.chapters.map(c => c.title).join(' + ')}`, detail: `রিভিশন রাউন্ড ${bn(round)} · নোট থেকে মূল ধারণা ঝালাই করো। প্রতিটি অধ্যায়ের ২টি CQ ও ২০টি MCQ; দুর্বল অংশ চিহ্নিত করো।`, chapterIds: group.chapters.map(c => c.id) };
         }
         return { id: `revision-extra-${localDay}-b${b}`, subject, kind: 'practice' as const, title: 'দুর্বল অধ্যায়ে দ্বিতীয় সুযোগ', detail: 'ভুলের খাতা ও কম আত্মবিশ্বাসের অধ্যায় থেকে ২টি CQ এবং ২৫টি MCQ। নতুন টপিক নয়, নির্ভুলতায় মনোযোগ।', chapterIds: [] };
@@ -245,7 +267,7 @@ export function getStats(plan: Day[], data: AppData, today: string) {
   const activeDates = new Set(Object.values(data.completed).map(at => todayKey(new Date(at))));
   let streak = 0, cursor = activeDates.has(today) ? today : addDays(today, -1);
   while (activeDates.has(cursor)) { streak++; cursor = addDays(cursor, -1); }
-  const backlog = all.filter(t => t.date < today && !data.completed[t.id]);
+  const backlog = all.filter(t => taskStart(t).date < today && !data.completed[t.id]);
   const subjectProgress = Object.fromEntries(Object.keys(subjectById).map(s => {
     const chapters = CHAPTERS.filter(c => c.subject === s);
     return [s, { done: chapters.filter(c => isChapterDone(plan, c.id, data.completed)).length, total: chapters.length }];

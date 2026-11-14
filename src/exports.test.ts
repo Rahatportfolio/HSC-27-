@@ -19,6 +19,15 @@ describe('calendar and Markdown exports', () => {
     expect(folded.replace(/\r\n /g, '')).toBe(line);
     expect(foldICSLine('SUMMARY:a\\,b\\;c')).toBe('SUMMARY:a\\,b\\;c');
   });
+  it('exports empty calendars as zero without creating a file and escapes Markdown metadata', () => {
+    const completed = Object.fromEntries(plan.flatMap(d => d.tasks).map(t => [t.id, '2026-11-14T08:00:00Z']));
+    expect(makeICS([], data)).not.toContain('BEGIN:VEVENT');
+    const md = makeMarkdown(plan, { ...data, completed, settings: { ...data.settings, dailyHours: 6, name: 'A|B', board: 'X\nY' } });
+    expect(md).toContain('৬ ঘণ্টা পড়ার মাঝে');
+    expect(md).not.toContain('৮ ঘণ্টা পড়ার মাঝে');
+    expect(md).toContain('A\\|B');
+    expect(md).not.toContain('X\nY');
+  });
   it('contains every date, chapter and model-test record in the Markdown plan', () => {
     const md = makeMarkdown(plan, data);
     for (const day of plan) expect(md).toContain(day.date);

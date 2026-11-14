@@ -19,6 +19,15 @@ describe('validated local backups', () => {
     expect(() => parseBackup(JSON.stringify({ ...data, exams: { 'physics-1': { score: 101, total: 100, at: '2027-04-16T08:00:00Z', mistakes: '' } } }))).toThrow();
     expect(() => parseBackup(JSON.stringify({ ...data, completed: { x: 'not-a-date' } }))).toThrow();
   });
+  it('rejects impossible timestamps and unsafe prototype keys stay own properties', () => {
+    const data = freshData();
+    expect(() => parseBackup(JSON.stringify({ ...data, completed: { x: '2026-02-30T08:00:00Z' } }))).toThrow('অগ্রগতির তারিখ');
+    expect(() => parseBackup(JSON.stringify({ ...data, exams: { 'physics-1': { score: 1, total: 100, at: '2026-02-30T08:00:00Z', mistakes: '' } } }))).toThrow();
+    expect(() => parseBackup(JSON.stringify({ ...data, focus: { minutes: -1, sessions: 0 } }))).toThrow('ফোকাস');
+    const parsed = parseBackup(JSON.stringify({ ...data, completed: JSON.parse('{"__proto__":"2026-11-14T08:00:00Z"}') }));
+    expect(Object.prototype.hasOwnProperty.call(parsed.completed, '__proto__')).toBe(true);
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined();
+  });
   it('normalizes settings and ignores unknown fields', () => {
     const settings = sanitizeSettings({ ...freshData().settings, dailyHours: '8', reminderLead: '15', unknown: 'x' });
     expect(settings.dailyHours).toBe(8); expect(settings.reminderLead).toBe(15); expect(settings).not.toHaveProperty('unknown');
