@@ -106,7 +106,7 @@ public class MainActivity extends Activity {
         catch (ActivityNotFoundException e) { message("No browser available to open this link."); }
     }
     private class LocalBridge {
-        @JavascriptInterface public void openExternal(String url) { runOnUiThread(() -> openExternal(Uri.parse(url))); }
+        @JavascriptInterface public void openExternal(String url) { runOnUiThread(() -> MainActivity.this.openExternal(Uri.parse(url))); }
         @JavascriptInterface public void saveFile(String name, String mime, String encoded) {
             if (encoded == null || encoded.length() > 44 * 1024 * 1024) { message("Export is too large. Keep your data and try a smaller export."); return; }
             final byte[] bytes;
