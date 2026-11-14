@@ -5,6 +5,30 @@
  */
 'use strict';
 
+// Comparisons are within one exam and marking method only, never predictions.
+function progressResults(st) {
+  const exams = new Map(st.exams.map(e => [e.id,e]));
+  return st.examResults.map(result => {
+    const exam = exams.get(result.examId);
+    const obtained = Number(result.obtainedMarks), total = exam && Number(exam.totalMarks);
+    if (!exam || result.obtainedMarks === null || result.obtainedMarks === '' || !Number.isFinite(obtained) || !Number.isFinite(total) || total <= 0 || obtained < 0 || obtained > total || !isValidDateKey(result.date)) return null;
+    const method = Array.isArray(result.quizReview) ? 'MCQ auto-score' : Array.isArray(result.writtenReview) ? 'written self-score' : 'manually recorded';
+    return {result, exam, method, percentage:obtained / total * 100};
+  }).filter(Boolean).sort((a,b) => b.result.date.localeCompare(a.result.date) || String(b.result.createdAt || '').localeCompare(String(a.result.createdAt || '')));
+}
+function resultComparisons(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    const key = JSON.stringify([row.exam.id,row.method]);
+    if (!groups.has(key)) groups.set(key, []);
+    const group = groups.get(key); if (group.length < 2) group.push(row);
+  }
+  return [...groups.values()].filter(g => g.length === 2 && (g[0].result.date !== g[1].result.date ||
+    (Number.isFinite(Date.parse(g[0].result.createdAt)) && Number.isFinite(Date.parse(g[1].result.createdAt)) && Date.parse(g[0].result.createdAt) !== Date.parse(g[1].result.createdAt))))
+    .map(([latest,previous]) => ({latest,previous,change:Math.round((latest.percentage-previous.percentage)*10)/10}))
+    .sort((a,b) => b.latest.result.date.localeCompare(a.latest.result.date) || String(b.latest.result.createdAt || '').localeCompare(String(a.latest.result.createdAt || ''))).slice(0,5);
+}
+
 function renderProgress() {
   const st = getState();
   const today = todayKey();
@@ -36,13 +60,10 @@ function renderProgress() {
   });
   const mcqAcc = accuracy(mcqAll.correct, mcqAll.attempted);
 
-  // Exam results
-  const results = st.examResults.slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
-  const avgPct = results.length
-    ? Math.round(results.reduce((a, r) => {
-        const ex = st.exams.find((e) => e.id === r.examId);
-        return a + (ex && ex.totalMarks ? (r.obtainedMarks / ex.totalMarks) * 100 : 0);
-      }, 0) / results.length) : null;
+  // Averages exclude missing or invalid exam/results rather than treating them as zero.
+  const results = st.examResults.slice().sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')));
+  const scoreRows = progressResults(st), comparisons = resultComparisons(scoreRows);
+  const avgPct = scoreRows.length ? Math.round(scoreRows.reduce((sum,row) => sum + row.percentage,0) / scoreRows.length) : null;
 
   // Revisions
   const revs = st.revisions;
@@ -115,13 +136,17 @@ function renderProgress() {
       <ul class="plain-list">
         <li>MCQ: ${esc(mcqAll.attempted)} attempted · accuracy ${mcqAcc === null ? '—' : mcqAcc + '%'}</li>
         <li>CQ: ${esc(cqAll.marks)}/${esc(cqAll.totalMarks)} marks recorded</li>
-        <li>Exams taken: ${results.length}${avgPct !== null ? ` · average ${avgPct}%` : ''}</li>
+        <li>Results recorded: ${results.length}${avgPct !== null ? ` · average ${avgPct}% across ${scoreRows.length} valid result(s)` : ''}</li>
         <li>Revisions: ${revDone} done · ${revOverdue} overdue</li>
       </ul>
-      ${results.length ? `<h3>Recent results</h3><ul class="plain-list">${results.slice(0, 5).map((r) => {
-        const ex = st.exams.find((e) => e.id === r.examId);
-        return `<li>${esc(formatDate(r.date))} — ${esc(ex ? ex.name : 'Exam')}: ${esc(r.obtainedMarks)}/${esc(ex ? ex.totalMarks : '?')} (${esc(r.grade || '')})</li>`;
-      }).join('')}</ul>` : `<p class="muted small">Record exam results in the Exams section to track performance here.</p>`}
+      <p class="muted small">Average weights each valid result equally, including self-marked and manually entered results; it is not an official grade or prediction. Missing or invalid exam scores are excluded.</p>
+      ${scoreRows.length ? `<h3>Recent valid results</h3><ul class="plain-list">${scoreRows.slice(0, 5).map(({result:r, exam:ex}) => `<li>${esc(formatDate(r.date))} — ${esc(ex.name)}: ${esc(r.obtainedMarks)}/${esc(ex.totalMarks)} (${esc(r.grade || '')})</li>`).join('')}</ul>` : `<p class="muted small">Record valid exam results in the Exams section to track performance here.</p>`}
+    </section>
+
+    <section class="card">
+      <h2>Same-test score comparison</h2>
+      <p class="muted small">Most recent two valid records for the same exam and marking method; same-day entries need distinct timestamps. A score change is not proof of learning or a future prediction.</p>
+      ${comparisons.length ? `<ul class="plain-list">${comparisons.map(({latest,previous,change}) => `<li><strong>${esc(latest.exam.name)}</strong> · ${esc(latest.method)}<br>${esc(formatDate(previous.result.date))}: ${Math.round(previous.percentage)}% → ${esc(formatDate(latest.result.date))}: ${Math.round(latest.percentage)}% · ${change > 0 ? '+' : ''}${change} percentage points</li>`).join('')}</ul>` : '<p class="muted">Record two valid results for the same exam and marking method to compare.</p>'}
     </section>
 
     <section class="card">
@@ -129,8 +154,8 @@ function renderProgress() {
       <p class="muted small">Based only on your recorded scores. A low score can identify a topic to revisit, not a prediction.</p>
       ${(() => {
         const scores = st.chapters.map((c) => {
-          const rows = st.examResults.map((r) => ({ result: r, exam: st.exams.find((e) => e.id === r.examId && e.chapterId === c.id) })).filter((x) => x.exam && x.exam.totalMarks > 0);
-          return { c, count: rows.length, avg: rows.length ? Math.round(rows.reduce((sum, x) => sum + x.result.obtainedMarks / x.exam.totalMarks * 100, 0) / rows.length) : null };
+          const rows = scoreRows.filter(x => x.exam.chapterId === c.id);
+          return { c, count: rows.length, avg: rows.length ? Math.round(rows.reduce((sum, x) => sum + x.percentage, 0) / rows.length) : null };
         }).filter((x) => x.count).sort((a, b) => a.avg - b.avg);
         return scores.length ? `<ul class="plain-list">${scores.map((x) => `<li><button class="link" data-nav="chapter" data-id="${esc(x.c.id)}">${esc(subjectName(x.c.subjectId))} — ${esc(chapterLabel(x.c.id))}</button> · ${x.avg}% average · ${x.count} result(s)</li>`).join('')}</ul>` : '<p class="muted">No linked chapter test scores yet.</p>';
       })()}
@@ -141,7 +166,7 @@ function renderProgress() {
       ${neglected.length ? `<ul class="plain-list">${neglected.map((x) => `
         <li><button class="link" data-nav="chapter" data-id="${esc(x.chapter.id)}">${esc(subjectName(x.chapter.subjectId))} — ${esc(chapterLabel(x.chapter.id))}</button>
         <span class="muted small"> (priority ${esc(x.chapter.priority || 'B')}, no study time yet)</span></li>`).join('')}</ul>`
-      : `<p class="muted">Every chapter has at least some recorded study time.</p>`}
+      : `<p class="muted">${st.chapters.length ? 'Every chapter has at least some recorded study time.' : 'Add chapters to see this summary.'}</p>`}
     </section>
   </div>`;
 }

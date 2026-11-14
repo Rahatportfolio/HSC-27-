@@ -28,7 +28,59 @@ function renderPlanner() {
       <button class="btn small ghost" id="planner-next">→</button>
     </div>
     ${body}
+    ${renderSuggestedPlan()}
   </div>`;
+}
+
+// Suggestions are previews built solely from the student's own records.
+function suggestedPlan(today = todayKey()) {
+  const st = getState(), target = Number(st.settings.dailyTargetMinutes);
+  const limit = Number.isFinite(target) && target > 0 ? target : 480;
+  const dates = Array.from({length:7}, (_, i) => addDays(today, i));
+  const used = new Map(dates.map(date => [date, st.tasks.filter(t => t.date === date && t.type !== 'rest').reduce((sum,t) => sum + Math.max(0, Number(t.plannedMinutes) || 0),0)]));
+  const chapters = new Map(st.chapters.map(c => [c.id,c]));
+  const subjectIds = new Set(st.subjects.map(s => s.id));
+  const linkedRevisions = new Set(st.tasks.map(t => t.suggestedRevisionId).filter(Boolean));
+  const linkedWeaknesses = new Set(st.tasks.flatMap(t => [t.suggestedWeaknessId, t.status !== 'done' ? t.weaknessId : null]).filter(Boolean));
+  const revisionCandidates = st.revisions.filter(r => r.id && !r.completedAt && isValidDateKey(r.dueDate) && r.dueDate <= dates[6] && chapters.has(r.chapterId) && subjectIds.has(chapters.get(r.chapterId).subjectId) &&
+    !linkedRevisions.has(r.id))
+    .sort((a,b) => a.dueDate.localeCompare(b.dueDate) || String(a.id).localeCompare(String(b.id)))
+    .map(r => ({kind:'revision', id:r.id, dueDate:r.dueDate, chapterId:r.chapterId, subjectId:subjectIds.has(chapters.get(r.chapterId).subjectId) ? chapters.get(r.chapterId).subjectId : null,
+      title:'Revise: ' + (chapters.get(r.chapterId).number ? 'Ch ' + chapters.get(r.chapterId).number + ': ' : '') + chapters.get(r.chapterId).name, priority:'A'}));
+  const weaknessCandidates = st.weaknesses.filter(w => w.id && w.status === 'active' && typeof w.topic === 'string' && w.topic.trim() && (!w.chapterId || (chapters.has(w.chapterId) && subjectIds.has(chapters.get(w.chapterId).subjectId))) &&
+    (!w.subjectId || subjectIds.has(w.subjectId)) && !linkedWeaknesses.has(w.id))
+    .sort((a,b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')) || String(a.id).localeCompare(String(b.id)))
+    .map(w => { const chapter = w.chapterId && chapters.get(w.chapterId); return {kind:'weakness', id:w.id, dueDate:today,
+      subjectId:chapter && subjectIds.has(chapter.subjectId) ? chapter.subjectId : (subjectIds.has(w.subjectId) ? w.subjectId : null), chapterId:chapter ? chapter.id : null,
+      title:sanitizeText(w.correctionTask,300) || 'Practice: ' + sanitizeText(w.topic,280), priority:'B'}; });
+  const suggestions = [];
+  for (const candidate of revisionCandidates.concat(weaknessCandidates)) {
+    if (suggestions.length >= 7) break;
+    const date = dates.find(d => d >= candidate.dueDate && used.get(d) + 30 <= limit);
+    if (!date) continue;
+    used.set(date, used.get(date) + 30);
+    suggestions.push({...candidate, date, title:sanitizeText(candidate.title,300)});
+  }
+  return suggestions;
+}
+function renderSuggestedPlan() {
+  const suggestions = suggestedPlan();
+  return `<section class="card"><h2>Suggested next 7 days</h2>
+    <p class="muted small">Preview only: 30-minute tasks from due/upcoming revisions and your active weaknesses. Earliest day with room under your daily planned target; no time slots or automatic scheduling. Existing non-rest planned tasks count towards that target. Review and edit after adding.</p>
+    ${suggestions.length ? `<ul class="plain-list">${suggestions.map(s => `<li>${esc(formatDate(s.date))} · ${esc(s.title)} · ${s.kind === 'revision' ? 'revision' : 'weakness'} · 30m</li>`).join('')}</ul><button class="btn" id="add-suggested-plan">Add these ${suggestions.length} task(s)</button>` : '<p class="muted small">No eligible suggestions or no room under your planned target in the next 7 days.</p>'}
+    <p class="muted small">Only linked suggestions and pending correction tasks are checked for duplicates; review manually created tasks too. This is not an exam-result prediction.</p></section>`;
+}
+function addSuggestedPlan() {
+  const st = getState(), suggestions = suggestedPlan();
+  if (!suggestions.length) { toast('No suggestions available.'); return false; }
+  if (!confirm(`Add ${suggestions.length} suggested 30-minute task(s)? Existing tasks will not be changed.`)) return false;
+  const previous = st.tasks;
+  const tasks = suggestions.map(s => ({id:uid('task'), title:s.title, date:s.date, plannedMinutes:30, type:s.kind === 'revision' ? 'revision' : 'study',
+    priority:s.priority, subjectId:s.subjectId, chapterId:s.chapterId, deadline:null, status:'pending', createdAt:nowISO(),
+    ...(s.kind === 'revision' ? {suggestedRevisionId:s.id} : {suggestedWeaknessId:s.id, weaknessId:s.id})}));
+  st.tasks = previous.concat(tasks);
+  if (!save()) { st.tasks = previous; return false; }
+  toast(`${tasks.length} suggested task(s) added.`); return true;
 }
 
 function taskItem(t) {

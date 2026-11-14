@@ -241,6 +241,7 @@ document.addEventListener('click', (e) => {
   const st = getState();
 
   // Planner mode / navigation
+  if (e.target.closest('#add-suggested-plan')) { if (addSuggestedPlan()) render(); return; }
   const pm = e.target.closest('[data-planner-mode]');
   if (pm) { plannerMode = pm.dataset.plannerMode; render(); return; }
   if (e.target.closest('#planner-today')) { plannerCursor = todayKey(); render(); return; }
