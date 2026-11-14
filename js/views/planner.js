@@ -23,9 +23,9 @@ function renderPlanner() {
       <button class="btn small primary" id="add-task-btn">+ Add task</button></div>
     <div class="tabs">${tabs}</div>
     <div class="row gap">
-      <button class="btn small ghost" id="planner-prev">←</button>
+      <button class="btn small ghost" id="planner-prev" aria-label="Previous period">←</button>
       <button class="btn small ghost" id="planner-today" data-i18n="extra69">Today</button>
-      <button class="btn small ghost" id="planner-next">→</button>
+      <button class="btn small ghost" id="planner-next" aria-label="Next period">→</button>
     </div>
     ${body}
     ${renderSuggestedPlan()}

@@ -1,6 +1,8 @@
 /* Optional partial Bangla interface. User-entered content is never translated. */
 'use strict';
 const UI_LABELS = {
+  studyHistory: ['Recorded study milestones', 'সংরক্ষিত পড়াশোনার মাইলফলক'],
+  recentSubjectActivity: ['Subject activity — last 14 days', 'বিষয়ভিত্তিক পড়াশোনা — গত ১৪ দিন'],
   "extra0": ["Science", "বিজ্ঞান"],
   "extra1": ["Other subjects", "অন্যান্য বিষয়"],
   "extra2": ["Chapter import", "অধ্যায় আমদানি"],

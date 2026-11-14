@@ -29,6 +29,32 @@ function resultComparisons(rows) {
     .sort((a,b) => b.latest.result.date.localeCompare(a.latest.result.date) || String(b.latest.result.createdAt || '').localeCompare(String(a.latest.result.createdAt || ''))).slice(0,5);
 }
 
+// Derived from retained sessions only: no awards or historical data are invented.
+function studyInsights(sessions, today) {
+  const days = new Map(), subjects = new Map(), start = addDays(today, -13);
+  for (const s of sessions) {
+    if (!s || !isValidDateKey(s.date) || s.date > today || !Number.isSafeInteger(s.durationMinutes) || s.durationMinutes <= 0) continue;
+    days.set(s.date, (days.get(s.date) || 0) + s.durationMinutes);
+    if (s.date >= start) {
+      const key = typeof s.subjectId === 'string' && s.subjectId ? s.subjectId : null;
+      if (!subjects.has(key)) subjects.set(key, {subjectId:key, minutes:0, dates:new Set(), sessions:0});
+      const item = subjects.get(key);
+      item.minutes += s.durationMinutes; item.dates.add(s.date); item.sessions++;
+    }
+  }
+  const hours = [10,50,100,250,500], streaks = [3,7,14,30];
+  const milestones = []; let total = 0, streak = 0, previous = null, bestStreak = 0;
+  for (const [date, minutes] of [...days].sort((a,b) => a[0].localeCompare(b[0]))) {
+    const before = total; total += minutes;
+    for (const hour of hours) if (before < hour * 60 && total >= hour * 60) milestones.push({date, kind:'hours', value:hour});
+    streak = previous && daysBetween(previous,date) === 1 ? streak + 1 : 1;
+    bestStreak = Math.max(bestStreak, streak);
+    if (streaks.includes(streak) && !milestones.some(m => m.kind === 'streak' && m.value === streak)) milestones.push({date,kind:'streak',value:streak});
+    previous = date;
+  }
+  return {milestones:milestones.reverse(), bestStreak, subjects:[...subjects.values()].map(item => ({...item, activeDays:item.dates.size, dates:undefined})).sort((a,b) => b.minutes - a.minutes)};
+}
+
 function renderProgress() {
   const st = getState();
   const today = todayKey();
@@ -63,6 +89,7 @@ function renderProgress() {
   // Averages exclude missing or invalid exam/results rather than treating them as zero.
   const results = st.examResults.slice().sort((a,b) => String(b.date || '').localeCompare(String(a.date || '')));
   const scoreRows = progressResults(st), comparisons = resultComparisons(scoreRows);
+  const insights = studyInsights(st.sessions, today);
   const avgPct = scoreRows.length ? Math.round(scoreRows.reduce((sum,row) => sum + row.percentage,0) / scoreRows.length) : null;
 
   // Revisions
@@ -119,6 +146,19 @@ function renderProgress() {
       </div>
       <p class="muted small">Trend (last 7 days vs previous 7): ${trend > 0 ? `▲ +${formatDuration(trend)}` : trend < 0 ? `▼ ${formatDuration(Math.abs(trend))}` : 'no change'}.</p>
       ${missedDays ? `<p class="muted small">⚠ ${missedDays} day(s) in the last 14 had planned tasks but no recorded study.</p>` : ''}
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="studyHistory">Recorded study milestones</h2>
+      <p class="muted small">Personal milestones calculated from retained study sessions, not certificates or proof of attainment. Dates are the recorded study days; editing or deleting sessions changes this history. Future-dated and invalid sessions are excluded.</p>
+      <p>Longest recorded streak: ${insights.bestStreak} day(s).</p>
+      ${insights.milestones.length ? `<ul class="plain-list">${insights.milestones.map(m => `<li>${esc(formatDate(m.date))} — ${m.kind === 'hours' ? `${m.value} recorded hours` : `${m.value} consecutive study days`}</li>`).join('')}</ul>` : '<p class="muted">No milestones yet. Record sessions to see your history.</p>'}
+    </section>
+
+    <section class="card">
+      <h2 data-i18n="recentSubjectActivity">Subject activity — last 14 days</h2>
+      <p class="muted small">Based on valid, positive-duration recorded sessions through today; activity is not a measure of understanding.</p>
+      ${insights.subjects.length ? `<ul class="plain-list">${insights.subjects.map(s => `<li>${esc(s.subjectId ? subjectName(s.subjectId) : 'No subject')} — ${formatDuration(s.minutes)} · ${s.activeDays} active day(s) · ${s.sessions} session(s)</li>`).join('')}</ul>` : '<p class="muted">No recorded study in this period.</p>'}
     </section>
 
     <section class="card">

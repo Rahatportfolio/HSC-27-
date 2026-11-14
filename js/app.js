@@ -93,7 +93,8 @@ function afterRender() {
 
 /* ---------- Modal ---------- */
 function openModal(title, html, onSubmit) {
-  modalState = { title, html, onSubmit };
+  const returnFocus = modalState ? modalState.returnFocus : document.activeElement;
+  modalState = { title, html, onSubmit, returnFocus };
   const overlay = document.getElementById('modal-overlay');
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = html;
@@ -117,13 +118,15 @@ function openModal(title, html, onSubmit) {
     if (subjectSelect && !subjectSelect.value) subjectSelect.value = chapter.subjectId;
   }
   applyLanguage(overlay);
-  const first = overlay.querySelector('input, select, textarea');
-  if (first) first.focus();
+  const first = overlay.querySelector('input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])');
+  (first || overlay.querySelector('#modal-body button:not([disabled]), #modal-body a[href]') || overlay.querySelector('[data-close-modal]')).focus();
 }
 function closeModal() {
+  const returnFocus = modalState && modalState.returnFocus;
   document.getElementById('modal-overlay').hidden = true;
   document.body.classList.remove('modal-open');
   modalState = null;
+  if (returnFocus && returnFocus.isConnected && typeof returnFocus.focus === 'function') returnFocus.focus();
 }
 
 /* ---------- Toast ---------- */
@@ -262,12 +265,19 @@ document.addEventListener('click', (e) => {
     openModal('Start a study challenge', `<form id="challenge-form" class="form"><label class="field"><span>Days (1–90)</span><input name="days" type="number" min="1" max="90" value="7" required></label><label class="field"><span>Daily study minutes (1–1440)</span><input name="minutes" type="number" min="1" max="1440" value="${esc(st.settings.dailyTargetMinutes)}" required></label><button class="btn primary" type="submit">Start today</button></form>`, (form) => {
       const fd = new FormData(form), days = Number(fd.get('days')), minutes = Number(fd.get('minutes'));
       if (!Number.isInteger(days) || days < 1 || days > 90 || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) { toast('Enter a valid duration and target.'); return false; }
-      st.challenge = { startDate: todayKey(), days, targetMinutes: minutes }; save(); return true;
+      const previous = st.challenge;
+      st.challenge = { startDate: todayKey(), days, targetMinutes: minutes };
+      if (!save()) { st.challenge = previous; return false; }
+      return true;
     });
     return;
   }
   if (e.target.closest('#end-challenge')) {
-    if (confirm('Remove this challenge? Study sessions will be kept.')) { st.challenge = null; save(); render(); }
+    if (confirm('Remove this challenge? Study sessions will be kept.')) {
+      const previous = st.challenge; st.challenge = null;
+      if (!save()) { st.challenge = previous; return; }
+      render();
+    }
     return;
   }
 
@@ -845,7 +855,16 @@ document.getElementById('modal-overlay').addEventListener('click', (e) => {
   if (e.target.id === 'modal-overlay') closeModal();
 });
 document.addEventListener('keydown', (e) => {
-  if (e.key === 'Escape' && modalState) closeModal();
+  if (!modalState) return;
+  if (e.key === 'Escape') { e.preventDefault(); closeModal(); return; }
+  if (e.key !== 'Tab') return;
+  const overlay = document.getElementById('modal-overlay');
+  const focusable = [...overlay.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])')]
+    .filter(node => !node.closest('[hidden]') && getComputedStyle(node).display !== 'none' && getComputedStyle(node).visibility !== 'hidden');
+  if (!focusable.length) { e.preventDefault(); return; }
+  const first = focusable[0], last = focusable[focusable.length - 1], active = document.activeElement;
+  if (e.shiftKey && (active === first || !overlay.contains(active))) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (active === last || !overlay.contains(active))) { e.preventDefault(); first.focus(); }
 });
 
 /* ---------- Bottom nav ---------- */
