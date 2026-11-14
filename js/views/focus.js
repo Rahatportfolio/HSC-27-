@@ -87,12 +87,24 @@ function renderFocus(prefillChapterId) {
 }
 
 // Save only serializable timer data, together with study records in the same store.
-function persistFocusTimer() {
+function focusTimerSnapshot() {
   const keys = ['mode', 'subjectId', 'chapterId', 'running', 'startedAt', 'accumulatedMs', 'targetMs', 'breakMs', 'phase', 'runId'];
   const snapshot = {};
   keys.forEach((key) => { snapshot[key] = focusState[key]; });
-  getState().activeFocus = snapshot;
-  save();
+  return snapshot;
+}
+function persistFocusTimer() {
+  getState().activeFocus = focusTimerSnapshot();
+  return save();
+}
+// Keep unsaved elapsed time available for an explicit retry after a storage failure.
+function pauseUnsavedFocus(elapsed) {
+  focusState.accumulatedMs = elapsed;
+  focusState.running = false; focusState.startedAt = null;
+  stopTimerInterval(); releaseWakeLock();
+  getState().activeFocus = focusTimerSnapshot();
+  refreshTimerButtons(); updateTimerDisplay();
+  toast('Session not saved. Free storage and retry Stop & save; do not close this page yet.');
 }
 function restoreFocusTimer() {
   const snapshot = getState().activeFocus;
@@ -176,7 +188,9 @@ function finishTimerPhase() {
   if (focusState.phase === 'focus') {
     const elapsed = focusElapsedMs();
     const completedAt = Date.now() - Math.max(0, elapsed - focusState.targetMs);
-    saveFocusSession(Math.min(elapsed, focusState.targetMs), completedAt);
+    const limited = Math.min(elapsed, focusState.targetMs);
+    const saved = saveFocusSession(limited, completedAt);
+    if (!saved && Math.round(limited / 60000) > 0) { pauseUnsavedFocus(limited); return; }
     focusState.phase = 'break';
     focusState.accumulatedMs = 0;
     focusState.startedAt = focusState.running ? Date.now() : null;
@@ -225,6 +239,7 @@ function stopAndSaveTimer() {
   const limited = focusState.mode === 'stopwatch' ? elapsed : Math.min(elapsed, focusState.targetMs);
   const ended = Date.now() - Math.max(0, elapsed - limited);
   const saved = focusState.phase === 'focus' ? saveFocusSession(limited, ended) : null;
+  if (focusState.phase === 'focus' && !saved && Math.round(limited / 60000) > 0) { pauseUnsavedFocus(limited); return; }
   focusState.accumulatedMs = 0;
   focusState.phase = 'focus';
   focusState.runId = null;

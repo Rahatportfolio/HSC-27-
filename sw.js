@@ -4,7 +4,7 @@
  */
 'use strict';
 
-const CACHE = 'hsc27-v6';
+const CACHE = 'hsc27-v7';
 const SHELL = [
   './',
   'index.html',

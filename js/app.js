@@ -98,10 +98,15 @@ function openModal(title, html, onSubmit) {
   overlay.hidden = false;
   document.body.classList.add('modal-open');
   const taskSubject = overlay.querySelector('#task-form select[name="subjectId"]');
-  if (taskSubject) taskSubject.addEventListener('change', () => {
-    const sel = overlay.querySelector('#task-form select[name="chapterId"]');
-    sel.innerHTML = '<option value="">—</option>' + chaptersOf(taskSubject.value).map((c) => `<option value="${esc(c.id)}">${esc(chapterLabel(c.id))}</option>`).join('');
-  });
+  if (taskSubject) {
+    const fill = (selected = '') => {
+      const sel = overlay.querySelector('#task-form select[name="chapterId"]');
+      sel.innerHTML = '<option value="">—</option>' + chaptersOf(taskSubject.value).map((c) => `<option value="${esc(c.id)}">${esc(chapterLabel(c.id))}</option>`).join('');
+      sel.value = selected || '';
+    };
+    fill(overlay.querySelector('#task-form').dataset.chapter);
+    taskSubject.addEventListener('change', () => fill());
+  }
   const chapter = chapterById(currentRoute.param);
   if (chapter && ['notes', 'formulas', 'library', 'weaknesses'].includes(currentRoute.name)) {
     const chSelect = overlay.querySelector('[name="chapterId"]');
@@ -252,6 +257,12 @@ document.addEventListener('click', (e) => {
   }
 
   // Tasks
+  const taskEdit = e.target.closest('[data-task-edit]');
+  if (taskEdit) {
+    const task = st.tasks.find(t => t.id === taskEdit.dataset.taskEdit);
+    if (task) openModal('Edit task', taskFormHTML(task.date, task), form => saveTaskFromForm(form, task.id));
+    return;
+  }
   const reschedule = e.target.closest('[data-task-reschedule]');
   if (reschedule) {
     const task = st.tasks.find((t) => t.id === reschedule.dataset.taskReschedule);
@@ -259,15 +270,20 @@ document.addEventListener('click', (e) => {
     openModal('Reschedule task', `<form id="reschedule-form" class="form"><p>${esc(task.title)}</p><label class="field"><span>New date</span><input type="date" name="date" value="${esc(task.date)}" required></label><button class="btn primary" type="submit">Reschedule</button></form>`, (form) => {
       const date = String(new FormData(form).get('date') || '');
       if (!isValidDateKey(date)) { toast('Choose a valid date.'); return false; }
+      const previous = {...task};
       if (!task.originalDate) task.originalDate = task.date;
-      task.date = date; task.status = 'pending'; save(); return true;
+      task.date = date; task.status = 'pending';
+      if (!save()) { Object.keys(task).forEach(key => delete task[key]); Object.assign(task, previous); return false; }
+      return true;
     });
     return;
   }
   const taskDel = e.target.closest('[data-task-delete]');
   if (taskDel) {
-    st.tasks = st.tasks.filter((t) => t.id !== taskDel.dataset.taskDelete);
-    save(); toast('Task deleted.'); render(); return;
+    if (!confirm('Delete this task?')) return;
+    const previous = st.tasks; st.tasks = st.tasks.filter((t) => t.id !== taskDel.dataset.taskDelete);
+    if (!save()) { st.tasks = previous; return; }
+    toast('Task deleted.'); render(); return;
   }
 
   // Focus mode
@@ -286,8 +302,10 @@ document.addEventListener('click', (e) => {
   // Sessions
   const sesDel = e.target.closest('[data-session-delete]');
   if (sesDel) {
-    st.sessions = st.sessions.filter((s) => s.id !== sesDel.dataset.sessionDelete);
-    save(); toast('Session deleted.'); render(); return;
+    if (!confirm('Delete this study session?')) return;
+    const previous = st.sessions; st.sessions = st.sessions.filter((s) => s.id !== sesDel.dataset.sessionDelete);
+    if (!save()) { st.sessions = previous; return; }
+    toast('Session deleted.'); render(); return;
   }
 
   // Chapters
@@ -660,7 +678,7 @@ document.addEventListener('change', (e) => {
   const taskToggle = e.target.closest('[data-task-toggle]');
   if (taskToggle) {
     const t = st.tasks.find((x) => x.id === taskToggle.dataset.taskToggle);
-    if (t) { t.status = taskToggle.checked ? 'done' : 'pending'; save(); render(); }
+    if (t) { const previous = t.status; t.status = taskToggle.checked ? 'done' : 'pending'; if (!save()) t.status = previous; render(); }
     return;
   }
   if (e.target.id === 'focus-subject') { focusState.subjectId = e.target.value || null; focusState.chapterId = null; persistFocusTimer(); syncFocusChapterOptions(); return; }
@@ -734,8 +752,10 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const minutes = Number(fd.get('minutes')) || 0;
-    if (minutes <= 0) { toast('Enter minutes studied.'); return; }
-    recordSession({ subjectId: String(fd.get('subjectId') || '') || null, chapterId: null, durationMinutes: minutes, mode: 'manual', source: 'manual', note: sanitizeText(fd.get('note'), 500) });
+    const subjectId = String(fd.get('subjectId') || '') || null;
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 1440 || (subjectId && !subjectById(subjectId))) { toast('Enter 1–1440 whole minutes and a valid subject.'); return; }
+    const session = recordSession({ subjectId, chapterId: null, durationMinutes: minutes, mode: 'manual', source: 'manual', note: sanitizeText(fd.get('note'), 500) });
+    if (!session) return;
     toast(`Saved ${formatDuration(minutes)} session.`);
     render();
     return;

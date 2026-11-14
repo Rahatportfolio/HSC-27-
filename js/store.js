@@ -222,7 +222,7 @@ function recordSession(data) {
     date: data.date || toDateKey(new Date(data.endedAt || Date.now())),
   };
   st.sessions.push(session);
-  save();
+  if (!save()) { st.sessions.pop(); return null; }
   return session;
 }
 
@@ -270,6 +270,7 @@ function carryOverMissed() {
   const st = getState();
   const today = todayKey();
   let moved = 0;
+  const original = st.tasks.map(t => ({t, date:t.date, status:t.status, originalDate:t.originalDate, hadOriginal:Object.prototype.hasOwnProperty.call(t, 'originalDate')}));
   st.tasks.forEach((t) => {
     if ((t.status === 'pending' || t.status === 'carried') && t.date < today) {
       if (!t.originalDate) t.originalDate = t.date;
@@ -278,7 +279,10 @@ function carryOverMissed() {
       moved += 1;
     }
   });
-  if (moved) save();
+  if (moved && !save()) {
+    original.forEach(({t, date, status, originalDate, hadOriginal}) => { t.date = date; t.status = status; if (hadOriginal) t.originalDate = originalDate; else delete t.originalDate; });
+    return 0;
+  }
   return moved;
 }
 

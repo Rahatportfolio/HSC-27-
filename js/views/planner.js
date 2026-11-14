@@ -32,16 +32,14 @@ function renderPlanner() {
 }
 
 function taskItem(t) {
-  const st = getState();
-  const actual = t.type === 'rest' ? 0 : st.sessions.filter((s) => s.date === t.date && s.subjectId === t.subjectId && s.chapterId === t.chapterId)
-    .reduce((a, s) => a + s.durationMinutes, 0);
   return `<li class="task-item ${t.status === 'done' ? 'done' : ''}">
     <input type="checkbox" data-task-toggle="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''} aria-label="Mark task done">
     <div class="task-body">
       <strong>${esc(t.title)}</strong>
-      <span class="muted small">${t.type === 'rest' ? 'Break' : esc(subjectName(t.subjectId))}${t.startTime ? ' · ' + esc(t.startTime) : ''}${t.chapterId ? ' · ' + esc(chapterLabel(t.chapterId)) : ''} · planned ${formatDuration(t.plannedMinutes || 0)}${actual ? ' · studied ' + formatDuration(actual) : ''}${t.deadline ? ' · deadline ' + esc(formatDate(t.deadline)) : ''}${t.status === 'carried' ? ' · carried over' : ''}${t.originalDate ? ' · originally ' + esc(formatDate(t.originalDate)) : ''}</span>
+      <span class="muted small">${t.type === 'rest' ? 'Break' : esc(subjectName(t.subjectId))}${t.startTime ? ' · ' + esc(t.startTime) : ''}${t.chapterId ? ' · ' + esc(chapterLabel(t.chapterId)) : ''} · planned ${formatDuration(t.plannedMinutes || 0)}${t.deadline ? ' · deadline ' + esc(formatDate(t.deadline)) : ''}${t.status === 'carried' ? ' · carried over' : ''}${t.originalDate ? ' · originally ' + esc(formatDate(t.originalDate)) : ''}</span>
     </div>
     <span class="badge prio-${esc(t.priority || 'B')}">${esc(t.priority || 'B')}</span>
+    <button class="btn small ghost" data-task-edit="${esc(t.id)}" aria-label="Edit task">✎</button>
     <button class="btn small ghost" data-task-reschedule="${esc(t.id)}" aria-label="Reschedule task">↪</button>
     <button class="btn small ghost" data-task-delete="${esc(t.id)}" aria-label="Delete task">✕</button>
   </li>`;
@@ -55,6 +53,7 @@ function plannerDayView(dateKey, target) {
   return `<section class="card">
     <h2>${esc(formatDay(dateKey))}</h2>
     <p class="muted">Planned study ${formatDuration(planned)} · Studied ${formatDuration(actual)} · Daily target ${formatDuration(target)}</p>
+    <p class="muted small">Studied time is the total for the day; sessions are not assigned to individual tasks.</p>
     ${getState().settings.preferredStart && getState().settings.preferredEnd ? `<p class="muted small">Preferred study hours: ${esc(getState().settings.preferredStart)}–${esc(getState().settings.preferredEnd)} (no automatic reminder)</p>` : ''}
     <div class="progress-bar"><div class="progress-fill" style="width:${pct(actual, target)}%"></div></div>
     ${tasks.length ? `<ul class="task-list">${tasks.map(taskItem).join('')}</ul>`
@@ -110,42 +109,50 @@ function plannerMonthView(cursor, target) {
   </section>`;
 }
 
-function taskFormHTML(prefillDate) {
+function taskFormHTML(prefillDate, task = null) {
   const st = getState();
-  return `<form id="task-form" class="form">
-    <label class="field"><span>Task title *</span><input name="title" required placeholder="e.g. Physics Ch 2 — CQ practice"></label>
+  const sel = (actual, expected) => actual === expected ? 'selected' : '';
+  return `<form id="task-form" class="form" data-chapter="${esc(task?.chapterId || '')}">
+    <label class="field"><span>Task title *</span><input name="title" maxlength="300" required value="${esc(task?.title || '')}" placeholder="e.g. Physics Ch 2 — CQ practice"></label>
     <label class="field"><span>Subject</span>
-      <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+      <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${sel(task?.subjectId, s.id)}>${esc(s.name)}</option>`).join('')}</select></label>
     <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option></select></label>
-    <label class="field"><span>Date</span><input name="date" type="date" value="${esc(prefillDate || todayKey())}"></label>
-    <label class="field"><span>Start time (optional)</span><input name="startTime" type="time"></label>
-    <label class="field"><span>Planned minutes</span><input name="plannedMinutes" type="number" min="5" step="5" value="60"></label>
+    <label class="field"><span>Date</span><input name="date" type="date" required value="${esc(task?.date || prefillDate || todayKey())}"></label>
+    <label class="field"><span>Start time (optional)</span><input name="startTime" type="time" value="${esc(task?.startTime || '')}"></label>
+    <label class="field"><span>Planned minutes (1–1440)</span><input name="plannedMinutes" type="number" min="1" max="1440" step="1" required value="${esc(task?.plannedMinutes ?? 60)}"></label>
     <label class="field"><span>Type</span>
-      <select name="type"><option value="study">Study</option><option value="revision">Revision</option><option value="test">Test</option><option value="rest">Rest / break</option></select></label>
+      <select name="type">${[['study','Study'],['revision','Revision'],['test','Test'],['rest','Rest / break']].map(([v,l]) => `<option value="${v}" ${sel(task?.type || 'study',v)}>${l}</option>`).join('')}</select></label>
     <label class="field"><span>Priority</span>
-      <select name="priority"><option>A</option><option selected>B</option><option>C</option></select></label>
-    <label class="field"><span>Deadline (optional)</span><input name="deadline" type="date"></label>
-    <div class="row gap"><button class="btn primary" type="submit">Add task</button>
+      <select name="priority">${['A','B','C'].map(p => `<option value="${p}" ${sel(task?.priority || 'B',p)}>${p}</option>`).join('')}</select></label>
+    <label class="field"><span>Deadline (optional)</span><input name="deadline" type="date" value="${esc(task?.deadline || '')}"></label>
+    <div class="row gap"><button class="btn primary" type="submit">${task ? 'Save task' : 'Add task'}</button>
     <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
   </form>`;
 }
 
-function saveTaskFromForm(form) {
-  const fd = new FormData(form);
-  const title = sanitizeText(fd.get('title'), 300);
+function saveTaskFromForm(form, existingId = null) {
+  const fd = new FormData(form), st = getState();
+  const title = sanitizeText(fd.get('title'), 300), date = String(fd.get('date') || '');
+  const subjectId = String(fd.get('subjectId') || '') || null, chapterId = String(fd.get('chapterId') || '') || null;
+  const chapter = chapterId && chapterById(chapterId);
+  const startTime = String(fd.get('startTime') || ''), deadline = String(fd.get('deadline') || '') || null;
+  const plannedMinutes = Number(fd.get('plannedMinutes')), type = String(fd.get('type') || ''), priority = String(fd.get('priority') || '');
   if (!title) { toast('Task title is required.'); return false; }
-  const date = String(fd.get('date') || todayKey());
-  if (!isValidDateKey(date)) { toast('Invalid date.'); return false; }
-  getState().tasks.push({
-    id: uid('task'), title,
-    subjectId: String(fd.get('subjectId') || '') || null,
-    chapterId: String(fd.get('chapterId') || '') || null,
-    date, startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(fd.get('startTime') || '')) ? String(fd.get('startTime')) : '', plannedMinutes: Math.max(0, Number(fd.get('plannedMinutes')) || 0),
-    type: String(fd.get('type') || 'study'),
-    priority: ['A', 'B', 'C'].includes(fd.get('priority')) ? fd.get('priority') : 'B',
-    deadline: String(fd.get('deadline') || '') || null,
-    status: 'pending', createdAt: nowISO(),
-  });
-  save();
+  if (!isValidDateKey(date) || (deadline && !isValidDateKey(deadline))) { toast('Enter valid dates.'); return false; }
+  if (startTime && !/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)) { toast('Enter a valid start time.'); return false; }
+  if (!Number.isInteger(plannedMinutes) || plannedMinutes < 1 || plannedMinutes > 1440) { toast('Planned minutes must be a whole number between 1 and 1440.'); return false; }
+  if (subjectId && !subjectById(subjectId) || chapterId && (!chapter || chapter.subjectId !== subjectId)) { toast('Choose a matching subject and chapter.'); return false; }
+  if (!['study','revision','test','rest'].includes(type) || !['A','B','C'].includes(priority)) { toast('Choose a valid type and priority.'); return false; }
+  const values = {title, subjectId, chapterId, date, startTime, plannedMinutes, type, priority, deadline};
+  if (existingId) {
+    const task = st.tasks.find(t => t.id === existingId);
+    if (!task) return false;
+    const previous = {...task};
+    Object.assign(task, values, {updatedAt:nowISO()});
+    if (!save()) { Object.keys(task).forEach(key => delete task[key]); Object.assign(task, previous); return false; }
+  } else {
+    st.tasks.push({id:uid('task'), ...values, status:'pending', createdAt:nowISO()});
+    if (!save()) { st.tasks.pop(); return false; }
+  }
   return true;
 }
