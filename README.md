@@ -53,7 +53,7 @@ npm run dev
 Open http://localhost:3000. The dev server binds to `0.0.0.0` and accepts the Arena preview host.
 
 ```bash
-npm test          # 48 tests: plan, dates, backup v1/v2, timer parsing, revision, GPA, analytics, exports, full UI smoke
+npm test          # 51 tests: plan, dates, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
 npm run typecheck
 npm run build     # production PWA build in dist/
 npm run preview   # serve the production build on port 3000

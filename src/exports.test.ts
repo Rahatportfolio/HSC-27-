@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildPlan, freshData } from './planner';
-import { foldICSLine, makeICS, makeMarkdown } from './exports';
+import { foldICSLine, makeCsv, makeICS, makeMarkdown } from './exports';
 
 describe('calendar and Markdown exports', () => {
   const plan = buildPlan(), data = freshData(), tasks = plan[0].tasks;
@@ -27,6 +27,14 @@ describe('calendar and Markdown exports', () => {
     expect(md).not.toContain('৮ ঘণ্টা পড়ার মাঝে');
     expect(md).toContain('A\\|B');
     expect(md).not.toContain('X\nY');
+  });
+  it('writes Excel-friendly CSV with a BOM, quoting and CRLF', () => {
+    const csv = makeCsv([['date', 'subject'], ['2026-11-14', 'পদার্থ, ১ম'], ['x', '"quoted"'], ['line', 'a\nb']]);
+    expect(csv.startsWith('\uFEFF')).toBe(true);
+    expect(csv).toContain('\r\n');
+    expect(csv).toContain('"পদার্থ, ১ম"');
+    expect(csv).toContain('"""quoted"""');
+    expect(csv).toContain('"a\nb"');
   });
   it('contains every date, chapter and model-test record in the Markdown plan', () => {
     const md = makeMarkdown(plan, data);
