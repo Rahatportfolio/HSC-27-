@@ -40,17 +40,27 @@ jobs:
           for v in KEYSTORE_DATA HSC_KEYSTORE_PASSWORD HSC_KEY_ALIAS HSC_KEY_PASSWORD; do
             if [[ -n "${!v}" ]]; then count=$((count + 1)); fi
           done
+          build_apk() {
+            # Publish a compact failure annotation for debug builds; normal full logs
+            # are still available in the Actions UI. Do not annotate signed-build logs.
+            if gradle -p android --no-daemon --console=plain "$1" 2>&1 | tee "$RUNNER_TEMP/gradle-build.log"; then return 0; fi
+            if [[ "$count" == 0 ]]; then
+              detail=$(tail -35 "$RUNNER_TEMP/gradle-build.log" | tr '\n' ' ' | cut -c1-3500)
+              echo "::error::Android build failed: $detail"
+            fi
+            return 1
+          }
           if [[ "$count" == 4 ]]; then
             export HSC_KEYSTORE_PATH="$RUNNER_TEMP/hsc-personal.jks"
             umask 077
             printf '%s' "$KEYSTORE_DATA" | base64 --decode > "$HSC_KEYSTORE_PATH"
             unset KEYSTORE_DATA
-            gradle -p android --no-daemon assembleRelease
+            build_apk assembleRelease
             echo 'path=android/app/build/outputs/apk/release/app-release.apk' >> "$GITHUB_OUTPUT"
             echo 'artifact=HSC-2027-personal-signed' >> "$GITHUB_OUTPUT"
           elif [[ "$count" == 0 ]]; then
             echo 'No signing key configured: making a debug APK. Its signing key is temporary; back up before updating.'
-            gradle -p android --no-daemon assembleDebug
+            build_apk assembleDebug
             echo 'path=android/app/build/outputs/apk/debug/app-debug.apk' >> "$GITHUB_OUTPUT"
             echo 'artifact=HSC-2027-debug' >> "$GITHUB_OUTPUT"
           else

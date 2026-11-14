@@ -161,3 +161,36 @@ function checkWrittenExpiry() {
     if (el) el.textContent = formatClock(Math.ceil((test.endsAt-Date.now())/1000))+' remaining';
   }
 }
+
+/* Offline self-study cards from the student's own question bank. */
+let flashcardSession = null;
+function flashcardAnswer(q) {
+  const answer = typeof q.answer === 'string' ? q.answer.trim() : '';
+  const choice = q.type === 'mcq' && Array.isArray(q.options) && q.options.length === 4 &&
+    Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < 4 &&
+    typeof q.options[q.correctIndex] === 'string' ? q.options[q.correctIndex].trim() : '';
+  return {answer, choice};
+}
+function startFlashcards(subjectId, type) {
+  if ((subjectId && !subjectById(subjectId)) || !['all','mcq','cq'].includes(type)) { toast('Choose a valid subject and question type.'); return false; }
+  const cards = getState().questionBank.filter(q => {
+    if (!q || typeof q.question !== 'string' || !q.question.trim() || (subjectId && q.subjectId !== subjectId) || (type !== 'all' && q.type !== type)) return false;
+    const a = flashcardAnswer(q); return !!(a.answer || a.choice);
+  }).slice(0, 500).map(q => ({question:q.question, ...flashcardAnswer(q), type:q.type}));
+  if (!cards.length) { toast('Add matching questions with answers or a correct MCQ choice first.'); return false; }
+  flashcardSession = {cards, index:0, revealed:false}; return true;
+}
+function renderFlashcards() {
+  const session = flashcardSession;
+  if (!session) return `<div class="page"><h1 data-i18n="flashTitle">Flashcards</h1><section class="card">
+    <p class="muted small">Review up to the first 500 matching questions with answers from your own question bank. No official questions or automatic grading. Session position is not saved after closing the app.</p>
+    <form id="flashcard-form" class="form"><label class="field"><span data-i18n="extra10">Subject</span><select name="subjectId"><option value="">All subjects</option>${getState().subjects.map(s => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+    <label class="field"><span data-i18n="extra41">Type</span><select name="type"><option value="all">All types</option><option value="mcq">MCQ</option><option value="cq">CQ</option></select></label>
+    <button class="btn primary" type="submit" data-i18n="flashStart">Start review</button></form></section><button class="btn" data-nav="practice">Question bank</button></div>`;
+  const card = session.cards[session.index];
+  return `<div class="page"><h1 data-i18n="flashTitle">Flashcards</h1><section class="card">
+    <p class="muted small">Card ${session.index + 1} of ${session.cards.length} · ${esc(card.type || 'question')} · Your question bank</p>
+    <h2>${esc(card.question).replace(/\n/g,'<br>')}</h2>
+    ${session.revealed ? `<div><strong data-i18n="flashAnswer">Answer</strong>${card.choice ? `<p>${esc(card.choice).replace(/\n/g,'<br>')}</p>` : ''}${card.answer ? `<p>${esc(card.answer).replace(/\n/g,'<br>')}</p>` : ''}</div>` : '<button class="btn primary" id="flash-reveal" data-i18n="flashReveal">Show answer</button>'}
+    </section><div class="row gap wrap"><button class="btn" id="flash-prev" ${session.index === 0 ? 'disabled' : ''} data-i18n="flashPrev">Previous</button><button class="btn" id="flash-next" ${session.index === session.cards.length - 1 ? 'disabled' : ''} data-i18n="flashNext">Next</button><button class="btn" id="flash-end" data-i18n="flashEnd">End review</button></div></div>`;
+}

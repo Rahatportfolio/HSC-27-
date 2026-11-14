@@ -7,7 +7,7 @@ const entries = new Map();
 const cache = { addAll: async paths => { for (const p of paths) { if (p !== './') assert.ok(fs.existsSync(p), 'missing shell asset '+p); entries.set(p, p); } } };
 const deleted = [];
 const shown = [];
-const caches = { open: async () => cache, keys: async () => ['unrelated-app','hsc27-old','hsc27-v13'], delete: async k => deleted.push(k), match: async req => entries.get(typeof req === 'string' ? req : new URL(req.url).pathname.slice(1)) };
+const caches = { open: async () => cache, keys: async () => ['unrelated-app','hsc27-old','hsc27-v14'], delete: async k => deleted.push(k), match: async req => entries.get(typeof req === 'string' ? req : new URL(req.url).pathname.slice(1)) };
 const ctx = { self: { addEventListener: (n, f) => { listeners[n] = f; }, location: {origin:'https://test.example'}, registration: {scope:'https://test.example/', showNotification: async (title, opts) => shown.push({title, opts})}, skipWaiting: async () => {}, clients: {claim:async()=>{}, matchAll:async()=>[], openWindow:async()=>{}} }, caches, URL, Response, fetch: async () => { throw Error('offline'); }, Promise };
 vm.runInNewContext(fs.readFileSync('sw.js','utf8'), ctx);
 (async () => {

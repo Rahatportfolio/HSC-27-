@@ -1,6 +1,7 @@
 /* Optional partial Bangla interface. User-entered content is never translated. */
 'use strict';
 const UI_LABELS = {
+  flashTitle:['Flashcards','ফ্ল্যাশকার্ড'], flashStart:['Start review','রিভিশন শুরু'], flashAnswer:['Answer','উত্তর'], flashReveal:['Show answer','উত্তর দেখুন'], flashPrev:['Previous','আগেরটি'], flashNext:['Next','পরেরটি'], flashEnd:['End review','রিভিশন শেষ'], 'menu-flashcards':['🗂 Flashcards','🗂 ফ্ল্যাশকার্ড'],
   studyHistory: ['Recorded study milestones', 'সংরক্ষিত পড়াশোনার মাইলফলক'],
   recentSubjectActivity: ['Subject activity — last 14 days', 'বিষয়ভিত্তিক পড়াশোনা — গত ১৪ দিন'],
   "extra0": ["Science", "বিজ্ঞান"],

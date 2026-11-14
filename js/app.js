@@ -19,6 +19,7 @@ const ROUTES = {
   formulas: (chapterId) => renderFormulas(chapterId || undefined),
   library: (chapterId) => renderLibrary(chapterId || undefined),
   practice: (chapterId) => renderPractice(chapterId || undefined),
+  flashcards: () => renderFlashcards(),
   exams: () => renderExams(),
   quiz: () => renderBankQuiz(),
   written: () => renderWrittenTest(),
@@ -523,6 +524,12 @@ document.addEventListener('click', (e) => {
   const pRe = e.target.closest('[data-practice-reattempt]');
   if (pRe) { if (updateLearningRecord('practice',pRe.dataset.practiceReattempt,p=>({reattempted:!p.reattempted}))) render(); return; }
 
+  // Flashcards are a transient review; they never alter question-bank data.
+  if (e.target.closest('#flash-reveal') && flashcardSession) { flashcardSession.revealed = true; render(); return; }
+  if (e.target.closest('#flash-next') && flashcardSession && flashcardSession.index < flashcardSession.cards.length - 1) { flashcardSession.index++; flashcardSession.revealed = false; render(); return; }
+  if (e.target.closest('#flash-prev') && flashcardSession && flashcardSession.index > 0) { flashcardSession.index--; flashcardSession.revealed = false; render(); return; }
+  if (e.target.closest('#flash-end') && flashcardSession) { flashcardSession = null; render(); return; }
+
   // Question bank
   const questionPageButton = e.target.closest('[data-question-page]');
   if (questionPageButton) { questionPage = Number(questionPageButton.dataset.questionPage) || 0; render(); return; }
@@ -834,6 +841,7 @@ document.addEventListener('submit', (e) => {
     render();
     return;
   }
+  if (form.id === 'flashcard-form') { e.preventDefault(); const fd = new FormData(form); if (startFlashcards(String(fd.get('subjectId') || ''), String(fd.get('type') || ''))) render(); return; }
   if (form.id === 'settings-form') { e.preventDefault(); if (saveSettingsFromForm(form)) { toast('Settings saved.'); render(); } return; }
   if (form.id === 'notif-form') { e.preventDefault(); if (saveNotifFromForm(form)) { toast('Notification preferences saved.'); checkReminders(); render(); } return; }
   if (form.id === 'review-form') { e.preventDefault(); if (saveReviewFromForm(form)) { toast('Weekly review saved.'); render(); } return; }
@@ -886,7 +894,7 @@ document.querySelectorAll('.nav-btn').forEach((b) => {
 document.getElementById('more-btn').addEventListener('click', () => {
   openModal('More', `<div class="menu-list">
     ${[['notes', '🗒 Notes & documents'], ['formulas', '∑ Formula library'], ['library', '▶ Video library'],
-       ['practice', '✍ Practice tracker'], ['exams', '📝 Exams'], ['revisions', '🔁 Revisions'],
+       ['practice', '✍ Practice tracker'], ['flashcards', '🗂 Flashcards'], ['exams', '📝 Exams'], ['revisions', '🔁 Revisions'],
        ['weaknesses', '⚠ Weaknesses'], ['review', '✅ Weekly review'], ['journal', '📓 Journal'],
        ['calendar', '📅 Calendar'], ['search', '🔍 Search'], ['sync', '☁ Account & sync'], ['ai', '🤖 AI assistant'],
        ['backup', '💾 Backup & restore'], ['settings', '⚙ Settings']]
