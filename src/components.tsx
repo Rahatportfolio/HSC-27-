@@ -6,7 +6,7 @@ import type { SubjectId } from './data';
 import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent } from './planner';
 import type { Day, Task } from './planner';
 import { usePlanner } from './context';
-import { t } from './i18n';
+import { isEnglish, t } from './i18n';
 
 export function SubjectBadge({ subject, small = false }: { subject: SubjectId; small?: boolean }) {
   const s = subjectById[subject];
@@ -38,7 +38,7 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
     document.addEventListener('keydown', key);
     return () => { document.removeEventListener('keydown', key); document.body.style.overflow = overflow; previous?.focus(); };
   }, []);
-  return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><div ref={ref} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId}><div className="modal-header"><h2 id={titleId}>{title}</h2><button className="icon-button" onClick={onClose} aria-label="বন্ধ করো"><X size={20} /></button></div><div className="modal-body">{children}</div></div></div>;
+  return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><div ref={ref} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId}><div className="modal-header"><h2 id={titleId}>{title}</h2><button className="icon-button" onClick={onClose} aria-label={t('বন্ধ করো', 'Close')}><X size={20} /></button></div><div className="modal-body">{children}</div></div></div>;
 }
 export function PageHeading({ eyebrow, title, titleEn, description, descriptionEn, action }: { eyebrow?: string; title: string; titleEn?: string; description: string; descriptionEn?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{t(title, titleEn || title)}</h1><p>{t(description, descriptionEn || description)}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>;
@@ -51,7 +51,7 @@ export function PhaseJourney({ startDate, activeDate }: { startDate: string; act
   const phases = getPhases(startDate);
   return <div className="phase-journey">{phases.map((p, i) => {
     const active = activeDate >= p.start && activeDate <= p.end;
-    return <button key={p.id} className={`phase-step ${active ? 'active' : ''}`} onClick={() => navigate('calendar', p.start)} style={{ '--phase-color': p.color } as CSSProperties}><span className="phase-number">{active ? <span className="live-dot" /> : bn(i + 1)}</span><span className="phase-copy"><strong>{p.name}</strong><span>{formatDate(p.start)} – {formatDate(p.end)} <span className="phase-days">· {bn(p.days)} দিন</span></span></span>{i < 2 && <ChevronRight className="phase-arrow" size={17} />}</button>;
+    return <button key={p.id} className={`phase-step ${active ? 'active' : ''}`} onClick={() => navigate('calendar', p.start)} style={{ '--phase-color': p.color } as CSSProperties}><span className="phase-number">{active ? <span className="live-dot" /> : bn(i + 1)}</span><span className="phase-copy"><strong>{p.name}</strong><span>{formatDate(p.start)} – {formatDate(p.end)} <span className="phase-days">· {bn(p.days)} {t('দিন', 'days')}</span></span></span>{i < 2 && <ChevronRight className="phase-arrow" size={17} />}</button>;
   })}</div>;
 }
 export function TaskCard({ task, compact = false }: { task: Task; compact?: boolean }) {
@@ -61,13 +61,13 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
   const minute = dhakaMinutes(now);
   const current = !done && isTaskCurrent(task, today, minute);
   return <article className={`task-card ${done ? 'done' : ''} ${current ? 'current' : ''} ${compact ? 'compact' : ''}`}>
-    <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}{formatDayOffset(task.startMinute)}</span><span className="time-line" /><small>{bn(task.endMinute - task.startMinute)} মি.</small></div>
-    <div className="task-main"><div className="task-topline"><SubjectBadge subject={task.subject} small />{current && <span className="now-badge">এখন চলছে</span>}{task.kind === 'exam' && <span className="kind-badge">মডেল টেস্ট</span>}{task.kind === 'revision' && <span className="kind-badge">রিভিশন</span>}{task.kind === 'custom' && <span className="kind-badge custom">কাস্টম</span>}</div>
+    <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}{formatDayOffset(task.startMinute)}</span><span className="time-line" /><small>{bn(task.endMinute - task.startMinute)} {t('মি.', 'min')}</small></div>
+    <div className="task-main"><div className="task-topline"><SubjectBadge subject={task.subject} small />{current && <span className="now-badge">{t('এখন চলছে', 'in progress')}</span>}{task.kind === 'exam' && <span className="kind-badge">{t('মডেল টেস্ট', 'model test')}</span>}{task.kind === 'revision' && <span className="kind-badge">{t('রিভিশন', 'revision')}</span>}{task.kind === 'custom' && <span className="kind-badge custom">{t('কাস্টম', 'custom')}</span>}</div>
       <button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
-      {expanded && <div className="task-expanded"><span><Clock3 size={14} />{formatTime(task.startMinute)}{formatDayOffset(task.startMinute)} – {formatTime(task.endMinute)}{formatDayOffset(task.endMinute)}</span><button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />ভুলের খাতায় যোগ করো</button></div>}
+      {expanded && <div className="task-expanded"><span><Clock3 size={14} />{formatTime(task.startMinute)}{formatDayOffset(task.startMinute)} – {formatTime(task.endMinute)}{formatDayOffset(task.endMinute)}</span><button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />{t('ভুলের খাতায় যোগ করো', 'Add to mistake notebook')}</button></div>}
     </div>
-    <button className={`task-check ${done ? 'checked' : ''}`} onClick={() => toggleTask(task.id)} aria-label={`${task.title} — ${done ? 'অসম্পন্ন করো' : 'সম্পন্ন করো'}`} aria-pressed={done}>{done && <Check size={17} strokeWidth={2.5} />}</button>
+    <button className={`task-check ${done ? 'checked' : ''}`} onClick={() => toggleTask(task.id)} aria-label={`${task.title} — ${done ? t('অসম্পন্ন করো', 'mark incomplete') : t('সম্পন্ন করো', 'mark complete')}`} aria-pressed={done}>{done && <Check size={17} strokeWidth={2.5} />}</button>
   </article>;
 }
 export function WeekChart({ large = false }: { large?: boolean }) {
@@ -77,7 +77,7 @@ export function WeekChart({ large = false }: { large?: boolean }) {
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.parse(`${monday}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10); return { date: d, day: plan.find(x => x.date === d) }; });
   return <div className={`week-chart ${large ? 'large' : ''}`}>{days.map((d, i) => {
     const minutes = d.day?.tasks.filter(t => data.completed[t.id]).reduce((n, t) => n + t.endMinute - t.startMinute, 0) || 0;
-    return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ঘণ্টার কাজ সম্পন্ন`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, minutes / (data.settings.dailyHours * 60) * 100))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'][i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}ঘ</small>}</button>;
+    return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ${t('ঘণ্টার কাজ সম্পন্ন', 'hours of tasks done')}`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, minutes / (data.settings.dailyHours * 60) * 100))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{(isEnglish() ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'])[i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}{t('ঘ', 'h')}</small>}</button>;
   })}</div>;
 }
 export function StudyIllustration() {
@@ -85,15 +85,15 @@ export function StudyIllustration() {
 }
 export function LocalNote() {
   const { data, setData, selectedDate, storageOk } = usePlanner();
-  return <section className="card note-card"><div className="card-heading"><h3><NotebookPen size={17} />দিনের ছোট নোট</h3><span className="tiny-muted">{storageOk ? 'অটো সেভ' : 'সেভ হয়নি'}</span></div><textarea aria-label="দিনের নোট" placeholder="কী শিখলে, কোথায় আটকে গেলে… নিজের জন্য লিখে রাখো।" value={data.notes[selectedDate] || ''} maxLength={10000} onChange={e => setData(d => ({ ...d, notes: { ...d.notes, [selectedDate]: e.target.value } }))} /><span className="note-date">{formatDate(selectedDate, 'long')}</span></section>;
+  return <section className="card note-card"><div className="card-heading"><h3><NotebookPen size={17} />{t('দিনের ছোট নোট', 'Short day note')}</h3><span className="tiny-muted">{storageOk ? t('অটো সেভ', 'auto-saved') : t('সেভ হয়নি', 'not saved')}</span></div><textarea aria-label={t('দিনের নোট', 'Day note')} placeholder={t('কী শিখলে, কোথায় আটকে গেলে… নিজের জন্য লিখে রাখো।', 'What did you learn? Where did you get stuck? Write it for yourself…')} value={data.notes[selectedDate] || ''} maxLength={10000} onChange={e => setData(d => ({ ...d, notes: { ...d.notes, [selectedDate]: e.target.value } }))} /><span className="note-date">{formatDate(selectedDate, 'long')}</span></section>;
 }
 export function SyllabusNotice() {
   const { data, navigate } = usePlanner();
   if (data.settings.syllabusChecked) return null;
-  return <div className="syllabus-notice"><Sparkles size={17} /><p>বইয়ের সঙ্গে সিলেবাস মিলিয়ে নাও। <span>A আগে, B এরপর—কোনো অধ্যায় বাদ নয়।</span></p><button className="text-button" onClick={() => navigate('settings')}>যাচাই করো <ArrowUpRight size={14} /></button></div>;
+  return <div className="syllabus-notice"><Sparkles size={17} /><p>{t('বইয়ের সঙ্গে সিলেবাস মিলিয়ে নাও।', 'Check the syllabus against your books.')} <span>{t('A আগে, B এরপর—কোনো অধ্যায় বাদ নয়।', 'A first, then B — no chapter is dropped.')}</span></p><button className="text-button" onClick={() => navigate('settings')}>{t('যাচাই করো', 'Check')} <ArrowUpRight size={14} /></button></div>;
 }
 export function DaySummary({ day }: { day: Day }) {
   const { data } = usePlanner();
   const done = day.tasks.filter(t => data.completed[t.id]).length;
-  return <div className="day-summary"><span>{bn(done)}/{bn(day.tasks.length)} কাজ শেষ</span><ProgressBar value={percent(done, day.tasks.length)} /></div>;
+  return <div className="day-summary"><span>{bn(done)}/{bn(day.tasks.length)} {t('কাজ শেষ', 'tasks done')}</span><ProgressBar value={percent(done, day.tasks.length)} /></div>;
 }

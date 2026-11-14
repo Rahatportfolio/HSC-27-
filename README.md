@@ -2,7 +2,7 @@
 
 A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet board), with Higher Mathematics as the fourth subject. Built with React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API is required.
 
-**Version 2.0** adds the full study loop: measured study sessions, spaced revision, MCQ/CQ practice, exams, GPA, analytics, and local libraries. The Android APK is built automatically by GitHub Actions.
+**Version 2.1** adds the full study loop — measured sessions, spaced revision, MCQ/CQ practice, exams, GPA, analytics and local libraries — plus a Bangla/English shell toggle, a daily motivation line, custom routine blocks with drag-and-drop reordering, and native reminders for important dates. The Android APK is built automatically by GitHub Actions.
 
 ## What is inside
 
@@ -37,7 +37,7 @@ A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet
 
 ### Priority 4 — comfort features
 
-Study calendar, HSC countdown, day journal, streak calendar, achievement badges, **focus mode**, **custom weekly routine**, **important dates with native reminders**, light/dark/system theme, Bangla/English toggle, global search (`Ctrl/⌘ + K`), settings, JSON/CSV import-export and app information.
+Study calendar, HSC countdown, day journal, streak calendar, achievement badges, **focus mode**, **custom weekly routine**, **important dates with native reminders**, light/dark/system theme, Bangla/English toggle, daily motivation line, global search (`Ctrl/⌘ + K`), settings, JSON/CSV import-export and app information.
 
 **Bangla / English:** Settings → ভাষা / Language switches the shell between বাংলা and English. English mode localises navigation (sidebar, mobile bar, breadcrumb), page headings, dashboard hero, dates, digits and phase names. Chapter names, task titles, the generated plan, notes and hint text stay in Bangla by design — the plan is written as a Bangla study guide, so translating it would be a separate content project, not a string swap. `settings.language` is validated (`bn` | `en`, default `bn`).
 
@@ -55,7 +55,7 @@ npm run dev
 Open http://localhost:3000. The dev server binds to `0.0.0.0` and accepts the Arena preview host.
 
 ```bash
-npm test          # 71 tests: plan, dates, i18n, study sessions, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
+npm test          # 76 tests: plan, dates, i18n, study sessions, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
 npm run typecheck
 npm run build     # production PWA build in dist/
 npm run preview   # serve the production build on port 3000
@@ -74,7 +74,7 @@ The APK is an installable debug-signed build. It runs the same offline app insid
 3. Download **prostuti-hsc27-apk** from the run’s *Artifacts* section.
 4. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.
 
-Pushing a tag such as `v2.0.0` also attaches the APK to a GitHub Release.
+Pushing a tag such as `v2.1.0` also attaches the APK to a GitHub Release.
 
 To build locally you need JDK 21 and Android SDK 36:
 
