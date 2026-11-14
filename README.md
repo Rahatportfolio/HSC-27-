@@ -69,12 +69,13 @@ The checked-in `package-lock.json` is the source of truth. If an older npm has a
 
 The APK is an installable debug-signed build. It runs the same offline app inside a Capacitor WebView and adds native local notifications plus a SQLite copy of the data.
 
-1. Push to `main` or open **Actions → Android APK → Run workflow**.
-2. Wait for the green build.
-3. Download **prostuti-hsc27-apk** from the run’s *Artifacts* section.
-4. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.
+**Download the current build:** [প্রস্তুতি 2.1.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.1.0) → `prostuti-hsc27-v2.1.0.apk`.
 
-Pushing a tag such as `v2.1.0` also attaches the APK to a GitHub Release.
+1. Download the APK from the release (or from **Actions → Android APK → Artifacts → prostuti-hsc27-apk**).
+2. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.
+3. Install over an older version to keep the existing local data; keep a JSON backup before updating.
+
+Pushing a tag such as `v2.1.0` also attaches the APK to a GitHub Release. Every push to `main` or an `arena/**` branch rebuilds the APK.
 
 To build locally you need JDK 21 and Android SDK 36:
 
