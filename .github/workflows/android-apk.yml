@@ -45,10 +45,7 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install Android platform 36
+      - name: Ensure Android platform 36
         run: sdkmanager "platforms;android-36"
 
       - name: Set up JDK 21
