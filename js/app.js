@@ -1,0 +1,621 @@
+/* HSC 2027 Smart Study App — app.js
+ * Router, bottom navigation, modal system, toasts, global event handling,
+ * theme, online/offline status, and in-app reminders.
+ */
+'use strict';
+
+let currentRoute = { name: 'dashboard', param: null };
+let modalState = null; // { title, html, onSubmit }
+
+const ROUTES = {
+  dashboard: () => renderDashboard(),
+  subjects: () => renderSubjects(),
+  subject: (id) => renderSubjectDetail(id),
+  chapter: (id) => renderChapterDetail(id),
+  planner: () => renderPlanner(),
+  focus: (chapterId) => renderFocus(chapterId || undefined),
+  progress: () => renderProgress(),
+  notes: (chapterId) => renderNotes(chapterId || undefined),
+  formulas: (chapterId) => renderFormulas(chapterId || undefined),
+  library: (chapterId) => renderLibrary(chapterId || undefined),
+  practice: (chapterId) => renderPractice(chapterId || undefined),
+  exams: () => renderExams(),
+  revisions: () => renderRevisions(),
+  weaknesses: (chapterId) => renderWeaknesses(chapterId || undefined),
+  review: () => renderReview(),
+  journal: () => renderJournal(),
+  calendar: () => renderCalendar(),
+  search: () => renderSearch(),
+  settings: () => renderSettings(),
+  backup: () => renderBackup(),
+};
+
+function navigate(name, param) {
+  if (modalState) closeModal();
+  currentRoute = { name, param: param || null };
+  render();
+  window.scrollTo(0, 0);
+}
+
+function render() {
+  const view = document.getElementById('view');
+  const fn = ROUTES[currentRoute.name] || ROUTES.dashboard;
+  view.innerHTML = fn(currentRoute.param);
+  document.querySelectorAll('.nav-btn').forEach((b) => {
+    b.classList.toggle('active', b.dataset.nav === currentRoute.name ||
+      (currentRoute.name === 'subject' && b.dataset.nav === 'subjects') ||
+      (currentRoute.name === 'chapter' && b.dataset.nav === 'subjects'));
+  });
+  afterRender();
+}
+
+function afterRender() {
+  // Focus view: sync chapter dropdown
+  if (currentRoute.name === 'focus') { syncFocusChapterOptions(); updateTimerDisplay(); refreshTimerButtons(); }
+  // Task form chapter dropdown depends on subject selection
+  const taskSubject = document.querySelector('#task-form select[name="subjectId"]');
+  if (taskSubject) {
+    const fillChapters = () => {
+      const sel = document.querySelector('#task-form select[name="chapterId"]');
+      const chs = taskSubject.value ? chaptersOf(taskSubject.value) : [];
+      sel.innerHTML = '<option value="">—</option>' + chs.map((c) => `<option value="${esc(c.id)}">${esc(chapterLabel(c.id))}</option>`).join('');
+    };
+    taskSubject.addEventListener('change', fillChapters);
+    fillChapters();
+  }
+  // Chapter detail: live % label
+  const pctInput = document.getElementById('ch-pct');
+  if (pctInput) pctInput.addEventListener('input', () => {
+    document.getElementById('ch-pct-label').textContent = pctInput.value + '%';
+  });
+  // Search inputs: live filtering
+  const bindSearch = (id, setter) => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener('input', () => { setter(el.value); render(); const again = document.getElementById(id); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } });
+  };
+  bindSearch('notes-search', (v) => { notesFilter.q = v; });
+  bindSearch('formula-search', (v) => { formulaFilter.q = v; });
+  bindSearch('library-search', (v) => { libraryFilter.q = v; });
+  bindSearch('global-search', (v) => { searchQuery = v; });
+  updateOnlineStatus();
+}
+
+/* ---------- Modal ---------- */
+function openModal(title, html, onSubmit) {
+  modalState = { title, html, onSubmit };
+  const overlay = document.getElementById('modal-overlay');
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = html;
+  overlay.hidden = false;
+  document.body.classList.add('modal-open');
+  const taskSubject = overlay.querySelector('#task-form select[name="subjectId"]');
+  if (taskSubject) taskSubject.addEventListener('change', () => {
+    const sel = overlay.querySelector('#task-form select[name="chapterId"]');
+    sel.innerHTML = '<option value="">—</option>' + chaptersOf(taskSubject.value).map((c) => `<option value="${esc(c.id)}">${esc(chapterLabel(c.id))}</option>`).join('');
+  });
+  const chapter = chapterById(currentRoute.param);
+  if (chapter && ['notes', 'formulas', 'library', 'weaknesses'].includes(currentRoute.name)) {
+    const chSelect = overlay.querySelector('[name="chapterId"]');
+    const subjectSelect = overlay.querySelector('[name="subjectId"], [name="subject"]');
+    if (chSelect && !chSelect.value) chSelect.value = chapter.id;
+    if (subjectSelect && !subjectSelect.value) subjectSelect.value = chapter.subjectId;
+  }
+  const first = overlay.querySelector('input, select, textarea');
+  if (first) first.focus();
+}
+function closeModal() {
+  document.getElementById('modal-overlay').hidden = true;
+  document.body.classList.remove('modal-open');
+  modalState = null;
+}
+
+/* ---------- Toast ---------- */
+function toast(message) {
+  const wrap = document.getElementById('toast-wrap');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.textContent = message;
+  wrap.appendChild(el);
+  setTimeout(() => { el.classList.add('show'); }, 10);
+  setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, 3500);
+}
+
+/* ---------- Theme ---------- */
+function applyTheme() {
+  const theme = getState().settings.theme || 'auto';
+  const dark = theme === 'dark' || (theme === 'auto' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+}
+
+/* ---------- Online / offline ---------- */
+function updateOnlineStatus() {
+  const el = document.getElementById('online-status');
+  if (!el) return;
+  const online = navigator.onLine;
+  el.textContent = online ? '● Online' : '● Offline — data is saved on this device';
+  el.classList.toggle('offline', !online);
+}
+
+/* ---------- In-app reminders (shown when app is open) ---------- */
+function checkReminders() {
+  const st = getState();
+  const n = st.settings.notifications;
+  const bar = document.getElementById('reminder-bar');
+  if (bar) bar.hidden = true;
+  if (!n.enabled) return;
+  const today = todayKey();
+  const items = [];
+  if (n.revisionReminder) {
+    const due = dueRevisions().length;
+    if (due) items.push(`${due} revision(s) due.`);
+  }
+  if (n.examReminder && st.settings.examDate && isValidDateKey(st.settings.examDate)) {
+    const d = daysBetween(today, st.settings.examDate);
+    if (d >= 0 && d <= 30) items.push(`HSC exam in ${d} day(s).`);
+  }
+  if (n.sessionReminder) {
+    const actual = minutesOn(today);
+    const target = st.settings.dailyTargetMinutes || 480;
+    if (actual < target) items.push(`${formatDuration(target - actual)} of today's target remaining.`);
+  }
+  if (n.weeklyReview) {
+    const wStart = weekStartKey(today);
+    if (!st.weeklyReviews.some((r) => r.weekStart === wStart)) items.push('Weekly review not done yet.');
+  }
+  if (items.length) {
+    const el = document.getElementById('reminder-bar');
+    if (el) {
+      el.hidden = false;
+      el.innerHTML = '<strong>Reminders:</strong> ' + esc(items.join(' '));
+    }
+  }
+}
+
+function shiftPlannerMonth(key, delta) {
+  const date = parseDateKey(key);
+  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1)).toISOString().slice(0, 10);
+}
+
+/* ---------- Global click delegation ---------- */
+document.addEventListener('click', (e) => {
+  const nav = e.target.closest('[data-nav]');
+  if (nav) {
+    const chapter = nav.dataset.chapter || nav.dataset.id;
+    navigate(nav.dataset.nav, chapter || nav.dataset.id || null);
+    return;
+  }
+  const close = e.target.closest('[data-close-modal]');
+  if (close) { closeModal(); return; }
+
+  const st = getState();
+
+  // Planner mode / navigation
+  const pm = e.target.closest('[data-planner-mode]');
+  if (pm) { plannerMode = pm.dataset.plannerMode; render(); return; }
+  if (e.target.closest('#planner-today')) { plannerCursor = todayKey(); render(); return; }
+  if (e.target.closest('#planner-prev')) {
+    plannerCursor = plannerMode === 'day' ? addDays(plannerCursor, -1)
+      : plannerMode === 'week' ? addDays(plannerCursor, -7) : shiftPlannerMonth(plannerCursor, -1);
+    render(); return;
+  }
+  if (e.target.closest('#planner-next')) {
+    plannerCursor = plannerMode === 'day' ? addDays(plannerCursor, 1)
+      : plannerMode === 'week' ? addDays(plannerCursor, 7) : shiftPlannerMonth(plannerCursor, 1);
+    render(); return;
+  }
+  const jump = e.target.closest('[data-planner-jump]');
+  if (jump) { plannerCursor = jump.dataset.plannerJump; plannerMode = 'day'; navigate('planner'); return; }
+
+  // Tasks
+  const taskDel = e.target.closest('[data-task-delete]');
+  if (taskDel) {
+    st.tasks = st.tasks.filter((t) => t.id !== taskDel.dataset.taskDelete);
+    save(); toast('Task deleted.'); render(); return;
+  }
+
+  // Focus mode
+  const fm = e.target.closest('[data-focus-mode]');
+  if (fm) {
+    if (focusElapsedMs() > 0 && !confirm('Discard the current timer period?')) return;
+    focusState.mode = fm.dataset.focusMode;
+    resetTimer();
+    render();
+    return;
+  }
+  if (e.target.closest('#timer-toggle')) { toggleTimer(); return; }
+  if (e.target.closest('#timer-stop')) { stopAndSaveTimer(); return; }
+  if (e.target.closest('#timer-reset')) { if (focusElapsedMs() > 0 && !confirm('Discard the current timer period?')) return; resetTimer(); toast('Timer reset.'); return; }
+
+  // Sessions
+  const sesDel = e.target.closest('[data-session-delete]');
+  if (sesDel) {
+    st.sessions = st.sessions.filter((s) => s.id !== sesDel.dataset.sessionDelete);
+    save(); toast('Session deleted.'); render(); return;
+  }
+
+  // Chapters
+  const move = e.target.closest('[data-move-chapter]');
+  if (move) {
+    const ch = chapterById(move.dataset.moveChapter);
+    if (ch) {
+      const list = chaptersOf(ch.subjectId);
+      const i = list.findIndex((c) => c.id === ch.id);
+      const j = i + Number(move.dataset.dir);
+      if (j >= 0 && j < list.length) {
+        const tmp = list[i].order; list[i].order = list[j].order; list[j].order = tmp;
+        save(); render();
+      }
+    }
+    return;
+  }
+  if (e.target.closest('#add-chapter-btn') || e.target.closest('#add-chapter-btn-2')) {
+    const sid = currentRoute.param;
+    openModal('Add chapter', chapterFormHTML(null, sid), (form) => saveChapterFromForm(form, null));
+    return;
+  }
+  if (e.target.closest('#ch-edit')) {
+    openModal('Edit chapter', chapterFormHTML(chapterById(currentRoute.param), null), (form) => saveChapterFromForm(form, currentRoute.param));
+    return;
+  }
+  if (e.target.closest('#ch-delete')) {
+    if (confirm('Delete this chapter and its linked data?')) {
+      const id = currentRoute.param;
+      st.chapters = st.chapters.filter((c) => c.id !== id);
+      st.tasks = st.tasks.filter((t) => t.chapterId !== id);
+      st.revisions = st.revisions.filter((r) => r.chapterId !== id);
+      st.practice = st.practice.filter((p) => p.chapterId !== id);
+      st.notes = st.notes.filter((n) => n.chapterId !== id);
+      st.formulas = st.formulas.filter((f) => f.chapterId !== id);
+      st.resources = st.resources.filter((r) => r.chapterId !== id);
+      st.weaknesses = st.weaknesses.filter((w) => w.chapterId !== id);
+      save(); toast('Chapter deleted.'); navigate('subjects');
+    }
+    return;
+  }
+  if (e.target.closest('#ch-save')) {
+    const ch = chapterById(currentRoute.param);
+    if (ch) {
+      ch.status = document.getElementById('ch-status').value;
+      ch.completionPct = Number(document.getElementById('ch-pct').value) || 0;
+      if (ch.status === 'completed') ch.completionPct = 100;
+      ch.cqStatus = document.getElementById('ch-cq').value;
+      ch.mcqStatus = document.getElementById('ch-mcq').value;
+      ch.writtenStatus = document.getElementById('ch-written').value;
+      ch.revisionStatus = document.getElementById('ch-revision').value;
+      ch.notes = sanitizeText(document.getElementById('ch-notes').value, 20000);
+      ch.updatedAt = nowISO();
+      save(); toast('Progress saved.');
+      if (ch.status === 'completed') { scheduleRevisions(ch); toast('Chapter completed — revisions scheduled.'); }
+      render();
+    }
+    return;
+  }
+  if (e.target.closest('#ch-complete')) {
+    const ch = chapterById(currentRoute.param);
+    if (ch) {
+      ch.status = 'completed'; ch.completionPct = 100; ch.updatedAt = nowISO();
+      scheduleRevisions(ch);
+      save(); toast('Chapter completed — revisions scheduled.'); render();
+    }
+    return;
+  }
+
+  // Subjects
+  if (e.target.closest('#add-subject-btn')) {
+    openModal('Add custom subject', `<form id="subject-form" class="form">
+      <label class="field"><span>Subject name *</span><input name="name" required></label>
+      <label class="field"><span>Group</span><select name="group"><option value="science">Science</option><option value="other">Other</option></select></label>
+      <div class="row gap"><button class="btn primary" type="submit">Add subject</button>
+      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      (form) => {
+        const fd = new FormData(form);
+        const name = sanitizeText(fd.get('name'), 200);
+        if (!name) { toast('Subject name is required.'); return false; }
+        st.subjects.push({ id: uid('sub'), name, group: String(fd.get('group') || 'other'), color: SUBJECT_COLORS[st.subjects.length % SUBJECT_COLORS.length], createdAt: nowISO() });
+        save(); return true;
+      });
+    return;
+  }
+  if (e.target.closest('#edit-subject-btn')) {
+    const s = subjectById(currentRoute.param);
+    openModal('Rename subject', `<form id="subject-form" class="form">
+      <label class="field"><span>Subject name</span><input name="name" required value="${esc(s.name)}"></label>
+      <div class="row gap"><button class="btn primary" type="submit">Save</button>
+      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      (form) => {
+        const name = sanitizeText(new FormData(form).get('name'), 200);
+        if (!name) { toast('Subject name is required.'); return false; }
+        s.name = name; save(); return true;
+      });
+    return;
+  }
+  if (e.target.closest('#delete-subject-btn')) {
+    const id = currentRoute.param;
+    if (['chapters', 'tasks', 'sessions', 'revisions', 'practice', 'exams', 'notes', 'formulas', 'resources', 'weaknesses', 'questionBank'].some((key) => st[key].some((item) => item.subjectId === id))) { toast('Remove or reassign linked records before deleting this subject.'); return; }
+    if (confirm('Delete this subject?')) {
+      st.subjects = st.subjects.filter((s) => s.id !== id);
+      st.chapters = st.chapters.filter((c) => c.subjectId !== id);
+      save(); toast('Subject deleted.'); navigate('subjects');
+    }
+    return;
+  }
+  if (e.target.closest('#download-chapter-template')) {
+    download('chapters-template.csv', 'subject,number,name,priority\nPhysics 1st Paper,1,Example Chapter,A\n', 'text/csv;charset=utf-8');
+    return;
+  }
+
+  // Tasks add
+  if (e.target.closest('#add-task-btn')) {
+    openModal('Add task', taskFormHTML(plannerCursor), (form) => saveTaskFromForm(form));
+    return;
+  }
+
+  // Notes
+  if (e.target.closest('#add-note-btn')) { openModal('Add note', noteFormHTML(null), (form) => saveNoteFromForm(form, null)); return; }
+  const noteEdit = e.target.closest('[data-note-edit]');
+  if (noteEdit) { const n = st.notes.find((x) => x.id === noteEdit.dataset.noteEdit); openModal('Edit note', noteFormHTML(n), (form) => saveNoteFromForm(form, n.id)); return; }
+  const noteDel = e.target.closest('[data-note-delete]');
+  if (noteDel) { st.notes = st.notes.filter((n) => n.id !== noteDel.dataset.noteDelete); save(); toast('Note deleted.'); render(); return; }
+  const noteBm = e.target.closest('[data-note-bookmark]');
+  if (noteBm) { const n = st.notes.find((x) => x.id === noteBm.dataset.noteBookmark); if (n) { n.bookmarked = !n.bookmarked; save(); render(); } return; }
+  if (e.target.closest('#notes-bookmarked')) { notesFilter.bookmarkedOnly = !notesFilter.bookmarkedOnly; render(); return; }
+
+  // Formulas
+  if (e.target.closest('#add-formula-btn')) { openModal('Add formula', formulaFormHTML(null), (form) => saveFormulaFromForm(form, null)); return; }
+  const fEdit = e.target.closest('[data-formula-edit]');
+  if (fEdit) { const f = st.formulas.find((x) => x.id === fEdit.dataset.formulaEdit); openModal('Edit formula', formulaFormHTML(f), (form) => saveFormulaFromForm(form, f.id)); return; }
+  const fDel = e.target.closest('[data-formula-delete]');
+  if (fDel) { st.formulas = st.formulas.filter((f) => f.id !== fDel.dataset.formulaDelete); save(); toast('Formula deleted.'); render(); return; }
+  const fFav = e.target.closest('[data-formula-fav]');
+  if (fFav) { const f = st.formulas.find((x) => x.id === fFav.dataset.formulaFav); if (f) { f.favorite = !f.favorite; save(); render(); } return; }
+
+  // Resources
+  if (e.target.closest('#add-resource-btn')) { openModal('Add video', resourceFormHTML(null), (form) => saveResourceFromForm(form, null)); return; }
+  const rEdit = e.target.closest('[data-resource-edit]');
+  if (rEdit) { const r = st.resources.find((x) => x.id === rEdit.dataset.resourceEdit); openModal('Edit video', resourceFormHTML(r), (form) => saveResourceFromForm(form, r.id)); return; }
+  const rDel = e.target.closest('[data-resource-delete]');
+  if (rDel) { st.resources = st.resources.filter((r) => r.id !== rDel.dataset.resourceDelete); save(); toast('Video deleted.'); render(); return; }
+  const rBm = e.target.closest('[data-resource-bookmark]');
+  if (rBm) { const r = st.resources.find((x) => x.id === rBm.dataset.resourceBookmark); if (r) { r.bookmarked = !r.bookmarked; save(); render(); } return; }
+  const rW = e.target.closest('[data-resource-watched]');
+  if (rW) { const r = st.resources.find((x) => x.id === rW.dataset.resourceWatched); if (r) { r.watched = !r.watched; save(); render(); } return; }
+  if (e.target.closest('#library-bookmarked')) { libraryFilter.bookmarkedOnly = !libraryFilter.bookmarkedOnly; render(); return; }
+  if (e.target.closest('#library-unwatched')) { libraryFilter.unwatchedOnly = !libraryFilter.unwatchedOnly; render(); return; }
+
+  // Practice
+  if (e.target.closest('#add-practice-btn')) { openModal('Record practice', practiceFormHTML(currentRoute.param), (form) => savePracticeFromForm(form)); return; }
+  const pDel = e.target.closest('[data-practice-delete]');
+  if (pDel) { st.practice = st.practice.filter((p) => p.id !== pDel.dataset.practiceDelete); save(); toast('Practice deleted.'); render(); return; }
+  const pBm = e.target.closest('[data-practice-bookmark]');
+  if (pBm) { const p = st.practice.find((x) => x.id === pBm.dataset.practiceBookmark); if (p) { p.bookmarked = !p.bookmarked; save(); render(); } return; }
+  const pRe = e.target.closest('[data-practice-reattempt]');
+  if (pRe) { const p = st.practice.find((x) => x.id === pRe.dataset.practiceReattempt); if (p) { p.reattempted = !p.reattempted; save(); render(); } return; }
+
+  // Question bank
+  if (e.target.closest('#add-question-btn')) {
+    openModal('Add question', `<form id="question-form" class="form">
+      <label class="field"><span>Question *</span><textarea name="question" rows="3" required></textarea></label>
+      <label class="field"><span>Type</span><select name="type"><option value="mcq">MCQ</option><option value="cq">CQ</option></select></label>
+      <label class="field"><span>Subject</span><select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Answer / explanation</span><textarea name="answer" rows="2"></textarea></label>
+      <div class="row gap"><button class="btn primary" type="submit">Add question</button>
+      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      (form) => {
+        const fd = new FormData(form);
+        const q = sanitizeText(fd.get('question'), 5000);
+        if (!q) { toast('Question is required.'); return false; }
+        st.questionBank.push({ id: uid('qb'), question: q, type: String(fd.get('type') || 'mcq'), subjectId: String(fd.get('subjectId') || '') || null, chapterId: null, answer: sanitizeText(fd.get('answer'), 5000), source: 'manual', createdAt: nowISO() });
+        save(); return true;
+      });
+    return;
+  }
+  if (e.target.closest('#export-questions-btn')) { download('question-bank.json', JSON.stringify(st.questionBank, null, 2), 'application/json'); return; }
+  const qDel = e.target.closest('[data-question-delete]');
+  if (qDel) { st.questionBank = st.questionBank.filter((q) => q.id !== qDel.dataset.questionDelete); save(); toast('Question deleted.'); render(); return; }
+
+  // Exams
+  if (e.target.closest('#add-exam-btn')) { openModal('Schedule exam', examFormHTML(), (form) => saveExamFromForm(form)); return; }
+  const exDel = e.target.closest('[data-exam-delete]');
+  if (exDel) {
+    st.exams = st.exams.filter((x) => x.id !== exDel.dataset.examDelete);
+    st.examResults = st.examResults.filter((r) => r.examId !== exDel.dataset.examDelete);
+    save(); toast('Exam deleted.'); render(); return;
+  }
+  const resAdd = e.target.closest('[data-result-add]');
+  if (resAdd) {
+    const exam = st.exams.find((x) => x.id === resAdd.dataset.resultAdd);
+    openModal('Record result', resultFormHTML(exam), (form) => saveResultFromForm(form, exam.id));
+    return;
+  }
+
+  // Revisions
+  const revDone = e.target.closest('[data-revision-done]');
+  if (revDone) {
+    openModal('Revision difficulty', `<form id="rev-form" class="form">
+      <p>How difficult was this revision?</p>
+      <label class="field"><span>Difficulty (1 = easy, 5 = very hard)</span>
+      <select name="difficulty"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
+      <div class="row gap"><button class="btn primary" type="submit">Mark revised</button>
+      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      (form) => { completeRevision(revDone.dataset.revisionDone, Number(new FormData(form).get('difficulty'))); return true; });
+    return;
+  }
+  const revDiff = e.target.closest('[data-revision-difficult]');
+  if (revDiff) {
+    const r = st.revisions.find((x) => x.id === revDiff.dataset.revisionDifficult);
+    if (r) {
+      r.completedAt = nowISO(); r.status = 'done'; r.difficulty = 5;
+      // Schedule an extra repeat in 2 days for weak topics
+      st.revisions.push({ id: uid('rev'), chapterId: r.chapterId, subjectId: r.subjectId, dueDate: addDays(todayKey(), 2), completedAt: null, difficulty: null, status: 'pending', cycle: r.cycle, createdAt: nowISO() });
+      save(); toast('Marked revised — extra repeat scheduled in 2 days.');
+      render();
+    }
+    return;
+  }
+
+  // Weaknesses
+  if (e.target.closest('#add-weakness-btn')) { openModal('Add weakness', weaknessFormHTML(currentRoute.param), (form) => saveWeaknessFromForm(form)); return; }
+  const wPrac = e.target.closest('[data-weakness-practice]');
+  if (wPrac) { const w = st.weaknesses.find((x) => x.id === wPrac.dataset.weaknessPractice); if (w) { w.practiceCount = (w.practiceCount || 0) + 1; w.updatedAt = nowISO(); save(); render(); } return; }
+  const wStat = e.target.closest('[data-weakness-status]');
+  if (wStat) { const w = st.weaknesses.find((x) => x.id === wStat.dataset.weaknessStatus); if (w) { w.status = wStat.dataset.status; w.updatedAt = nowISO(); save(); render(); } return; }
+  const wDel = e.target.closest('[data-weakness-delete]');
+  if (wDel) { st.weaknesses = st.weaknesses.filter((w) => w.id !== wDel.dataset.weaknessDelete); save(); toast('Weakness deleted.'); render(); return; }
+
+  // Journal
+  if (e.target.closest('#add-journal-btn')) { openModal('New journal entry', journalFormHTML(), (form) => saveJournalFromForm(form)); return; }
+  const jDel = e.target.closest('[data-journal-delete]');
+  if (jDel) { st.journal = st.journal.filter((j) => j.id !== jDel.dataset.journalDelete); save(); toast('Entry deleted.'); render(); return; }
+
+  // Settings / data
+  if (e.target.closest('#load-demo-btn')) { loadDemoData(); toast('Demo data loaded (labelled DEMO).'); render(); return; }
+  if (e.target.closest('#clear-demo-btn')) { clearDemoData(); toast('Demo data removed.'); render(); return; }
+  if (e.target.closest('#reset-all-btn')) {
+    if (confirm('Delete ALL local data on this device? Export a backup first.')) { resetState(); toast('All data reset.'); render(); }
+    return;
+  }
+  if (e.target.closest('#enable-browser-notif')) {
+    const statusEl = document.getElementById('notif-status');
+    if (!('Notification' in window)) { if (statusEl) statusEl.textContent = 'This browser does not support notifications.'; return; }
+    Notification.requestPermission().then((perm) => {
+      if (statusEl) statusEl.textContent = 'Notification permission: ' + perm;
+      if (perm === 'granted') notify('Notifications enabled', 'Timer alerts can appear while the app is open.');
+    });
+    return;
+  }
+
+  // Backup
+  if (e.target.closest('#export-json-btn')) { download('hsc27-backup-' + todayKey() + '.json', exportJSON(), 'application/json'); return; }
+  if (e.target.closest('#export-notes-btn')) {
+    download('hsc27-notes-' + todayKey() + '.json', JSON.stringify({ notes: st.notes, formulas: st.formulas, resources: st.resources }, null, 2), 'application/json');
+    return;
+  }
+  const csvBtn = e.target.closest('[data-export-csv]');
+  if (csvBtn) { download('hsc27-' + csvBtn.dataset.exportCsv + '.csv', exportCSV(csvBtn.dataset.exportCsv), 'text/csv;charset=utf-8'); return; }
+
+
+});
+
+/* ---------- Change delegation (checkboxes, selects) ---------- */
+document.addEventListener('change', (e) => {
+  const st = getState();
+  const taskToggle = e.target.closest('[data-task-toggle]');
+  if (taskToggle) {
+    const t = st.tasks.find((x) => x.id === taskToggle.dataset.taskToggle);
+    if (t) { t.status = taskToggle.checked ? 'done' : 'pending'; save(); render(); }
+    return;
+  }
+  if (e.target.id === 'focus-subject') { focusState.subjectId = e.target.value || null; focusState.chapterId = null; syncFocusChapterOptions(); return; }
+  if (e.target.id === 'focus-chapter') { focusState.chapterId = e.target.value || null; return; }
+  if (e.target.id === 'focus-minutes') { focusState.targetMs = Math.max(1, Number(e.target.value) || 25) * 60000; resetTimer(); return; }
+  if (e.target.id === 'focus-break') { focusState.breakMs = Math.max(1, Number(e.target.value) || 5) * 60000; return; }
+  if (e.target.id === 'notes-category') { notesFilter.category = e.target.value; render(); return; }
+  if (e.target.id === 'formula-subject') { formulaFilter.subject = e.target.value; render(); return; }
+  if (e.target.id === 'library-subject') { libraryFilter.subject = e.target.value; render(); return; }
+  if (e.target.id === 'chapter-import-file' && e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const r = importChaptersFromText(String(reader.result), file.name);
+        toast(`Imported ${r.added} chapter(s), skipped ${r.skipped}.`);
+      } catch (err) { toast('Import failed: ' + err.message); }
+      render();
+    };
+    reader.readAsText(file);
+    return;
+  }
+  if (e.target.id === 'import-json-file' && e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { if (!confirm('Replace all data on this device with this backup? Export a backup first.')) return; importJSON(String(reader.result)); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
+      render();
+    };
+    reader.readAsText(file);
+    return;
+  }
+  if (e.target.id === 'import-questions-file' && e.target.files && e.target.files[0]) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const arr = JSON.parse(String(reader.result));
+        if (!Array.isArray(arr)) throw new Error('Expected a JSON array.');
+        arr.forEach((q) => st.questionBank.push({
+          id: uid('qb'), question: sanitizeText(q.question, 5000), type: q.type === 'cq' ? 'cq' : 'mcq',
+          subjectId: q.subjectId || null, chapterId: null, answer: sanitizeText(q.answer, 5000),
+          source: q.source === 'ai' ? 'ai' : 'imported', createdAt: nowISO(),
+        }));
+        save(); toast(`Imported ${arr.length} question(s).`);
+      } catch (err) { toast('Import failed: ' + err.message); }
+      render();
+    };
+    reader.readAsText(file);
+  }
+});
+
+/* ---------- Submit delegation (modal + inline forms) ---------- */
+document.addEventListener('submit', (e) => {
+  const form = e.target;
+  if (form.id === 'manual-session-form') {
+    e.preventDefault();
+    const fd = new FormData(form);
+    const minutes = Number(fd.get('minutes')) || 0;
+    if (minutes <= 0) { toast('Enter minutes studied.'); return; }
+    recordSession({ subjectId: String(fd.get('subjectId') || '') || null, chapterId: null, durationMinutes: minutes, mode: 'manual', source: 'manual', note: sanitizeText(fd.get('note'), 500) });
+    toast(`Saved ${formatDuration(minutes)} session.`);
+    render();
+    return;
+  }
+  if (form.id === 'settings-form') { e.preventDefault(); if (saveSettingsFromForm(form)) { toast('Settings saved.'); render(); } return; }
+  if (form.id === 'notif-form') { e.preventDefault(); if (saveNotifFromForm(form)) { toast('Notification preferences saved.'); checkReminders(); render(); } return; }
+  if (form.id === 'review-form') { e.preventDefault(); if (saveReviewFromForm(form)) { toast('Weekly review saved.'); render(); } return; }
+  // Modal forms
+  if (modalState && form.closest('#modal-overlay')) {
+    e.preventDefault();
+    const ok = modalState.onSubmit(form);
+    if (ok) { closeModal(); render(); }
+  }
+});
+
+/* ---------- Modal overlay click-to-close ---------- */
+document.getElementById('modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'modal-overlay') closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape' && modalState) closeModal();
+});
+
+/* ---------- Bottom nav ---------- */
+document.querySelectorAll('.nav-btn').forEach((b) => {
+  b.addEventListener('click', () => navigate(b.dataset.nav));
+});
+document.getElementById('more-btn').addEventListener('click', () => {
+  openModal('More', `<div class="menu-list">
+    ${[['notes', '🗒 Notes & documents'], ['formulas', '∑ Formula library'], ['library', '▶ Video library'],
+       ['practice', '✍ Practice tracker'], ['exams', '📝 Exams'], ['revisions', '🔁 Revisions'],
+       ['weaknesses', '⚠ Weaknesses'], ['review', '✅ Weekly review'], ['journal', '📓 Journal'],
+       ['calendar', '📅 Calendar'], ['search', '🔍 Search'],
+       ['backup', '💾 Backup & restore'], ['settings', '⚙ Settings']]
+      .map(([r, l]) => `<button class="menu-item" data-nav="${r}">${l}</button>`).join('')}
+  </div>`, () => true);
+});
+
+/* ---------- Init ---------- */
+loadState();
+carryOverMissed();
+applyTheme();
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', applyTheme);
+window.addEventListener('online', updateOnlineStatus);
+window.addEventListener('offline', updateOnlineStatus);
+render();
+checkReminders();
+setInterval(checkReminders, 60000);
+
+// Register service worker for offline PWA support
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => { /* offline still works via cache if previously registered */ });
+  });
+}
