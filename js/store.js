@@ -250,13 +250,13 @@ function dueRevisions() {
     .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
 }
 function completeRevision(id, difficulty) {
-  const r = getState().revisions.find((x) => x.id === id);
-  if (!r) return null;
-  r.completedAt = nowISO();
-  r.status = 'done';
-  if (difficulty) r.difficulty = difficulty;
-  save();
-  return r;
+  const st = getState(), index = st.revisions.findIndex(x => x.id === id);
+  if (index < 0 || !Number.isInteger(difficulty) || difficulty < 1 || difficulty > 5) return null;
+  const previous = st.revisions;
+  const revised = {...previous[index], completedAt:nowISO(), status:'done', difficulty};
+  st.revisions = previous.map((r, i) => i === index ? revised : r);
+  if (!save()) { st.revisions = previous; return null; }
+  return revised;
 }
 
 /* ---------- Tasks / planner ---------- */

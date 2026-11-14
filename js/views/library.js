@@ -70,6 +70,18 @@ function noteFormHTML(note) {
   </form>`;
 }
 
+// Persist a collection replacement only if storage accepts it.
+function replaceLearningCollection(key, next) {
+  const st = getState(), previous = st[key];
+  st[key] = next;
+  if (!save()) { st[key] = previous; return false; }
+  return true;
+}
+function validLearningLink(subjectId, chapterId) {
+  const chapter = chapterId ? chapterById(chapterId) : null;
+  return (!subjectId || !!subjectById(subjectId)) && (!chapterId || !!chapter) && (!chapter || chapter.subjectId === subjectId);
+}
+
 const PDF_MAX_BYTES = 512 * 1024;
 
 function readSmallPdf(file) {
@@ -119,6 +131,10 @@ async function saveNoteFromForm(form, existingId, isCurrent = () => true) {
     tags: String(fd.get('tags') || '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 20),
     updatedAt: nowISO(),
   };
+  const chapter = data.chapterId && chapterById(data.chapterId);
+  if (!data.subjectId && chapter) data.subjectId = chapter.subjectId;
+  if (!validLearningLink(data.subjectId, data.chapterId)) { toast('Choose a subject matching the chapter.'); return false; }
+  if (String(fd.get('url') || '').trim() && !data.url) { toast('Enter a valid HTTP(S) document URL.'); return false; }
   const selected = form.querySelector('[name="pdf"]').files[0];
   if (selected) {
     try { data.attachment = await readSmallPdf(selected); }
@@ -190,22 +206,16 @@ function formulaFormHTML(f) {
 }
 
 function saveFormulaFromForm(form, existingId) {
-  const fd = new FormData(form);
-  const title = sanitizeText(fd.get('title'), 300);
-  const content = sanitizeText(fd.get('content'), 10000);
-  const subject = String(fd.get('subject') || '');
-  if (!title || !content || !subject) { toast('Title, subject and content are required.'); return false; }
-  const data = { title, content, subject, chapterId: String(fd.get('chapterId') || '') || null };
-  const st = getState();
+  const fd = new FormData(form), st = getState();
+  const title = sanitizeText(fd.get('title'), 300), content = sanitizeText(fd.get('content'), 10000);
+  const subject = String(fd.get('subject') || ''), chapterId = String(fd.get('chapterId') || '') || null;
+  if (!title || !content || !subject || !validLearningLink(subject, chapterId)) { toast('Enter a title, content and matching subject and chapter.'); return false; }
+  const data = {title, content, subject, chapterId};
   if (existingId) {
-    const f = st.formulas.find((x) => x.id === existingId);
-    if (!f) return false;
-    Object.assign(f, data);
-  } else {
-    st.formulas.push(Object.assign({ id: uid('frm'), favorite: false, createdAt: nowISO() }, data));
+    if (!st.formulas.some(x => x.id === existingId)) return false;
+    return replaceLearningCollection('formulas', st.formulas.map(f => f.id === existingId ? {...f, ...data} : f));
   }
-  save();
-  return true;
+  return replaceLearningCollection('formulas', st.formulas.concat({id:uid('frm'), favorite:false, createdAt:nowISO(), ...data}));
 }
 
 /* ================= YOUTUBE LIBRARY ================= */
@@ -273,35 +283,29 @@ function resourceFormHTML(r) {
 }
 
 function saveResourceFromForm(form, existingId) {
-  const fd = new FormData(form);
-  const title = sanitizeText(fd.get('title'), 300);
-  const url = sanitizeUrl(fd.get('url'));
-  if (!title || !url) { toast('Title and a valid YouTube URL are required.'); return false; }
-  const data = {
-    title, url,
-    channel: sanitizeText(fd.get('channel'), 200),
-    playlistUrl: sanitizeUrl(fd.get('playlistUrl')),
-    subjectId: String(fd.get('subjectId') || '') || null,
-    chapterId: String(fd.get('chapterId') || '') || null,
-    description: sanitizeText(fd.get('description'), 2000),
-    rating: clamp(Number(fd.get('rating')) || 0, 0, 5) || null,
-  };
-  const st = getState();
+  const fd = new FormData(form), st = getState();
+  const title = sanitizeText(fd.get('title'), 300), url = sanitizeUrl(fd.get('url'));
+  const chapterId = String(fd.get('chapterId') || '') || null, chapter = chapterId && chapterById(chapterId);
+  const subjectId = String(fd.get('subjectId') || '') || (chapter ? chapter.subjectId : null);
+  const playlistUrl = sanitizeUrl(fd.get('playlistUrl'));
+  if (!title || !url || (String(fd.get('playlistUrl') || '').trim() && !playlistUrl) || !validLearningLink(subjectId, chapterId)) { toast('Enter a title, valid HTTP(S) URLs and matching subject and chapter.'); return false; }
+  const data = {title, url, channel:sanitizeText(fd.get('channel'),200), playlistUrl, subjectId, chapterId,
+    description:sanitizeText(fd.get('description'),2000), rating:clamp(Number(fd.get('rating')) || 0,0,5) || null};
   if (existingId) {
-    const r = st.resources.find((x) => x.id === existingId);
-    if (!r) return false;
-    Object.assign(r, data);
-  } else {
-    st.resources.push(Object.assign({ id: uid('res'), bookmarked: false, watched: false, createdAt: nowISO() }, data));
+    if (!st.resources.some(x => x.id === existingId)) return false;
+    return replaceLearningCollection('resources', st.resources.map(r => r.id === existingId ? {...r, ...data} : r));
   }
-  save();
-  return true;
+  return replaceLearningCollection('resources', st.resources.concat({id:uid('res'), bookmarked:false, watched:false, createdAt:nowISO(), ...data}));
 }
 
 /* ================= PRACTICE (CQ / MCQ / written) ================= */
+let questionPage = 0;
 function renderPractice(prefillChapterId) {
   const st = getState();
   const list = st.practice.filter((p) => !prefillChapterId || p.chapterId === prefillChapterId).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  const totalPages = Math.max(1, Math.ceil(st.questionBank.length / 20));
+  questionPage = Math.min(Math.max(0, questionPage), totalPages - 1);
+  const questions = st.questionBank.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(questionPage * 20, (questionPage + 1) * 20);
   return `<div class="page">
     <div class="page-head"><h1 data-i18n="practiceTitle">Practice tracker</h1>
       <button class="btn small primary" id="add-practice-btn">+ Record practice</button></div>
@@ -336,10 +340,12 @@ function renderPractice(prefillChapterId) {
         <label class="btn small ghost" for="import-questions-file">Import JSON</label>
         <input type="file" id="import-questions-file" accept=".json,application/json" hidden>
       </div>
-      ${st.questionBank.length ? `<ul class="plain-list">${st.questionBank.slice().sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || '')).slice(0, 20).map((q) => `
+      ${st.questionBank.length ? `<ul class="plain-list">${questions.map((q) => `
         <li><strong>${esc(q.type.toUpperCase())}</strong> ${esc(q.question)} <span class="muted small">(${esc(q.source)})</span>
+        <button class="btn small" data-question-edit="${esc(q.id)}">Edit</button>
         <button class="btn small danger-ghost" data-question-delete="${esc(q.id)}">Delete</button></li>`).join('')}</ul>`
       : `<p class="muted small">Question bank is empty.</p>`}
+      ${totalPages > 1 ? `<div class="row gap"><button class="btn small" data-question-page="${questionPage-1}" ${questionPage === 0 ? 'disabled' : ''}>Previous</button><span>Page ${questionPage+1} of ${totalPages}</span><button class="btn small" data-question-page="${questionPage+1}" ${questionPage+1 === totalPages ? 'disabled' : ''}>Next</button></div>` : ''}
     </section>
   </div>`;
 }
@@ -376,27 +382,28 @@ function savePracticeFromForm(form) {
   const marks = rawMarks === '' ? null : Number(rawMarks), totalMarks = rawTotal === '' ? null : Number(rawTotal);
   const duration = Number(fd.get('durationMinutes')) || 0;
   if (!['mcq', 'cq', 'written'].includes(type) || !Number.isInteger(attempted) || attempted < 0 || !Number.isInteger(correct) || correct < 0 || (type === 'mcq' && correct > attempted) || !Number.isFinite(duration) || duration < 0 || duration > 1440 || (marks === null) !== (totalMarks === null) || (marks !== null && (!Number.isFinite(marks) || !Number.isFinite(totalMarks) || totalMarks <= 0 || marks < 0 || marks > totalMarks))) { toast('Check attempts, correct answers, time and marks. Marks need a valid total.'); return false; }
+  const date = String(fd.get('date') || '');
+  if (!isValidDateKey(date)) { toast('Enter a valid practice date.'); return false; }
   const mistakes = String(fd.get('mistakes') || '').split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 50)
     .map((q) => ({ q, reason: '' }));
-  getState().practice.push({
+  const st = getState(), previousPractice = st.practice, previousWeaknesses = st.weaknesses;
+  st.practice = previousPractice.concat({
     id: uid('prc'), chapterId, subjectId: ch.subjectId,
     type,
-    date: isValidDateKey(String(fd.get('date'))) ? String(fd.get('date')) : todayKey(),
+    date,
     attempted, correct,
     marks, totalMarks,
     durationMinutes: duration,
     mistakes, bookmarked: false, reattempted: false,
     note: sanitizeText(fd.get('note'), 1000), createdAt: nowISO(),
   });
-  // Mistakes also become tracked weaknesses
-  mistakes.forEach((m) => {
-    getState().weaknesses.push({
+  // Mistakes and their practice record must be persisted together.
+  st.weaknesses = previousWeaknesses.concat(mistakes.map((m) => ({
       id: uid('wk'), subjectId: ch.subjectId, chapterId,
       topic: m.q, type, reason: '', correctionTask: 'Reattempt this question',
       status: 'active', practiceCount: 0, createdAt: nowISO(), updatedAt: nowISO(),
-    });
-  });
-  save();
+    })));
+  if (!save()) { st.practice = previousPractice; st.weaknesses = previousWeaknesses; return false; }
   return true;
 }
 
@@ -415,10 +422,11 @@ function renderExams() {
       <div class="row between"><strong>${esc(e.name)}</strong>
         <span class="badge">${daysLeft >= 0 ? daysLeft + 'd left' : 'done'}</span></div>
       <p class="muted small">${esc(formatDate(e.date))} · ${esc(e.scope)} · ${esc(e.durationMinutes)} min · ${esc(e.totalMarks)} marks${e.subjectId ? ' · ' + esc(subjectName(e.subjectId)) : ''}${e.chapterId ? ' · ' + esc(chapterLabel(e.chapterId)) : ''}${e.format ? ' · ' + esc(e.format) : ''}</p>
-      ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${esc(r.obtainedMarks)}/${esc(e.totalMarks)} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}${Array.isArray(r.quizReview) ? ` <button class="btn small" data-nav="quiz-review" data-id="${esc(r.id)}">Review answers</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
+      ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${esc(r.obtainedMarks)}/${esc(e.totalMarks)} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}${Array.isArray(r.quizReview) ? ` <button class="btn small" data-nav="quiz-review" data-id="${esc(r.id)}">Review answers</button>` : ''}${Array.isArray(r.writtenReview) ? ` <button class="btn small" data-nav="written-review" data-id="${esc(r.id)}">Review written answers</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
       <div class="row gap wrap">
         <button class="btn small primary" data-result-add="${esc(e.id)}">Record result</button>
         <button class="btn small" data-quiz-start="${esc(e.id)}">Take MCQ test</button>
+        <button class="btn small" data-written-start="${esc(e.id)}">Take written test</button>
         <button class="btn small" data-exam-start="${esc(e.id)}">Start manual timer</button>
         <button class="btn small danger-ghost" data-exam-delete="${esc(e.id)}">Delete exam</button>
       </div>
@@ -429,6 +437,7 @@ function renderExams() {
     <div class="page-head"><h1 data-i18n="examsTitle">Exams</h1>
       <button class="btn small primary" id="add-exam-btn">+ Schedule exam</button></div>
     ${st.activeQuiz ? `<section class="card"><h2>MCQ test in progress</h2><p>${esc(st.activeQuiz.examName)}</p><button class="btn primary" data-nav="quiz">Resume MCQ test</button></section>` : ''}
+    ${st.activeWritten ? `<section class="card"><h2>Written test in progress</h2><p>${esc(st.activeWritten.examName)}</p><button class="btn primary" data-nav="written">Resume written test / marking</button></section>` : ''}
     ${st.activeExam ? `<section class="card"><h2>Timed test in progress</h2><p>${esc((st.exams.find((e) => e.id === st.activeExam.examId) || {}).name || 'Exam')} · <strong id="exam-timer-display"></strong></p><p class="muted small">Use your own questions. The timer does not submit answers or record marks; enter your result yourself.</p><button class="btn" id="end-timed-exam">End timer</button></section>` : ''}
     <p class="muted small">Chapter tests, subject tests and full-syllabus model tests. Record results and add notes about weak chapters. No GPA prediction is made.</p>
     <h2 class="section-title">Upcoming</h2>
@@ -468,17 +477,16 @@ function saveExamFromForm(form) {
   const totalMarks = Number(fd.get('totalMarks'));
   const ch = chapterId ? chapterById(chapterId) : null;
   if (!['chapter', 'subject', 'full'].includes(scope) || (scope !== 'full' && !subjectById(subjectId)) || (scope === 'chapter' && (!ch || ch.subjectId !== subjectId))) { toast('Choose a matching subject and chapter for a chapter test.'); return false; }
-  if (!Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(totalMarks) || totalMarks <= 0) { toast('Enter valid duration and total marks.'); return false; }
-  getState().exams.push({
+  if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 1440 || !Number.isFinite(totalMarks) || totalMarks <= 0 || totalMarks > 100000) { toast('Enter valid duration and total marks.'); return false; }
+  const st = getState();
+  return replaceLearningCollection('exams', st.exams.concat({
     id: uid('exam'), name, date, scope,
     subjectId: scope === 'full' ? null : subjectId,
     chapterId: scope === 'chapter' ? chapterId : null,
     format: ['mixed', 'mcq', 'written'].includes(fd.get('format')) ? fd.get('format') : 'mixed',
     durationMinutes, totalMarks,
     createdAt: nowISO(),
-  });
-  save();
-  return true;
+  }));
 }
 
 function resultFormHTML(exam) {
@@ -498,14 +506,14 @@ function saveResultFromForm(form, examId) {
   const fd = new FormData(form);
   const obtained = Number(fd.get('obtainedMarks'));
   if (fd.get('obtainedMarks') === '' || !Number.isFinite(obtained) || obtained < 0 || obtained > exam.totalMarks) { toast('Marks must be between 0 and total.'); return false; }
-  const g = gradeForMarks(obtained, exam.totalMarks);
-  getState().examResults.push({
+  const date = String(fd.get('date') || '');
+  if (!isValidDateKey(date)) { toast('Enter a valid result date.'); return false; }
+  const g = gradeForMarks(obtained, exam.totalMarks), st = getState();
+  return replaceLearningCollection('examResults', st.examResults.concat({
     id: uid('res'), examId, obtainedMarks: obtained,
-    grade: g.grade, date: isValidDateKey(String(fd.get('date'))) ? String(fd.get('date')) : todayKey(),
+    grade: g.grade, date,
     notes: sanitizeText(fd.get('notes'), 2000), createdAt: nowISO(),
-  });
-  save();
-  return true;
+  }));
 }
 
 /* ================= REVISIONS ================= */
@@ -600,7 +608,8 @@ function saveWeaknessFromForm(form) {
   const chapter = chapterId ? chapterById(chapterId) : null;
   const subjectId = String(fd.get('subjectId') || '') || (chapter ? chapter.subjectId : null);
   if ((chapterId && !chapter) || (subjectId && !subjectById(subjectId)) || (chapter && chapter.subjectId !== subjectId)) { toast('Choose a subject matching the chapter.'); return false; }
-  getState().weaknesses.push({
+  const st = getState();
+  return replaceLearningCollection('weaknesses', st.weaknesses.concat({
     id: uid('wk'), topic,
     subjectId,
     chapterId,
@@ -608,7 +617,5 @@ function saveWeaknessFromForm(form) {
     reason: sanitizeText(fd.get('reason'), 1000),
     correctionTask: sanitizeText(fd.get('correctionTask'), 500),
     status: 'active', practiceCount: 0, createdAt: nowISO(), updatedAt: nowISO(),
-  });
-  save();
-  return true;
+  }));
 }

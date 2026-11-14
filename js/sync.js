@@ -36,7 +36,7 @@ async function refreshCloud() { syncRemote = await api('api/state'); }
 function cloudSnapshot() {
   const snapshot = JSON.parse(exportJSON());
   // Running timers cannot be safely shared between two devices.
-  delete snapshot.activeFocus; delete snapshot.activeExam; delete snapshot.activeQuiz;
+  delete snapshot.activeFocus; delete snapshot.activeExam; delete snapshot.activeQuiz; delete snapshot.activeWritten;
   return snapshot;
 }
 async function flushSync() {
@@ -62,7 +62,7 @@ function renderSync() {
     <form id="sync-auth-form" class="card form"><label class="field"><span>Username</span><input name="username" autocomplete="username" minlength="3" maxlength="32" required></label><label class="field"><span>Password (at least 12 characters)</span><input name="password" type="password" autocomplete="current-password" minlength="12" maxlength="200" required></label><div class="row gap wrap"><button class="btn primary" type="submit" value="login" name="action">Sign in</button><button class="btn" type="submit" value="register" name="action">Create account</button></div></form></div>`;
   const linked = syncMeta && syncMeta.enabled && syncMeta.userId === syncUser.id;
   const mismatch = syncMeta && syncMeta.enabled && syncMeta.userId !== syncUser.id;
-  return `<div class="page"><h1>Account &amp; sync</h1><p>Signed in as <strong>${esc(syncUser.name)}</strong>.</p><p class="muted small">Sync transfers a full unencrypted snapshot to your server. Running focus, quiz and manual exam timers stay on the current device. Keep independent JSON backups.</p><p>${esc(syncMessage)}</p>
+  return `<div class="page"><h1>Account &amp; sync</h1><p>Signed in as <strong>${esc(syncUser.name)}</strong>.</p><p class="muted small">Sync transfers a full unencrypted snapshot to your server. Running focus, MCQ, written tests and manual exam timers stay on the current device. Keep independent JSON backups.</p><p>${esc(syncMessage)}</p>
     ${syncBlocked ? '<p>Sync metadata is unavailable. Export a backup and check device storage.</p>' : mismatch ? '<p>This device is linked to a different account. Sign back into that account or disconnect its link first; queued changes will not be uploaded to this account.</p>' : linked ? `<p>Local changes: ${syncMeta.conflict ? 'conflict — automatic sync paused' : syncMeta.dirty ? 'queued' : 'synced'} · cloud revision ${esc(syncMeta.revision)}</p><div class="row gap wrap"><button class="btn" id="sync-now">Sync now</button><button class="btn" id="sync-pull">Replace local data with cloud copy</button></div>` : `<p>Sync is not connected. ${syncRemote && syncRemote.snapshot ? 'A cloud copy exists. Download it explicitly to connect.' : 'No cloud copy exists. You can upload this device to start.'}</p><button class="btn primary" id="${syncRemote && syncRemote.snapshot ? 'sync-pull' : 'sync-connect'}">${syncRemote && syncRemote.snapshot ? 'Download cloud copy' : 'Connect and upload this device'}</button>`}
     <section class="card"><h2>Background reminders</h2><p class="muted small">Optional push reminders require browser permission, a running server with push configured, and synced notification preferences. They use the last cloud snapshot and may be delayed or blocked by Android/browser settings.</p>${syncPushConfig && syncPushConfig.enabled ? '<button class="btn" id="push-enable">Enable on this device</button> <button class="btn" id="push-disable">Disable on this device</button>' : '<p>Push is not configured on the server.</p>'}</section>
     <div class="row gap wrap"><button class="btn" id="sync-disconnect">Disconnect this device</button><button class="btn" id="sync-logout">Sign out</button></div><p class="muted small">No automatic merging: conflicting changes remain local until you choose what to do. Signing out removes this device’s push subscription but leaves local data on this device.</p></div>`;
@@ -73,7 +73,7 @@ function renderAiAssistant() {
     <p class="muted">${esc(syncMessage)}</p></div>`;
 }
 function canReplaceLocal() {
-  return !(focusState.running || focusState.accumulatedMs > 0 || getState().activeQuiz || getState().activeExam);
+  return !(focusState.running || focusState.accumulatedMs > 0 || getState().activeQuiz || getState().activeWritten || getState().activeExam);
 }
 document.addEventListener('submit', async (e) => {
   const form = e.target;
@@ -141,7 +141,7 @@ document.addEventListener('click', async (e) => {
       if (!writeSyncMeta()) return; await flushSync(); return;
     } else if (target.id === 'sync-pull') {
       if (syncMeta && syncMeta.enabled && syncMeta.userId !== syncUser.id) throw new Error('Disconnect the previous account first.');
-      if (!canReplaceLocal()) throw new Error('Stop the focus and exam timers and finish the MCQ test before replacing local data.');
+      if (!canReplaceLocal()) throw new Error('Stop the focus and exam timers and finish active tests before replacing local data.');
       await refreshCloud(); if (!syncRemote.snapshot) throw new Error('No cloud copy exists.');
       if (!confirm('Replace ALL local study data with the cloud copy? Export a local backup first. This discards unsynced local changes.')) return;
       syncSuppress = true;

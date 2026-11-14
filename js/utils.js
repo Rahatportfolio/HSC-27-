@@ -181,8 +181,9 @@ function sanitizeText(s, maxLen) {
 function sanitizeUrl(u) {
   if (typeof u !== 'string') return '';
   const t = u.trim();
-  if (/^https?:\/\//i.test(t)) return t;
-  return '';
+  if (/[\u0000-\u001f\u007f]/.test(t)) return '';
+  try { const parsed = new URL(t); return ['http:', 'https:'].includes(parsed.protocol) && parsed.hostname && !parsed.username && !parsed.password ? t : ''; }
+  catch { return ''; }
 }
 
 /* ---------- Export for Node tests ---------- */

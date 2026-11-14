@@ -19,7 +19,7 @@ function startBankQuiz(examId) {
   const exam = st.exams.find((e) => e.id === examId);
   if (!exam || !Number.isFinite(exam.durationMinutes) || exam.durationMinutes <= 0 || !Number.isFinite(exam.totalMarks) || exam.totalMarks <= 0) { toast('Exam is missing or invalid.'); return false; }
   if (exam.format === 'written' || (exam.scope === 'subject' && !exam.subjectId) || (exam.scope === 'chapter' && !exam.chapterId)) { toast('Choose an MCQ or mixed exam with a valid scope.'); return false; }
-  if (st.activeQuiz) { toast('Finish the active MCQ test first.'); return false; }
+  if (st.activeQuiz || st.activeWritten) { toast('Finish the active test first.'); return false; }
   const questions = st.questionBank.filter((q) => quizEligible(q, exam)).slice(0, 50).map((q) => ({
     id: q.id, question: q.question, options: q.options.slice(), correctIndex: q.correctIndex,
     answer: q.answer || '', source: q.source || 'manual', chapterId: q.chapterId || null,
@@ -44,6 +44,7 @@ function renderBankQuiz() {
       <p class="muted small">Source: ${esc(q.source)}</p></fieldset>`).join('')}
     <button class="btn primary" id="quiz-submit">Submit test</button>
     <button class="btn ghost" data-nav="exams">Back to exams</button>
+    <button class="btn danger-ghost" id="quiz-discard">Discard test</button>
   </div>`;
 }
 
@@ -91,4 +92,72 @@ function quizReviewHTML(result) {
       <p>Correct answer: ${esc(q.options[q.correctIndex] || '')}</p>
       ${q.answer ? `<p>${esc(q.answer)}</p>` : ''}<p class="muted small">Source: ${esc(q.source)}</p>${q.selectedIndex !== q.correctIndex ? `<button class="btn small" data-quiz-weakness="${esc(result.id)}" data-index="${i}">Save as weakness</button>` : ''}</section>`).join('')}
     <button class="btn" data-nav="exams">Back to exams</button></div>`;
+}
+
+// Self-administered written practice. The student, not an algorithm, marks answers.
+function startWrittenTest(examId) {
+  const st = getState(), exam = st.exams.find(e => e.id === examId);
+  if (!exam || exam.format === 'mcq' || !['full','subject','chapter'].includes(exam.scope) || (exam.scope === 'subject' && !exam.subjectId) || (exam.scope === 'chapter' && !exam.chapterId) || !Number.isFinite(exam.durationMinutes) || exam.durationMinutes <= 0 || !Number.isFinite(exam.totalMarks) || exam.totalMarks <= 0) { toast('Choose a valid written or mixed exam.'); return false; }
+  if (st.activeWritten || st.activeQuiz) { toast('Finish the active test first.'); return false; }
+  const questions = st.questionBank.filter(q => q && q.type === 'cq' && typeof q.question === 'string' && q.question.trim() &&
+    (exam.scope !== 'subject' || q.subjectId === exam.subjectId) && (exam.scope !== 'chapter' || q.chapterId === exam.chapterId))
+    .slice(0,10).map(q => ({question:q.question, answer:q.answer || '', source:q.source || 'manual', chapterId:q.chapterId || null}));
+  if (!questions.length) { toast('Add matching written/CQ questions to your question bank first.'); return false; }
+  const now = Date.now();
+  st.activeWritten = {id:uid('written'), examId:exam.id, examName:exam.name, totalMarks:exam.totalMarks, startedAt:now, endsAt:now+exam.durationMinutes*60000, questions, answers:{}, scores:{}, submittedAt:null};
+  if (!save()) { st.activeWritten = null; return false; }
+  return true;
+}
+function renderWrittenTest() {
+  const test = getState().activeWritten;
+  if (!test) return `<div class="page"><h1>Written test</h1><p>No active test.</p><button class="btn" data-nav="exams">Exams</button></div>`;
+  const marking = !!test.submittedAt, expired = Date.now() >= test.endsAt;
+  return `<div class="page"><h1>${esc(test.examName)} — written test</h1>
+    <p class="muted small">Your own questions, not official board content. Answers are saved on this device. ${marking ? 'Mark each answer yourself from 0 to 100%; questions carry equal weight. No automatic grading.' : 'After submission, mark your answers yourself.'}</p>
+    ${!marking ? `<p><strong id="written-timer">${expired ? 'Time is up' : formatClock(Math.ceil((test.endsAt-Date.now())/1000))+' remaining'}</strong></p>` : ''}
+    ${test.questions.map((q,i) => `<section class="card"><h2>${i+1}. ${esc(q.question)}</h2><p class="muted small">Source: ${esc(q.source)}</p>
+      ${marking ? `<p><strong>Your answer</strong></p><p>${esc(test.answers[i] || '').replace(/\n/g,'<br>')}</p>${q.answer ? `<p><strong>Your reference answer</strong></p><p>${esc(q.answer).replace(/\n/g,'<br>')}</p>` : ''}<label class="field"><span>Self-mark percentage (0–100) *</span><input type="number" min="0" max="100" step="1" data-written-score="${i}" value="${Number.isInteger(test.scores[i]) ? test.scores[i] : ''}"></label>`
+        : `<label class="field"><span>Your answer</span><textarea rows="5" maxlength="4000" data-written-answer="${i}" ${expired ? 'disabled' : ''}>${esc(test.answers[i] || '')}</textarea></label>`}</section>`).join('')}
+    ${marking ? '<button class="btn primary" id="written-finish">Save self-marked result</button>' : '<button class="btn primary" id="written-submit">Submit for self-marking</button>'}
+    <button class="btn ghost" data-nav="exams">Back to exams</button><button class="btn danger-ghost" id="written-discard">Discard test</button></div>`;
+}
+function submitWrittenTest() {
+  const st = getState(), test = st.activeWritten;
+  if (!test || test.submittedAt) return false;
+  const previous = test.submittedAt;
+  test.submittedAt = Math.min(Date.now(),test.endsAt);
+  if (!save()) { test.submittedAt = previous; return false; }
+  return true;
+}
+function finishWrittenTest() {
+  const st = getState(), test = st.activeWritten;
+  if (!test || !test.submittedAt) return false;
+  const scores = test.questions.map((_,i) => test.scores[i]);
+  if (scores.some(n => !Number.isInteger(n) || n < 0 || n > 100)) { toast('Enter a percentage from 0 to 100 for every answer.'); return false; }
+  const obtainedMarks = Math.round(scores.reduce((a,b)=>a+b,0) / scores.length / 100 * test.totalMarks * 100) / 100;
+  const grade = gradeForMarks(obtainedMarks,test.totalMarks).grade;
+  const review = test.questions.map((q,i)=>({...q, response:test.answers[i] || '', selfScore:scores[i]}));
+  const oldResults = st.examResults;
+  if (!st.examResults.some(r=>r.writtenId===test.id)) st.examResults = oldResults.concat({id:uid('res'),writtenId:test.id,examId:test.examId,obtainedMarks,grade,date:toDateKey(new Date(test.submittedAt)),notes:'Self-marked written test; equal weighting. Not an automatic assessment.',writtenReview:review,createdAt:nowISO()});
+  st.activeWritten = null;
+  if (!save()) { st.activeWritten = test; st.examResults = oldResults; return false; }
+  return true;
+}
+function writtenReviewHTML(result) {
+  return `<div class="page"><h1>Written test review</h1><p class="muted small">Self-marked, equal weighting; not an automatic assessment or official questions.</p>
+    ${result.writtenReview.map((q,i)=>`<section class="card"><h2>${i+1}. ${esc(q.question)}</h2><p>Self-mark: ${esc(q.selfScore)}%</p><p><strong>Your answer</strong></p><p>${esc(q.response || '').replace(/\n/g,'<br>')}</p>${q.answer ? `<p><strong>Reference answer</strong></p><p>${esc(q.answer).replace(/\n/g,'<br>')}</p>` : ''}<p class="muted small">Source: ${esc(q.source)}</p></section>`).join('')}
+    <button class="btn" data-nav="exams">Back to exams</button></div>`;
+}
+let lastWrittenSaveFailure = 0;
+function checkWrittenExpiry() {
+  const test = getState().activeWritten;
+  if (!test || test.submittedAt) return;
+  if (Date.now() >= test.endsAt) {
+    if (Date.now()-lastWrittenSaveFailure < 30000) return;
+    if (submitWrittenTest()) { toast('Time is up. Mark your written answers yourself.'); if (currentRoute.name === 'written') render(); }
+    else lastWrittenSaveFailure = Date.now();
+  } else {
+    const el = document.getElementById('written-timer');
+    if (el) el.textContent = formatClock(Math.ceil((test.endsAt-Date.now())/1000))+' remaining';
+  }
 }

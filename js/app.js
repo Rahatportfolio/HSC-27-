@@ -21,6 +21,8 @@ const ROUTES = {
   practice: (chapterId) => renderPractice(chapterId || undefined),
   exams: () => renderExams(),
   quiz: () => renderBankQuiz(),
+  written: () => renderWrittenTest(),
+  'written-review': (id) => { const r = getState().examResults.find(item => item.id === id && Array.isArray(item.writtenReview)); return r ? writtenReviewHTML(r) : '<div class="page"><p>Result not found.</p><button class="btn" data-nav="exams">Exams</button></div>'; },
   'quiz-review': (id) => { const r = getState().examResults.find((item) => item.id === id && Array.isArray(item.quizReview)); return r ? quizReviewHTML(r) : '<div class="page"><p>Result not found.</p><button class="btn" data-nav="exams">Exams</button></div>'; },
   revisions: () => renderRevisions(),
   weaknesses: (chapterId) => renderWeaknesses(chapterId || undefined),
@@ -206,6 +208,18 @@ function updateExamTimerDisplay() {
 function shiftPlannerMonth(key, delta) {
   const date = parseDateKey(key);
   return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1)).toISOString().slice(0, 10);
+}
+
+// Learning actions replace collections transactionally; failed saves leave the view/data unchanged.
+function removeLearningRecord(key, id, prompt) {
+  if (!confirm(prompt)) return false;
+  const st = getState();
+  return replaceLearningCollection(key, st[key].filter(item => item.id !== id));
+}
+function updateLearningRecord(key, id, patch) {
+  const st = getState(), item = st[key].find(x => x.id === id);
+  if (!item) return false;
+  return replaceLearningCollection(key, st[key].map(x => x.id === id ? {...x, ...patch(item)} : x));
 }
 
 /* ---------- Global click delegation ---------- */
@@ -445,9 +459,9 @@ document.addEventListener('click', (e) => {
   const noteEdit = e.target.closest('[data-note-edit]');
   if (noteEdit) { const n = st.notes.find((x) => x.id === noteEdit.dataset.noteEdit); openModal('Edit note', noteFormHTML(n), (form, isCurrent) => saveNoteFromForm(form, n.id, isCurrent)); return; }
   const noteDel = e.target.closest('[data-note-delete]');
-  if (noteDel) { if (!confirm('Delete this note and its saved PDF, if any?')) return; st.notes = st.notes.filter((n) => n.id !== noteDel.dataset.noteDelete); save(); toast('Note deleted.'); render(); return; }
+  if (noteDel) { if (removeLearningRecord('notes',noteDel.dataset.noteDelete,'Delete this note and its saved PDF, if any?')) { toast('Note deleted.'); render(); } return; }
   const noteBm = e.target.closest('[data-note-bookmark]');
-  if (noteBm) { const n = st.notes.find((x) => x.id === noteBm.dataset.noteBookmark); if (n) { n.bookmarked = !n.bookmarked; save(); render(); } return; }
+  if (noteBm) { if (updateLearningRecord('notes',noteBm.dataset.noteBookmark,n=>({bookmarked:!n.bookmarked}))) render(); return; }
   if (e.target.closest('#notes-bookmarked')) { notesFilter.bookmarkedOnly = !notesFilter.bookmarkedOnly; render(); return; }
 
   // Formulas
@@ -455,14 +469,13 @@ document.addEventListener('click', (e) => {
   const fEdit = e.target.closest('[data-formula-edit]');
   if (fEdit) { const f = st.formulas.find((x) => x.id === fEdit.dataset.formulaEdit); openModal('Edit formula', formulaFormHTML(f), (form) => saveFormulaFromForm(form, f.id)); return; }
   const fDel = e.target.closest('[data-formula-delete]');
-  if (fDel) { st.formulas = st.formulas.filter((f) => f.id !== fDel.dataset.formulaDelete); save(); toast('Formula deleted.'); render(); return; }
+  if (fDel) { if (removeLearningRecord('formulas',fDel.dataset.formulaDelete,'Delete this formula?')) { toast('Formula deleted.'); render(); } return; }
   const fFav = e.target.closest('[data-formula-fav]');
-  if (fFav) { const f = st.formulas.find((x) => x.id === fFav.dataset.formulaFav); if (f) { f.favorite = !f.favorite; save(); render(); } return; }
+  if (fFav) { if (updateLearningRecord('formulas',fFav.dataset.formulaFav,f=>({favorite:!f.favorite}))) render(); return; }
 
   const openedResource = e.target.closest('[data-resource-open]');
   if (openedResource) {
-    const resource = st.resources.find((x) => x.id === openedResource.dataset.resourceOpen);
-    if (resource) { resource.lastOpenedAt = nowISO(); save(); }
+    updateLearningRecord('resources',openedResource.dataset.resourceOpen,()=>({lastOpenedAt:nowISO()}));
   }
 
   // Resources
@@ -470,57 +483,59 @@ document.addEventListener('click', (e) => {
   const rEdit = e.target.closest('[data-resource-edit]');
   if (rEdit) { const r = st.resources.find((x) => x.id === rEdit.dataset.resourceEdit); openModal('Edit video', resourceFormHTML(r), (form) => saveResourceFromForm(form, r.id)); return; }
   const rDel = e.target.closest('[data-resource-delete]');
-  if (rDel) { st.resources = st.resources.filter((r) => r.id !== rDel.dataset.resourceDelete); save(); toast('Video deleted.'); render(); return; }
+  if (rDel) { if (removeLearningRecord('resources',rDel.dataset.resourceDelete,'Delete this video link?')) { toast('Video deleted.'); render(); } return; }
   const rBm = e.target.closest('[data-resource-bookmark]');
-  if (rBm) { const r = st.resources.find((x) => x.id === rBm.dataset.resourceBookmark); if (r) { r.bookmarked = !r.bookmarked; save(); render(); } return; }
+  if (rBm) { if (updateLearningRecord('resources',rBm.dataset.resourceBookmark,r=>({bookmarked:!r.bookmarked}))) render(); return; }
   const rW = e.target.closest('[data-resource-watched]');
-  if (rW) { const r = st.resources.find((x) => x.id === rW.dataset.resourceWatched); if (r) { r.watched = !r.watched; save(); render(); } return; }
+  if (rW) { if (updateLearningRecord('resources',rW.dataset.resourceWatched,r=>({watched:!r.watched}))) render(); return; }
   if (e.target.closest('#library-bookmarked')) { libraryFilter.bookmarkedOnly = !libraryFilter.bookmarkedOnly; render(); return; }
   if (e.target.closest('#library-unwatched')) { libraryFilter.unwatchedOnly = !libraryFilter.unwatchedOnly; render(); return; }
 
   // Practice
   if (e.target.closest('#add-practice-btn')) { openModal('Record practice', practiceFormHTML(currentRoute.param), (form) => savePracticeFromForm(form)); return; }
   const pDel = e.target.closest('[data-practice-delete]');
-  if (pDel) { st.practice = st.practice.filter((p) => p.id !== pDel.dataset.practiceDelete); save(); toast('Practice deleted.'); render(); return; }
+  if (pDel) { if (removeLearningRecord('practice',pDel.dataset.practiceDelete,'Delete this practice record? Linked weaknesses will remain.')) { toast('Practice deleted.'); render(); } return; }
   const pBm = e.target.closest('[data-practice-bookmark]');
-  if (pBm) { const p = st.practice.find((x) => x.id === pBm.dataset.practiceBookmark); if (p) { p.bookmarked = !p.bookmarked; save(); render(); } return; }
+  if (pBm) { if (updateLearningRecord('practice',pBm.dataset.practiceBookmark,p=>({bookmarked:!p.bookmarked}))) render(); return; }
   const pRe = e.target.closest('[data-practice-reattempt]');
-  if (pRe) { const p = st.practice.find((x) => x.id === pRe.dataset.practiceReattempt); if (p) { p.reattempted = !p.reattempted; save(); render(); } return; }
+  if (pRe) { if (updateLearningRecord('practice',pRe.dataset.practiceReattempt,p=>({reattempted:!p.reattempted}))) render(); return; }
 
   // Question bank
-  if (e.target.closest('#add-question-btn')) {
-    openModal('Add question', `<form id="question-form" class="form">
-      <label class="field"><span>Question *</span><textarea name="question" rows="3" required></textarea></label>
-      <label class="field"><span>Type</span><select name="type"><option value="mcq">MCQ</option><option value="cq">CQ</option></select></label>
-      <label class="field"><span>Subject</span><select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
-      <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}">${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-      <p class="muted small">For an auto-graded MCQ test, provide all four choices and the correct choice. Leave choices blank for a manual question.</p>
-      ${[0, 1, 2, 3].map((i) => `<label class="field"><span>Choice ${i + 1}</span><input name="option${i}" maxlength="1000"></label>`).join('')}
-      <label class="field"><span>Correct choice</span><select name="correctIndex"><option value="">—</option><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option></select></label>
-      <label class="field"><span>Answer / explanation</span><textarea name="answer" rows="2"></textarea></label>
-      <div class="row gap"><button class="btn primary" type="submit">Add question</button>
-      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+  const questionPageButton = e.target.closest('[data-question-page]');
+  if (questionPageButton) { questionPage = Number(questionPageButton.dataset.questionPage) || 0; render(); return; }
+  const questionEdit = e.target.closest('[data-question-edit]');
+  if (e.target.closest('#add-question-btn') || questionEdit) {
+    const existing = questionEdit ? st.questionBank.find(q => q.id === questionEdit.dataset.questionEdit) : null;
+    if (questionEdit && !existing) return;
+    const options = Array.isArray(existing?.options) ? existing.options : [];
+    const selected = (a, b) => a === b ? 'selected' : '';
+    openModal(existing ? 'Edit question' : 'Add question', `<form id="question-form" class="form">
+      <label class="field"><span>Question *</span><textarea name="question" rows="3" required>${esc(existing?.question || '')}</textarea></label>
+      <label class="field"><span>Type</span><select name="type"><option value="mcq" ${selected(existing?.type || 'mcq','mcq')}>MCQ</option><option value="cq" ${selected(existing?.type,'cq')}>CQ</option></select></label>
+      <label class="field"><span>Subject</span><select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${selected(existing?.subjectId,s.id)}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${selected(existing?.chapterId,c.id)}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
+      <p class="muted small">For an auto-graded MCQ test, provide all four choices and the correct choice. Leave choices blank for a manual question. Editing a question does not alter an active test or past review.</p>
+      ${[0,1,2,3].map(i => `<label class="field"><span>Choice ${i+1}</span><input name="option${i}" maxlength="1000" value="${esc(options[i] || '')}"></label>`).join('')}
+      <label class="field"><span>Correct choice</span><select name="correctIndex"><option value="">—</option>${[0,1,2,3].map(i => `<option value="${i}" ${selected(existing?.correctIndex,i)}>${i+1}</option>`).join('')}</select></label>
+      <label class="field"><span>Answer / explanation</span><textarea name="answer" rows="2">${esc(existing?.answer || '')}</textarea></label>
+      <div class="row gap"><button class="btn primary" type="submit">${existing ? 'Save question' : 'Add question'}</button><button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
       (form) => {
-        const fd = new FormData(form);
-        const q = sanitizeText(fd.get('question'), 5000);
-        if (!q) { toast('Question is required.'); return false; }
-        const type = String(fd.get('type') || 'mcq');
-        const chapterId = String(fd.get('chapterId') || '') || null;
-        const chapter = chapterId ? chapterById(chapterId) : null;
+        const fd = new FormData(form), question = sanitizeText(fd.get('question'),5000), type = String(fd.get('type') || '');
+        const chapterId = String(fd.get('chapterId') || '') || null, chapter = chapterId ? chapterById(chapterId) : null;
         const subjectId = String(fd.get('subjectId') || '') || (chapter ? chapter.subjectId : null);
-        if ((chapterId && !chapter) || (subjectId && !subjectById(subjectId)) || (chapter && chapter.subjectId !== subjectId)) { toast('Choose a subject matching the chapter.'); return false; }
-        const options = [0, 1, 2, 3].map((i) => sanitizeText(fd.get('option' + i), 1000));
-        const choice = String(fd.get('correctIndex') || '');
-        if ((options.some(Boolean) || choice) && (type !== 'mcq' || options.some((v) => !v) || !['0', '1', '2', '3'].includes(choice))) { toast('For an MCQ, enter all four choices and select the correct one.'); return false; }
-        if (questionDuplicate(st.questionBank, q, type, subjectId, chapterId)) { toast('This question is already in the same subject and chapter.'); return false; }
-        st.questionBank.push({ id: uid('qb'), question: q, type, subjectId, chapterId, options: options.every(Boolean) ? options : null, correctIndex: choice === '' ? null : Number(choice), answer: sanitizeText(fd.get('answer'), 5000), source: 'manual', createdAt: nowISO() });
-        if (!save()) { st.questionBank.pop(); return false; } return true;
+        if (!question || !['mcq','cq'].includes(type) || !validLearningLink(subjectId,chapterId)) { toast('Enter a question and choose a matching subject and chapter.'); return false; }
+        const choices = [0,1,2,3].map(i => sanitizeText(fd.get('option'+i),1000)), choice = String(fd.get('correctIndex') || '');
+        if ((choices.some(Boolean) || choice) && (type !== 'mcq' || choices.some(v => !v) || !['0','1','2','3'].includes(choice))) { toast('For an MCQ, enter all four choices and select the correct one.'); return false; }
+        if (questionDuplicate(st.questionBank.filter(q => !existing || q.id !== existing.id),question,type,subjectId,chapterId)) { toast('This question is already in the same subject and chapter.'); return false; }
+        const data = {question,type,subjectId,chapterId,options:choices.every(Boolean) ? choices : null,correctIndex:choice === '' ? null : Number(choice),answer:sanitizeText(fd.get('answer'),5000)};
+        if (existing) return replaceLearningCollection('questionBank', st.questionBank.map(q => q.id === existing.id ? {...q,...data,updatedAt:nowISO()} : q));
+        return replaceLearningCollection('questionBank',st.questionBank.concat({id:uid('qb'),...data,source:'manual',createdAt:nowISO()}));
       });
     return;
   }
   if (e.target.closest('#export-questions-btn')) { download('question-bank.json', JSON.stringify(st.questionBank, null, 2), 'application/json'); return; }
   const qDel = e.target.closest('[data-question-delete]');
-  if (qDel) { st.questionBank = st.questionBank.filter((q) => q.id !== qDel.dataset.questionDelete); save(); toast('Question deleted.'); render(); return; }
+  if (qDel) { if (removeLearningRecord('questionBank',qDel.dataset.questionDelete,'Delete this question? Active tests and past reviews keep their snapshots.')) { toast('Question deleted.'); render(); } return; }
 
   // Exams
   if (e.target.closest('#add-exam-btn')) { openModal('Schedule exam', examFormHTML(), (form) => saveExamFromForm(form)); return; }
@@ -537,6 +552,17 @@ document.addEventListener('click', (e) => {
     if (!save()) { st.weaknesses.pop(); return; }
     toast('Saved to weaknesses.'); return;
   }
+  if (e.target.closest('#written-discard') || e.target.closest('#quiz-discard')) {
+    const key = e.target.closest('#written-discard') ? 'activeWritten' : 'activeQuiz';
+    if (!st[key] || !confirm('Discard this test and its answers without saving a result?')) return;
+    const previous = st[key]; st[key] = null;
+    if (!save()) { st[key] = previous; return; }
+    toast('Test discarded.'); navigate('exams'); return;
+  }
+  const writtenStart = e.target.closest('[data-written-start]');
+  if (writtenStart) { if (startWrittenTest(writtenStart.dataset.writtenStart)) navigate('written'); return; }
+  if (e.target.closest('#written-submit')) { if (confirm('Submit answers for self-marking? They can no longer be edited.')) { if (submitWrittenTest()) render(); } return; }
+  if (e.target.closest('#written-finish')) { if (confirm('Save your self-marked result?')) { if (finishWrittenTest()) { toast('Self-marked result saved.'); navigate('exams'); } } return; }
   const quizStart = e.target.closest('[data-quiz-start]');
   if (quizStart) { if (startBankQuiz(quizStart.dataset.quizStart)) navigate('quiz'); return; }
   if (e.target.closest('#quiz-submit')) { if (confirm('Submit your answers now?')) { if (finishBankQuiz()) { toast('MCQ test submitted.'); navigate('exams'); } } return; }
@@ -546,20 +572,22 @@ document.addEventListener('click', (e) => {
     if (!exam) return;
     if (st.activeExam) { toast('End the current timed test first.'); return; }
     st.activeExam = { examId: exam.id, startedAt: Date.now(), endsAt: Date.now() + exam.durationMinutes * 60000 };
-    save(); render(); return;
+    if (!save()) { st.activeExam = null; return; } render(); return;
   }
   if (e.target.closest('#end-timed-exam')) {
-    if (confirm('End the timed test? Record your marks separately.')) { st.activeExam = null; save(); render(); }
+    if (confirm('End the timed test? Record your marks separately.')) { const previous = st.activeExam; st.activeExam = null; if (!save()) { st.activeExam = previous; return; } render(); }
     return;
   }
   const exDel = e.target.closest('[data-exam-delete]');
   if (exDel) {
+    if (st.activeWritten && st.activeWritten.examId === exDel.dataset.examDelete) { toast('Finish the active written test before deleting this exam.'); return; }
     if (st.activeQuiz && st.activeQuiz.examId === exDel.dataset.examDelete) { toast('Finish the active MCQ test before deleting this exam.'); return; }
     if (!confirm('Delete this exam and its recorded results?')) return;
+    const previous = {activeExam:st.activeExam, exams:st.exams, examResults:st.examResults};
     if (st.activeExam && st.activeExam.examId === exDel.dataset.examDelete) st.activeExam = null;
     st.exams = st.exams.filter((x) => x.id !== exDel.dataset.examDelete);
     st.examResults = st.examResults.filter((r) => r.examId !== exDel.dataset.examDelete);
-    save(); toast('Exam deleted.'); render(); return;
+    if (!save()) { Object.assign(st,previous); return; } toast('Exam deleted.'); render(); return;
   }
   const resAdd = e.target.closest('[data-result-add]');
   if (resAdd) {
@@ -577,17 +605,18 @@ document.addEventListener('click', (e) => {
       <select name="difficulty"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
       <div class="row gap"><button class="btn primary" type="submit">Mark revised</button>
       <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
-      (form) => { completeRevision(revDone.dataset.revisionDone, Number(new FormData(form).get('difficulty'))); return true; });
+      (form) => !!completeRevision(revDone.dataset.revisionDone, Number(new FormData(form).get('difficulty'))));
     return;
   }
   const revDiff = e.target.closest('[data-revision-difficult]');
   if (revDiff) {
     const r = st.revisions.find((x) => x.id === revDiff.dataset.revisionDifficult);
     if (r) {
-      r.completedAt = nowISO(); r.status = 'done'; r.difficulty = 5;
-      // Schedule an extra repeat in 2 days for weak topics
-      st.revisions.push({ id: uid('rev'), chapterId: r.chapterId, subjectId: r.subjectId, dueDate: addDays(todayKey(), 2), completedAt: null, difficulty: null, status: 'pending', cycle: r.cycle, createdAt: nowISO() });
-      save(); toast('Marked revised — extra repeat scheduled in 2 days.');
+      // Completion and the extra repeat are a single transaction.
+      const revised = {...r, completedAt:nowISO(), status:'done', difficulty:5};
+      const extra = {id:uid('rev'), chapterId:r.chapterId, subjectId:r.subjectId, dueDate:addDays(todayKey(),2), completedAt:null, difficulty:null, status:'pending', cycle:r.cycle, createdAt:nowISO()};
+      if (!replaceLearningCollection('revisions',st.revisions.map(x => x.id === r.id ? revised : x).concat(extra))) return;
+      toast('Marked revised — extra repeat scheduled in 2 days.');
       render();
     }
     return;
@@ -603,17 +632,18 @@ document.addEventListener('click', (e) => {
       const fd = new FormData(form), title = sanitizeText(fd.get('title'), 300), date = String(fd.get('date') || '');
       const count = Number(fd.get('count')), interval = Number(fd.get('interval')), minutes = Number(fd.get('minutes'));
       if (!title || !isValidDateKey(date) || !Number.isInteger(count) || count < 1 || count > 5 || !Number.isInteger(interval) || interval < 1 || interval > 90 || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) { toast('Enter a valid title, date and schedule.'); return false; }
+      const previous = st.tasks; st.tasks = previous.slice();
       for (let i = 0; i < count; i++) st.tasks.push({ id: uid('task'), title, date: addDays(date, i * interval), plannedMinutes: minutes, type: 'study', priority: 'A', subjectId: weakness.subjectId || null, chapterId: weakness.chapterId || null, weaknessId: weakness.id, deadline: null, status: 'pending', createdAt: nowISO() });
-      save(); toast(`${count} correction task(s) added to Planner.`); return true;
+      if (!save()) { st.tasks = previous; return false; } toast(`${count} correction task(s) added to Planner.`); return true;
     });
     return;
   }
   const wPrac = e.target.closest('[data-weakness-practice]');
-  if (wPrac) { const w = st.weaknesses.find((x) => x.id === wPrac.dataset.weaknessPractice); if (w) { w.practiceCount = (w.practiceCount || 0) + 1; w.updatedAt = nowISO(); save(); render(); } return; }
+  if (wPrac) { if (updateLearningRecord('weaknesses',wPrac.dataset.weaknessPractice,w=>({practiceCount:(w.practiceCount || 0)+1,updatedAt:nowISO()}))) render(); return; }
   const wStat = e.target.closest('[data-weakness-status]');
-  if (wStat) { const w = st.weaknesses.find((x) => x.id === wStat.dataset.weaknessStatus); if (w) { w.status = wStat.dataset.status; w.updatedAt = nowISO(); save(); render(); } return; }
+  if (wStat) { if (updateLearningRecord('weaknesses',wStat.dataset.weaknessStatus,()=>({status:wStat.dataset.status,updatedAt:nowISO()}))) render(); return; }
   const wDel = e.target.closest('[data-weakness-delete]');
-  if (wDel) { st.weaknesses = st.weaknesses.filter((w) => w.id !== wDel.dataset.weaknessDelete); save(); toast('Weakness deleted.'); render(); return; }
+  if (wDel) { if (removeLearningRecord('weaknesses',wDel.dataset.weaknessDelete,'Delete this weakness? Scheduled tasks will remain.')) { toast('Weakness deleted.'); render(); } return; }
 
   if (e.target.closest('#review-create-tasks')) {
     const review = st.weeklyReviews.find((r) => r.weekStart === weekStartKey(todayKey()));
@@ -705,7 +735,7 @@ document.addEventListener('change', (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = () => {
-      try { if (focusState.running || focusState.accumulatedMs > 0) { toast('Stop or reset the current focus timer before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? If sync is connected this replacement will also be uploaded. Export a backup first.')) return; importJSON(String(reader.result)); resetTimer(false); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
+      try { if (focusState.running || focusState.accumulatedMs > 0 || getState().activeQuiz || getState().activeWritten || getState().activeExam) { toast('Stop the focus and exam timers and finish active tests before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? If sync is connected this replacement will also be uploaded. Export a backup first.')) return; importJSON(String(reader.result)); resetTimer(false); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
       render();
     };
     reader.readAsText(file);
@@ -743,6 +773,24 @@ document.addEventListener('change', (e) => {
     };
     reader.readAsText(file);
   }
+});
+
+document.addEventListener('input', (e) => {
+  const test = getState().activeWritten, el = e.target.closest('[data-written-answer]');
+  if (!el || !test || test.submittedAt) return;
+  if (Date.now() >= test.endsAt) { checkWrittenExpiry(); return; }
+  const i = Number(el.dataset.writtenAnswer);
+  if (!Number.isInteger(i) || i < 0 || i >= test.questions.length) return;
+  const previous = test.answers[i]; test.answers[i] = String(el.value).slice(0,4000);
+  if (!save()) { if (previous === undefined) delete test.answers[i]; else test.answers[i] = previous; el.value = previous || ''; }
+});
+document.addEventListener('change', (e) => {
+  const test = getState().activeWritten, el = e.target.closest('[data-written-score]');
+  if (!el || !test || !test.submittedAt) return;
+  const i = Number(el.dataset.writtenScore), value = el.value === '' ? null : Number(el.value);
+  if (!Number.isInteger(i) || i < 0 || i >= test.questions.length || (value !== null && (!Number.isInteger(value) || value < 0 || value > 100))) { toast('Enter a whole percentage between 0 and 100.'); el.value = Number.isInteger(test.scores[i]) ? test.scores[i] : ''; return; }
+  const previous = test.scores[i]; if (value === null) delete test.scores[i]; else test.scores[i] = value;
+  if (!save()) { if (previous === undefined) delete test.scores[i]; else test.scores[i] = previous; el.value = previous ?? ''; }
 });
 
 /* ---------- Submit delegation (modal + inline forms) ---------- */
@@ -832,8 +880,9 @@ checkReminders();
 setInterval(updateHeaderDate, 60000);
 setInterval(() => { if (carryOverMissed()) render(); checkReminders(); }, 60000);
 checkQuizExpiry();
+checkWrittenExpiry();
 syncInit();
-setInterval(() => { updateExamTimerDisplay(); checkQuizExpiry(); }, 1000);
+setInterval(() => { updateExamTimerDisplay(); checkQuizExpiry(); checkWrittenExpiry(); }, 1000);
 
 // Register service worker for offline PWA support
 if ('serviceWorker' in navigator) {
