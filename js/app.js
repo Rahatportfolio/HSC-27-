@@ -401,11 +401,13 @@ document.addEventListener('click', (e) => {
   }
 
   // Notes
-  if (e.target.closest('#add-note-btn')) { openModal('Add note', noteFormHTML(null), (form) => saveNoteFromForm(form, null)); return; }
+  const notePdf = e.target.closest('[data-note-pdf]');
+  if (notePdf) { downloadNotePdf(notePdf.dataset.notePdf); return; }
+  if (e.target.closest('#add-note-btn')) { openModal('Add note', noteFormHTML(null), (form, isCurrent) => saveNoteFromForm(form, null, isCurrent)); return; }
   const noteEdit = e.target.closest('[data-note-edit]');
-  if (noteEdit) { const n = st.notes.find((x) => x.id === noteEdit.dataset.noteEdit); openModal('Edit note', noteFormHTML(n), (form) => saveNoteFromForm(form, n.id)); return; }
+  if (noteEdit) { const n = st.notes.find((x) => x.id === noteEdit.dataset.noteEdit); openModal('Edit note', noteFormHTML(n), (form, isCurrent) => saveNoteFromForm(form, n.id, isCurrent)); return; }
   const noteDel = e.target.closest('[data-note-delete]');
-  if (noteDel) { st.notes = st.notes.filter((n) => n.id !== noteDel.dataset.noteDelete); save(); toast('Note deleted.'); render(); return; }
+  if (noteDel) { if (!confirm('Delete this note and its saved PDF, if any?')) return; st.notes = st.notes.filter((n) => n.id !== noteDel.dataset.noteDelete); save(); toast('Note deleted.'); render(); return; }
   const noteBm = e.target.closest('[data-note-bookmark]');
   if (noteBm) { const n = st.notes.find((x) => x.id === noteBm.dataset.noteBookmark); if (n) { n.bookmarked = !n.bookmarked; save(); render(); } return; }
   if (e.target.closest('#notes-bookmarked')) { notesFilter.bookmarkedOnly = !notesFilter.bookmarkedOnly; render(); return; }
@@ -525,6 +527,19 @@ document.addEventListener('click', (e) => {
 
   // Weaknesses
   if (e.target.closest('#add-weakness-btn')) { openModal('Add weakness', weaknessFormHTML(currentRoute.param), (form) => saveWeaknessFromForm(form)); return; }
+  const wSchedule = e.target.closest('[data-weakness-schedule]');
+  if (wSchedule) {
+    const weakness = st.weaknesses.find((w) => w.id === wSchedule.dataset.weaknessSchedule);
+    if (!weakness) return;
+    openModal('Schedule correction practice', `<form id="correction-form" class="form"><p>${esc(weakness.topic)}</p><label class="field"><span>Task title</span><input name="title" required maxlength="300" value="${esc(weakness.correctionTask || 'Practice: ' + weakness.topic)}"></label><label class="field"><span>First date</span><input name="date" type="date" value="${todayKey()}" required></label><label class="field"><span>Number of sessions (1–5)</span><input name="count" type="number" min="1" max="5" value="1" required></label><label class="field"><span>Days between sessions</span><input name="interval" type="number" min="1" max="90" value="3" required></label><label class="field"><span>Minutes per session</span><input name="minutes" type="number" min="1" max="1440" value="30" required></label><button class="btn primary" type="submit">Add to planner</button></form>`, (form) => {
+      const fd = new FormData(form), title = sanitizeText(fd.get('title'), 300), date = String(fd.get('date') || '');
+      const count = Number(fd.get('count')), interval = Number(fd.get('interval')), minutes = Number(fd.get('minutes'));
+      if (!title || !isValidDateKey(date) || !Number.isInteger(count) || count < 1 || count > 5 || !Number.isInteger(interval) || interval < 1 || interval > 90 || !Number.isInteger(minutes) || minutes < 1 || minutes > 1440) { toast('Enter a valid title, date and schedule.'); return false; }
+      for (let i = 0; i < count; i++) st.tasks.push({ id: uid('task'), title, date: addDays(date, i * interval), plannedMinutes: minutes, type: 'study', priority: 'A', subjectId: weakness.subjectId || null, chapterId: weakness.chapterId || null, weaknessId: weakness.id, deadline: null, status: 'pending', createdAt: nowISO() });
+      save(); toast(`${count} correction task(s) added to Planner.`); return true;
+    });
+    return;
+  }
   const wPrac = e.target.closest('[data-weakness-practice]');
   if (wPrac) { const w = st.weaknesses.find((x) => x.id === wPrac.dataset.weaknessPractice); if (w) { w.practiceCount = (w.practiceCount || 0) + 1; w.updatedAt = nowISO(); save(); render(); } return; }
   const wStat = e.target.closest('[data-weakness-status]');
@@ -612,7 +627,7 @@ document.addEventListener('change', (e) => {
     const file = e.target.files[0];
     const reader = new FileReader();
     reader.onload = () => {
-      try { if (focusState.running || focusState.accumulatedMs > 0) { toast('Stop or reset the current focus timer before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? Export a backup first.')) return; resetTimer(); importJSON(String(reader.result)); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
+      try { if (focusState.running || focusState.accumulatedMs > 0) { toast('Stop or reset the current focus timer before restoring.'); return; } if (!confirm('Replace all data on this device with this backup? Export a backup first.')) return; importJSON(String(reader.result)); resetTimer(false); restoreFocusTimer(); toast('Backup restored.'); } catch (err) { toast('Restore failed: ' + err.message); }
       render();
     };
     reader.readAsText(file);
@@ -657,8 +672,25 @@ document.addEventListener('submit', (e) => {
   // Modal forms
   if (modalState && form.closest('#modal-overlay')) {
     e.preventDefault();
-    const ok = modalState.onSubmit(form);
-    if (ok) { closeModal(); render(); }
+    const modal = modalState;
+    if (modal.pending) return;
+    const result = modal.onSubmit(form, () => modalState === modal);
+    if (result && typeof result.then === 'function') {
+      modal.pending = true;
+      const buttons = form.querySelectorAll('[type="submit"]');
+      buttons.forEach((button) => { button.disabled = true; });
+      result.then((ok) => {
+        if (modalState !== modal) return;
+        modal.pending = false;
+        buttons.forEach((button) => { button.disabled = false; });
+        if (ok) { closeModal(); render(); }
+      }).catch(() => {
+        if (modalState !== modal) return;
+        modal.pending = false;
+        buttons.forEach((button) => { button.disabled = false; });
+        toast('Could not save. Please try again.');
+      });
+    } else if (result) { closeModal(); render(); }
   }
 });
 

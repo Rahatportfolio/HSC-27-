@@ -1,0 +1,55 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const { JSDOM, VirtualConsole } = require('jsdom');
+const html = fs.readFileSync('index.html', 'utf8').replace(/<script[\s\S]*?<\/script>/g, '');
+const files = ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/app.js'];
+const errors = [];
+const vc = new VirtualConsole(); vc.on('jsdomError', e => errors.push(e.message));
+const dom = new JSDOM(html, { url:'https://study.example/', runScripts:'dangerously', virtualConsole:vc, beforeParse(w) {
+  w.matchMedia = () => ({matches:false,addEventListener(){}}); w.scrollTo = () => {}; w.confirm = () => true; w.alert = () => {};
+}});
+const w = dom.window, d = w.document;
+w.addEventListener('error', e => errors.push(e.error ? e.error.stack : e.message));
+for (const f of files) { const s=d.createElement('script'); s.textContent=fs.readFileSync(f,'utf8'); d.body.appendChild(s); }
+const click = sel => { const e=d.querySelector(sel); assert.ok(e,sel); e.click(); };
+const set = (sel, value) => {const el=d.querySelector(sel); assert.ok(el,sel); el.value=value;};
+const submit = sel => {const el=d.querySelector(sel); assert.ok(el,sel); el.dispatchEvent(new w.Event('submit',{bubbles:true,cancelable:true}));};
+const state = () => JSON.parse(w.localStorage.getItem('hsc27_state_v1'));
+const file = contents => {const el=d.querySelector('#note-form [name="pdf"]'); Object.defineProperty(el,'files',{configurable:true,value:[new w.File([contents], 'test.pdf', {type:'application/pdf'})]});};
+const waitFor = async predicate => { for(let i=0;i<100;i++){if(predicate()) return; await new Promise(r=>setTimeout(r,10));} throw Error('timed out'); };
+(async () => {
+  click('#more-btn'); click('[data-nav="notes"]'); click('#add-note-btn'); set('#note-form [name="title"]','PDF note'); file('%PDF-1.4\nexample'); submit('#note-form');
+  await waitFor(() => d.querySelector('#modal-overlay').hidden);
+  assert.equal(state().notes.length,1); assert.equal(w.atob(state().notes[0].attachment.base64),'%PDF-1.4\nexample');
+  assert.ok(d.querySelector('[data-note-pdf]'));
+  const backup = w.eval('exportJSON()');
+  assert.ok(JSON.parse(backup).notes[0].attachment.base64);
+  click('[data-note-edit]'); set('#note-form [name="title"]','New title'); submit('#note-form');
+  await waitFor(() => d.querySelector('#modal-overlay').hidden);
+  assert.ok(state().notes[0].attachment, 'editing without replacement retains PDF');
+  click('[data-note-edit]'); d.querySelector('#note-form [name="removePdf"]').checked=true; submit('#note-form');
+  await waitFor(() => d.querySelector('#modal-overlay').hidden);
+  assert.equal(state().notes[0].attachment,null);
+  click('#add-note-btn'); set('#note-form [name="title"]','bad'); file('not a PDF'); submit('#note-form');
+  await waitFor(() => !d.querySelector('#note-form [type="submit"]').disabled);
+  assert.equal(state().notes.length,1); assert.equal(d.querySelector('#modal-overlay').hidden,false);
+  click('[data-close-modal]');
+  click('#add-note-btn'); set('#note-form [name="title"]','large'); file('%PDF-' + 'x'.repeat(512 * 1024)); submit('#note-form');
+  await waitFor(() => !d.querySelector('#note-form [type="submit"]').disabled); assert.equal(state().notes.length,1); click('[data-close-modal]');
+  click('#add-note-btn'); set('#note-form [name="title"]','cancel'); file('%PDF-1.4\ncancel'); submit('#note-form'); click('[data-close-modal]');
+  await new Promise(r=>setTimeout(r,50)); assert.equal(state().notes.length,1, 'cancelled pending file does not save');
+  // Failed storage must leave both the live notes and persisted backup unchanged.
+  const original = w.Storage.prototype.setItem;
+  w.Storage.prototype.setItem = function(){ throw new Error('quota'); };
+  click('#add-note-btn'); set('#note-form [name="title"]','quota'); submit('#note-form');
+  await waitFor(() => !d.querySelector('#note-form [type="submit"]').disabled);
+  assert.equal(state().notes.length,1); assert.equal(w.eval('getState().notes.length'),1);
+  assert.throws(() => w.eval(`importJSON(${JSON.stringify(backup)})`), /Current data is unchanged/);
+  assert.equal(w.eval('getState().notes.length'),1);
+  w.Storage.prototype.setItem = original;
+  w.eval(`importJSON(${JSON.stringify(backup)})`);
+  assert.equal(w.atob(state().notes[0].attachment.base64),'%PDF-1.4\nexample', 'restore retains PDF content');
+  assert.equal(errors.length,0,errors.join('\n'));
+  console.log('PDF integration: attach, backup, edit, remove, invalid input, cancellation and quota failures passed.');
+})().catch(e=>{console.error(e); process.exitCode=1;}).finally(()=>dom.window.close());

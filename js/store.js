@@ -104,16 +104,17 @@ function loadState() {
   return state;
 }
 function persist() {
-  if (storageBlocked) return;
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch (e) {
+  if (storageBlocked) return false;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); return true; } catch (e) {
     if (typeof alert === 'function') alert('Unable to save data on this device. Export a backup now; free storage space or check browser settings.');
+    return false;
   }
 }
 function save() {
   // Synchronous persistence avoids losing changes when Android suspends the app.
-  persist();
+  return persist();
 }
-function saveNow() { if (saveTimer) clearTimeout(saveTimer); persist(); }
+function saveNow() { if (saveTimer) clearTimeout(saveTimer); return persist(); }
 function getState() { if (!state) loadState(); return state; }
 function resetState() { state = defaultState(); saveNow(); return state; }
 
@@ -317,9 +318,12 @@ function importJSON(text) {
   candidate.settings = Object.assign({}, DEFAULT_SETTINGS, parsed.settings);
   candidate.settings.notifications = Object.assign({}, DEFAULT_SETTINGS.notifications, parsed.settings.notifications || {});
   delete candidate.settings.ai;
+  // Write before replacing the live state, so quota/security failures cannot
+  // turn a failed restore into an apparent success or discard current data.
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(candidate)); }
+  catch (e) { throw new Error('Could not store backup on this device. Current data is unchanged.'); }
   state = candidate;
   storageBlocked = false;
-  saveNow();
   return state;
 }
 function exportCSV(kind) {

@@ -236,7 +236,7 @@ function stopAndSaveTimer() {
   render();
 }
 
-function resetTimer() {
+function resetTimer(shouldPersist = true) {
   focusState.running = false;
   focusState.startedAt = null;
   focusState.accumulatedMs = 0;
@@ -244,7 +244,7 @@ function resetTimer() {
   focusState.runId = null;
   stopTimerInterval();
   releaseWakeLock();
-  persistFocusTimer();
+  if (shouldPersist) persistFocusTimer();
   refreshTimerButtons();
   updateTimerDisplay();
 }

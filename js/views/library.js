@@ -37,6 +37,7 @@ function renderNotes(prefillChapterId) {
           <button class="btn small ghost" data-note-bookmark="${esc(n.id)}" aria-label="Bookmark">${n.bookmarked ? '★' : '☆'}</button>
         </div>
         <p class="muted small">${esc(subjectName(n.subjectId))}${n.chapterId ? ' · ' + esc(chapterLabel(n.chapterId)) : ''} · ${esc(n.category)}${(n.tags || []).length ? ' · ' + esc(n.tags.join(', ')) : ''}</p>
+        ${n.attachment ? `<p><button class="btn small" data-note-pdf="${esc(n.id)}">Download saved PDF: ${esc(n.attachment.name)}</button></p>` : ''}
         ${n.url ? `<p><a href="${esc(sanitizeUrl(n.url))}" target="_blank" rel="noopener">Open document ↗</a></p>` : ''}
         <p class="note-body">${esc(n.body || '').replace(/\n/g, '<br>')}</p>
         <div class="row gap wrap">
@@ -60,13 +61,51 @@ function noteFormHTML(note) {
       <select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${note && note.chapterId === c.id ? 'selected' : ''}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
     <label class="field"><span>Content</span><textarea name="body" rows="5">${note ? esc(note.body || '') : ''}</textarea></label>
     <label class="field"><span>Document URL (for PDFs / board questions)</span><input name="url" type="url" value="${note ? esc(note.url || '') : ''}" placeholder="https://…"></label>
+    <label class="field"><span>Offline PDF (optional, maximum 512 KiB)</span><input name="pdf" type="file" accept="application/pdf,.pdf"></label>
+    <p class="muted small">Small PDFs are stored in this browser and included in JSON backups. Storage is limited; keep the original file. Only attach files you trust.</p>
+    ${note && note.attachment ? `<label class="check"><input type="checkbox" name="removePdf"> Remove current PDF: ${esc(note.attachment.name)}</label>` : ''}
     <label class="field"><span>Tags (comma separated)</span><input name="tags" value="${note ? esc((note.tags || []).join(', ')) : ''}"></label>
     <div class="row gap"><button class="btn primary" type="submit">${note ? 'Save note' : 'Add note'}</button>
     <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
   </form>`;
 }
 
-function saveNoteFromForm(form, existingId) {
+const PDF_MAX_BYTES = 512 * 1024;
+
+function readSmallPdf(file) {
+  return new Promise((resolve, reject) => {
+    if (!file || file.size === 0 || file.size > PDF_MAX_BYTES) { reject(new Error('PDF must be between 1 byte and 512 KiB.')); return; }
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Could not read the file.'));
+    reader.onload = () => {
+      try {
+        const result = String(reader.result || '');
+        const base64 = result.slice(result.indexOf(',') + 1);
+        if (!result.startsWith('data:') || !result.includes(';base64,') || !atob(base64).startsWith('%PDF-')) throw new Error('Choose a valid PDF file.');
+        resolve({ name: sanitizeText(file.name, 180) || 'document.pdf', base64 });
+      } catch (error) { reject(error); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function downloadNotePdf(id) {
+  const note = getState().notes.find((n) => n.id === id);
+  const file = note && note.attachment;
+  try {
+    if (!file || typeof file.base64 !== 'string' || file.base64.length > Math.ceil(PDF_MAX_BYTES / 3) * 4) throw new Error();
+    const bytes = atob(file.base64);
+    if (!bytes.startsWith('%PDF-') || bytes.length > PDF_MAX_BYTES) throw new Error();
+    const blob = new Blob([Uint8Array.from(bytes, (ch) => ch.charCodeAt(0))], { type: 'application/pdf' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = (sanitizeText(file.name, 180) || 'document.pdf').replace(/[\\/]/g, '_');
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
+  } catch (error) { toast('This saved PDF could not be opened.'); }
+}
+
+async function saveNoteFromForm(form, existingId, isCurrent = () => true) {
   const fd = new FormData(form);
   const title = sanitizeText(fd.get('title'), 300);
   if (!title) { toast('Title is required.'); return false; }
@@ -80,15 +119,21 @@ function saveNoteFromForm(form, existingId) {
     tags: String(fd.get('tags') || '').split(',').map((t) => t.trim()).filter(Boolean).slice(0, 20),
     updatedAt: nowISO(),
   };
+  const selected = form.querySelector('[name="pdf"]').files[0];
+  if (selected) {
+    try { data.attachment = await readSmallPdf(selected); }
+    catch (error) { if (isCurrent()) toast(error.message); return false; }
+  } else if (fd.get('removePdf')) data.attachment = null;
+  if (!isCurrent()) return false;
   const st = getState();
+  const previous = st.notes;
   if (existingId) {
-    const n = st.notes.find((x) => x.id === existingId);
-    if (!n) return false;
-    Object.assign(n, data);
+    if (!previous.some((n) => n.id === existingId)) return false;
+    st.notes = previous.map((n) => n.id === existingId ? Object.assign({}, n, data) : n);
   } else {
-    st.notes.push(Object.assign({ id: uid('note'), bookmarked: false, createdAt: nowISO() }, data));
+    st.notes = previous.concat(Object.assign({ id: uid('note'), bookmarked: false, createdAt: nowISO() }, data));
   }
-  save();
+  if (!save()) { st.notes = previous; toast('Note was not saved; free space or export a backup.'); return false; }
   return true;
 }
 
@@ -503,6 +548,7 @@ function renderWeaknesses(prefillChapterId) {
     ${w.reason ? `<p class="muted small">Reason: ${esc(w.reason)}</p>` : ''}
     ${w.correctionTask ? `<p class="muted small">Correction task: ${esc(w.correctionTask)}</p>` : ''}
     <div class="row gap wrap">
+      <button class="btn small" data-weakness-schedule="${esc(w.id)}">Schedule correction</button>
       <button class="btn small" data-weakness-practice="${esc(w.id)}">Practiced +1</button>
       <button class="btn small" data-weakness-status="${esc(w.id)}" data-status="improving">Improving</button>
       <button class="btn small primary" data-weakness-status="${esc(w.id)}" data-status="resolved">Resolved</button>
@@ -544,10 +590,14 @@ function saveWeaknessFromForm(form) {
   const fd = new FormData(form);
   const topic = sanitizeText(fd.get('topic'), 300);
   if (!topic) { toast('Topic is required.'); return false; }
+  const chapterId = String(fd.get('chapterId') || '') || null;
+  const chapter = chapterId ? chapterById(chapterId) : null;
+  const subjectId = String(fd.get('subjectId') || '') || (chapter ? chapter.subjectId : null);
+  if ((chapterId && !chapter) || (subjectId && !subjectById(subjectId)) || (chapter && chapter.subjectId !== subjectId)) { toast('Choose a subject matching the chapter.'); return false; }
   getState().weaknesses.push({
     id: uid('wk'), topic,
-    subjectId: String(fd.get('subjectId') || '') || null,
-    chapterId: String(fd.get('chapterId') || '') || null,
+    subjectId,
+    chapterId,
     type: String(fd.get('type') || 'concept'),
     reason: sanitizeText(fd.get('reason'), 1000),
     correctionTask: sanitizeText(fd.get('correctionTask'), 500),

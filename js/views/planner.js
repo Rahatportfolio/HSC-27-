@@ -33,13 +33,13 @@ function renderPlanner() {
 
 function taskItem(t) {
   const st = getState();
-  const actual = st.sessions.filter((s) => s.date === t.date && s.subjectId === t.subjectId && s.chapterId === t.chapterId)
+  const actual = t.type === 'rest' ? 0 : st.sessions.filter((s) => s.date === t.date && s.subjectId === t.subjectId && s.chapterId === t.chapterId)
     .reduce((a, s) => a + s.durationMinutes, 0);
   return `<li class="task-item ${t.status === 'done' ? 'done' : ''}">
     <input type="checkbox" data-task-toggle="${esc(t.id)}" ${t.status === 'done' ? 'checked' : ''} aria-label="Mark task done">
     <div class="task-body">
       <strong>${esc(t.title)}</strong>
-      <span class="muted small">${esc(subjectName(t.subjectId))}${t.chapterId ? ' · ' + esc(chapterLabel(t.chapterId)) : ''} · planned ${formatDuration(t.plannedMinutes || 0)}${actual ? ' · studied ' + formatDuration(actual) : ''}${t.deadline ? ' · deadline ' + esc(formatDate(t.deadline)) : ''}${t.status === 'carried' ? ' · carried over' : ''}${t.originalDate ? ' · originally ' + esc(formatDate(t.originalDate)) : ''}</span>
+      <span class="muted small">${t.type === 'rest' ? 'Break' : esc(subjectName(t.subjectId))}${t.startTime ? ' · ' + esc(t.startTime) : ''}${t.chapterId ? ' · ' + esc(chapterLabel(t.chapterId)) : ''} · planned ${formatDuration(t.plannedMinutes || 0)}${actual ? ' · studied ' + formatDuration(actual) : ''}${t.deadline ? ' · deadline ' + esc(formatDate(t.deadline)) : ''}${t.status === 'carried' ? ' · carried over' : ''}${t.originalDate ? ' · originally ' + esc(formatDate(t.originalDate)) : ''}</span>
     </div>
     <span class="badge prio-${esc(t.priority || 'B')}">${esc(t.priority || 'B')}</span>
     <button class="btn small ghost" data-task-reschedule="${esc(t.id)}" aria-label="Reschedule task">↪</button>
@@ -49,12 +49,13 @@ function taskItem(t) {
 
 function plannerDayView(dateKey, target) {
   const tasks = tasksOn(dateKey);
-  const planned = tasks.reduce((a, t) => a + (t.plannedMinutes || 0), 0);
+  const planned = tasks.filter((t) => t.type !== 'rest').reduce((a, t) => a + (t.plannedMinutes || 0), 0);
   const actual = minutesOn(dateKey);
   const isToday = dateKey === todayKey();
   return `<section class="card">
     <h2>${esc(formatDay(dateKey))}</h2>
-    <p class="muted">Planned ${formatDuration(planned)} · Studied ${formatDuration(actual)} · Daily target ${formatDuration(target)}</p>
+    <p class="muted">Planned study ${formatDuration(planned)} · Studied ${formatDuration(actual)} · Daily target ${formatDuration(target)}</p>
+    ${getState().settings.preferredStart && getState().settings.preferredEnd ? `<p class="muted small">Preferred study hours: ${esc(getState().settings.preferredStart)}–${esc(getState().settings.preferredEnd)} (no automatic reminder)</p>` : ''}
     <div class="progress-bar"><div class="progress-fill" style="width:${pct(actual, target)}%"></div></div>
     ${tasks.length ? `<ul class="task-list">${tasks.map(taskItem).join('')}</ul>`
       : `<p class="muted">No tasks for this day. Add study, revision, test or rest tasks.</p>`}
@@ -68,7 +69,7 @@ function plannerWeekView(wStart, target) {
   for (let i = 0; i < 7; i++) {
     const d = addDays(wStart, i);
     const tasks = tasksOn(d);
-    const planned = tasks.reduce((a, t) => a + (t.plannedMinutes || 0), 0);
+    const planned = tasks.filter((t) => t.type !== 'rest').reduce((a, t) => a + (t.plannedMinutes || 0), 0);
     const actual = minutesOn(d);
     weekPlanned += planned; weekActual += actual;
     rows += `<div class="week-day ${d === todayKey() ? 'today' : ''}">
@@ -94,7 +95,7 @@ function plannerMonthView(cursor, target) {
   for (let d = 1; d <= daysInMonth; d++) {
     const key = `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
     const tasks = tasksOn(key);
-    const planned = tasks.reduce((a, t) => a + (t.plannedMinutes || 0), 0);
+    const planned = tasks.filter((t) => t.type !== 'rest').reduce((a, t) => a + (t.plannedMinutes || 0), 0);
     const actual = minutesOn(key);
     totalPlanned += planned; totalActual += actual;
     cells += `<button class="cal-cell ${key === todayKey() ? 'today' : ''} ${actual >= target ? 'hit' : ''}" data-planner-jump="${key}">
@@ -117,6 +118,7 @@ function taskFormHTML(prefillDate) {
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
     <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option></select></label>
     <label class="field"><span>Date</span><input name="date" type="date" value="${esc(prefillDate || todayKey())}"></label>
+    <label class="field"><span>Start time (optional)</span><input name="startTime" type="time"></label>
     <label class="field"><span>Planned minutes</span><input name="plannedMinutes" type="number" min="5" step="5" value="60"></label>
     <label class="field"><span>Type</span>
       <select name="type"><option value="study">Study</option><option value="revision">Revision</option><option value="test">Test</option><option value="rest">Rest / break</option></select></label>
@@ -138,7 +140,7 @@ function saveTaskFromForm(form) {
     id: uid('task'), title,
     subjectId: String(fd.get('subjectId') || '') || null,
     chapterId: String(fd.get('chapterId') || '') || null,
-    date, plannedMinutes: Math.max(0, Number(fd.get('plannedMinutes')) || 0),
+    date, startTime: /^([01]\d|2[0-3]):[0-5]\d$/.test(String(fd.get('startTime') || '')) ? String(fd.get('startTime')) : '', plannedMinutes: Math.max(0, Number(fd.get('plannedMinutes')) || 0),
     type: String(fd.get('type') || 'study'),
     priority: ['A', 'B', 'C'].includes(fd.get('priority')) ? fd.get('priority') : 'B',
     deadline: String(fd.get('deadline') || '') || null,

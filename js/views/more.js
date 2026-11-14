@@ -206,6 +206,8 @@ function renderSettings() {
       <form id="settings-form" class="form">
         <label class="field"><span>Your name (optional)</span><input name="studentName" value="${esc(s.studentName || '')}"></label>
         <label class="field"><span>Daily study target (minutes)</span><input name="dailyTargetMinutes" type="number" min="30" max="1440" step="15" value="${s.dailyTargetMinutes}"></label>
+        <label class="field"><span>Preferred study start (optional)</span><input name="preferredStart" type="time" value="${esc(s.preferredStart || '')}"></label>
+        <label class="field"><span>Preferred study end (optional)</span><input name="preferredEnd" type="time" value="${esc(s.preferredEnd || '')}"></label>
         <label class="field"><span>HSC exam date (set it yourself — never guessed)</span><input name="examDate" type="date" value="${esc(s.examDate || '')}"></label>
         <label class="field"><span>Revision intervals (days, comma separated)</span>
           <input name="revisionIntervals" value="${esc((s.revisionIntervals || []).join(', '))}" placeholder="1, 3, 7, 14, 30"></label>
@@ -252,6 +254,10 @@ function saveSettingsFromForm(form) {
   const st = getState();
   st.settings.studentName = sanitizeText(fd.get('studentName'), 100);
   st.settings.dailyTargetMinutes = clamp(Number(fd.get('dailyTargetMinutes')) || 480, 30, 1440);
+  for (const key of ['preferredStart', 'preferredEnd']) {
+    const value = String(fd.get(key) || '');
+    st.settings[key] = /^([01]\d|2[0-3]):[0-5]\d$/.test(value) ? value : '';
+  }
   const examDate = String(fd.get('examDate') || '');
   st.settings.examDate = isValidDateKey(examDate) ? examDate : '';
   const intervals = String(fd.get('revisionIntervals') || '')
