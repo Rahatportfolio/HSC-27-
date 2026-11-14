@@ -1,0 +1,22 @@
+'use strict';
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const vm = require('node:vm');
+const listeners = {};
+const entries = new Map();
+const cache = { addAll: async paths => { for (const p of paths) { if (p !== './') assert.ok(fs.existsSync(p), 'missing shell asset '+p); entries.set(p, p); } } };
+const deleted = [];
+const caches = { open: async () => cache, keys: async () => ['unrelated-app','hsc27-old','hsc27-v1'], delete: async k => deleted.push(k), match: async req => entries.get(typeof req === 'string' ? req : new URL(req.url).pathname.slice(1)) };
+const ctx = { self: { addEventListener: (n, f) => { listeners[n] = f; }, location: {origin:'https://test.example'}, skipWaiting: async () => {}, clients: {claim:async()=>{}} }, caches, URL, Response, fetch: async () => { throw Error('offline'); }, Promise };
+vm.runInNewContext(fs.readFileSync('sw.js','utf8'), ctx);
+(async () => {
+  let promise; listeners.install({ waitUntil: p => promise = p }); await promise;
+  assert.ok(entries.has('js/store.js'));
+  listeners.activate({ waitUntil: p => promise = p }); await promise;
+  assert.deepEqual(deleted, ['hsc27-old']);
+  let response; listeners.fetch({ request: {method:'GET', url:'https://test.example/js/store.js', mode:'no-cors'}, respondWith: p => response=p });
+  assert.equal(await response, 'js/store.js');
+  listeners.fetch({ request: {method:'GET', url:'https://test.example/unknown', mode:'navigate'}, respondWith: p => response=p });
+  assert.equal(await response, 'index.html');
+  console.log('Service worker: shell assets exist, install, scoped cleanup and offline cache/fallback passed (mocked APIs).');
+})().catch(e => { console.error(e); process.exitCode=1; });
