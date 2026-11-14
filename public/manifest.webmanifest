@@ -1,0 +1,16 @@
+{
+  "id": "./",
+  "name": "প্রস্তুতি — HSC 27",
+  "short_name": "প্রস্তুতি",
+  "description": "Your date-wise HSC science study companion",
+  "lang": "bn",
+  "start_url": "./#today",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7f3",
+  "theme_color": "#24634d",
+  "icons": [
+    { "src": "./icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "./icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
