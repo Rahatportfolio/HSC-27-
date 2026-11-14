@@ -20,6 +20,8 @@ const ROUTES = {
   library: (chapterId) => renderLibrary(chapterId || undefined),
   practice: (chapterId) => renderPractice(chapterId || undefined),
   exams: () => renderExams(),
+  quiz: () => renderBankQuiz(),
+  'quiz-review': (id) => { const r = getState().examResults.find((item) => item.id === id && Array.isArray(item.quizReview)); return r ? quizReviewHTML(r) : '<div class="page"><p>Result not found.</p><button class="btn" data-nav="exams">Exams</button></div>'; },
   revisions: () => renderRevisions(),
   weaknesses: (chapterId) => renderWeaknesses(chapterId || undefined),
   review: () => renderReview(),
@@ -199,6 +201,11 @@ function shiftPlannerMonth(key, delta) {
 document.addEventListener('click', (e) => {
   const nav = e.target.closest('[data-nav]');
   if (nav) {
+    if (nav.dataset.searchResult) {
+      if (nav.dataset.nav === 'notes') { notesFilter.q = searchQuery; notesFilter.category = ''; notesFilter.bookmarkedOnly = false; }
+      if (nav.dataset.nav === 'formulas') { formulaFilter.q = searchQuery; formulaFilter.subject = ''; }
+      if (nav.dataset.nav === 'library') { libraryFilter.q = searchQuery; libraryFilter.subject = ''; libraryFilter.bookmarkedOnly = false; libraryFilter.unwatchedOnly = false; }
+    }
     const chapter = nav.dataset.chapter || nav.dataset.id;
     navigate(nav.dataset.nav, chapter || nav.dataset.id || null);
     return;
@@ -455,6 +462,10 @@ document.addEventListener('click', (e) => {
       <label class="field"><span>Question *</span><textarea name="question" rows="3" required></textarea></label>
       <label class="field"><span>Type</span><select name="type"><option value="mcq">MCQ</option><option value="cq">CQ</option></select></label>
       <label class="field"><span>Subject</span><select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}">${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
+      <p class="muted small">For an auto-graded MCQ test, provide all four choices and the correct choice. Leave choices blank for a manual question.</p>
+      ${[0, 1, 2, 3].map((i) => `<label class="field"><span>Choice ${i + 1}</span><input name="option${i}" maxlength="1000"></label>`).join('')}
+      <label class="field"><span>Correct choice</span><select name="correctIndex"><option value="">—</option><option value="0">1</option><option value="1">2</option><option value="2">3</option><option value="3">4</option></select></label>
       <label class="field"><span>Answer / explanation</span><textarea name="answer" rows="2"></textarea></label>
       <div class="row gap"><button class="btn primary" type="submit">Add question</button>
       <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
@@ -462,8 +473,17 @@ document.addEventListener('click', (e) => {
         const fd = new FormData(form);
         const q = sanitizeText(fd.get('question'), 5000);
         if (!q) { toast('Question is required.'); return false; }
-        st.questionBank.push({ id: uid('qb'), question: q, type: String(fd.get('type') || 'mcq'), subjectId: String(fd.get('subjectId') || '') || null, chapterId: null, answer: sanitizeText(fd.get('answer'), 5000), source: 'manual', createdAt: nowISO() });
-        save(); return true;
+        const type = String(fd.get('type') || 'mcq');
+        const chapterId = String(fd.get('chapterId') || '') || null;
+        const chapter = chapterId ? chapterById(chapterId) : null;
+        const subjectId = String(fd.get('subjectId') || '') || (chapter ? chapter.subjectId : null);
+        if ((chapterId && !chapter) || (subjectId && !subjectById(subjectId)) || (chapter && chapter.subjectId !== subjectId)) { toast('Choose a subject matching the chapter.'); return false; }
+        const options = [0, 1, 2, 3].map((i) => sanitizeText(fd.get('option' + i), 1000));
+        const choice = String(fd.get('correctIndex') || '');
+        if ((options.some(Boolean) || choice) && (type !== 'mcq' || options.some((v) => !v) || !['0', '1', '2', '3'].includes(choice))) { toast('For an MCQ, enter all four choices and select the correct one.'); return false; }
+        if (questionDuplicate(st.questionBank, q, type, subjectId, chapterId)) { toast('This question is already in the same subject and chapter.'); return false; }
+        st.questionBank.push({ id: uid('qb'), question: q, type, subjectId, chapterId, options: options.every(Boolean) ? options : null, correctIndex: choice === '' ? null : Number(choice), answer: sanitizeText(fd.get('answer'), 5000), source: 'manual', createdAt: nowISO() });
+        if (!save()) { st.questionBank.pop(); return false; } return true;
       });
     return;
   }
@@ -473,6 +493,22 @@ document.addEventListener('click', (e) => {
 
   // Exams
   if (e.target.closest('#add-exam-btn')) { openModal('Schedule exam', examFormHTML(), (form) => saveExamFromForm(form)); return; }
+  const quizMistake = e.target.closest('[data-quiz-weakness]');
+  if (quizMistake) {
+    const result = st.examResults.find((r) => r.id === quizMistake.dataset.quizWeakness);
+    const index = Number(quizMistake.dataset.index);
+    const q = result && Array.isArray(result.quizReview) && Number.isInteger(index) ? result.quizReview[index] : null;
+    if (!q || q.selectedIndex === q.correctIndex) return;
+    if (st.weaknesses.some((w) => w.resultId === result.id && w.questionIndex === index)) { toast('Already saved to weaknesses.'); return; }
+    const chapter = q.chapterId ? chapterById(q.chapterId) : null;
+    const weakness = { id: uid('wk'), topic: sanitizeText(q.question, 300), type: 'mcq', subjectId: chapter ? chapter.subjectId : null, chapterId: chapter ? chapter.id : null, reason: '', correctionTask: 'Reattempt the question', status: 'active', practiceCount: 0, resultId: result.id, questionIndex: index, createdAt: nowISO(), updatedAt: nowISO() };
+    st.weaknesses.push(weakness);
+    if (!save()) { st.weaknesses.pop(); return; }
+    toast('Saved to weaknesses.'); return;
+  }
+  const quizStart = e.target.closest('[data-quiz-start]');
+  if (quizStart) { if (startBankQuiz(quizStart.dataset.quizStart)) navigate('quiz'); return; }
+  if (e.target.closest('#quiz-submit')) { if (confirm('Submit your answers now?')) { if (finishBankQuiz()) { toast('MCQ test submitted.'); navigate('exams'); } } return; }
   const exStart = e.target.closest('[data-exam-start]');
   if (exStart) {
     const exam = st.exams.find((x) => x.id === exStart.dataset.examStart);
@@ -487,6 +523,7 @@ document.addEventListener('click', (e) => {
   }
   const exDel = e.target.closest('[data-exam-delete]');
   if (exDel) {
+    if (st.activeQuiz && st.activeQuiz.examId === exDel.dataset.examDelete) { toast('Finish the active MCQ test before deleting this exam.'); return; }
     if (!confirm('Delete this exam and its recorded results?')) return;
     if (st.activeExam && st.activeExam.examId === exDel.dataset.examDelete) st.activeExam = null;
     st.exams = st.exams.filter((x) => x.id !== exDel.dataset.examDelete);
@@ -597,6 +634,16 @@ document.addEventListener('click', (e) => {
 /* ---------- Change delegation (checkboxes, selects) ---------- */
 document.addEventListener('change', (e) => {
   const st = getState();
+  const quizAnswer = e.target.closest('[data-quiz-answer]');
+  if (quizAnswer && st.activeQuiz) {
+    if (Date.now() >= st.activeQuiz.endsAt) { checkQuizExpiry(); return; }
+    const i = Number(quizAnswer.dataset.quizAnswer), value = Number(quizAnswer.value);
+    if (Number.isInteger(i) && i >= 0 && i < st.activeQuiz.questions.length && Number.isInteger(value) && value >= 0 && value < 4) {
+      const previous = st.activeQuiz.answers[i]; st.activeQuiz.answers[i] = value;
+      if (!save()) { if (previous === undefined) delete st.activeQuiz.answers[i]; else st.activeQuiz.answers[i] = previous; render(); }
+    }
+    return;
+  }
   const taskToggle = e.target.closest('[data-task-toggle]');
   if (taskToggle) {
     const t = st.tasks.find((x) => x.id === taskToggle.dataset.taskToggle);
@@ -640,12 +687,26 @@ document.addEventListener('change', (e) => {
       try {
         const arr = JSON.parse(String(reader.result));
         if (!Array.isArray(arr)) throw new Error('Expected a JSON array.');
-        arr.forEach((q) => st.questionBank.push({
-          id: uid('qb'), question: sanitizeText(q.question, 5000), type: q.type === 'cq' ? 'cq' : 'mcq',
-          subjectId: q.subjectId || null, chapterId: null, answer: sanitizeText(q.answer, 5000),
-          source: q.source === 'ai' ? 'ai' : 'imported', createdAt: nowISO(),
-        }));
-        save(); toast(`Imported ${arr.length} question(s).`);
+        const currentState = getState();
+        const previous = currentState.questionBank;
+        const next = previous.slice();
+        let added = 0;
+        arr.slice(0, 1000).forEach((q) => {
+          if (!q || !sanitizeText(q.question, 5000)) return;
+          const chapter = q.chapterId ? chapterById(q.chapterId) : null;
+          const subjectId = chapter ? chapter.subjectId : (subjectById(q.subjectId) ? q.subjectId : null);
+          const options = Array.isArray(q.options) && q.options.length === 4 ? q.options.map((o) => sanitizeText(o, 1000)) : null;
+          const correctIndex = Number.isInteger(q.correctIndex) && q.correctIndex >= 0 && q.correctIndex < 4 ? q.correctIndex : null;
+          const question = sanitizeText(q.question, 5000), type = q.type === 'cq' ? 'cq' : 'mcq', chapterId = chapter ? chapter.id : null;
+          if (questionDuplicate(next, question, type, subjectId, chapterId)) return;
+          next.push({ id: uid('qb'), question, type,
+            subjectId, chapterId, options: options && options.every(Boolean) ? options : null, correctIndex,
+            answer: sanitizeText(q.answer, 5000), source: q.source === 'ai' ? 'ai' : 'imported', createdAt: nowISO() });
+          added++;
+        });
+        currentState.questionBank = next;
+        if (!save()) { currentState.questionBank = previous; throw new Error('Could not save imported questions.'); }
+        toast(`Imported ${added} question(s); duplicates or invalid entries skipped.`);
       } catch (err) { toast('Import failed: ' + err.message); }
       render();
     };
@@ -728,7 +789,8 @@ window.addEventListener('offline', updateOnlineStatus);
 render();
 checkReminders();
 setInterval(() => { if (carryOverMissed()) render(); checkReminders(); }, 60000);
-setInterval(updateExamTimerDisplay, 1000);
+checkQuizExpiry();
+setInterval(() => { updateExamTimerDisplay(); checkQuizExpiry(); }, 1000);
 
 // Register service worker for offline PWA support
 if ('serviceWorker' in navigator) {

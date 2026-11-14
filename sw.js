@@ -5,7 +5,7 @@
  */
 'use strict';
 
-const CACHE = 'hsc27-v3';
+const CACHE = 'hsc27-v4';
 const SHELL = [
   './',
   'index.html',
@@ -20,6 +20,7 @@ const SHELL = [
   'js/views/progress.js',
   'js/views/library.js',
   'js/views/more.js',
+  'js/views/quiz.js',
   'js/app.js',
   'icons/icon.svg',
   'icons/icon-192.png',

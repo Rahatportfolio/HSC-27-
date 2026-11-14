@@ -369,18 +369,22 @@ function savePracticeFromForm(form) {
   const chapterId = String(fd.get('chapterId') || '');
   const ch = chapterById(chapterId);
   if (!ch) { toast('Please choose a chapter.'); return false; }
-  const attempted = Math.max(0, Number(fd.get('attempted')) || 0);
-  const correct = Math.min(attempted, Math.max(0, Number(fd.get('correct')) || 0));
+  const attempted = Number(fd.get('attempted'));
+  const correct = Number(fd.get('correct'));
+  const type = String(fd.get('type') || 'mcq');
+  const rawMarks = String(fd.get('marks') || ''), rawTotal = String(fd.get('totalMarks') || '');
+  const marks = rawMarks === '' ? null : Number(rawMarks), totalMarks = rawTotal === '' ? null : Number(rawTotal);
+  const duration = Number(fd.get('durationMinutes')) || 0;
+  if (!['mcq', 'cq', 'written'].includes(type) || !Number.isInteger(attempted) || attempted < 0 || !Number.isInteger(correct) || correct < 0 || (type === 'mcq' && correct > attempted) || !Number.isFinite(duration) || duration < 0 || duration > 1440 || (marks === null) !== (totalMarks === null) || (marks !== null && (!Number.isFinite(marks) || !Number.isFinite(totalMarks) || totalMarks <= 0 || marks < 0 || marks > totalMarks))) { toast('Check attempts, correct answers, time and marks. Marks need a valid total.'); return false; }
   const mistakes = String(fd.get('mistakes') || '').split('\n').map((s) => s.trim()).filter(Boolean).slice(0, 50)
     .map((q) => ({ q, reason: '' }));
   getState().practice.push({
     id: uid('prc'), chapterId, subjectId: ch.subjectId,
-    type: String(fd.get('type') || 'mcq'),
+    type,
     date: isValidDateKey(String(fd.get('date'))) ? String(fd.get('date')) : todayKey(),
     attempted, correct,
-    marks: fd.get('marks') === '' || fd.get('marks') === null ? null : Number(fd.get('marks')),
-    totalMarks: fd.get('totalMarks') === '' || fd.get('totalMarks') === null ? null : Number(fd.get('totalMarks')),
-    durationMinutes: Math.max(0, Number(fd.get('durationMinutes')) || 0),
+    marks, totalMarks,
+    durationMinutes: duration,
     mistakes, bookmarked: false, reattempted: false,
     note: sanitizeText(fd.get('note'), 1000), createdAt: nowISO(),
   });
@@ -388,7 +392,7 @@ function savePracticeFromForm(form) {
   mistakes.forEach((m) => {
     getState().weaknesses.push({
       id: uid('wk'), subjectId: ch.subjectId, chapterId,
-      topic: m.q, type: String(fd.get('type') || 'other'), reason: '', correctionTask: 'Reattempt this question',
+      topic: m.q, type, reason: '', correctionTask: 'Reattempt this question',
       status: 'active', practiceCount: 0, createdAt: nowISO(), updatedAt: nowISO(),
     });
   });
@@ -411,10 +415,11 @@ function renderExams() {
       <div class="row between"><strong>${esc(e.name)}</strong>
         <span class="badge">${daysLeft >= 0 ? daysLeft + 'd left' : 'done'}</span></div>
       <p class="muted small">${esc(formatDate(e.date))} · ${esc(e.scope)} · ${e.durationMinutes} min · ${e.totalMarks} marks${e.subjectId ? ' · ' + esc(subjectName(e.subjectId)) : ''}${e.chapterId ? ' · ' + esc(chapterLabel(e.chapterId)) : ''}${e.format ? ' · ' + esc(e.format) : ''}</p>
-      ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${r.obtainedMarks}/${e.totalMarks} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
+      ${results.length ? `<ul class="plain-list">${results.map((r) => `<li>${esc(formatDate(r.date))}: ${r.obtainedMarks}/${e.totalMarks} (${esc(r.grade || '')})${r.notes ? ' — ' + esc(r.notes) : ''}${Array.isArray(r.quizReview) ? ` <button class="btn small" data-nav="quiz-review" data-id="${esc(r.id)}">Review answers</button>` : ''}</li>`).join('')}</ul>` : `<p class="muted small">No result recorded yet.</p>`}
       <div class="row gap wrap">
         <button class="btn small primary" data-result-add="${esc(e.id)}">Record result</button>
-        <button class="btn small" data-exam-start="${esc(e.id)}">Start timed test</button>
+        <button class="btn small" data-quiz-start="${esc(e.id)}">Take MCQ test</button>
+        <button class="btn small" data-exam-start="${esc(e.id)}">Start manual timer</button>
         <button class="btn small danger-ghost" data-exam-delete="${esc(e.id)}">Delete exam</button>
       </div>
     </li>`;
@@ -423,6 +428,7 @@ function renderExams() {
   return `<div class="page">
     <div class="page-head"><h1>Exams</h1>
       <button class="btn small primary" id="add-exam-btn">+ Schedule exam</button></div>
+    ${st.activeQuiz ? `<section class="card"><h2>MCQ test in progress</h2><p>${esc(st.activeQuiz.examName)}</p><button class="btn primary" data-nav="quiz">Resume MCQ test</button></section>` : ''}
     ${st.activeExam ? `<section class="card"><h2>Timed test in progress</h2><p>${esc((st.exams.find((e) => e.id === st.activeExam.examId) || {}).name || 'Exam')} · <strong id="exam-timer-display"></strong></p><p class="muted small">Use your own questions. The timer does not submit answers or record marks; enter your result yourself.</p><button class="btn" id="end-timed-exam">End timer</button></section>` : ''}
     <p class="muted small">Chapter tests, subject tests and full-syllabus model tests. Record results and add notes about weak chapters. No GPA prediction is made.</p>
     <h2 class="section-title">Upcoming</h2>

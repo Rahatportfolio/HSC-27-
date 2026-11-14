@@ -168,6 +168,8 @@ function renderSearch() {
   const q = searchQuery.trim().toLowerCase();
   const results = [];
   if (q.length >= 2) {
+    st.subjects.filter((s) => s.name.toLowerCase().includes(q))
+      .forEach((s) => results.push({ type: 'Subject', label: s.name, sub: s.group, nav: 'subject', id: s.id }));
     st.chapters.filter((c) => (c.name + ' ' + subjectName(c.subjectId)).toLowerCase().includes(q))
       .forEach((c) => results.push({ type: 'Chapter', label: chapterLabel(c.id), sub: subjectName(c.subjectId), nav: 'chapter', id: c.id }));
     st.notes.filter((n) => (n.title + ' ' + n.body).toLowerCase().includes(q))
@@ -188,7 +190,7 @@ function renderSearch() {
     : results.length ? `<ul class="card-list">${results.map((r) => `
         <li class="card"><span class="badge">${esc(r.type)}</span> <strong>${esc(r.label)}</strong>
           <span class="muted small">${esc(r.sub)}</span>
-          <button class="btn small" data-nav="${esc(r.nav)}">Open</button></li>`).join('')}</ul>`
+          <button class="btn small" data-nav="${esc(r.nav)}" ${r.nav === 'subject' || r.nav === 'chapter' ? `data-id="${esc(r.id)}"` : 'data-search-result="true"'}>Open</button></li>`).join('')}</ul>`
     : `<p class="muted">No results for “${esc(searchQuery)}”.</p>`}
   </div>`;
 }

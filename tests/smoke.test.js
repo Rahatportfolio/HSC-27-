@@ -40,7 +40,7 @@ vm.createContext(sandbox);
 const files = [
   'js/utils.js', 'js/store.js',
   'js/views/dashboard.js', 'js/views/subjects.js', 'js/views/planner.js',
-  'js/views/focus.js', 'js/views/progress.js', 'js/views/library.js', 'js/views/more.js',
+  'js/views/focus.js', 'js/views/progress.js', 'js/views/library.js', 'js/views/more.js', 'js/views/quiz.js',
 ];
 for (const f of files) {
   const code = fs.readFileSync(path.join(__dirname, '..', f), 'utf8');

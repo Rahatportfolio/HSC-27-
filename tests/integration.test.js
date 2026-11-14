@@ -14,7 +14,7 @@ const dom = new JSDOM(html, { url: 'https://study.example/', runScripts: 'danger
 }});
 const w = dom.window, d = w.document;
 w.addEventListener('error', e => errors.push(e.error ? e.error.stack : e.message));
-for (const f of ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/app.js']) {
+for (const f of ['js/utils.js','js/store.js','js/views/dashboard.js','js/views/subjects.js','js/views/planner.js','js/views/focus.js','js/views/progress.js','js/views/library.js','js/views/more.js','js/views/quiz.js','js/app.js']) {
   const s = d.createElement('script'); s.textContent = fs.readFileSync(f, 'utf8'); d.body.appendChild(s);
 }
 function click(sel) { const el = d.querySelector(sel); assert.ok(el, 'missing ' + sel); el.click(); }
