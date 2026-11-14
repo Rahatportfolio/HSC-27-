@@ -41,8 +41,8 @@ function renderNotes(prefillChapterId) {
         ${n.url ? `<p><a href="${esc(sanitizeUrl(n.url))}" target="_blank" rel="noopener">Open document ↗</a></p>` : ''}
         <p class="note-body">${esc(n.body || '').replace(/\n/g, '<br>')}</p>
         <div class="row gap wrap">
-          <button class="btn small" data-note-edit="${esc(n.id)}">Edit</button>
-          <button class="btn small danger-ghost" data-note-delete="${esc(n.id)}">Delete</button>
+          <button class="btn small" data-note-edit="${esc(n.id)}" data-i18n="extra22">Edit</button>
+          <button class="btn small danger-ghost" data-note-delete="${esc(n.id)}" data-i18n="extra23">Delete</button>
         </div>
       </li>`).join('')}</ul>`
     : `<div class="empty"><p>No notes found.</p><p class="muted small">Add personal notes, formulas, definitions, tricks, PDF links and board-question references.</p></div>`}
@@ -52,21 +52,21 @@ function renderNotes(prefillChapterId) {
 function noteFormHTML(note) {
   const st = getState();
   return `<form id="note-form" class="form">
-    <label class="field"><span>Title *</span><input name="title" required value="${note ? esc(note.title) : ''}"></label>
-    <label class="field"><span>Category</span>
+    <label class="field"><span data-i18n="extra32">Title *</span><input name="title" required value="${note ? esc(note.title) : ''}"></label>
+    <label class="field"><span data-i18n="extra33">Category</span>
       <select name="category">${['note', 'formula', 'definition', 'trick', 'pdf', 'board-question'].map((c) => `<option value="${c}" ${note && note.category === c ? 'selected' : ''}>${c}</option>`).join('')}</select></label>
-    <label class="field"><span>Subject</span>
+    <label class="field"><span data-i18n="extra10">Subject</span>
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${note && note.subjectId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter (optional)</span>
+    <label class="field"><span data-i18n="extra14">Chapter (optional)</span>
       <select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${note && note.chapterId === c.id ? 'selected' : ''}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-    <label class="field"><span>Content</span><textarea name="body" rows="5">${note ? esc(note.body || '') : ''}</textarea></label>
+    <label class="field"><span data-i18n="extra34">Content</span><textarea name="body" rows="5">${note ? esc(note.body || '') : ''}</textarea></label>
     <label class="field"><span>Document URL (for PDFs / board questions)</span><input name="url" type="url" value="${note ? esc(note.url || '') : ''}" placeholder="https://…"></label>
     <label class="field"><span>Offline PDF (optional, maximum 512 KiB)</span><input name="pdf" type="file" accept="application/pdf,.pdf"></label>
     <p class="muted small">Small PDFs are stored in this browser and included in JSON backups. Storage is limited; keep the original file. Only attach files you trust.</p>
     ${note && note.attachment ? `<label class="check"><input type="checkbox" name="removePdf"> Remove current PDF: ${esc(note.attachment.name)}</label>` : ''}
-    <label class="field"><span>Tags (comma separated)</span><input name="tags" value="${note ? esc((note.tags || []).join(', ')) : ''}"></label>
+    <label class="field"><span data-i18n="extra35">Tags (comma separated)</span><input name="tags" value="${note ? esc((note.tags || []).join(', ')) : ''}"></label>
     <div class="row gap"><button class="btn primary" type="submit">${note ? 'Save note' : 'Add note'}</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -183,8 +183,8 @@ function renderFormulas(prefillChapterId) {
         <p class="muted small">${esc(subjectName(f.subject))}${f.chapterId ? ' · ' + esc(chapterLabel(f.chapterId)) : ''}</p>
         <p class="note-body">${esc(f.content || '').replace(/\n/g, '<br>')}</p>
         <div class="row gap wrap">
-          <button class="btn small" data-formula-edit="${esc(f.id)}">Edit</button>
-          <button class="btn small danger-ghost" data-formula-delete="${esc(f.id)}">Delete</button>
+          <button class="btn small" data-formula-edit="${esc(f.id)}" data-i18n="extra22">Edit</button>
+          <button class="btn small danger-ghost" data-formula-delete="${esc(f.id)}" data-i18n="extra23">Delete</button>
         </div>
       </li>`).join('')}</ul>`
     : `<div class="empty"><p>No formulas found.</p><p class="muted small">Keep Physics, Chemistry, Higher Math formulas, Biology definitions, ICT concepts and grammar rules here.</p></div>`}
@@ -194,14 +194,14 @@ function renderFormulas(prefillChapterId) {
 function formulaFormHTML(f) {
   const st = getState();
   return `<form id="formula-form" class="form">
-    <label class="field"><span>Title *</span><input name="title" required value="${f ? esc(f.title) : ''}" placeholder="e.g. Newton's second law"></label>
-    <label class="field"><span>Subject *</span>
+    <label class="field"><span data-i18n="extra32">Title *</span><input name="title" required value="${f ? esc(f.title) : ''}" placeholder="e.g. Newton's second law"></label>
+    <label class="field"><span data-i18n="extra11">Subject *</span>
       <select name="subject" required><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${f && f.subject === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter (optional)</span>
+    <label class="field"><span data-i18n="extra14">Chapter (optional)</span>
       <select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${f && f.chapterId === c.id ? 'selected' : ''}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-    <label class="field"><span>Formula / content *</span><textarea name="content" rows="4" required>${f ? esc(f.content || '') : ''}</textarea></label>
+    <label class="field"><span data-i18n="extra36">Formula / content *</span><textarea name="content" rows="4" required>${f ? esc(f.content || '') : ''}</textarea></label>
     <div class="row gap"><button class="btn primary" type="submit">${f ? 'Save' : 'Add'} formula</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -256,8 +256,8 @@ function renderLibrary(prefillChapterId) {
           <a class="btn small primary" href="${esc(sanitizeUrl(r.url))}" data-resource-open="${esc(r.id)}" target="_blank" rel="noopener">▶ Watch</a>
           ${r.playlistUrl ? `<a class="btn small" href="${esc(sanitizeUrl(r.playlistUrl))}" data-resource-open="${esc(r.id)}" target="_blank" rel="noopener">Playlist</a>` : ''}
           <button class="btn small ${r.watched ? 'primary' : ''}" data-resource-watched="${esc(r.id)}">${r.watched ? '✓ Watched' : 'Mark watched'}</button>
-          <button class="btn small" data-resource-edit="${esc(r.id)}">Edit</button>
-          <button class="btn small danger-ghost" data-resource-delete="${esc(r.id)}">Delete</button>
+          <button class="btn small" data-resource-edit="${esc(r.id)}" data-i18n="extra22">Edit</button>
+          <button class="btn small danger-ghost" data-resource-delete="${esc(r.id)}" data-i18n="extra23">Delete</button>
         </div>
       </li>`).join('')}</ul>`
     : `<div class="empty"><p>No videos found.</p><p class="muted small">Add YouTube links per subject/chapter with teacher or channel names.</p></div>`}
@@ -267,18 +267,18 @@ function renderLibrary(prefillChapterId) {
 function resourceFormHTML(r) {
   const st = getState();
   return `<form id="resource-form" class="form">
-    <label class="field"><span>Title *</span><input name="title" required value="${r ? esc(r.title) : ''}"></label>
+    <label class="field"><span data-i18n="extra32">Title *</span><input name="title" required value="${r ? esc(r.title) : ''}"></label>
     <label class="field"><span>YouTube URL *</span><input name="url" type="url" required value="${r ? esc(sanitizeUrl(r.url)) : ''}" placeholder="https://www.youtube.com/watch?v=…"></label>
-    <label class="field"><span>Teacher / channel</span><input name="channel" value="${r ? esc(r.channel || '') : ''}"></label>
-    <label class="field"><span>Playlist URL</span><input name="playlistUrl" type="url" value="${r ? esc(r.playlistUrl || '') : ''}"></label>
-    <label class="field"><span>Subject</span>
+    <label class="field"><span data-i18n="extra37">Teacher / channel</span><input name="channel" value="${r ? esc(r.channel || '') : ''}"></label>
+    <label class="field"><span data-i18n="extra38">Playlist URL</span><input name="playlistUrl" type="url" value="${r ? esc(r.playlistUrl || '') : ''}"></label>
+    <label class="field"><span data-i18n="extra10">Subject</span>
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${r && r.subjectId === s.id ? 'selected' : ''}>${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter (optional)</span>
+    <label class="field"><span data-i18n="extra14">Chapter (optional)</span>
       <select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${r && r.chapterId === c.id ? 'selected' : ''}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-    <label class="field"><span>Description</span><textarea name="description" rows="3">${r ? esc(r.description || '') : ''}</textarea></label>
-    <label class="field"><span>Your rating (1–5)</span><input name="rating" type="number" min="1" max="5" value="${r ? esc(r.rating || '') : ''}"></label>
+    <label class="field"><span data-i18n="extra39">Description</span><textarea name="description" rows="3">${r ? esc(r.description || '') : ''}</textarea></label>
+    <label class="field"><span data-i18n="extra40">Your rating (1–5)</span><input name="rating" type="number" min="1" max="5" value="${r ? esc(r.rating || '') : ''}"></label>
     <div class="row gap"><button class="btn primary" type="submit">${r ? 'Save' : 'Add'} video</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -326,13 +326,13 @@ function renderPractice(prefillChapterId) {
         <div class="row gap wrap">
           <button class="btn small ${p.bookmarked ? 'primary' : ''}" data-practice-bookmark="${esc(p.id)}">${p.bookmarked ? '★ Bookmarked' : '☆ Bookmark'}</button>
           <button class="btn small ${p.reattempted ? 'primary' : ''}" data-practice-reattempt="${esc(p.id)}">${p.reattempted ? '✓ Reattempted' : 'Mark reattempted'}</button>
-          <button class="btn small danger-ghost" data-practice-delete="${esc(p.id)}">Delete</button>
+          <button class="btn small danger-ghost" data-practice-delete="${esc(p.id)}" data-i18n="extra23">Delete</button>
         </div>
       </li>`;
     }).join('')}</ul>`
     : `<div class="empty"><p>No practice recorded yet.</p><p class="muted small">Record your first MCQ/CQ/written session to start tracking accuracy.</p></div>`}
     <section class="card">
-      <h2>Question bank</h2>
+      <h2 data-i18n="extra31">Question bank</h2>
       <p class="muted small">Your own questions (manual or imported). AI-generated questions are always labelled and never presented as board questions.</p>
       <div class="row gap wrap">
         <button class="btn small" id="add-question-btn">+ Add question</button>
@@ -342,8 +342,8 @@ function renderPractice(prefillChapterId) {
       </div>
       ${st.questionBank.length ? `<ul class="plain-list">${questions.map((q) => `
         <li><strong>${esc(q.type.toUpperCase())}</strong> ${esc(q.question)} <span class="muted small">(${esc(q.source)})</span>
-        <button class="btn small" data-question-edit="${esc(q.id)}">Edit</button>
-        <button class="btn small danger-ghost" data-question-delete="${esc(q.id)}">Delete</button></li>`).join('')}</ul>`
+        <button class="btn small" data-question-edit="${esc(q.id)}" data-i18n="extra22">Edit</button>
+        <button class="btn small danger-ghost" data-question-delete="${esc(q.id)}" data-i18n="extra23">Delete</button></li>`).join('')}</ul>`
       : `<p class="muted small">Question bank is empty.</p>`}
       ${totalPages > 1 ? `<div class="row gap"><button class="btn small" data-question-page="${questionPage-1}" ${questionPage === 0 ? 'disabled' : ''}>Previous</button><span>Page ${questionPage+1} of ${totalPages}</span><button class="btn small" data-question-page="${questionPage+1}" ${questionPage+1 === totalPages ? 'disabled' : ''}>Next</button></div>` : ''}
     </section>
@@ -353,20 +353,20 @@ function renderPractice(prefillChapterId) {
 function practiceFormHTML(prefillChapterId) {
   const st = getState();
   return `<form id="practice-form" class="form">
-    <label class="field"><span>Chapter *</span>
+    <label class="field"><span data-i18n="extra12">Chapter *</span>
       <select name="chapterId" required><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${prefillChapterId === c.id ? 'selected' : ''}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-    <label class="field"><span>Type</span>
+    <label class="field"><span data-i18n="extra41">Type</span>
       <select name="type"><option value="mcq">MCQ</option><option value="cq">CQ</option><option value="written">Written answer</option></select></label>
-    <label class="field"><span>Date</span><input name="date" type="date" value="${todayKey()}"></label>
-    <label class="field"><span>Questions attempted</span><input name="attempted" type="number" min="0" value="10"></label>
-    <label class="field"><span>Correct (MCQ)</span><input name="correct" type="number" min="0" value="0"></label>
-    <label class="field"><span>CQ marks obtained (optional)</span><input name="marks" type="number" min="0" step="0.5"></label>
-    <label class="field"><span>CQ total marks (optional)</span><input name="totalMarks" type="number" min="0" step="0.5"></label>
-    <label class="field"><span>Time spent (minutes)</span><input name="durationMinutes" type="number" min="0"></label>
-    <label class="field"><span>Mistakes (one per line)</span><textarea name="mistakes" rows="3" placeholder="Question or topic you got wrong…"></textarea></label>
-    <label class="field"><span>Note</span><input name="note"></label>
-    <div class="row gap"><button class="btn primary" type="submit">Save practice</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <label class="field"><span data-i18n="extra42">Date</span><input name="date" type="date" value="${todayKey()}"></label>
+    <label class="field"><span data-i18n="extra43">Questions attempted</span><input name="attempted" type="number" min="0" value="10"></label>
+    <label class="field"><span data-i18n="extra44">Correct (MCQ)</span><input name="correct" type="number" min="0" value="0"></label>
+    <label class="field"><span data-i18n="extra45">CQ marks obtained (optional)</span><input name="marks" type="number" min="0" step="0.5"></label>
+    <label class="field"><span data-i18n="extra46">CQ total marks (optional)</span><input name="totalMarks" type="number" min="0" step="0.5"></label>
+    <label class="field"><span data-i18n="extra47">Time spent (minutes)</span><input name="durationMinutes" type="number" min="0"></label>
+    <label class="field"><span data-i18n="extra48">Mistakes (one per line)</span><textarea name="mistakes" rows="3" placeholder="Question or topic you got wrong…"></textarea></label>
+    <label class="field"><span data-i18n="extra49">Note</span><input name="note"></label>
+    <div class="row gap"><button class="btn primary" type="submit" data-i18n="extra50">Save practice</button>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -450,18 +450,18 @@ function renderExams() {
 function examFormHTML() {
   const st = getState();
   return `<form id="exam-form" class="form">
-    <label class="field"><span>Exam name *</span><input name="name" required placeholder="e.g. Physics 1st — Chapter 2 test"></label>
-    <label class="field"><span>Scope</span>
+    <label class="field"><span data-i18n="extra51">Exam name *</span><input name="name" required placeholder="e.g. Physics 1st — Chapter 2 test"></label>
+    <label class="field"><span data-i18n="extra52">Scope</span>
       <select name="scope"><option value="chapter">Chapter test</option><option value="subject">Subject test</option><option value="full">Full syllabus model test</option></select></label>
-    <label class="field"><span>Subject</span>
+    <label class="field"><span data-i18n="extra10">Subject</span>
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
     <label class="field"><span>Chapter (required for chapter tests)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}">${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-    <label class="field"><span>Exam format</span><select name="format"><option value="mixed">Mixed</option><option value="mcq">MCQ</option><option value="written">Written</option></select></label>
-    <label class="field"><span>Date</span><input name="date" type="date" value="${todayKey()}" required></label>
-    <label class="field"><span>Duration (minutes)</span><input name="durationMinutes" type="number" min="1" value="60"></label>
-    <label class="field"><span>Total marks</span><input name="totalMarks" type="number" min="1" value="25"></label>
-    <div class="row gap"><button class="btn primary" type="submit">Schedule exam</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <label class="field"><span data-i18n="extra53">Exam format</span><select name="format"><option value="mixed">Mixed</option><option value="mcq">MCQ</option><option value="written">Written</option></select></label>
+    <label class="field"><span data-i18n="extra42">Date</span><input name="date" type="date" value="${todayKey()}" required></label>
+    <label class="field"><span data-i18n="extra54">Duration (minutes)</span><input name="durationMinutes" type="number" min="1" value="60"></label>
+    <label class="field"><span data-i18n="extra55">Total marks</span><input name="totalMarks" type="number" min="1" value="25"></label>
+    <div class="row gap"><button class="btn primary" type="submit" data-i18n="extra56">Schedule exam</button>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -492,11 +492,11 @@ function saveExamFromForm(form) {
 function resultFormHTML(exam) {
   return `<form id="result-form" class="form">
     <p><strong>${esc(exam.name)}</strong> — ${esc(exam.totalMarks)} marks</p>
-    <label class="field"><span>Marks obtained *</span><input name="obtainedMarks" type="number" min="0" max="${esc(exam.totalMarks)}" step="0.5" required></label>
-    <label class="field"><span>Date</span><input name="date" type="date" value="${todayKey()}"></label>
-    <label class="field"><span>Notes / weak chapters</span><textarea name="notes" rows="3" placeholder="Which chapters were weak?"></textarea></label>
-    <div class="row gap"><button class="btn primary" type="submit">Save result</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <label class="field"><span data-i18n="extra57">Marks obtained *</span><input name="obtainedMarks" type="number" min="0" max="${esc(exam.totalMarks)}" step="0.5" required></label>
+    <label class="field"><span data-i18n="extra42">Date</span><input name="date" type="date" value="${todayKey()}"></label>
+    <label class="field"><span data-i18n="extra58">Notes / weak chapters</span><textarea name="notes" rows="3" placeholder="Which chapters were weak?"></textarea></label>
+    <div class="row gap"><button class="btn primary" type="submit" data-i18n="extra59">Save result</button>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -566,7 +566,7 @@ function renderWeaknesses(prefillChapterId) {
       <button class="btn small" data-weakness-practice="${esc(w.id)}">Practiced +1</button>
       <button class="btn small" data-weakness-status="${esc(w.id)}" data-status="improving">Improving</button>
       <button class="btn small primary" data-weakness-status="${esc(w.id)}" data-status="resolved">Resolved</button>
-      <button class="btn small danger-ghost" data-weakness-delete="${esc(w.id)}">Delete</button>
+      <button class="btn small danger-ghost" data-weakness-delete="${esc(w.id)}" data-i18n="extra23">Delete</button>
     </div>
   </li>`;
 
@@ -586,17 +586,17 @@ function renderWeaknesses(prefillChapterId) {
 function weaknessFormHTML(prefillChapterId) {
   const st = getState();
   return `<form id="weakness-form" class="form">
-    <label class="field"><span>Difficult topic *</span><input name="topic" required placeholder="e.g. Rotational motion — torque sign"></label>
-    <label class="field"><span>Subject</span>
+    <label class="field"><span data-i18n="extra60">Difficult topic *</span><input name="topic" required placeholder="e.g. Rotational motion — torque sign"></label>
+    <label class="field"><span data-i18n="extra10">Subject</span>
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}">${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter (optional)</span>
+    <label class="field"><span data-i18n="extra14">Chapter (optional)</span>
       <select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${prefillChapterId === c.id ? 'selected' : ''}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
-    <label class="field"><span>Type</span>
+    <label class="field"><span data-i18n="extra41">Type</span>
       <select name="type"><option value="concept">Concept</option><option value="mcq">MCQ mistake</option><option value="cq">CQ mistake</option><option value="other">Other</option></select></label>
-    <label class="field"><span>Reason for mistake</span><textarea name="reason" rows="2" placeholder="e.g. Sign error, formula confusion…"></textarea></label>
-    <label class="field"><span>Correction task</span><input name="correctionTask" placeholder="e.g. Solve 10 similar problems"></label>
-    <div class="row gap"><button class="btn primary" type="submit">Add weakness</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <label class="field"><span data-i18n="extra61">Reason for mistake</span><textarea name="reason" rows="2" placeholder="e.g. Sign error, formula confusion…"></textarea></label>
+    <label class="field"><span data-i18n="extra62">Correction task</span><input name="correctionTask" placeholder="e.g. Solve 10 similar problems"></label>
+    <div class="row gap"><button class="btn primary" type="submit" data-i18n="extra63">Add weakness</button>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 

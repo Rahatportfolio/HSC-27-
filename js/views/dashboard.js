@@ -39,7 +39,7 @@ function renderDashboard() {
         </div>
       </div>
       <div class="stat-grid">
-        <div class="stat"><span class="stat-label">Today</span><strong>${formatDuration(actual)}</strong><span class="muted small">of ${formatDuration(target)} target</span></div>
+        <div class="stat"><span class="stat-label" data-i18n="extra69">Today</span><strong>${formatDuration(actual)}</strong><span class="muted small">of ${formatDuration(target)} target</span></div>
         <div class="stat"><span class="stat-label">Remaining</span><strong>${formatDuration(remaining)}</strong><span class="muted small">${dayPct}% done</span></div>
         <div class="stat"><span class="stat-label">This week</span><strong>${formatDuration(weekMinutes)}</strong><span class="muted small">of ${formatDuration(weekTarget)}</span></div>
         <div class="stat"><span class="stat-label">Syllabus</span><strong>${overall.pct}%</strong><span class="muted small">${overall.done}/${overall.total} chapters done</span></div>

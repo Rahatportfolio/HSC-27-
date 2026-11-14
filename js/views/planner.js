@@ -24,7 +24,7 @@ function renderPlanner() {
     <div class="tabs">${tabs}</div>
     <div class="row gap">
       <button class="btn small ghost" id="planner-prev">←</button>
-      <button class="btn small ghost" id="planner-today">Today</button>
+      <button class="btn small ghost" id="planner-today" data-i18n="extra69">Today</button>
       <button class="btn small ghost" id="planner-next">→</button>
     </div>
     ${body}
@@ -65,7 +65,7 @@ function suggestedPlan(today = todayKey()) {
 }
 function renderSuggestedPlan() {
   const suggestions = suggestedPlan();
-  return `<section class="card"><h2>Suggested next 7 days</h2>
+  return `<section class="card"><h2 data-i18n="extra70">Suggested next 7 days</h2>
     <p class="muted small">Preview only: 30-minute tasks from due/upcoming revisions and your active weaknesses. Earliest day with room under your daily planned target; no time slots or automatic scheduling. Existing non-rest planned tasks count towards that target. Review and edit after adding.</p>
     ${suggestions.length ? `<ul class="plain-list">${suggestions.map(s => `<li>${esc(formatDate(s.date))} · ${esc(s.title)} · ${s.kind === 'revision' ? 'revision' : 'weakness'} · 30m</li>`).join('')}</ul><button class="btn" id="add-suggested-plan">Add these ${suggestions.length} task(s)</button>` : '<p class="muted small">No eligible suggestions or no room under your planned target in the next 7 days.</p>'}
     <p class="muted small">Only linked suggestions and pending correction tasks are checked for duplicates; review manually created tasks too. This is not an exam-result prediction.</p></section>`;
@@ -165,20 +165,20 @@ function taskFormHTML(prefillDate, task = null) {
   const st = getState();
   const sel = (actual, expected) => actual === expected ? 'selected' : '';
   return `<form id="task-form" class="form" data-chapter="${esc(task?.chapterId || '')}">
-    <label class="field"><span>Task title *</span><input name="title" maxlength="300" required value="${esc(task?.title || '')}" placeholder="e.g. Physics Ch 2 — CQ practice"></label>
-    <label class="field"><span>Subject</span>
+    <label class="field"><span data-i18n="extra64">Task title *</span><input name="title" maxlength="300" required value="${esc(task?.title || '')}" placeholder="e.g. Physics Ch 2 — CQ practice"></label>
+    <label class="field"><span data-i18n="extra10">Subject</span>
       <select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${sel(task?.subjectId, s.id)}>${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option></select></label>
-    <label class="field"><span>Date</span><input name="date" type="date" required value="${esc(task?.date || prefillDate || todayKey())}"></label>
-    <label class="field"><span>Start time (optional)</span><input name="startTime" type="time" value="${esc(task?.startTime || '')}"></label>
-    <label class="field"><span>Planned minutes (1–1440)</span><input name="plannedMinutes" type="number" min="1" max="1440" step="1" required value="${esc(task?.plannedMinutes ?? 60)}"></label>
-    <label class="field"><span>Type</span>
+    <label class="field"><span data-i18n="extra14">Chapter (optional)</span><select name="chapterId"><option value="">—</option></select></label>
+    <label class="field"><span data-i18n="extra42">Date</span><input name="date" type="date" required value="${esc(task?.date || prefillDate || todayKey())}"></label>
+    <label class="field"><span data-i18n="extra65">Start time (optional)</span><input name="startTime" type="time" value="${esc(task?.startTime || '')}"></label>
+    <label class="field"><span data-i18n="extra66">Planned minutes (1–1440)</span><input name="plannedMinutes" type="number" min="1" max="1440" step="1" required value="${esc(task?.plannedMinutes ?? 60)}"></label>
+    <label class="field"><span data-i18n="extra41">Type</span>
       <select name="type">${[['study','Study'],['revision','Revision'],['test','Test'],['rest','Rest / break']].map(([v,l]) => `<option value="${v}" ${sel(task?.type || 'study',v)}>${l}</option>`).join('')}</select></label>
-    <label class="field"><span>Priority</span>
+    <label class="field"><span data-i18n="extra67">Priority</span>
       <select name="priority">${['A','B','C'].map(p => `<option value="${p}" ${sel(task?.priority || 'B',p)}>${p}</option>`).join('')}</select></label>
-    <label class="field"><span>Deadline (optional)</span><input name="deadline" type="date" value="${esc(task?.deadline || '')}"></label>
+    <label class="field"><span data-i18n="extra68">Deadline (optional)</span><input name="deadline" type="date" value="${esc(task?.deadline || '')}"></label>
     <div class="row gap"><button class="btn primary" type="submit">${task ? 'Save task' : 'Add task'}</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 

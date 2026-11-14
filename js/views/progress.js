@@ -98,7 +98,7 @@ function renderProgress() {
     <div class="page-head"><h1 data-i18n="progress">Progress</h1></div>
 
     <section class="card">
-      <h2>Personal study challenge</h2>
+      <h2 data-i18n="extra80">Personal study challenge</h2>
       ${st.challenge && isValidDateKey(st.challenge.startDate) && Number.isInteger(st.challenge.days) && st.challenge.days > 0 && st.challenge.days <= 90 && Number.isInteger(st.challenge.targetMinutes) && st.challenge.targetMinutes > 0 && st.challenge.targetMinutes <= 1440 ? (() => {
         const c = st.challenge;
         const completed = Array.from({ length: c.days }, (_, i) => addDays(c.startDate, i)).filter((d) => d <= today && minutesOn(d) >= c.targetMinutes).length;
@@ -108,7 +108,7 @@ function renderProgress() {
     </section>
 
     <section class="card">
-      <h2>Daily study — last 14 days</h2>
+      <h2 data-i18n="extra85">Daily study — last 14 days</h2>
       <p class="muted small">Target ${formatDuration(target)}/day · Green bars met the target</p>
       <div class="bar-chart">${days.map(bar).join('')}</div>
       <div class="stat-grid">
@@ -122,7 +122,7 @@ function renderProgress() {
     </section>
 
     <section class="card">
-      <h2>Subject-wise study time &amp; completion</h2>
+      <h2 data-i18n="extra86">Subject-wise study time &amp; completion</h2>
       ${subjectRows.length ? subjectRows.map((r) => `
         <div class="subject-stat">
           <div class="row between"><span><span class="dot" style="background:${esc(r.subject.color)}"></span> ${esc(r.subject.name)}</span>
@@ -132,7 +132,7 @@ function renderProgress() {
     </section>
 
     <section class="card">
-      <h2>Practice &amp; tests</h2>
+      <h2 data-i18n="extra81">Practice &amp; tests</h2>
       <ul class="plain-list">
         <li>MCQ: ${esc(mcqAll.attempted)} attempted · accuracy ${mcqAcc === null ? '—' : mcqAcc + '%'}</li>
         <li>CQ: ${esc(cqAll.marks)}/${esc(cqAll.totalMarks)} marks recorded</li>
@@ -144,13 +144,13 @@ function renderProgress() {
     </section>
 
     <section class="card">
-      <h2>Same-test score comparison</h2>
+      <h2 data-i18n="extra84">Same-test score comparison</h2>
       <p class="muted small">Most recent two valid records for the same exam and marking method; same-day entries need distinct timestamps. A score change is not proof of learning or a future prediction.</p>
       ${comparisons.length ? `<ul class="plain-list">${comparisons.map(({latest,previous,change}) => `<li><strong>${esc(latest.exam.name)}</strong> · ${esc(latest.method)}<br>${esc(formatDate(previous.result.date))}: ${Math.round(previous.percentage)}% → ${esc(formatDate(latest.result.date))}: ${Math.round(latest.percentage)}% · ${change > 0 ? '+' : ''}${change} percentage points</li>`).join('')}</ul>` : '<p class="muted">Record two valid results for the same exam and marking method to compare.</p>'}
     </section>
 
     <section class="card">
-      <h2>Chapter test performance</h2>
+      <h2 data-i18n="extra82">Chapter test performance</h2>
       <p class="muted small">Based only on your recorded scores. A low score can identify a topic to revisit, not a prediction.</p>
       ${(() => {
         const scores = st.chapters.map((c) => {
@@ -162,7 +162,7 @@ function renderProgress() {
     </section>
 
     <section class="card">
-      <h2>Most neglected chapters</h2>
+      <h2 data-i18n="extra83">Most neglected chapters</h2>
       ${neglected.length ? `<ul class="plain-list">${neglected.map((x) => `
         <li><button class="link" data-nav="chapter" data-id="${esc(x.chapter.id)}">${esc(subjectName(x.chapter.subjectId))} — ${esc(chapterLabel(x.chapter.id))}</button>
         <span class="muted small"> (priority ${esc(x.chapter.priority || 'B')}, no study time yet)</span></li>`).join('')}</ul>`

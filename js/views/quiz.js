@@ -34,7 +34,7 @@ function startBankQuiz(examId) {
 
 function renderBankQuiz() {
   const quiz = getState().activeQuiz;
-  if (!quiz) return `<div class="page"><h1>MCQ test</h1><p>No active test.</p><button class="btn" data-nav="exams">Exams</button></div>`;
+  if (!quiz) return `<div class="page"><h1 data-i18n="extra108">MCQ test</h1><p>No active test.</p><button class="btn" data-nav="exams">Exams</button></div>`;
   const expired = Date.now() >= quiz.endsAt;
   return `<div class="page"><div class="page-head"><h1>${esc(quiz.examName)} — MCQ test</h1></div>
     <p class="muted small">From your own question bank, not official board content. Equal marks per question; no negative marking. Answers are saved on this device.</p>
@@ -42,9 +42,9 @@ function renderBankQuiz() {
     ${quiz.questions.map((q, i) => `<fieldset class="card"><legend><strong>${i + 1}. ${esc(q.question)}</strong></legend>
       ${q.options.map((choice, n) => `<label class="check"><input type="radio" name="q-${i}" data-quiz-answer="${i}" value="${n}" ${quiz.answers[i] === n ? 'checked' : ''} ${expired ? 'disabled' : ''}> ${esc(choice)}</label>`).join('')}
       <p class="muted small">Source: ${esc(q.source)}</p></fieldset>`).join('')}
-    <button class="btn primary" id="quiz-submit">Submit test</button>
-    <button class="btn ghost" data-nav="exams">Back to exams</button>
-    <button class="btn danger-ghost" id="quiz-discard">Discard test</button>
+    <button class="btn primary" id="quiz-submit" data-i18n="extra112">Submit test</button>
+    <button class="btn ghost" data-nav="exams" data-i18n="extra111">Back to exams</button>
+    <button class="btn danger-ghost" id="quiz-discard" data-i18n="extra113">Discard test</button>
   </div>`;
 }
 
@@ -91,7 +91,7 @@ function quizReviewHTML(result) {
       <p>Your answer: ${q.selectedIndex === null ? 'Not answered' : esc(q.options[q.selectedIndex] || '')}</p>
       <p>Correct answer: ${esc(q.options[q.correctIndex] || '')}</p>
       ${q.answer ? `<p>${esc(q.answer)}</p>` : ''}<p class="muted small">Source: ${esc(q.source)}</p>${q.selectedIndex !== q.correctIndex ? `<button class="btn small" data-quiz-weakness="${esc(result.id)}" data-index="${i}">Save as weakness</button>` : ''}</section>`).join('')}
-    <button class="btn" data-nav="exams">Back to exams</button></div>`;
+    <button class="btn" data-nav="exams" data-i18n="extra111">Back to exams</button></div>`;
 }
 
 // Self-administered written practice. The student, not an algorithm, marks answers.
@@ -110,16 +110,16 @@ function startWrittenTest(examId) {
 }
 function renderWrittenTest() {
   const test = getState().activeWritten;
-  if (!test) return `<div class="page"><h1>Written test</h1><p>No active test.</p><button class="btn" data-nav="exams">Exams</button></div>`;
+  if (!test) return `<div class="page"><h1 data-i18n="extra109">Written test</h1><p>No active test.</p><button class="btn" data-nav="exams">Exams</button></div>`;
   const marking = !!test.submittedAt, expired = Date.now() >= test.endsAt;
   return `<div class="page"><h1>${esc(test.examName)} — written test</h1>
     <p class="muted small">Your own questions, not official board content. Answers are saved on this device. ${marking ? 'Mark each answer yourself from 0 to 100%; questions carry equal weight. No automatic grading.' : 'After submission, mark your answers yourself.'}</p>
     ${!marking ? `<p><strong id="written-timer">${expired ? 'Time is up' : formatClock(Math.ceil((test.endsAt-Date.now())/1000))+' remaining'}</strong></p>` : ''}
     ${test.questions.map((q,i) => `<section class="card"><h2>${i+1}. ${esc(q.question)}</h2><p class="muted small">Source: ${esc(q.source)}</p>
-      ${marking ? `<p><strong>Your answer</strong></p><p>${esc(test.answers[i] || '').replace(/\n/g,'<br>')}</p>${q.answer ? `<p><strong>Your reference answer</strong></p><p>${esc(q.answer).replace(/\n/g,'<br>')}</p>` : ''}<label class="field"><span>Self-mark percentage (0–100) *</span><input type="number" min="0" max="100" step="1" data-written-score="${i}" value="${Number.isInteger(test.scores[i]) ? test.scores[i] : ''}"></label>`
-        : `<label class="field"><span>Your answer</span><textarea rows="5" maxlength="4000" data-written-answer="${i}" ${expired ? 'disabled' : ''}>${esc(test.answers[i] || '')}</textarea></label>`}</section>`).join('')}
-    ${marking ? '<button class="btn primary" id="written-finish">Save self-marked result</button>' : '<button class="btn primary" id="written-submit">Submit for self-marking</button>'}
-    <button class="btn ghost" data-nav="exams">Back to exams</button><button class="btn danger-ghost" id="written-discard">Discard test</button></div>`;
+      ${marking ? `<p><strong data-i18n="extra114">Your answer</strong></p><p>${esc(test.answers[i] || '').replace(/\n/g,'<br>')}</p>${q.answer ? `<p><strong data-i18n="extra115">Your reference answer</strong></p><p>${esc(q.answer).replace(/\n/g,'<br>')}</p>` : ''}<label class="field"><span data-i18n="extra116">Self-mark percentage (0–100) *</span><input type="number" min="0" max="100" step="1" data-written-score="${i}" value="${Number.isInteger(test.scores[i]) ? test.scores[i] : ''}"></label>`
+        : `<label class="field"><span data-i18n="extra114">Your answer</span><textarea rows="5" maxlength="4000" data-written-answer="${i}" ${expired ? 'disabled' : ''}>${esc(test.answers[i] || '')}</textarea></label>`}</section>`).join('')}
+    ${marking ? '<button class="btn primary" id="written-finish" data-i18n="extra117">Save self-marked result</button>' : '<button class="btn primary" id="written-submit" data-i18n="extra118">Submit for self-marking</button>'}
+    <button class="btn ghost" data-nav="exams" data-i18n="extra111">Back to exams</button><button class="btn danger-ghost" id="written-discard" data-i18n="extra113">Discard test</button></div>`;
 }
 function submitWrittenTest() {
   const st = getState(), test = st.activeWritten;
@@ -144,9 +144,9 @@ function finishWrittenTest() {
   return true;
 }
 function writtenReviewHTML(result) {
-  return `<div class="page"><h1>Written test review</h1><p class="muted small">Self-marked, equal weighting; not an automatic assessment or official questions.</p>
-    ${result.writtenReview.map((q,i)=>`<section class="card"><h2>${i+1}. ${esc(q.question)}</h2><p>Self-mark: ${esc(q.selfScore)}%</p><p><strong>Your answer</strong></p><p>${esc(q.response || '').replace(/\n/g,'<br>')}</p>${q.answer ? `<p><strong>Reference answer</strong></p><p>${esc(q.answer).replace(/\n/g,'<br>')}</p>` : ''}<p class="muted small">Source: ${esc(q.source)}</p></section>`).join('')}
-    <button class="btn" data-nav="exams">Back to exams</button></div>`;
+  return `<div class="page"><h1 data-i18n="extra119">Written test review</h1><p class="muted small">Self-marked, equal weighting; not an automatic assessment or official questions.</p>
+    ${result.writtenReview.map((q,i)=>`<section class="card"><h2>${i+1}. ${esc(q.question)}</h2><p>Self-mark: ${esc(q.selfScore)}%</p><p><strong data-i18n="extra114">Your answer</strong></p><p>${esc(q.response || '').replace(/\n/g,'<br>')}</p>${q.answer ? `<p><strong data-i18n="extra120">Reference answer</strong></p><p>${esc(q.answer).replace(/\n/g,'<br>')}</p>` : ''}<p class="muted small">Source: ${esc(q.source)}</p></section>`).join('')}
+    <button class="btn" data-nav="exams" data-i18n="extra111">Back to exams</button></div>`;
 }
 let lastWrittenSaveFailure = 0;
 function checkWrittenExpiry() {

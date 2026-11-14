@@ -29,7 +29,7 @@ function renderReview() {
     <p class="muted">Week of ${esc(formatDate(wStart))} · Studied ${formatDuration(weekMins)} of ${formatDuration(target * 7)} target.</p>
 
     <section class="card">
-      <h2>Auto-generated summary (from recorded data only)</h2>
+      <h2 data-i18n="extra87">Auto-generated summary (from recorded data only)</h2>
       <ul class="plain-list">
         <li>Chapters completed this week: <strong>${chaptersDone.length}</strong>${chaptersDone.length ? ' — ' + chaptersDone.map((c) => esc(chapterLabel(c.id))).join(', ') : ''}</li>
         <li>Original weekly plan: ${formatDuration(plannedMinutes)} across ${plannedTasks.length} tasks · ${plannedTasks.filter((t) => t.status === 'done').length} currently marked done.</li>
@@ -43,7 +43,7 @@ function renderReview() {
     </section>
 
     <section class="card">
-      <h2>Your answers</h2>
+      <h2 data-i18n="extra88">Your answers</h2>
       <form id="review-form" class="form">
         <label class="field"><span>1. Which chapters were completed?</span><textarea name="completed" rows="2">${existing ? esc(existing.answers.completed || '') : ''}</textarea></label>
         <label class="field"><span>2. Progress per subject?</span><textarea name="subjectProgress" rows="2">${existing ? esc(existing.answers.subjectProgress || '') : ''}</textarea></label>
@@ -51,18 +51,18 @@ function renderReview() {
         <label class="field"><span>4. Which topics were difficult?</span><textarea name="difficult" rows="2">${existing ? esc(existing.answers.difficult || '') : ''}</textarea></label>
         <label class="field"><span>5. Actual hours studied</span><input name="hours" value="${existing ? esc(existing.answers.hours || '') : minutesToHours(weekMins)}"></label>
         <label class="field"><span>6. Which planned tasks were missed?</span><textarea name="missed" rows="2">${existing ? esc(existing.answers.missed || '') : ''}</textarea></label>
-        <label class="field"><span>Goals for the next 7 days</span><textarea name="goals" rows="3">${existing ? esc(existing.answers.goals || '') : ''}</textarea></label>
+        <label class="field"><span data-i18n="extra89">Goals for the next 7 days</span><textarea name="goals" rows="3">${existing ? esc(existing.answers.goals || '') : ''}</textarea></label>
         <button class="btn primary" type="submit">${existing ? 'Update review' : 'Save review'}</button>
       </form>
     </section>
 
     <section class="card">
-      <h2>Turn goals into tasks</h2>
+      <h2 data-i18n="extra90">Turn goals into tasks</h2>
       <p class="muted small">Save your review first. Put one goal per line; this creates one 30-minute task per goal across the next seven days, without replacing existing tasks. You can reschedule them in Planner.</p>
       ${existing && existing.answers.goals ? `<button class="btn" id="review-create-tasks">Create tasks from saved goals</button>` : '<p class="muted">No saved goals yet.</p>'}
     </section>
     <section class="card">
-      <h2>Past reviews</h2>
+      <h2 data-i18n="extra91">Past reviews</h2>
       ${st.weeklyReviews.length ? `<ul class="plain-list">${st.weeklyReviews.slice().sort((a, b) => b.weekStart.localeCompare(a.weekStart)).map((r) => `
         <li><strong>${esc(formatDate(r.weekStart))}</strong> — goals: ${esc(r.answers.goals || '—')}</li>`).join('')}</ul>`
       : `<p class="muted">No reviews saved yet.</p>`}
@@ -78,10 +78,10 @@ function saveReviewFromForm(form) {
   ['completed', 'subjectProgress', 'tests', 'difficult', 'hours', 'missed', 'goals'].forEach((k) => {
     answers[k] = sanitizeText(fd.get(k), 5000);
   });
-  const existing = st.weeklyReviews.find((r) => r.weekStart === wStart);
-  if (existing) { existing.answers = answers; existing.updatedAt = nowISO(); }
-  else st.weeklyReviews.push({ id: uid('rev'), weekStart: wStart, answers, createdAt: nowISO(), updatedAt: nowISO() });
-  save();
+  const previous = st.weeklyReviews;
+  const existing = previous.find((r) => r.weekStart === wStart);
+  st.weeklyReviews = existing ? previous.map(r => r === existing ? {...r,answers,updatedAt:nowISO()} : r) : [...previous,{id:uid('rev'),weekStart:wStart,answers,createdAt:nowISO(),updatedAt:nowISO()}];
+  if (!save()) { st.weeklyReviews = previous; return false; }
   return true;
 }
 
@@ -95,19 +95,19 @@ function renderJournal() {
     ${list.length ? `<ul class="card-list">${list.map((j) => `
       <li class="card"><strong>${esc(formatDate(j.date))}</strong>${j.mood ? ` <span class="badge">${esc(j.mood)}</span>` : ''}
         <p>${esc(j.text).replace(/\n/g, '<br>')}</p>
-        <button class="btn small danger-ghost" data-journal-delete="${esc(j.id)}">Delete</button></li>`).join('')}</ul>`
+        <button class="btn small danger-ghost" data-journal-delete="${esc(j.id)}" data-i18n="extra23">Delete</button></li>`).join('')}</ul>`
     : `<div class="empty"><p>No journal entries yet.</p></div>`}
   </div>`;
 }
 
 function journalFormHTML() {
   return `<form id="journal-form" class="form">
-    <label class="field"><span>Date</span><input name="date" type="date" value="${todayKey()}"></label>
-    <label class="field"><span>Mood</span>
+    <label class="field"><span data-i18n="extra42">Date</span><input name="date" type="date" value="${todayKey()}"></label>
+    <label class="field"><span data-i18n="extra92">Mood</span>
       <select name="mood"><option value="">—</option><option>Great</option><option>Good</option><option>Okay</option><option>Tough</option></select></label>
-    <label class="field"><span>Entry *</span><textarea name="text" rows="5" required placeholder="What did you study? What was hard?"></textarea></label>
-    <div class="row gap"><button class="btn primary" type="submit">Save entry</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <label class="field"><span data-i18n="extra93">Entry *</span><textarea name="text" rows="5" required placeholder="What did you study? What was hard?"></textarea></label>
+    <div class="row gap"><button class="btn primary" type="submit" data-i18n="extra94">Save entry</button>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
@@ -115,12 +115,13 @@ function saveJournalFromForm(form) {
   const fd = new FormData(form);
   const text = sanitizeText(fd.get('text'), 20000);
   if (!text) { toast('Entry text is required.'); return false; }
-  getState().journal.push({
+  const journal = getState().journal;
+  journal.push({
     id: uid('jrnl'),
     date: isValidDateKey(String(fd.get('date'))) ? String(fd.get('date')) : todayKey(),
     mood: String(fd.get('mood') || ''), text, createdAt: nowISO(),
   });
-  save();
+  if (!save()) { journal.pop(); return false; }
   return true;
 }
 
@@ -231,10 +232,10 @@ function renderSettings() {
         <label class="check"><input type="checkbox" name="missedTaskReminder" ${n.missedTaskReminder ? 'checked' : ''}> Carried or missed tasks</label>
         <label class="check"><input type="checkbox" name="dailySummary" ${n.dailySummary ? 'checked' : ''}> Daily progress summary</label>
         <label class="check"><input type="checkbox" name="weeklyReview" ${n.weeklyReview ? 'checked' : ''}> Weekly review reminder</label>
-        <label class="field"><span>Daily reminder time (Bangladesh time)</span><input name="reminderTime" type="time" value="${esc(n.reminderTime || '20:00')}"></label>
+        <label class="field"><span data-i18n="extra95">Daily reminder time (Bangladesh time)</span><input name="reminderTime" type="time" value="${esc(n.reminderTime || '20:00')}"></label>
         <div class="row gap wrap">
-          <button class="btn primary" type="submit">Save preferences</button>
-          <button class="btn" type="button" id="enable-browser-notif">Enable browser notifications</button>
+          <button class="btn primary" type="submit" data-i18n="extra96">Save preferences</button>
+          <button class="btn" type="button" id="enable-browser-notif" data-i18n="extra97">Enable browser notifications</button>
         </div>
         <p class="muted small" id="notif-status"></p>
       </form>
@@ -255,7 +256,8 @@ function renderSettings() {
 
 function saveSettingsFromForm(form) {
   const fd = new FormData(form);
-  const st = getState();
+  const st = getState(), previous = st.settings;
+  st.settings = {...previous};
   st.settings.studentName = sanitizeText(fd.get('studentName'), 100);
   st.settings.dailyTargetMinutes = clamp(Number(fd.get('dailyTargetMinutes')) || 480, 30, 1440);
   for (const key of ['preferredStart', 'preferredEnd']) {
@@ -269,14 +271,15 @@ function saveSettingsFromForm(form) {
   if (intervals.length) st.settings.revisionIntervals = intervals;
   st.settings.theme = String(fd.get('theme') || 'auto');
   st.settings.language = fd.get('language') === 'bn' ? 'bn' : 'en';
-  save();
+  if (!save()) { st.settings = previous; return false; }
   applyTheme();
   return true;
 }
 
 function saveNotifFromForm(form) {
   const fd = new FormData(form);
-  const n = getState().settings.notifications;
+  const settings = getState().settings, previous = settings.notifications;
+  const n = settings.notifications = {...previous};
   n.enabled = !!fd.get('enabled');
   n.sessionReminder = !!fd.get('sessionReminder');
   n.revisionReminder = !!fd.get('revisionReminder');
@@ -285,7 +288,7 @@ function saveNotifFromForm(form) {
   n.missedTaskReminder = !!fd.get('missedTaskReminder');
   n.dailySummary = !!fd.get('dailySummary');
   n.reminderTime = /^([01]\d|2[0-3]):[0-5]\d$/.test(String(fd.get('reminderTime') || '')) ? String(fd.get('reminderTime')) : '20:00';
-  save();
+  if (!save()) { settings.notifications = previous; return false; }
   return true;
 }
 
@@ -295,26 +298,26 @@ function renderBackup() {
   return `<div class="page">
     <div class="page-head"><h1 data-i18n="backupTitle">Backup &amp; restore</h1></div>
     <section class="card">
-      <h2>Full backup (JSON)</h2>
+      <h2 data-i18n="extra98">Full backup (JSON)</h2>
       <p class="muted small">Contains your local study data. Keep it private. Restoring replaces the current data on this device.</p>
       <div class="row gap wrap">
-        <button class="btn primary" id="export-json-btn">Download backup</button>
-        <label class="btn" for="import-json-file">Restore from backup</label>
+        <button class="btn primary" id="export-json-btn" data-i18n="extra99">Download backup</button>
+        <label class="btn" for="import-json-file" data-i18n="extra100">Restore from backup</label>
         <input type="file" id="import-json-file" accept=".json,application/json" hidden>
       </div>
     </section>
     <section class="card">
-      <h2>CSV exports</h2>
+      <h2 data-i18n="extra101">CSV exports</h2>
       <div class="row gap wrap">
-        <button class="btn small" data-export-csv="sessions">Sessions</button>
-        <button class="btn small" data-export-csv="chapters">Chapters</button>
-        <button class="btn small" data-export-csv="practice">Practice</button>
-        <button class="btn small" data-export-csv="examResults">Exam results</button>
+        <button class="btn small" data-export-csv="sessions" data-i18n="extra102">Sessions</button>
+        <button class="btn small" data-export-csv="chapters" data-i18n="extra103">Chapters</button>
+        <button class="btn small" data-export-csv="practice" data-i18n="extra104">Practice</button>
+        <button class="btn small" data-export-csv="examResults" data-i18n="extra105">Exam results</button>
       </div>
     </section>
     <section class="card">
-      <h2>Notes export</h2>
-      <button class="btn small" id="export-notes-btn">Download notes (JSON)</button>
+      <h2 data-i18n="extra106">Notes export</h2>
+      <button class="btn small" id="export-notes-btn" data-i18n="extra107">Download notes (JSON)</button>
       <p class="muted small">${st.notes.length} notes · ${st.formulas.length} formulas · ${st.resources.length} videos</p>
     </section>
   </div>`;

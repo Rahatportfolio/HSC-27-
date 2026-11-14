@@ -399,7 +399,7 @@ document.addEventListener('click', (e) => {
       <label class="field"><span>Subject name *</span><input name="name" required></label>
       <label class="field"><span>Group</span><select name="group"><option value="science">Science</option><option value="other">Other</option></select></label>
       <div class="row gap"><button class="btn primary" type="submit">Add subject</button>
-      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div></form>`,
       (form) => {
         const fd = new FormData(form);
         const name = sanitizeText(fd.get('name'), 200);
@@ -416,7 +416,7 @@ document.addEventListener('click', (e) => {
     openModal('Rename subject', `<form id="subject-form" class="form">
       <label class="field"><span>Subject name</span><input name="name" required value="${esc(s.name)}"></label>
       <div class="row gap"><button class="btn primary" type="submit">Save</button>
-      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div></form>`,
       (form) => {
         const name = sanitizeText(new FormData(form).get('name'), 200);
         if (!name) { toast('Subject name is required.'); return false; }
@@ -512,14 +512,14 @@ document.addEventListener('click', (e) => {
     const selected = (a, b) => a === b ? 'selected' : '';
     openModal(existing ? 'Edit question' : 'Add question', `<form id="question-form" class="form">
       <label class="field"><span>Question *</span><textarea name="question" rows="3" required>${esc(existing?.question || '')}</textarea></label>
-      <label class="field"><span>Type</span><select name="type"><option value="mcq" ${selected(existing?.type || 'mcq','mcq')}>MCQ</option><option value="cq" ${selected(existing?.type,'cq')}>CQ</option></select></label>
-      <label class="field"><span>Subject</span><select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${selected(existing?.subjectId,s.id)}>${esc(s.name)}</option>`).join('')}</select></label>
-      <label class="field"><span>Chapter (optional)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${selected(existing?.chapterId,c.id)}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
+      <label class="field"><span data-i18n="extra41">Type</span><select name="type"><option value="mcq" ${selected(existing?.type || 'mcq','mcq')}>MCQ</option><option value="cq" ${selected(existing?.type,'cq')}>CQ</option></select></label>
+      <label class="field"><span data-i18n="extra10">Subject</span><select name="subjectId"><option value="">—</option>${st.subjects.map((s) => `<option value="${esc(s.id)}" ${selected(existing?.subjectId,s.id)}>${esc(s.name)}</option>`).join('')}</select></label>
+      <label class="field"><span data-i18n="extra14">Chapter (optional)</span><select name="chapterId"><option value="">—</option>${st.chapters.map((c) => `<option value="${esc(c.id)}" ${selected(existing?.chapterId,c.id)}>${esc(subjectName(c.subjectId))} — ${esc(chapterLabel(c.id))}</option>`).join('')}</select></label>
       <p class="muted small">For an auto-graded MCQ test, provide all four choices and the correct choice. Leave choices blank for a manual question. Editing a question does not alter an active test or past review.</p>
       ${[0,1,2,3].map(i => `<label class="field"><span>Choice ${i+1}</span><input name="option${i}" maxlength="1000" value="${esc(options[i] || '')}"></label>`).join('')}
       <label class="field"><span>Correct choice</span><select name="correctIndex"><option value="">—</option>${[0,1,2,3].map(i => `<option value="${i}" ${selected(existing?.correctIndex,i)}>${i+1}</option>`).join('')}</select></label>
       <label class="field"><span>Answer / explanation</span><textarea name="answer" rows="2">${esc(existing?.answer || '')}</textarea></label>
-      <div class="row gap"><button class="btn primary" type="submit">${existing ? 'Save question' : 'Add question'}</button><button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      <div class="row gap"><button class="btn primary" type="submit">${existing ? 'Save question' : 'Add question'}</button><button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div></form>`,
       (form) => {
         const fd = new FormData(form), question = sanitizeText(fd.get('question'),5000), type = String(fd.get('type') || '');
         const chapterId = String(fd.get('chapterId') || '') || null, chapter = chapterId ? chapterById(chapterId) : null;
@@ -605,7 +605,7 @@ document.addEventListener('click', (e) => {
       <label class="field"><span>Difficulty (1 = easy, 5 = very hard)</span>
       <select name="difficulty"><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option></select></label>
       <div class="row gap"><button class="btn primary" type="submit">Mark revised</button>
-      <button class="btn ghost" type="button" data-close-modal>Cancel</button></div></form>`,
+      <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div></form>`,
       (form) => !!completeRevision(revDone.dataset.revisionDone, Number(new FormData(form).get('difficulty'))));
     return;
   }
@@ -651,18 +651,21 @@ document.addEventListener('click', (e) => {
     if (!review) return;
     const goals = String(review.answers.goals || '').split('\n').map((v) => v.trim()).filter(Boolean).slice(0, 21);
     let added = 0;
+    const previous = st.tasks; st.tasks = previous.slice();
     goals.forEach((goal, i) => {
       if (st.tasks.some((t) => t.reviewId === review.id && t.reviewGoal === goal)) return;
       st.tasks.push({ id: uid('task'), title: sanitizeText(goal, 300), date: addDays(todayKey(), i % 7 + 1), plannedMinutes: 30, type: 'study', priority: 'B', subjectId: null, chapterId: null, deadline: null, status: 'pending', reviewId: review.id, reviewGoal: goal, createdAt: nowISO() });
       added++;
     });
-    save(); toast(added + ' goal task(s) added.'); render(); return;
+    if (!added) { st.tasks = previous; toast('No new goal tasks to add.'); return; }
+    if (!save()) { st.tasks = previous; return; }
+    toast(added + ' goal task(s) added.'); render(); return;
   }
 
   // Journal
   if (e.target.closest('#add-journal-btn')) { openModal('New journal entry', journalFormHTML(), (form) => saveJournalFromForm(form)); return; }
   const jDel = e.target.closest('[data-journal-delete]');
-  if (jDel) { st.journal = st.journal.filter((j) => j.id !== jDel.dataset.journalDelete); save(); toast('Entry deleted.'); render(); return; }
+  if (jDel) { const previous = st.journal; st.journal = previous.filter((j) => j.id !== jDel.dataset.journalDelete); if (!save()) { st.journal = previous; return; } toast('Entry deleted.'); render(); return; }
 
   // Settings / data
   if (e.target.closest('#load-demo-btn')) { loadDemoData(); toast('Demo data loaded (labelled DEMO).'); render(); return; }

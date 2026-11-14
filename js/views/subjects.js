@@ -26,12 +26,12 @@ function renderSubjects() {
     <div class="page-head"><h1 data-i18n="subjects">Subjects</h1>
       <button class="btn small" id="add-subject-btn">+ Custom subject</button></div>
     <p class="muted small">Chapters are added by you — official syllabus data is never invented. Use the import tool to bulk-add chapters.</p>
-    <h2 class="section-title">Science</h2>
+    <h2 class="section-title" data-i18n="extra0">Science</h2>
     <div class="subject-list">${sci.map(card).join('')}</div>
-    <h2 class="section-title">Other subjects</h2>
+    <h2 class="section-title" data-i18n="extra1">Other subjects</h2>
     <div class="subject-list">${oth.map(card).join('')}</div>
     <section class="card">
-      <h2>Chapter import</h2>
+      <h2 data-i18n="extra2">Chapter import</h2>
       <p class="muted small">Import chapters from CSV or JSON. CSV columns: <code>subject,number,name,priority</code>. JSON: an array of <code>{subject, number, name, priority}</code>. Subjects must uniquely match existing subject names. Invalid or duplicate rows are skipped; maximum 5,000 rows and 2,097,152 characters.</p>
       <label class="btn small" for="chapter-import-file">Import chapters file</label>
       <input type="file" id="chapter-import-file" accept=".csv,.json,text/csv,application/json" hidden>
@@ -55,8 +55,8 @@ function renderSubjectDetail(subjectId) {
     ${chs.length ? `<ul class="chapter-list">${chs.map((ch) => chapterRow(ch)).join('')}</ul>`
       : `<div class="empty"><p>No chapters yet for this subject.</p><p class="muted small">Add chapters manually or import them. Chapter names are never guessed by the app.</p><button class="btn primary" id="add-chapter-btn-2">+ Add first chapter</button></div>`}
     <div class="row gap wrap">
-      <button class="btn small ghost" id="edit-subject-btn">Rename subject</button>
-      <button class="btn small danger-ghost" id="delete-subject-btn">Delete subject</button>
+      <button class="btn small ghost" id="edit-subject-btn" data-i18n="extra29">Rename subject</button>
+      <button class="btn small danger-ghost" id="delete-subject-btn" data-i18n="extra30">Delete subject</button>
     </div>
   </div>`;
 }
@@ -105,27 +105,27 @@ function renderChapterDetail(chapterId) {
     <p class="muted">${formatDuration(mins)} studied · ${esc(ch.status === 'completed' ? 100 : (ch.completionPct || 0))}% complete</p>
 
     <section class="card">
-      <h2>Progress</h2>
-      <label class="field"><span>Study status</span>
+      <h2 data-i18n="extra3">Progress</h2>
+      <label class="field"><span data-i18n="extra4">Study status</span>
         <select id="ch-status">${sel(ch.status, statusOpts)}</select></label>
       <label class="field"><span>Completion: <strong id="ch-pct-label">${esc(ch.completionPct || 0)}%</strong></span>
         <input type="range" id="ch-pct" min="0" max="100" step="5" value="${esc(ch.completionPct || 0)}"></label>
-      <label class="field"><span>CQ preparation</span><select id="ch-cq">${sel(ch.cqStatus || 'not-started', prepOpts)}</select></label>
-      <label class="field"><span>MCQ preparation</span><select id="ch-mcq">${sel(ch.mcqStatus || 'not-started', prepOpts)}</select></label>
-      <label class="field"><span>Written practice</span><select id="ch-written">${sel(ch.writtenStatus || 'not-started', prepOpts)}</select></label>
-      <label class="field"><span>Revision status</span><select id="ch-revision">${sel(ch.revisionStatus || 'not-started', prepOpts)}</select></label>
-      <label class="field"><span>Personal notes</span>
+      <label class="field"><span data-i18n="extra18">CQ preparation</span><select id="ch-cq">${sel(ch.cqStatus || 'not-started', prepOpts)}</select></label>
+      <label class="field"><span data-i18n="extra19">MCQ preparation</span><select id="ch-mcq">${sel(ch.mcqStatus || 'not-started', prepOpts)}</select></label>
+      <label class="field"><span data-i18n="extra20">Written practice</span><select id="ch-written">${sel(ch.writtenStatus || 'not-started', prepOpts)}</select></label>
+      <label class="field"><span data-i18n="extra21">Revision status</span><select id="ch-revision">${sel(ch.revisionStatus || 'not-started', prepOpts)}</select></label>
+      <label class="field"><span data-i18n="extra17">Personal notes</span>
         <textarea id="ch-notes" rows="3" placeholder="Your own notes for this chapter…">${esc(ch.notes || '')}</textarea></label>
       <div class="row gap wrap">
-        <button class="btn primary" id="ch-save">Save progress</button>
-        <button class="btn" id="ch-complete">Mark completed</button>
+        <button class="btn primary" id="ch-save" data-i18n="extra25">Save progress</button>
+        <button class="btn" id="ch-complete" data-i18n="extra26">Mark completed</button>
         <button class="btn" data-nav="focus" data-chapter="${esc(ch.id)}">▶ Study this chapter</button>
       </div>
       <p class="muted small">Completing a chapter automatically schedules spaced revisions (${esc((getState().settings.revisionIntervals || []).join(', '))} days — configurable in Settings).</p>
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Practice summary</h2><button class="btn small ghost" data-nav="practice" data-chapter="${esc(ch.id)}">Record practice</button></div>
+      <div class="card-head"><h2 data-i18n="extra6">Practice summary</h2><button class="btn small ghost" data-nav="practice" data-chapter="${esc(ch.id)}">Record practice</button></div>
       <ul class="plain-list">
         <li>MCQ: ${esc(mcq.attempted)} attempted · accuracy ${mcq.accuracy === null ? '—' : mcq.accuracy + '%'} · ${mcq.sessions} sessions</li>
         <li>CQ: ${esc(cq.attempted)} attempted · marks ${esc(cq.marks)}/${esc(cq.totalMarks)} · ${cq.sessions} sessions</li>
@@ -134,7 +134,7 @@ function renderChapterDetail(chapterId) {
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Chapter test results</h2><button class="btn small ghost" data-nav="exams">Exams</button></div>
+      <div class="card-head"><h2 data-i18n="extra7">Chapter test results</h2><button class="btn small ghost" data-nav="exams">Exams</button></div>
       ${(() => {
         const st = getState();
         const results = st.examResults.map((r) => ({ r, exam: st.exams.find((e) => e.id === r.examId && e.chapterId === chapterId) })).filter((x) => x.exam);
@@ -143,26 +143,26 @@ function renderChapterDetail(chapterId) {
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Revisions</h2><button class="btn small ghost" data-nav="revisions">All revisions</button></div>
+      <div class="card-head"><h2 data-i18n="extra8">Revisions</h2><button class="btn small ghost" data-nav="revisions">All revisions</button></div>
       ${revs.length ? `<ul class="plain-list">${revs.map((r) => `<li>Cycle ${esc(r.cycle)}: due ${esc(formatDate(r.dueDate))} — ${r.completedAt ? 'done' : (r.dueDate <= todayKey() ? 'OVERDUE' : 'pending')}</li>`).join('')}</ul>`
       : `<p class="muted">No revisions scheduled. Complete this chapter to start the spaced-revision cycle.</p>`}
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Linked items</h2></div>
+      <div class="card-head"><h2 data-i18n="extra9">Linked items</h2></div>
       <ul class="plain-list">
         <li>Notes: ${chapterNotes.length} · <button class="link" data-nav="notes" data-chapter="${esc(ch.id)}">Add note</button></li>
         <li>Formulas: ${chapterFormulas.length} · <button class="link" data-nav="formulas" data-chapter="${esc(ch.id)}">Add formula</button></li>
         <li>Videos: ${chapterVideos.length} · <button class="link" data-nav="library" data-chapter="${esc(ch.id)}">Add video</button></li>
-        <li>Weaknesses: ${chapterWeak.length} · <button class="link" data-nav="weaknesses" data-chapter="${esc(ch.id)}">Add weakness</button></li>
+        <li>Weaknesses: ${chapterWeak.length} · <button class="link" data-nav="weaknesses" data-chapter="${esc(ch.id)}" data-i18n="extra63">Add weakness</button></li>
       </ul>
     </section>
 
     <section class="card danger-zone">
-      <h2>Chapter admin</h2>
+      <h2 data-i18n="extra5">Chapter admin</h2>
       <div class="row gap wrap">
-        <button class="btn small" id="ch-edit">Edit chapter</button>
-        <button class="btn small danger-ghost" id="ch-delete">Delete chapter</button>
+        <button class="btn small" id="ch-edit" data-i18n="extra27">Edit chapter</button>
+        <button class="btn small danger-ghost" id="ch-delete" data-i18n="extra28">Delete chapter</button>
       </div>
     </section>
   </div>`;
@@ -172,14 +172,14 @@ function renderChapterDetail(chapterId) {
 function chapterFormHTML(ch, subjectId) {
   const subjects = getState().subjects;
   return `<form id="chapter-form" class="form">
-    <label class="field"><span>Subject</span>
+    <label class="field"><span data-i18n="extra10">Subject</span>
       <select name="subjectId">${subjects.map((s) => `<option value="${esc(s.id)}" ${ch && ch.subjectId === s.id ? 'selected' : (!ch && subjectId === s.id ? 'selected' : '')}>${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter number</span><input name="number" type="number" min="1" max="9999" step="1" value="${ch ? esc(ch.number || '') : ''}" placeholder="e.g. 2"></label>
-    <label class="field"><span>Chapter name *</span><input name="name" required maxlength="300" value="${ch ? esc(ch.name) : ''}" placeholder="Enter the chapter name from your textbook"></label>
+    <label class="field"><span data-i18n="extra15">Chapter number</span><input name="number" type="number" min="1" max="9999" step="1" value="${ch ? esc(ch.number || '') : ''}" placeholder="e.g. 2"></label>
+    <label class="field"><span data-i18n="extra16">Chapter name *</span><input name="name" required maxlength="300" value="${ch ? esc(ch.name) : ''}" placeholder="Enter the chapter name from your textbook"></label>
     <label class="field"><span>Priority (your personal priority, not official)</span>
       <select name="priority">${['A', 'B', 'C'].map((p) => `<option ${ch && ch.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
     <div class="row gap"><button class="btn primary" type="submit">${ch ? 'Save chapter' : 'Add chapter'}</button>
-    <button class="btn ghost" type="button" data-close-modal>Cancel</button></div>
+    <button class="btn ghost" type="button" data-close-modal data-i18n="extra24">Cancel</button></div>
   </form>`;
 }
 
