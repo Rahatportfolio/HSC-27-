@@ -150,7 +150,7 @@ function toCSV(rows) {
   };
   return rows.map((r) => r.map(cell).join(',')).join('\n');
 }
-function parseCSV(text) {
+function parseCSV(text, strict = false) {
   const rows = [];
   let row = [], cur = '', inQuotes = false;
   for (let i = 0; i < text.length; i++) {
@@ -165,6 +165,7 @@ function parseCSV(text) {
     else if (ch === '\n') { row.push(cur); rows.push(row); row = []; cur = ''; }
     else if (ch !== '\r') cur += ch;
   }
+  if (strict && inQuotes) throw new Error('CSV contains an unclosed quoted field.');
   if (cur !== '' || row.length) { row.push(cur); rows.push(row); }
   return rows.filter((r) => r.some((c) => String(c).trim() !== ''));
 }

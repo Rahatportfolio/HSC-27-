@@ -46,9 +46,11 @@ function render() {
   const fn = ROUTES[currentRoute.name] || ROUTES.dashboard;
   view.innerHTML = fn(currentRoute.param);
   document.querySelectorAll('.nav-btn').forEach((b) => {
-    b.classList.toggle('active', b.dataset.nav === currentRoute.name ||
+    const active = b.dataset.nav === currentRoute.name ||
       (currentRoute.name === 'subject' && b.dataset.nav === 'subjects') ||
-      (currentRoute.name === 'chapter' && b.dataset.nav === 'subjects'));
+      (currentRoute.name === 'chapter' && b.dataset.nav === 'subjects');
+    b.classList.toggle('active', active);
+    if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
   });
   afterRender();
 }
@@ -297,8 +299,11 @@ document.addEventListener('click', (e) => {
       const i = list.findIndex((c) => c.id === ch.id);
       const j = i + Number(move.dataset.dir);
       if (j >= 0 && j < list.length) {
-        const tmp = list[i].order; list[i].order = list[j].order; list[j].order = tmp;
-        save(); render();
+        const oldOrders = list.map(c => c.order);
+        [list[i], list[j]] = [list[j], list[i]];
+        list.forEach((c, index) => { c.order = index; });
+        if (!save()) { [list[i], list[j]] = [list[j], list[i]]; list.forEach((c, index) => { c.order = oldOrders[index]; }); }
+        render();
       }
     }
     return;
@@ -314,48 +319,43 @@ document.addEventListener('click', (e) => {
   }
   if (e.target.closest('#ch-delete')) {
     if (focusState.chapterId === currentRoute.param && (focusState.running || focusState.accumulatedMs > 0)) { toast('Stop the active focus timer before deleting this chapter.'); return; }
-    if (confirm('Delete this chapter and its linked data?')) {
+    if (confirm('Delete this chapter? Its linked tasks, revisions, practice, notes, formulas, videos and weaknesses will also be deleted. Sessions, exams and questions will be kept without a chapter link. Export a backup first.')) {
       const id = currentRoute.param;
+      const previous = Object.fromEntries(['chapters','sessions','exams','questionBank','tasks','revisions','practice','notes','formulas','resources','weaknesses'].map(key => [key, st[key]]));
+      const previousFocus = st.activeFocus, previousFocusChapter = focusState.chapterId;
       st.chapters = st.chapters.filter((c) => c.id !== id);
-      st.sessions.forEach((s) => { if (s.chapterId === id) s.chapterId = null; });
-      st.exams.forEach((exam) => { if (exam.chapterId === id) exam.chapterId = null; });
-      st.questionBank.forEach((q) => { if (q.chapterId === id) q.chapterId = null; });
-      if (focusState.chapterId === id) { focusState.chapterId = null; persistFocusTimer(); }
-      st.tasks = st.tasks.filter((t) => t.chapterId !== id);
-      st.revisions = st.revisions.filter((r) => r.chapterId !== id);
-      st.practice = st.practice.filter((p) => p.chapterId !== id);
-      st.notes = st.notes.filter((n) => n.chapterId !== id);
-      st.formulas = st.formulas.filter((f) => f.chapterId !== id);
-      st.resources = st.resources.filter((r) => r.chapterId !== id);
-      st.weaknesses = st.weaknesses.filter((w) => w.chapterId !== id);
-      save(); toast('Chapter deleted.'); navigate('subjects');
+      for (const key of ['sessions','exams','questionBank']) st[key] = st[key].map(item => item.chapterId === id ? {...item, chapterId:null} : item);
+      for (const key of ['tasks','revisions','practice','notes','formulas','resources','weaknesses']) st[key] = st[key].filter(item => item.chapterId !== id);
+      if (focusState.chapterId === id) {
+        focusState.chapterId = null;
+        if (st.activeFocus) st.activeFocus = {...st.activeFocus, chapterId:null};
+      }
+      if (!save()) { Object.assign(st, previous); st.activeFocus = previousFocus; focusState.chapterId = previousFocusChapter; return; }
+      toast('Chapter deleted.'); navigate('subjects');
     }
     return;
   }
-  if (e.target.closest('#ch-save')) {
+  if (e.target.closest('#ch-save') || e.target.closest('#ch-complete')) {
     const ch = chapterById(currentRoute.param);
     if (ch) {
-      ch.status = document.getElementById('ch-status').value;
-      ch.completionPct = Number(document.getElementById('ch-pct').value) || 0;
-      if (ch.status === 'completed') ch.completionPct = 100;
-      ch.cqStatus = document.getElementById('ch-cq').value;
-      ch.mcqStatus = document.getElementById('ch-mcq').value;
-      ch.writtenStatus = document.getElementById('ch-written').value;
-      ch.revisionStatus = document.getElementById('ch-revision').value;
-      ch.notes = sanitizeText(document.getElementById('ch-notes').value, 20000);
+      const previous = {...ch}, previousRevisions = st.revisions.slice();
+      if (e.target.closest('#ch-complete')) {
+        ch.status = 'completed'; ch.completionPct = 100;
+      } else {
+        ch.status = document.getElementById('ch-status').value;
+        ch.completionPct = Number(document.getElementById('ch-pct').value) || 0;
+        if (ch.status === 'completed') ch.completionPct = 100;
+        ch.cqStatus = document.getElementById('ch-cq').value;
+        ch.mcqStatus = document.getElementById('ch-mcq').value;
+        ch.writtenStatus = document.getElementById('ch-written').value;
+        ch.revisionStatus = document.getElementById('ch-revision').value;
+        ch.notes = sanitizeText(document.getElementById('ch-notes').value, 20000);
+      }
       ch.updatedAt = nowISO();
-      save(); toast('Progress saved.');
-      if (ch.status === 'completed') { scheduleRevisions(ch); toast('Chapter completed — revisions scheduled.'); }
+      if (ch.status === 'completed') scheduleRevisions(ch, false);
+      if (!save()) { Object.assign(ch, previous); st.revisions = previousRevisions; return; }
+      toast(ch.status === 'completed' ? 'Chapter completed — revisions scheduled.' : 'Progress saved.');
       render();
-    }
-    return;
-  }
-  if (e.target.closest('#ch-complete')) {
-    const ch = chapterById(currentRoute.param);
-    if (ch) {
-      ch.status = 'completed'; ch.completionPct = 100; ch.updatedAt = nowISO();
-      scheduleRevisions(ch);
-      save(); toast('Chapter completed — revisions scheduled.'); render();
     }
     return;
   }
@@ -371,8 +371,10 @@ document.addEventListener('click', (e) => {
         const fd = new FormData(form);
         const name = sanitizeText(fd.get('name'), 200);
         if (!name) { toast('Subject name is required.'); return false; }
-        st.subjects.push({ id: uid('sub'), name, group: String(fd.get('group') || 'other'), color: SUBJECT_COLORS[st.subjects.length % SUBJECT_COLORS.length], createdAt: nowISO() });
-        save(); return true;
+        if (st.subjects.some(s => s.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) { toast('A subject with that name already exists.'); return false; }
+        const group = fd.get('group') === 'science' ? 'science' : 'other';
+        st.subjects.push({ id: uid('sub'), name, group, color: SUBJECT_COLORS[st.subjects.length % SUBJECT_COLORS.length], createdAt: nowISO() });
+        if (!save()) { st.subjects.pop(); return false; } return true;
       });
     return;
   }
@@ -385,7 +387,9 @@ document.addEventListener('click', (e) => {
       (form) => {
         const name = sanitizeText(new FormData(form).get('name'), 200);
         if (!name) { toast('Subject name is required.'); return false; }
-        s.name = name; save(); return true;
+        if (st.subjects.some(other => other.id !== s.id && other.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) { toast('A subject with that name already exists.'); return false; }
+        const oldName = s.name; s.name = name;
+        if (!save()) { s.name = oldName; return false; } return true;
       });
     return;
   }
@@ -394,9 +398,14 @@ document.addEventListener('click', (e) => {
     if (focusState.subjectId === id && (focusState.running || focusState.accumulatedMs > 0)) { toast('Stop the active focus timer before deleting this subject.'); return; }
     if (['chapters', 'tasks', 'sessions', 'revisions', 'practice', 'exams', 'notes', 'formulas', 'resources', 'weaknesses', 'questionBank'].some((key) => st[key].some((item) => item.subjectId === id || (key === 'formulas' && item.subject === id)))) { toast('Remove or reassign linked records before deleting this subject.'); return; }
     if (confirm('Delete this subject?')) {
+      const previous = st.subjects, previousFocus = st.activeFocus, previousFocusSubject = focusState.subjectId;
       st.subjects = st.subjects.filter((s) => s.id !== id);
-      st.chapters = st.chapters.filter((c) => c.subjectId !== id);
-      save(); toast('Subject deleted.'); navigate('subjects');
+      if (focusState.subjectId === id) {
+        focusState.subjectId = null;
+        if (st.activeFocus) st.activeFocus = {...st.activeFocus, subjectId:null};
+      }
+      if (!save()) { st.subjects = previous; st.activeFocus = previousFocus; focusState.subjectId = previousFocusSubject; return; }
+      toast('Subject deleted.'); navigate('subjects');
     }
     return;
   }

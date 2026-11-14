@@ -32,7 +32,7 @@ function renderSubjects() {
     <div class="subject-list">${oth.map(card).join('')}</div>
     <section class="card">
       <h2>Chapter import</h2>
-      <p class="muted small">Import chapters from CSV or JSON. CSV columns: <code>subject,number,name,priority</code>. JSON: an array of <code>{subject, number, name, priority}</code>. Subjects must match existing subject names.</p>
+      <p class="muted small">Import chapters from CSV or JSON. CSV columns: <code>subject,number,name,priority</code>. JSON: an array of <code>{subject, number, name, priority}</code>. Subjects must uniquely match existing subject names. Invalid or duplicate rows are skipped; maximum 5,000 rows and 2,097,152 characters.</p>
       <label class="btn small" for="chapter-import-file">Import chapters file</label>
       <input type="file" id="chapter-import-file" accept=".csv,.json,text/csv,application/json" hidden>
       <button class="btn small ghost" id="download-chapter-template">Download CSV template</button>
@@ -174,8 +174,8 @@ function chapterFormHTML(ch, subjectId) {
   return `<form id="chapter-form" class="form">
     <label class="field"><span>Subject</span>
       <select name="subjectId">${subjects.map((s) => `<option value="${esc(s.id)}" ${ch && ch.subjectId === s.id ? 'selected' : (!ch && subjectId === s.id ? 'selected' : '')}>${esc(s.name)}</option>`).join('')}</select></label>
-    <label class="field"><span>Chapter number</span><input name="number" type="number" min="1" value="${ch ? esc(ch.number || '') : ''}" placeholder="e.g. 2"></label>
-    <label class="field"><span>Chapter name *</span><input name="name" required value="${ch ? esc(ch.name) : ''}" placeholder="Enter the chapter name from your textbook"></label>
+    <label class="field"><span>Chapter number</span><input name="number" type="number" min="1" max="9999" step="1" value="${ch ? esc(ch.number || '') : ''}" placeholder="e.g. 2"></label>
+    <label class="field"><span>Chapter name *</span><input name="name" required maxlength="300" value="${ch ? esc(ch.name) : ''}" placeholder="Enter the chapter name from your textbook"></label>
     <label class="field"><span>Priority (your personal priority, not official)</span>
       <select name="priority">${['A', 'B', 'C'].map((p) => `<option ${ch && ch.priority === p ? 'selected' : ''}>${p}</option>`).join('')}</select></label>
     <div class="row gap"><button class="btn primary" type="submit">${ch ? 'Save chapter' : 'Add chapter'}</button>
@@ -183,68 +183,91 @@ function chapterFormHTML(ch, subjectId) {
   </form>`;
 }
 
+function nextChapterOrder(subjectId, excludingId = null) {
+  return chaptersOf(subjectId).filter(c => c.id !== excludingId).reduce((max, c) => Math.max(max, Number.isFinite(Number(c.order)) ? Number(c.order) : 0), -1) + 1;
+}
+function chapterNameKey(name) { return sanitizeText(name, 300).toLocaleLowerCase(); }
+
 function saveChapterFromForm(form, existingId) {
-  const fd = new FormData(form);
+  const fd = new FormData(form), st = getState();
   const name = sanitizeText(fd.get('name'), 300);
-  if (!name) { toast('Chapter name is required.'); return false; }
-  const st = getState();
-  const subjectId = String(fd.get('subjectId'));
-  const number = Number(fd.get('number')) || null;
+  const subjectId = String(fd.get('subjectId') || '');
+  const numberText = String(fd.get('number') || '').trim();
+  const number = numberText ? Number(numberText) : null;
   const priority = ['A', 'B', 'C'].includes(fd.get('priority')) ? fd.get('priority') : 'B';
+  if (!name) { toast('Chapter name is required.'); return false; }
+  if (!subjectById(subjectId)) { toast('Choose a valid subject.'); return false; }
+  if (number !== null && (!Number.isInteger(number) || number < 1 || number > 9999)) { toast('Chapter number must be a whole number from 1 to 9999.'); return false; }
+  if (chaptersOf(subjectId).some(c => c.id !== existingId && chapterNameKey(c.name) === chapterNameKey(name))) { toast('This subject already has a chapter with that name.'); return false; }
   if (existingId) {
     const ch = chapterById(existingId);
     if (!ch) return false;
     if (ch.subjectId !== subjectId && ['tasks', 'sessions', 'revisions', 'practice', 'exams', 'notes', 'formulas', 'resources', 'weaknesses', 'questionBank'].some((key) => st[key].some((item) => item.chapterId === ch.id))) { toast('Remove or reassign linked records before changing the chapter subject.'); return false; }
-    Object.assign(ch, { subjectId, number, name, priority, updatedAt: nowISO() });
+    if (ch.subjectId !== subjectId && focusState.chapterId === ch.id && (focusState.running || focusState.accumulatedMs > 0)) { toast('Stop the active focus timer before changing this chapter subject.'); return false; }
+    const previous = { ...ch }, previousFocus = st.activeFocus, previousFocusSubject = focusState.subjectId;
+    const order = ch.subjectId === subjectId ? ch.order : nextChapterOrder(subjectId, ch.id);
+    Object.assign(ch, { subjectId, number, name, priority, order, updatedAt: nowISO() });
+    if (focusState.chapterId === ch.id) {
+      focusState.subjectId = subjectId;
+      if (st.activeFocus && st.activeFocus.chapterId === ch.id) st.activeFocus = {...st.activeFocus, subjectId};
+    }
+    if (!save()) { Object.assign(ch, previous); st.activeFocus = previousFocus; focusState.subjectId = previousFocusSubject; return false; }
   } else {
-    const order = chaptersOf(subjectId).length;
-    st.chapters.push({
+    const ch = {
       id: uid('ch'), subjectId, number, name, priority,
       status: 'not-started', completionPct: 0,
       cqStatus: 'not-started', mcqStatus: 'not-started',
       writtenStatus: 'not-started', revisionStatus: 'not-started',
-      notes: '', order, createdAt: nowISO(), updatedAt: nowISO(),
-    });
+      notes: '', order: nextChapterOrder(subjectId), createdAt: nowISO(), updatedAt: nowISO(),
+    };
+    st.chapters.push(ch);
+    if (!save()) { st.chapters.pop(); return false; }
   }
-  save();
   return true;
 }
 
 function importChaptersFromText(text, filename) {
   const st = getState();
-  let added = 0, skipped = 0;
-  const byName = new Map(st.subjects.map((s) => [s.name.toLowerCase(), s]));
-  const addRow = (subjectName, number, name, priority) => {
-    const s = byName.get(String(subjectName || '').trim().toLowerCase());
-    if (!s || !String(name || '').trim()) { skipped++; return; }
-    if (chaptersOf(s.id).some((c) => c.name.trim().toLowerCase() === String(name).trim().toLowerCase())) { skipped++; return; }
-    const order = chaptersOf(s.id).length;
-    st.chapters.push({
-      id: uid('ch'), subjectId: s.id, number: Number(number) || null,
-      name: sanitizeText(name, 300),
-      priority: ['A', 'B', 'C'].includes(String(priority).toUpperCase()) ? String(priority).toUpperCase() : 'B',
-      status: 'not-started', completionPct: 0,
-      cqStatus: 'not-started', mcqStatus: 'not-started',
-      writtenStatus: 'not-started', revisionStatus: 'not-started',
-      notes: '', order, createdAt: nowISO(), updatedAt: nowISO(),
-    });
-    added++;
-  };
+  if (text.length > 2 * 1024 * 1024) throw new Error('Chapter import is limited to 2,097,152 characters.');
+  let rows;
   if (/\.json$/i.test(filename || '')) {
-    const arr = JSON.parse(text);
-    if (!Array.isArray(arr)) throw new Error('JSON must be an array of chapter objects.');
-    arr.forEach((o) => addRow(o.subject, o.number, o.name, o.priority));
+    rows = JSON.parse(text);
+    if (!Array.isArray(rows)) throw new Error('JSON must be an array of chapter objects.');
   } else {
-    const rows = parseCSV(text);
-    if (!rows.length) throw new Error('CSV file is empty.');
-    const header = rows[0].map((h) => String(h).trim().toLowerCase());
-    const idx = {
-      subject: header.indexOf('subject'), number: header.indexOf('number'),
-      name: header.indexOf('name'), priority: header.indexOf('priority'),
-    };
-    if (idx.subject < 0 || idx.name < 0) throw new Error('CSV needs "subject" and "name" columns.');
-    rows.slice(1).forEach((r) => addRow(r[idx.subject], r[idx.number], r[idx.name], r[idx.priority]));
+    const csv = parseCSV(text, true);
+    if (!csv.length) throw new Error('CSV file is empty.');
+    const header = csv[0].map((h) => String(h).replace(/^\uFEFF/, '').trim().toLowerCase());
+    const subject = header.indexOf('subject'), number = header.indexOf('number'), name = header.indexOf('name'), priority = header.indexOf('priority');
+    if (subject < 0 || name < 0) throw new Error('CSV needs "subject" and "name" columns.');
+    rows = csv.slice(1).map(r => ({subject:r[subject], number:r[number], name:r[name], priority:r[priority]}));
   }
-  save();
-  return { added, skipped };
+  if (rows.length > 5000) throw new Error('Chapter import is limited to 5000 rows.');
+  // Stage the whole import before touching state, so malformed rows or a failed save
+  // cannot leave an invisible partial import in memory.
+  const staged = [], seen = new Set(st.chapters.map(c => c.subjectId + '\0' + chapterNameKey(c.name)));
+  const nextOrders = new Map(st.subjects.map(s => [s.id, nextChapterOrder(s.id)]));
+  let skipped = 0;
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) { skipped++; continue; }
+    const subjectName = typeof row.subject === 'string' ? row.subject.trim().toLocaleLowerCase() : '';
+    const matches = st.subjects.filter(s => s.name.trim().toLocaleLowerCase() === subjectName);
+    const name = sanitizeText(row.name, 300);
+    const numberText = row.number == null ? '' : String(row.number).trim();
+    const number = numberText ? Number(numberText) : null;
+    if (matches.length !== 1 || !name || (number !== null && (!Number.isInteger(number) || number < 1 || number > 9999))) { skipped++; continue; }
+    const subject = matches[0], key = subject.id + '\0' + chapterNameKey(name);
+    if (seen.has(key)) { skipped++; continue; }
+    seen.add(key);
+    const order = nextOrders.get(subject.id);
+    nextOrders.set(subject.id, order + 1);
+    staged.push({id:uid('ch'), subjectId:subject.id, number, name,
+      priority:['A','B','C'].includes(String(row.priority || '').trim().toUpperCase()) ? String(row.priority).trim().toUpperCase() : 'B',
+      status:'not-started', completionPct:0, cqStatus:'not-started', mcqStatus:'not-started', writtenStatus:'not-started', revisionStatus:'not-started',
+      notes:'', order, createdAt:nowISO(), updatedAt:nowISO()});
+  }
+  if (staged.length) {
+    st.chapters.push(...staged);
+    if (!save()) { st.chapters.splice(st.chapters.length - staged.length, staged.length); throw new Error('Unable to save; no chapters imported.'); }
+  }
+  return {added:staged.length, skipped};
 }

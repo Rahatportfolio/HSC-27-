@@ -186,6 +186,7 @@ function overallCompletion() {
 }
 function weakestSubjects(limit) {
   return getState().subjects
+    .filter((s) => chaptersOf(s.id).length > 0)
     .map((s) => {
       const c = subjectCompletion(s.id);
       return { subject: s, pct: c.pct, minutes: subjectMinutes(s.id), chapters: c.total };
@@ -226,7 +227,7 @@ function recordSession(data) {
 }
 
 /* ---------- Revisions ---------- */
-function scheduleRevisions(chapter) {
+function scheduleRevisions(chapter, shouldSave = true) {
   const st = getState();
   const intervals = st.settings.revisionIntervals || [1, 3, 7, 14, 30];
   const today = todayKey();
@@ -240,7 +241,7 @@ function scheduleRevisions(chapter) {
       });
     }
   });
-  save();
+  if (shouldSave) save();
 }
 function dueRevisions() {
   const today = todayKey();

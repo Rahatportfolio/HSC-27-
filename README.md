@@ -1,6 +1,6 @@
 # HSC 2027 Study
 
-A local-first, mobile-oriented study tracker for a Bangladesh HSC Science student. The app starts with 13 subject names, a 480-minute daily target and **no official chapters**. Enter chapters yourself or import a trusted CSV/JSON syllabus. Priorities are personal judgments, not official statistics. Demonstration data is opt-in and labelled. See [AUDIT.md](AUDIT.md) for scope, limitations and test evidence. A GPA 5.00/Golden A+ is a goal, not a prediction or guarantee.
+A local-first, mobile-oriented study tracker for a Bangladesh HSC Science student. The app starts with 13 subject names, a 480-minute daily target and **no official chapters**. Enter chapters yourself or import a trusted CSV/JSON syllabus. Priorities are personal judgments, not official statistics. Demonstration data is opt-in and labelled. Chapter CSV/JSON import matches existing subject names, skips invalid, ambiguous or duplicate rows, and accepts at most 5,000 rows and 2,097,152 characters per file. Chapter deletion warns which linked records will be deleted; export a backup first. See [AUDIT.md](AUDIT.md) for scope, limitations and test evidence. A GPA 5.00/Golden A+ is a goal, not a prediction or guarantee.
 
 ## Start locally
 
