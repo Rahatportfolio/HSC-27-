@@ -166,4 +166,53 @@ describe('application shell', () => {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     expect(stored.attempts.length).toBe(1);
   });
+
+  it('displays top live Test Exam + HSC 27 countdowns and inline One-Shot/CQ/MCQ class blocks on Today', async () => {
+    render(<App />);
+    const countdown = screen.getByRole('region', { name: /পরীক্ষার কাউন্টডাউন/ });
+    expect(countdown.textContent).toContain('টেস্ট পরীক্ষা');
+    expect(countdown.textContent).toContain('HSC ’২৭ পরীক্ষা');
+    expect(await screen.findByText(/আজকের নির্ধারিত পড়া|এই দিনের পড়া/)).toBeTruthy();
+    expect(screen.getAllByText('ওয়ান শট ক্লাস').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('CQ সলভিং ক্লাস').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('MCQ সলভিং ক্লাস').length).toBeGreaterThan(0);
+  });
+});
+
+describe('personalized study workflows', () => {
+  it('adds a task to only the selected day and persists it', async () => {
+    render(<App />);
+    const date = await screen.findByLabelText('পড়ার তারিখ নির্বাচন');
+    fireEvent.change(date, { target: { value: '2026-11-14' } });
+    fireEvent.click(screen.getByRole('button', { name: 'নতুন কাজ' }));
+    fireEvent.change(screen.getByLabelText('কাজের নাম'), { target: { value: 'নিজের পরীক্ষা' } });
+    fireEvent.change(screen.getByLabelText('কাজের সময়'), { target: { value: '19:30' } });
+    fireEvent.change(screen.getByLabelText('কাজের সময়কাল মিনিট'), { target: { value: '45' } });
+    fireEvent.click(screen.getByRole('button', { name: 'যোগ করো' }));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      expect(stored.routineBlocks).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'নিজের পরীক্ষা', date: '2026-11-14', minutes: 45, startMinute: 1170 })]));
+    });
+    expect(screen.getAllByText('নিজের পরীক্ষা').length).toBeGreaterThan(0);
+    fireEvent.change(date, { target: { value: '2026-11-21' } });
+    expect(screen.queryByText('নিজের পরীক্ষা')).toBeNull();
+  });
+  it('marks a whole chapter complete and incomplete from its sheet', async () => {
+    render(<App />);
+    go('syllabus');
+    const chapter = CHAPTERS[0];
+    const row = await screen.findByRole('button', { name: new RegExp(chapter.title) });
+    fireEvent.click(row);
+    fireEvent.click(await screen.findByRole('button', { name: 'পুরো অধ্যায় সম্পন্ন করো' }));
+    const taskIds = chapterTasks(buildPlan(), chapter.id).map(task => task.id);
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      expect(taskIds.every(id => !!stored.completed[id])).toBe(true);
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'অধ্যায় অসম্পূর্ণ করো' }));
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+      expect(taskIds.every(id => !stored.completed[id])).toBe(true);
+    });
+  });
 });

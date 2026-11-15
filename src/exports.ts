@@ -1,5 +1,5 @@
 import { CHAPTERS, PAPERS, SOURCES, SUBJECTS, SYLLABUS_NOTE, subjectById } from './data';
-import { bn, chapterTasks, formatDate, formatDayOffset, formatTime, getPhases, getStats, isChapterDone, phaseName, taskStart, todayKey } from './planner';
+import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, getPhases, getStats, isChapterDone, phaseName, taskStart, todayKey } from './planner';
 import type { AppData, Day, Task } from './planner';
 
 export function downloadText(content: string, filename: string, type = 'text/plain;charset=utf-8'): void {
@@ -77,7 +77,7 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
   for (const subject of SUBJECTS) {
     lines.push(`### ${subject.name}${subject.optional ? ' (চতুর্থ বিষয়)' : ''}`, '', '| অগ্রাধিকার | পত্র | পাঠ/অধ্যায় | পড়ার তারিখ | শেষ হয়েছে? |', '|---|---:|---|---|---|');
     for (const c of CHAPTERS.filter(c => c.subject === subject.id)) {
-      const tasks = chapterTasks(plan, c.id);
+      const tasks = chapterStudyTasks(plan, c.id);
       lines.push(`| ${c.priority} | ${c.paper} | ${mdCell(`${c.number}. ${c.title}`)} | ${tasks.map(t => t.date).join(', ') || 'সংস্করণ যাচাই করে ব্যাকলগ সেশনে করো'} | ${isChapterDone(plan, c.id, data.completed) ? 'হ্যাঁ' : 'না'} |`);
       if (c.note) lines.push('', `> ${c.note}`, '');
     }

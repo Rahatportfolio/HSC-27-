@@ -4,7 +4,7 @@ import { Award, CalendarDays, Check, ClipboardCheck, GraduationCap, Info, Pause,
 import { usePlanner } from '../context';
 import { CHAPTERS, PAPERS, SUBJECTS, SUBJECT_FULL_MARKS, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { bn, formatDate, percent } from '../planner';
+import { bn, diffDays, formatDate, isChapterDone, percent } from '../planner';
 import { calculateGpa, gpaTargetLabel } from '../gpa';
 import { newId, nowIso } from '../storage';
 import type { TestKind, TestRecord } from '../types';
@@ -28,10 +28,39 @@ export default function ExamsView() {
   const customTests = [...data.tests].sort((a, b) => b.date.localeCompare(a.date));
   const testAverage = customTests.length ? Math.round(customTests.reduce((sum, test) => sum + test.score / test.total * 100, 0) / customTests.length) : 0;
   const bestTest = customTests.reduce((best, test) => Math.max(best, test.score / test.total * 100), 0);
+  const priorityAChapters = CHAPTERS.filter(c => c.priority === 'A');
+  const priorityADone = priorityAChapters.filter(c => isChapterDone(plan, c.id, data.completed)).length;
+  const testDaysLeft = diffDays(today, data.settings.testExamDate);
+  const hscDaysLeft = diffDays(today, data.settings.examDate);
   return <div className="view exams-view">
-    <PageHeading eyebrow="TEST YOURSELF" title={t("ভুল হোক এখানেই।", "Let the mistakes happen here.")} titleEn="Make mistakes here." description="অধ্যায় টেস্ট, বিষয় টেস্ট ও পূর্ণ মডেল টেস্ট—নম্বর যোগ করো, GPA দেখো, দুর্বল জায়গা খোঁজো।" descriptionEn="Chapter, subject and full model tests. Add marks, track GPA and find weak areas." action={<button className="button primary" onClick={() => setTestOpen(true)}><Plus size={17} />{t("নতুন টেস্ট", "New test")}</button>} />
-    <div className="notice-box"><Info size={19} /><p><strong>{t("এগুলো তোমার ব্যক্তিগত টেস্ট।", "These are your personal tests.")}</strong> বোর্ড পরীক্ষার তারিখ বা সময়সূচি নয়। প্রকৃত পরীক্ষার রুটিন বোর্ডের নোটিশ থেকে আলাদাভাবে যাচাই করো।</p></div>
+    <PageHeading eyebrow="TEST YOURSELF" title={t("ভুল হোক এখানেই।", "Let the mistakes happen here.")} titleEn="Make mistakes here." description="ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা, অধ্যায় টেস্ট, পূর্ণ মডেল টেস্ট ও GPA ট্র্যাকার—সব এক জায়গায়।" descriptionEn="February 2027 Test Exam readiness, chapter tests, full model tests and GPA tracker." action={<button className="button primary" onClick={() => setTestOpen(true)}><Plus size={17} />{t("নতুন টেস্ট", "New test")}</button>} />
+    <div className="notice-box"><Info size={19} /><p><strong>{t("এগুলো তোমার ব্যক্তিগত টেস্ট ও লক্ষ্য ট্র্যাকার।", "Personal test & target tracker.")}</strong> চূড়ান্ত পরীক্ষার রুটিন তোমার কলেজ ও শিক্ষা বোর্ডের নোটিশ থেকে মিলিয়ে নাও।</p></div>
     <div className="exam-stats"><div className="card"><span className="stat-icon green"><ClipboardCheck size={21} /></span><div><span>{t("মডেল টেস্ট রেকর্ড", "Model test record")}</span><strong>{bn(results.length)} <small>{t("/ ১৩টি পত্র", "/ 13 papers")}</small></strong></div></div><div className="card"><span className="stat-icon lavender"><Target size={21} /></span><div><span>{t("মডেল টেস্টের গড়", "Model test average")}</span><strong>{results.length ? `${bn(average)}%` : '—'}</strong></div><small>{t("পূর্ণমান অনুযায়ী শতাংশ", "Percentage of total marks")}</small></div><div className="card"><span className="stat-icon peach"><TrendingUp size={21} /></span><div><span>{t("সব টেস্টের গড়", "Average of all tests")}</span><strong>{customTests.length ? `${bn(testAverage)}%` : '—'}</strong></div><small>{bn(customTests.length)}টি টেস্ট · সেরা {customTests.length ? `${bn(Math.round(bestTest))}%` : '—'}</small></div><div className="card next-exam-card"><span className="stat-icon blue"><Award size={21} /></span><div><span>{t("পরের মডেল টেস্ট", "Next model test")}</span><strong>{next ? subjectById[next.subject].short : 'সব রেকর্ড আছে'}</strong><p>{next ? `${formatDate(next.date)} · ${next.paperId?.endsWith('-2') ? 'দ্বিতীয় পত্র' : 'প্রথম পত্র'}` : 'ভুলের খাতা ঝালাই করতে থাকো'}</p></div>{next && <button className="icon-button" aria-label={t("পরের টেস্টের রুটিন", "Next test routine")} onClick={() => navigate('today', next.date)}><CalendarDays size={18} /></button>}</div></div>
+
+    <section className="card test-exam-readiness-card">
+      <div className="card-heading">
+        <div>
+          <h2><Target size={20} />{t('টেস্ট পরীক্ষা প্রস্তুতি ট্র্যাকার (ফেব্রুয়ারি ২০২৭)', 'Test Exam Readiness Tracker (February 2027)')}</h2>
+          <p>{t(`লক্ষ্য তারিখ: ${formatDate(data.settings.testExamDate, 'long')} (${testDaysLeft >= 0 ? `বাকি ${bn(testDaysLeft)} দিন` : 'সম্পন্ন'}) · HSC ’২৭ পরীক্ষা: ${formatDate(data.settings.examDate, 'long')} (${hscDaysLeft >= 0 ? `বাকি ${bn(hscDaysLeft)} দিন` : 'সম্পন্ন'})`, `Target: ${formatDate(data.settings.testExamDate, 'long')} · HSC '27: ${formatDate(data.settings.examDate, 'long')}`)}</p>
+        </div>
+        <div className="test-readiness-pill">
+          <strong>{bn(percent(priorityADone, priorityAChapters.length))}%</strong>
+          <small>{bn(priorityADone)}/{bn(priorityAChapters.length)} {t('অগ্রাধিকার A শেষ', 'Priority A done')}</small>
+        </div>
+      </div>
+      <ProgressBar value={percent(priorityADone, priorityAChapters.length)} />
+      <div className="test-readiness-subjects">
+        {SUBJECTS.map(sub => {
+          const subA = priorityAChapters.filter(c => c.subject === sub.id);
+          const subDone = subA.filter(c => isChapterDone(plan, c.id, data.completed)).length;
+          return <div className="test-readiness-row" key={sub.id}>
+            <span style={{ color: sub.color }}>{sub.short}</span>
+            <ProgressBar value={percent(subDone, subA.length)} color={sub.color} />
+            <small>{bn(subDone)}/{bn(subA.length)}</small>
+          </div>;
+        })}
+      </div>
+    </section>
 
     <section className="card gpa-card">
       <div className="card-heading"><div><h2><GraduationCap size={21} />{t("GPA ও Golden A+ ট্র্যাকার", "GPA & Golden A+ tracker")}</h2><p>প্রতিটি বিষয়ের দুই পত্রের মোট নম্বর লেখো। ICT-এর পূর্ণমান ১০০ (তত্ত্বীয় ৭৫ + ব্যবহারিক ২৫)। উচ্চতর গণিত চতুর্থ বিষয়ের নিয়মে গণনা হবে।</p></div><div className={`gpa-badge ${gpa.golden ? 'golden' : ''}`}><span>GPA</span><strong>{gpa.gpa === null ? '—' : bn(gpa.gpa.toFixed(2))}</strong><small>{gpaTargetLabel(gpa.gpa, gpa.golden)}</small></div></div>

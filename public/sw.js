@@ -1,5 +1,5 @@
 /* Production-only offline shell. User data stays in localStorage, never in this cache. */
-const CACHE = 'prostuti-hsc27-v3';
+const CACHE = 'prostuti-hsc27-v4';
 const SHELL = ['./', './index.html', './icon.svg', './icon-192.png', './icon-512.png', './manifest.webmanifest'];
 self.addEventListener('install', event => {
   // Do not skipWaiting: an open tab keeps its old precache until it is safe to activate.

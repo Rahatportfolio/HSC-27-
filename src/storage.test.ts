@@ -85,7 +85,11 @@ describe('validated local backups', () => {
     expect(migrated.notes['2026-11-14']).toBe('পুরোনো দিনের নোট');
     expect(migrated.focus.minutes).toBe(120);
     expect(migrated.settings.theme).toBe('light');
-    expect(migrated.settings.examDate).toBe('2027-06-30');
+    expect(migrated.settings.testExamDate).toBe('2027-02-01');
+    expect(migrated.settings.examDate).toBe('2027-06-06');
+    expect(migrated.settings.boostEnabled).toBe(true);
+    expect(migrated.settings.boostStartDate).toBe('2026-12-01');
+    expect(migrated.settings.boostDailyHours).toBe(16);
     expect(migrated.settings.pomodoroFocus).toBe(25);
     expect(migrated.studySessions).toEqual([]);
     expect(migrated.revisions).toEqual([]);
@@ -97,5 +101,17 @@ describe('validated local backups', () => {
     expect(settings.dailyHours).toBe(8); expect(settings.reminderLead).toBe(15); expect(settings).not.toHaveProperty('unknown');
     const parsed = parseBackup(JSON.stringify({ ...freshData(), injected: true }));
     expect(parsed).not.toHaveProperty('injected');
+  });
+});
+
+describe('personal tasks and legacy carryovers', () => {
+  it('retains one-off task dates and repairs stale carried completion state', () => {
+    const data = freshData();
+    data.routineBlocks.push({ id: 'personal', date: '2026-11-14', weekday: 6, startMinute: 600, minutes: 30, subject: 'physics', title: 'My task', createdAt: '2026-11-14T00:00:00Z' });
+    data.completed.task = '2026-11-14T00:00:00Z';
+    data.carryovers.push({ id: 'carry', taskId: 'task', title: 'Task', subject: 'physics', minutes: 30, fromDate: '2026-11-14', date: '2026-11-15', createdAt: '2026-11-14T00:00:00Z' });
+    const restored = parseBackup(JSON.stringify(data));
+    expect(restored.routineBlocks[0].date).toBe('2026-11-14');
+    expect(restored.carryovers[0].completedAt).toBe(data.completed.task);
   });
 });

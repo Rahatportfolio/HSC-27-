@@ -1,0 +1,249 @@
+import { chapterById, subjectById } from './data';
+import { isEnglish } from './i18n';
+import {
+  bn,
+  effectiveDailyHours,
+  formatDurationBn,
+  formatTime,
+  getNextUnfinishedDay,
+  getUnfinishedPastTasks,
+  phaseName,
+} from './planner';
+import type { AppData, Day, Task } from './planner';
+
+export interface DailyNotificationDigest {
+  date: string;
+  /** Short readable description of what subjects & chapters are scheduled today. */
+  whatToStudy: string;
+  /** Total scheduled minutes for the day. */
+  totalMinutes: number;
+  /** Total scheduled tasks/sessions for the day. */
+  totalTasks: number;
+  /** Completed minutes for the day. */
+  doneMinutes: number;
+  /** Completed tasks/sessions for the day. */
+  doneTasks: number;
+  /** Remaining minutes left to complete today. */
+  remainingMinutes: number;
+  /** Remaining tasks/sessions left to complete today. */
+  remainingTasks: number;
+  /** Completion percentage (0..100). */
+  percentDone: number;
+  /** Titles of remaining sessions today. */
+  remainingTitles: string[];
+  /** Number of unfinished sessions carried from earlier days. */
+  pastUnfinishedCount: number;
+  /** Minutes of unfinished sessions carried from earlier days. */
+  pastUnfinishedMinutes: number;
+  /** Formatted duration of unfinished sessions from earlier days. */
+  pastUnfinishedSummary: string;
+  /** True when today has scheduled tasks and all of them are completed. */
+  allDone: boolean;
+  /** Next unfinished day's study description (when today is 100% done). */
+  nextDayWhatToStudy: string;
+  /** Formatted total study text, e.g. "৮ ঘণ্টা (৪টি সেশন)". */
+  totalSummary: string;
+  /** Formatted completed text, e.g. "১/৪ সেশন (২ ঘণ্টা · ২৫%)". */
+  completedSummary: string;
+  /** Formatted remaining-to-complete text, e.g. "৩টি সেশন (৬ ঘণ্টা)". */
+  remainingSummary: string;
+}
+
+export interface NotificationPayload {
+  title: string;
+  body: string;
+}
+
+function describeDayStudy(day: Day | undefined): string {
+  if (!day || day.tasks.length === 0) {
+    return isEnglish() ? 'Revision & self-study' : 'রিভিশন ও নিজস্ব অনুশীলন';
+  }
+  const bySubject = new Map<string, string[]>();
+  for (const tk of day.tasks) {
+    const subShort = isEnglish() ? subjectById[tk.subject].english : subjectById[tk.subject].short;
+    const list = bySubject.get(subShort) || [];
+    for (const cid of tk.chapterIds) {
+      const chTitle = chapterById[cid]?.title;
+      if (chTitle && !list.includes(chTitle)) list.push(chTitle);
+    }
+    bySubject.set(subShort, list);
+  }
+  const parts: string[] = [];
+  for (const [subName, chTitles] of bySubject.entries()) {
+    if (chTitles.length > 0) {
+      parts.push(`${subName} (${chTitles.join(', ')})`);
+    } else {
+      parts.push(`${subName} (${phaseName(day.phase)})`);
+    }
+  }
+  return parts.join(isEnglish() ? ' + ' : ' ও ');
+}
+
+/**
+ * Computes a complete snapshot of today's study:
+ * 1) What to study today (আজ কী পড়া)
+ * 2) Total amount of study (মোট কতটুকু পড়া)
+ * 3) How much is completed & how much still needs to be completed (কতটুকু কমপ্লিট করা লাগবে)
+ */
+export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: string): DailyNotificationDigest {
+  const day = plan.find(d => d.date === date);
+  const tasks = day?.tasks ?? [];
+  const totalTasks = tasks.length;
+  const fallbackTargetMin = effectiveDailyHours(data.settings, date, data.dayOverrides?.[date]) * 60;
+  const totalMinutes = totalTasks > 0
+    ? tasks.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0)
+    : fallbackTargetMin;
+
+  const doneList = tasks.filter(tk => Boolean(data.completed[tk.id]));
+  const remainingList = tasks.filter(tk => !data.completed[tk.id]);
+
+  const doneTasks = doneList.length;
+  const doneMinutes = doneList.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0);
+  const remainingTasks = remainingList.length;
+  const remainingMinutes = remainingList.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0);
+  const percentDone = totalMinutes > 0 ? Math.round((doneMinutes / totalMinutes) * 100) : 0;
+
+  const pastUnfinished = getUnfinishedPastTasks(plan, date, data.completed);
+  const pastUnfinishedCount = pastUnfinished.length;
+  const pastUnfinishedMinutes = pastUnfinished.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0);
+  const pastUnfinishedSummary = formatDurationBn(pastUnfinishedMinutes);
+  const allDone = totalTasks > 0 && remainingTasks === 0;
+  const nextDay = allDone ? getNextUnfinishedDay(plan, date, data.completed) : undefined;
+  const nextDayWhatToStudy = nextDay ? describeDayStudy(nextDay) : '';
+
+  const whatToStudy = describeDayStudy(day);
+  const remainingTitles = remainingList.map(tk => tk.title);
+
+  const totalSummary = isEnglish()
+    ? `${formatDurationBn(totalMinutes)} (${totalTasks} sessions)`
+    : `${formatDurationBn(totalMinutes)} (${bn(totalTasks)}টি সেশন)`;
+
+  const completedSummary = isEnglish()
+    ? `${doneTasks}/${totalTasks} sessions (${formatDurationBn(doneMinutes)} · ${percentDone}%)`
+    : `${bn(doneTasks)}/${bn(totalTasks)}টি সেশন (${formatDurationBn(doneMinutes)} · ${bn(percentDone)}%)`;
+
+  const remainingSummary = remainingTasks === 0
+    ? (isEnglish() ? 'All completed for today!' : 'আজকের সব পড়া সম্পন্ন!')
+    : isEnglish()
+      ? `${remainingTasks} sessions left (${formatDurationBn(remainingMinutes)})`
+      : `${bn(remainingTasks)}টি সেশন বাকি (${formatDurationBn(remainingMinutes)})`;
+
+  return {
+    date,
+    whatToStudy,
+    totalMinutes,
+    totalTasks,
+    doneMinutes,
+    doneTasks,
+    remainingMinutes,
+    remainingTasks,
+    percentDone,
+    remainingTitles,
+    pastUnfinishedCount,
+    pastUnfinishedMinutes,
+    pastUnfinishedSummary,
+    allDone,
+    nextDayWhatToStudy,
+    totalSummary,
+    completedSummary,
+    remainingSummary,
+  };
+}
+
+/**
+ * Full daily status notification (used for morning briefing, live progress tray card, and 1-click check).
+ * Explicitly includes: আজ কী পড়া + মোট কতটুকু পড়া + কতটুকু সম্পন্ন ও কতটুকু কমপ্লিট করা লাগবে।
+ */
+export function buildDailyStatusNotification(plan: Day[], data: AppData, date: string): NotificationPayload {
+  const digest = buildDailyNotificationDigest(plan, data, date);
+
+  if (digest.totalTasks > 0 && digest.remainingTasks === 0) {
+    const nextDay = getNextUnfinishedDay(plan, date, data.completed);
+    const nextStudy = nextDay ? describeDayStudy(nextDay) : '';
+    if (isEnglish()) {
+      return {
+        title: `🎉 Today 100% Done (${digest.totalSummary})`,
+        body: `Studied: ${digest.whatToStudy}${nextStudy ? `\nNext up: ${nextStudy}` : ''}${digest.pastUnfinishedCount > 0 ? `\nEarlier pending: ${digest.pastUnfinishedCount} sessions (${formatDurationBn(digest.pastUnfinishedMinutes)})` : ''}`,
+      };
+    }
+    return {
+      title: `🎉 আজকের সব পড়া সম্পন্ন! (${digest.totalSummary})`,
+      body: `আজ পড়া হয়েছে: ${digest.whatToStudy}${nextStudy ? `\nপরের দিনের পড়া: ${nextStudy}` : ''}${digest.pastUnfinishedCount > 0 ? `\nআগের বাকি পড়া: ${bn(digest.pastUnfinishedCount)}টি সেশন (${formatDurationBn(digest.pastUnfinishedMinutes)})` : ''}`,
+    };
+  }
+
+  const nextRemainingText = digest.remainingTitles.slice(0, 2).join(' · ');
+  const pastLineBn = digest.pastUnfinishedCount > 0
+    ? `\nআগের দিনের বাকি: ${bn(digest.pastUnfinishedCount)}টি (${formatDurationBn(digest.pastUnfinishedMinutes)})`
+    : '';
+  const pastLineEn = digest.pastUnfinishedCount > 0
+    ? `\nEarlier pending: ${digest.pastUnfinishedCount} (${formatDurationBn(digest.pastUnfinishedMinutes)})`
+    : '';
+
+  if (isEnglish()) {
+    return {
+      title: `📚 Today: ${digest.remainingSummary} · Total ${formatDurationBn(digest.totalMinutes)}`,
+      body: `Today's study: ${digest.whatToStudy}\nTotal: ${digest.totalSummary} · Done: ${digest.completedSummary}\nLeft to complete: ${digest.remainingSummary}${nextRemainingText ? ` (${nextRemainingText})` : ''}${pastLineEn}`,
+    };
+  }
+
+  return {
+    title: `📚 আজকের পড়া · কমপ্লিট করতে বাকি ${formatDurationBn(digest.remainingMinutes)} (${bn(digest.remainingTasks)}/${bn(digest.totalTasks)} সেশন)`,
+    body: `আজ কী পড়া: ${digest.whatToStudy}\nমোট পড়া: ${digest.totalSummary} · সম্পন্ন: ${digest.completedSummary}\nকমপ্লিট করা লাগবে: ${digest.remainingSummary}${nextRemainingText ? ` — ${nextRemainingText}` : ''}${pastLineBn}`,
+  };
+}
+
+/**
+ * Pre-session notification fired right before a scheduled block starts.
+ * Shows the current session + duration, PLUS today's full study & remaining work to complete!
+ */
+export function buildTaskReminderNotification(plan: Day[], data: AppData, task: Task): NotificationPayload {
+  const digest = buildDailyNotificationDigest(plan, data, task.date);
+  const taskMin = Math.max(15, task.endMinute - task.startMinute);
+  const timeSlot = `${formatTime(task.startMinute)} – ${formatTime(task.endMinute)}`;
+
+  if (isEnglish()) {
+    return {
+      title: `⏰ Study now: ${task.title} (${formatDurationBn(taskMin)})`,
+      body: `Slot: ${timeSlot} · Today: ${digest.whatToStudy}\nTotal: ${digest.totalSummary} · Done: ${digest.doneTasks}/${digest.totalTasks} · Left to complete: ${digest.remainingSummary}`,
+    };
+  }
+
+  return {
+    title: `⏰ এখন পড়া: ${task.title} (${formatDurationBn(taskMin)})`,
+    body: `সময়: ${timeSlot} · আজ কী পড়া: ${digest.whatToStudy}\nমোট: ${digest.totalSummary} · সম্পন্ন: ${bn(digest.doneTasks)}/${bn(digest.totalTasks)}টি · কমপ্লিট করা বাকি: ${digest.remainingSummary}`,
+  };
+}
+
+/**
+ * Evening check-in notification (when today's study is still incomplete).
+ */
+export function buildEveningCheckinNotification(plan: Day[], data: AppData, date: string): NotificationPayload | null {
+  const digest = buildDailyNotificationDigest(plan, data, date);
+  if (digest.remainingTasks === 0 && digest.pastUnfinishedCount === 0) return null;
+
+  if (digest.remainingTasks === 0 && digest.pastUnfinishedCount > 0) {
+    return isEnglish()
+      ? {
+          title: `🌙 Today done! ${digest.pastUnfinishedCount} earlier sessions pending`,
+          body: `Today's ${formatDurationBn(digest.totalMinutes)} is 100% complete. If you have time, finish 1 pending session (${formatDurationBn(digest.pastUnfinishedMinutes)} total).`,
+        }
+      : {
+          title: `🌙 আজকের পড়া শেষ! আগের ${bn(digest.pastUnfinishedCount)}টি পড়া বাকি`,
+          body: `আজকের ${formatDurationBn(digest.totalMinutes)} সম্পূর্ণ শেষ। হাতে সময় থাকলে আগের বাকি পড়া থেকে ১টি সেশন শেষ করে নাও।`,
+        };
+  }
+
+  const remItems = digest.remainingTitles.slice(0, 2).join(' · ');
+  if (isEnglish()) {
+    return {
+      title: `🌙 Study check-in · ${digest.remainingSummary}`,
+      body: `Today's study: ${digest.whatToStudy} (Total ${digest.totalSummary})\nDone: ${digest.completedSummary} · Still to complete: ${digest.remainingSummary}${remItems ? ` — ${remItems}` : ''}`,
+    };
+  }
+
+  return {
+    title: `🌙 রাতের রিমাইন্ডার · আজ কমপ্লিট করতে বাকি ${formatDurationBn(digest.remainingMinutes)}`,
+    body: `আজ কী পড়া: ${digest.whatToStudy} (মোট ${digest.totalSummary})\nসম্পন্ন: ${digest.completedSummary} · বাকি আছে: ${digest.remainingSummary}${remItems ? ` — ${remItems}` : ''}`,
+  };
+}

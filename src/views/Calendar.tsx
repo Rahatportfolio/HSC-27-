@@ -12,7 +12,7 @@ import { DaySummary, EmptyState, PageHeading, ProgressBar, TaskCard } from '../c
 import { t } from '../i18n';
 
 export default function CalendarView() {
-  const { plan, data, setData, today, selectedDate, setSelectedDate, navigate, exportICS, notify } = usePlanner();
+  const { plan, data, setData, today, selectedDate, setSelectedDate, navigate, exportICS, notify, toggleTask } = usePlanner();
   const [month, setMonth] = useState(selectedDate.slice(0, 7));
   const [mode, setMode] = useState<'month' | 'week'>('month');
   const [weekStart, setWeekStart] = useState(startOfWeek(selectedDate));
@@ -21,6 +21,7 @@ export default function CalendarView() {
   const [subject, setSubject] = useState<SubjectId | 'all'>('all');
   const [backlog, setBacklog] = useState(false);
   const [routineWeekday, setRoutineWeekday] = useState(() => new Date(`${selectedDate}T00:00:00Z`).getUTCDay());
+  useEffect(() => { setRoutineWeekday(new Date(`${selectedDate}T00:00:00Z`).getUTCDay()); }, [selectedDate]);
   const [routineTime, setRoutineTime] = useState('20:00');
   const [routineMinutes, setRoutineMinutes] = useState('60');
   const [routineSubject, setRoutineSubject] = useState<SubjectId>('physics');
@@ -48,12 +49,12 @@ export default function CalendarView() {
     const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(routineTime);
     const minutes = Number(routineMinutes);
     if (!match) { notify('শুরুর সময় HH:MM ফরম্যাটে লেখো।', 'error'); return; }
-    if (!Number.isFinite(minutes) || minutes < 15 || minutes > 480) { notify('একটি ব্লক ১৫ থেকে ৪৮০ মিনিটের মধ্যে হতে হবে।', 'error'); return; }
-    if (data.routineBlocks.length >= 40) { notify('সর্বোচ্চ ৪০টি কাস্টম ব্লক রাখা যায়।', 'error'); return; }
+    if (!Number.isInteger(minutes) || minutes < 15 || minutes > 480) { notify('একটি ব্লক ১৫ থেকে ৪৮০ মিনিটের মধ্যে হতে হবে।', 'error'); return; }
+    if (data.routineBlocks.filter(block => !block.date).length >= 40 || data.routineBlocks.length >= 500) { notify('সর্বোচ্চ ৪০টি কাস্টম ব্লক রাখা যায়।', 'error'); return; }
     const startMinute = Number(match[1]) * 60 + Number(match[2]);
     setData(d => ({ ...d, routineBlocks: [...d.routineBlocks, { id: newId(), weekday: routineWeekday, startMinute, minutes, subject: routineSubject, title: routineTitle.trim(), createdAt: new Date().toISOString() }] }));
     setRoutineTitle('');
-    notify('কাস্টম রুটিন ব্লক যোগ হয়েছে। শুধু এই সপ্তাহের দিনগুলোতে যোগ হবে।');
+    notify(t('কাস্টম ব্লক এই বার থেকে প্রতি সপ্তাহে যোগ হবে।', 'The custom block repeats weekly from today.'));
   };
   const removeRoutineBlock = (id: string) => setData(d => ({ ...d, routineBlocks: d.routineBlocks.filter(block => block.id !== id) }));
   const swapRoutineTimes = (firstId: string, secondId: string) => {
@@ -67,7 +68,7 @@ export default function CalendarView() {
     notify('দুই ব্লকের সময় অদলবদল হয়েছে।');
   };
   const moveRoutineBlock = (id: string, direction: -1 | 1) => {
-    const sameDay = data.routineBlocks.filter(block => block.weekday === routineWeekday).sort((a, b) => a.startMinute - b.startMinute);
+    const sameDay = data.routineBlocks.filter(block => !block.date && block.weekday === routineWeekday).sort((a, b) => a.startMinute - b.startMinute);
     const index = sameDay.findIndex(block => block.id === id);
     const target = sameDay[index + direction];
     if (target) swapRoutineTimes(id, target.id);
@@ -83,22 +84,24 @@ export default function CalendarView() {
   };
   const removeImportantDate = (id: string) => setData(d => ({ ...d, importantDates: d.importantDates.filter(item => item.id !== id) }));
   const weekdayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
-  const routineRows = data.routineBlocks.filter(block => block.weekday === routineWeekday).sort((a, b) => a.startMinute - b.startMinute);
+  const routineRows = data.routineBlocks.filter(block => !block.date && block.weekday === routineWeekday).sort((a, b) => a.startMinute - b.startMinute);
   const upcomingImportant = [...data.importantDates].sort((a, b) => a.date.localeCompare(b.date)).filter(item => item.date >= today).slice(0, 12);
   const daysUntil = (date: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
   const carryToToday = (task: { id: string; title: string; subject: SubjectId; startMinute: number; endMinute: number; date: string }) => {
+    if (data.carryovers.some(item => item.taskId === task.id && !item.completedAt)) { notify(t('কাজটি আগেই ব্যাকলগে আছে।', 'This task is already in your backlog.'), 'info'); return; }
+    if (data.carryovers.length >= 2000) { notify(t('ব্যাকলগের সীমা পূর্ণ।', 'Backlog limit reached.'), 'error'); return; }
     setData(d => addCarryover(d, task, today));
-    notify('আজকের ব্যাকলগে যোগ হয়েছে। Today পেজে টিক দিতে পারবে।', 'info');
+    notify(t('আজকের ব্যাকলগে যোগ হয়েছে।', 'Added to today’s backlog.'), 'info');
   };
   const takeFive = () => {
-    let added = 0;
-    setData(d => { const result = addBacklogToToday(plan, d, today, 5); added = result.added; return result.data; });
+    const { added } = addBacklogToToday(plan, data, today, 5);
+    setData(d => addBacklogToToday(plan, d, today, 5).data);
     notify(added ? `${bn(added)}টি কাজ আজকের তালিকায় নেওয়া হয়েছে।` : 'যোগ করার মতো নতুন ব্যাকলগ নেই।', 'info');
   };
   return <div className="view">
     <PageHeading eyebrow="DAY BY DAY" title={t("এক দিন। এক পদক্ষেপ।", "One day. One step.")} titleEn="One day. One step." description="কোন দিন কী পড়বে, সব আছে এখানে। মাস বা সপ্তাহে দেখো, তারিখে ক্লিক করে সেই দিনের কাজ দেখো।" descriptionEn="See what to study on every day. Switch between month and week, or pick a date to open its sessions." action={<div className="heading-actions"><div className="segmented small"><button className={mode === 'month' ? 'active' : ''} onClick={() => setMode('month')}><CalendarDays size={14} />{t("মাস", "Month")}</button><button className={mode === 'week' ? 'active' : ''} onClick={() => setMode('week')}><CalendarRange size={14} />{t("সপ্তাহ", "Week")}</button></div><button className="button secondary" onClick={() => exportICS('all')}><CalendarDays size={17} />{t("পুরো রুটিন", "Full routine")}</button></div>} />
     <div className="filter-bar"><div className="segmented">{(['all', 'learn', 'revise', 'exam'] as const).map(p => <button key={p} className={phase === p ? 'active' : ''} onClick={() => setPhase(p)}>{p === 'all' ? 'সব ধাপ' : phaseName(p)}</button>)}</div><select aria-label={t("বিষয় ফিল্টার", "Subject filter")} value={subject} onChange={e => setSubject(e.target.value as SubjectId | 'all')}><option value="all">{t("সব বিষয়", "All subjects")}</option>{SUBJECTS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><button className={`button ${backlog ? 'primary' : 'secondary'}`} onClick={() => setBacklog(!backlog)}><ListChecks size={16} />{t("ব্যাকলগ", "Backlog")}<span className="count-badge">{bn(overdue.length)}</span></button></div>
-    {backlog ? <section className="card backlog-card"><div className="card-heading"><div><h2>{t("আগের অসমাপ্ত কাজ", "Earlier unfinished work")}</h2><span className="tiny-muted">পুরোনো থেকে নতুন · {bn(overdue.length)}টি</span></div><button className="button secondary small" onClick={takeFive}><Plus size={15} />{t("৫টি আজকের তালিকায়", "5 in today’s list")}</button></div>{overdue.length ? <div className="backlog-list">{overdue.slice(0, 100).map(task => <div key={task.id} className="backlog-row"><div><span className="eyebrow">{formatDate(task.date)} · {subjectById[task.subject].short} · {phaseName(task.phase)}</span><strong>{task.title}</strong></div><div className="backlog-actions"><button className="button secondary small" onClick={() => carryToToday(task)}><Plus size={14} />{t("আজকের তালিকায়", " in today’s list")}</button><button className="button ghost small" onClick={() => { setSelectedDate(task.date); setBacklog(false); setMonth(task.date.slice(0, 7)); }}>{t("সেদিনে যাও", "Go to that day")}<ArrowRight size={14} /></button></div></div>)}{overdue.length > 100 && <p className="muted padded">প্রথম ১০০টি দেখানো হচ্ছে। বাকিগুলো সংশ্লিষ্ট তারিখে পাবে।</p>}</div> : <EmptyState title={t("ব্যাকলগ নেই", "No backlog")} description="অতীতের সব নির্ধারিত কাজ শেষ, অথবা এখনও কোনো কাজ বাকি পড়েনি।" />}</section>
+    {backlog ? <section className="card backlog-card"><div className="card-heading"><div><h2>{t("আগের অসমাপ্ত কাজ", "Earlier unfinished work")}</h2><span className="tiny-muted">পুরোনো থেকে নতুন · {bn(overdue.length)}টি</span></div><button className="button secondary small" onClick={takeFive}><Plus size={15} />{t("৫টি আজকের তালিকায়", "5 in today’s list")}</button></div>{overdue.length ? <div className="backlog-list">{overdue.slice(0, 100).map(task => <div key={task.id} className="backlog-row"><button className="task-check" aria-label={t(`${task.title} সম্পন্ন করো`, `Complete ${task.title}`)} aria-pressed={false} onClick={() => toggleTask(task.id)} /><div><span className="eyebrow">{formatDate(task.date)} · {subjectById[task.subject].short} · {phaseName(task.phase)}</span><strong>{task.title}</strong></div><div className="backlog-actions"><button className="button secondary small" disabled={data.carryovers.some(item => item.taskId === task.id && !item.completedAt)} onClick={() => carryToToday(task)}><Plus size={14} />{data.carryovers.some(item => item.taskId === task.id && !item.completedAt) ? t("তালিকায় আছে", "Already added") : t("আজকের তালিকায়", "Add to today")}</button><button className="button ghost small" onClick={() => { setSelectedDate(task.date); setBacklog(false); setMonth(task.date.slice(0, 7)); }}>{t("সেদিনে যাও", "Go to that day")}<ArrowRight size={14} /></button></div></div>)}{overdue.length > 100 && <p className="muted padded">প্রথম ১০০টি দেখানো হচ্ছে। বাকিগুলো সংশ্লিষ্ট তারিখে পাবে।</p>}</div> : <EmptyState title={t("ব্যাকলগ নেই", "No backlog")} description="অতীতের সব নির্ধারিত কাজ শেষ, অথবা এখনও কোনো কাজ বাকি পড়েনি।" />}</section>
       : <div className="calendar-layout">
         <section className="card calendar-card">
           {mode === 'month' ? <>
@@ -126,7 +129,7 @@ export default function CalendarView() {
         <aside className="card calendar-day-panel"><div className="card-heading"><div><span className="eyebrow">{formatDate(selectedDate, 'weekday')}</span><h2>{formatDate(selectedDate, 'long')}</h2></div>{day && <span className="phase-pill">{phaseName(day.phase)}</span>}</div>{day ? <><DaySummary day={day} /><div className="compact-tasks">{visibleTasks.length ? visibleTasks.map(task => <TaskCard key={task.id} task={task} compact />) : <EmptyState title={t("এই বিষয়ে কাজ নেই", "No work left in this subject")} description="ফিল্টার বদলে অন্য বিষয় দেখো।" />}</div><button className="button secondary full-width" onClick={() => navigate('today', selectedDate)}>{t("বিস্তারিত রুটিন", "Detailed routine")}<ArrowRight size={16} /></button></> : <EmptyState title={t("এই দিনে কোনো সেশন নেই", "No session on this day")} description="পরিকল্পনার তারিখের মধ্যে একটি দিন বেছে নাও।" />}</aside>
       </div>}
     <section className="card routine-card">
-      <div className="card-heading"><div><h2><Clock3 size={20} />{t("কাস্টম সাপ্তাহিক রুটিন", "Custom weekly routine")}</h2><p>অটো রুটিনের সঙ্গে নিজের নির্দিষ্ট সময়ের সেশন যোগ করো। অধ্যায়ের অগ্রগতি বদলাবে না।</p></div><span className="count-badge">{bn(data.routineBlocks.length)} ব্লক</span></div>
+      <div className="card-heading"><div><h2><Clock3 size={20} />{t("কাস্টম সাপ্তাহিক রুটিন", "Custom weekly routine")}</h2><p>অটো রুটিনের সঙ্গে নিজের নির্দিষ্ট সময়ের সেশন যোগ করো। অধ্যায়ের অগ্রগতি বদলাবে না।</p></div><span className="count-badge">{bn(data.routineBlocks.filter(block => !block.date).length)} ব্লক</span></div>
       <div className="weekday-tabs">{weekdayNames.map((name, index) => <button key={name} type="button" className={routineWeekday === index ? 'active' : ''} onClick={() => setRoutineWeekday(index)}>{name}</button>)}</div>
       <form className="routine-form" onSubmit={addRoutineBlock}>
         <label>{t("শুরু", "Start")}<input type="time" value={routineTime} onChange={e => setRoutineTime(e.target.value)} required /></label>
@@ -139,7 +142,20 @@ export default function CalendarView() {
       <p className="tiny-muted">কাস্টম ব্লক ১৮১ দিনের রুটিনে প্রতি সপ্তাহে একই দিনে যোগ হবে। অনেকগুলো ব্লক একই সময়ে থাকলে সময় মিলিয়ে নাও।</p>
     </section>
     <section className="card important-dates-card">
-      <div className="card-heading"><div><h2><BellRing size={20} />{t("গুরুত্বপূর্ণ তারিখ", "Important dates")}</h2><p>পরীক্ষা, স্কুল ইভেন্ট বা নিজের লক্ষ্য—আলাদা করে মনে রাখো।</p></div><span className="count-badge">{bn(upcomingImportant.length)} আসন্ন</span></div>
+      <div className="card-heading"><div><h2><BellRing size={20} />{t("গুরুত্বপূর্ণ তারিখ", "Important dates")}</h2><p>{t("টেস্ট পরীক্ষা, ঈদুল আজহা, বোর্ড পরীক্ষা ও তোমার নিজের লক্ষ্য তারিখ—সব এক নজরে।", "Test Exam, Eid-ul-Adha, Board Exam and your own target dates — at a glance.")}</p></div><span className="count-badge">{bn(upcomingImportant.length)} আসন্ন</span></div>
+      <div className="built-in-milestones">
+        {[
+          { key: 'test', date: data.settings.testExamDate, title: t('কলেজের টেস্ট পরীক্ষা (জানুয়ারি ২০২৭)', 'College Test Exam (January 2027)'), note: t('সেটিংসে কলেজের নির্দিষ্ট তারিখ বসানো যাবে', 'Editable in Settings') },
+          { key: 'eid', date: '2027-05-16', title: t('ঈদুল আজহা ২০২৭ (সম্ভাব্য)', 'Eid-ul-Adha 2027 (expected)'), note: t('ঈদের আগেই পুরো মডেল টেস্ট ধাপ শেষ', 'Model test phase finishes right before Eid') },
+          { key: 'hsc', date: data.settings.examDate, title: t('HSC ’২৭ বোর্ড পরীক্ষা শুরু (সম্ভাব্য)', "HSC '27 Board Exam starts (expected)"), note: t('ঈদুল আজহার পর সম্ভাব্য তারিখ · ৬ জুন ২০২৭', 'Post-Eid expected board schedule · 6 June 2027') },
+        ].map(m => {
+          const left = daysUntil(m.date);
+          return <div className="milestone-chip-card" key={m.key}>
+            <span className={`important-days ${left >= 0 && left <= 45 ? 'soon' : ''}`}>{left >= 0 ? bn(left) : '✓'}<small>{left >= 0 ? t('দিন বাকি', 'days') : t('সম্পন্ন', 'done')}</small></span>
+            <div><strong>{m.title}</strong><span>{formatDate(m.date, 'long')} · {m.note}</span></div>
+          </div>;
+        })}
+      </div>
       <form className="important-form" onSubmit={addImportantDate}>
         <label>{t("তারিখ", "Date")}<input type="date" min={addDays(today, -365)} max="2041-12-31" value={importantDate} onChange={e => setImportantDate(e.target.value)} required /></label>
         <label>{t("নাম", "Name")}<input value={importantTitle} maxLength={200} onChange={e => setImportantTitle(e.target.value)} placeholder={t("যেমন: রসায়ন মডেল টেস্ট", "e.g. chemistry model test")} required /></label>

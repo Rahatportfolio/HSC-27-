@@ -17,6 +17,7 @@ describe('class-watched tracker', () => {
   it('counts only direct links, never channel searches', () => {
     const classes = CHAPTER_CLASSES['physics-1-2'];
     expect(realOptions(classes).every(option => option.kind !== 'search')).toBe(true);
+    expect(realOptions(classes).length).toBeGreaterThanOrEqual(6);
     expect(realOptions(classes).length).toBeLessThan(allOptions(classes).length);
     const progress = chapterClassProgress(freshData(), 'physics-1-2');
     expect(progress).toEqual({ total: realOptions(classes).length, watched: 0, percent: 0 });

@@ -2,7 +2,7 @@ import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
-import type { CqParts, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind } from './types';
+import type { CqParts, DayScheduleOverride, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind } from './types';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max = 10000): v is string => typeof v === 'string' && v.length <= max;
@@ -32,7 +32,7 @@ export const SAVED_AT_KEY = `${STORAGE_KEY}-saved-at`;
 export const MISTAKE_LIMIT = 1000;
 export const LIMITS = {
   sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000,
-  libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 40, importantDates: 200,
+  libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 500, importantDates: 200,
   classWatched: 1000,
 };
 
@@ -74,9 +74,16 @@ export function sanitizeSettings(raw: unknown): Settings {
   const d = DEFAULT_SETTINGS;
   if (!text(raw.startDate, 10) || !isValidDate(raw.startDate) || raw.startDate > '2040-12-31') throw new Error('শুরুর তারিখ সঠিক নয়।');
   if (!text(raw.startTime, 5) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(raw.startTime)) throw new Error('শুরুর সময় সঠিক নয়।');
-  if (![6, 8, 10].includes(Number(raw.dailyHours))) throw new Error('দৈনিক পড়ার সময় ৬, ৮ বা ১০ ঘণ্টা হতে হবে।');
+  if (!int(Number(raw.dailyHours), 4, 18)) throw new Error('দৈনিক পড়ার সময় ৪ থেকে ১৮ ঘণ্টার মধ্যে হতে হবে।');
+  const boostEnabled = raw.boostEnabled === undefined ? d.boostEnabled : raw.boostEnabled === true;
+  const boostStartDate = raw.boostStartDate === undefined ? d.boostStartDate : raw.boostStartDate;
+  if (!text(boostStartDate, 10) || !isValidDate(boostStartDate)) throw new Error('পরবর্তী ধাপের শুরুর তারিখ সঠিক নয়।');
+  const boostDailyHours = raw.boostDailyHours === undefined ? d.boostDailyHours : Number(raw.boostDailyHours);
+  if (!int(boostDailyHours, 4, 18)) throw new Error('পরবর্তী ধাপের পড়ার সময় ৪ থেকে ১৮ ঘণ্টার মধ্যে হতে হবে।');
   if (![0, 5, 10, 15, 30].includes(Number(raw.reminderLead))) throw new Error('রিমাইন্ডারের সময় সঠিক নয়।');
   if (!text(raw.board, 60) || !text(raw.name, 60)) throw new Error('নাম বা বোর্ডের লেখা সঠিক নয়।');
+  const testExamDate = raw.testExamDate === undefined ? d.testExamDate : raw.testExamDate;
+  if (!text(testExamDate, 10) || !isValidDate(testExamDate)) throw new Error('টেস্ট পরীক্ষার তারিখ সঠিক নয়।');
   const examDate = raw.examDate === undefined ? d.examDate : raw.examDate;
   if (!text(examDate, 10) || !isValidDate(examDate)) throw new Error('HSC পরীক্ষার লক্ষ্য তারিখ সঠিক নয়।');
   const theme = raw.theme === undefined ? d.theme : raw.theme;
@@ -92,9 +99,12 @@ export function sanitizeSettings(raw: unknown): Settings {
   const fontScale = raw.fontScale === undefined ? d.fontScale : raw.fontScale;
   if (!['sm', 'md', 'lg'].includes(String(fontScale))) throw new Error('লেখার আকারের সেটিংস সঠিক নয়।');
   return {
-    startDate: raw.startDate, startTime: raw.startTime, dailyHours: Number(raw.dailyHours), board: raw.board, name: raw.name,
+    startDate: raw.startDate, startTime: raw.startTime, dailyHours: Number(raw.dailyHours),
+    boostEnabled, boostStartDate, boostDailyHours,
+    board: raw.board, name: raw.name,
     reminderEnabled: raw.reminderEnabled === true, reminderLead: Number(raw.reminderLead), syllabusChecked: raw.syllabusChecked === true,
     calendarRevision: int(raw.calendarRevision, 0, 999999) ? Number(raw.calendarRevision) : 0,
+    testExamDate,
     examDate,
     theme: theme as Settings['theme'],
     language: language as Settings['language'],
@@ -233,9 +243,13 @@ export function parseBackup(rawText: string): AppData {
     return { id: item.id, taskId: item.taskId, title: item.title, subject: item.subject, minutes: Number(item.minutes), fromDate: item.fromDate, date: item.date, createdAt: item.createdAt, completedAt: optionalAt(item.completedAt, 'ব্যাকলগের তারিখ সঠিক নয়।') };
   });
 
+  // Repair backups written by earlier versions that let carried copies drift from the original.
+  result.carryovers = result.carryovers.map(item => ({ ...item, completedAt: result.completed[item.taskId] || undefined }));
+
   result.routineBlocks = listOf(raw.routineBlocks, LIMITS.routineBlocks, 'কাস্টম রুটিন', item => {
     if (!object(item) || !nonEmpty(item.id, 180) || !int(item.weekday, 0, 6) || !int(item.startMinute, 0, 1439) || !int(item.minutes, 15, 480) || !isSubject(item.subject) || !text(item.title, 120) || !validAt(item.createdAt)) throw new Error('কাস্টম রুটিনের তথ্য সঠিক নয়।');
-    return { id: item.id, weekday: Number(item.weekday), startMinute: Number(item.startMinute), minutes: Number(item.minutes), subject: item.subject, title: item.title.trim(), createdAt: item.createdAt };
+    if (item.date !== undefined && (typeof item.date !== 'string' || !isValidDate(item.date) || new Date(`${item.date}T00:00:00Z`).getUTCDay() !== item.weekday)) throw new Error('কাস্টম রুটিনের তারিখ সঠিক নয়।');
+    return { id: item.id, ...(item.date !== undefined ? { date: item.date as string } : {}), weekday: Number(item.weekday), startMinute: Number(item.startMinute), minutes: Number(item.minutes), subject: item.subject, title: item.title.trim(), createdAt: item.createdAt };
   });
   if (new Set(result.routineBlocks.map(block => block.id)).size !== result.routineBlocks.length) throw new Error('কাস্টম রুটিনে একই ID দুইবার আছে।');
 
@@ -254,6 +268,38 @@ export function parseBackup(rawText: string): AppData {
     for (const [key, value] of Object.entries(raw.classWatched)) {
       if (!nonEmpty(key, 500) || !validAt(value)) throw new Error('দেখা ক্লাসের তালিকা সঠিক নয়।');
       put(result.classWatched, key, value);
+    }
+  }
+  if (raw.dayOverrides !== undefined) {
+    if (!object(raw.dayOverrides) || Object.keys(raw.dayOverrides).length > 1500) throw new Error('দিনের কাস্টম সময়ের তথ্য সঠিক নয়।');
+    for (const [date, ov] of Object.entries(raw.dayOverrides)) {
+      if (!isValidDate(date) || !object(ov)) throw new Error('দিনের কাস্টম সময়ের তথ্য সঠিক নয়।');
+      const parsedOv: DayScheduleOverride = {};
+      if (ov.startMinute !== undefined) {
+        if (!int(Number(ov.startMinute), 0, 1439)) throw new Error('দিনের শুরুর সময় সঠিক নয়।');
+        parsedOv.startMinute = Number(ov.startMinute);
+      }
+      if (ov.dailyHours !== undefined) {
+        if (!int(Number(ov.dailyHours), 4, 18)) throw new Error('দিনের পড়ার ঘণ্টা সঠিক নয়।');
+        parsedOv.dailyHours = Number(ov.dailyHours);
+      }
+      if (ov.taskMinutes !== undefined) {
+        if (!object(ov.taskMinutes) || Object.keys(ov.taskMinutes).length > 50) throw new Error('সেশনের সময়ের তথ্য সঠিক নয়।');
+        parsedOv.taskMinutes = {};
+        for (const [tId, mins] of Object.entries(ov.taskMinutes)) {
+          if (!nonEmpty(tId, 180) || !int(Number(mins), 15, 720)) throw new Error('সেশনের সময়ের তথ্য সঠিক নয়।');
+          put(parsedOv.taskMinutes, tId, Number(mins));
+        }
+      }
+      if (ov.taskStartMinutes !== undefined) {
+        if (!object(ov.taskStartMinutes) || Object.keys(ov.taskStartMinutes).length > 50) throw new Error('সেশনের শুরুর সময়ের তথ্য সঠিক নয়।');
+        parsedOv.taskStartMinutes = {};
+        for (const [tId, sm] of Object.entries(ov.taskStartMinutes)) {
+          if (!nonEmpty(tId, 180) || !int(Number(sm), 0, 2879)) throw new Error('সেশনের শুরুর সময়ের তথ্য সঠিক নয়।');
+          put(parsedOv.taskStartMinutes, tId, Number(sm));
+        }
+      }
+      put(result.dayOverrides, date, parsedOv);
     }
   }
 

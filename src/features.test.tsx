@@ -181,4 +181,63 @@ describe('global search', () => {
     await act(async () => { chapterHit!.click(); });
     expect(await screen.findByText(/এই অধ্যায়ে কতটা আত্মবিশ্বাসী/)).toBeTruthy();
   });
+
+  it('matches teacher names and exposes direct YouTube links inside global search', async () => {
+    render(<App />);
+    fireEvent.keyDown(window, { key: 'k', ctrlKey: true });
+    const input = await screen.findByRole('textbox', { name: /অধ্যায় ও রুটিন খুঁজো|সব কিছু খুঁজো/ });
+    type(input, 'মাশরুর');
+    const results = await waitFor(() => document.querySelector('.search-results') as HTMLElement);
+    const links = within(results).getAllByRole('link');
+    expect(links.length).toBeGreaterThan(0);
+    expect(links[0].getAttribute('href')).toMatch(/^https:\/\/www\.youtube\.com\/(watch\?v=|playlist\?list=)/);
+  });
+});
+
+describe('direct class archive & test exam readiness', () => {
+  it('browses and filters the built-in direct class archive in Library → YouTube', async () => {
+    render(<App />);
+    go('library');
+    await screen.findByText('নোট লাইব্রেরি');
+    await act(async () => { libraryTab(/^YouTube/).click(); });
+    expect(await screen.findByText(/অধ্যায়ভিত্তিক সরাসরি ক্লাস আর্কাইভ/)).toBeTruthy();
+    type(screen.getByLabelText(/ভিডিও খুঁজো/), 'জৈব রসায়ন');
+    expect(await screen.findByText('জৈব রসায়ন')).toBeTruthy();
+  });
+
+  it('shows the February 2027 Test Exam readiness tracker on Exams', async () => {
+    render(<App />);
+    go('exams');
+    expect(await screen.findByText(/টেস্ট পরীক্ষা প্রস্তুতি ট্র্যাকার \(ফেব্রুয়ারি ২০২৭\)/)).toBeTruthy();
+  });
+
+  it('starts an inline preset timer on Today and keeps the recording-style live status bar visible across views', async () => {
+    render(<App />);
+    const presetBtns = await screen.findAllByRole('button', { name: /টাইমার/ });
+    const inlinePreset = presetBtns.find(btn => btn.classList.contains('step-timer-pill') || btn.classList.contains('preset-launch-btn'))!;
+    expect(inlinePreset).toBeTruthy();
+    await act(async () => { inlinePreset.click(); });
+    expect(await screen.findByText('লাইভ চলছে')).toBeTruthy();
+    expect(document.querySelector('.live-timer-topbar.running')).toBeTruthy();
+    // Navigate to Syllabus — top live recording bar stays pinned!
+    go('syllabus');
+    expect(document.querySelector('.live-timer-topbar.running')).toBeTruthy();
+  });
+
+  it('cascades subsequent session times when Today start time changes and auto-reveals next day upon completion', async () => {
+    render(<App />);
+    const startInput = await screen.findByLabelText('আজকের শুরুর সময়');
+    await act(async () => {
+      fireEvent.change(startInput, { target: { value: '10:00' } });
+    });
+    expect((await screen.findAllByText(/10:00 AM/)).length).toBeGreaterThan(0);
+
+    // Tick every task in .task-list -> next day's study plan appears immediately!
+    const checks = Array.from(document.querySelectorAll<HTMLButtonElement>('.task-list .task-check'));
+    expect(checks.length).toBeGreaterThan(0);
+    for (const btn of checks) {
+      await act(async () => { btn.click(); });
+    }
+    expect(await screen.findByText(/পরের দিনের পড়া রেডি/)).toBeTruthy();
+  });
 });

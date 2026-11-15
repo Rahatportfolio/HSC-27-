@@ -7,9 +7,10 @@ import type { SubjectId } from '../data';
 import { addDays, bn, formatDate, percent } from '../planner';
 import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
 import { deleteStudySession } from '../study';
-import { PageHeading, ProgressBar, ProgressRing } from '../components';
+import { CHAPTER_CLASSES } from '../classLinks';
+import { ClassBlock, PageHeading, ProgressBar, ProgressRing } from '../components';
+import { effectiveDailyHours } from '../planner';
 import { t } from '../i18n';
-import { startStudyTimerService, stopStudyTimerService } from '../native';
 
 const pad = (value: number): string => bn(String(value).padStart(2, '0'));
 function clock(seconds: number): string {
@@ -18,7 +19,8 @@ function clock(seconds: number): string {
 }
 const PHASE_LABEL = { focus: 'ফোকাস সময়', short: 'ছোট বিরতি', long: 'লম্বা বিরতি', none: 'টাইমার' } as const;
 export default function TimerView() {
-  const { data, setData, today, timer, logSession, notify, confirm, navigate, screenAwake } = usePlanner();
+  const { data, setData, today, timer, logSession, notify, confirm, navigate, screenAwake, serviceRunning } = usePlanner();
+  const todayTargetHours = effectiveDailyHours(data.settings, today, data.dayOverrides?.[today]);
   const [manualMinutes, setManualMinutes] = useState('30');
   const [manualSubject, setManualSubject] = useState<SubjectId>('physics');
   const [manualChapter, setManualChapter] = useState('');
@@ -33,24 +35,6 @@ export default function TimerView() {
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
-  // Android: an ongoing foreground-service notification keeps the session alive while
-  // the app is in the background. On the web the same call is a guarded no-op.
-  const [serviceRunning, setServiceRunning] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    const label = subjectById[timer.subject]?.name ?? '';
-    if (timer.running) {
-      void startStudyTimerService(
-        t(`${label} · পড়া চলছে`, `${label} · session running`),
-        t('টাইমার চলছে—অ্যাপ বন্ধ করলেও সময় গণনা চলবে।', 'Timer running — the clock keeps counting in the background.'),
-      ).then(started => { if (alive) setServiceRunning(started); });
-    } else {
-      setServiceRunning(false);
-      void stopStudyTimerService();
-    }
-    return () => { alive = false; };
-  }, [timer.running, timer.subject]);
-  useEffect(() => () => { void stopStudyTimerService(); }, []);
 
   const toggleFocusMode = async () => {
     const next = !focusMode;
@@ -87,17 +71,26 @@ export default function TimerView() {
           <span>{timer.running ? 'মনোযোগ ধরে রাখো' : timer.mode === 'stopwatch' ? 'শুরু করলে সময় জমবে' : 'শুরু করার জন্য তৈরি'}</span>
         </ProgressRing>
         <div className="timer-controls"><button className="timer-main-button" onClick={timer.running ? timer.pause : timer.start}>{timer.running ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}{timer.running ? 'বিরতি' : 'শুরু করো'}</button><button className="timer-reset-button" onClick={timer.reset} aria-label={t("রিসেট", "Reset")}><RotateCcw size={18} /></button>{timer.mode === 'stopwatch' && <button className="button secondary" disabled={!canSaveStopwatch} onClick={timer.saveStopwatch}><Save size={16} />{t("সেশন সেভ", "Save session")}</button>}</div>
-        {timer.mode !== 'stopwatch' && <div className="timer-presets">{[15, 25, 45, 60, 90].map(minutes => <button key={minutes} disabled={timer.running} className={timer.durationMin === minutes ? 'active' : ''} onClick={() => timer.setDuration(minutes)}>{bn(minutes)} মি.</button>)}<label className="custom-duration">{t("নিজের", "Own")}<input type="number" min={1} max={180} value={timer.durationMin} disabled={timer.running} onChange={e => timer.setDuration(Number(e.target.value))} /><span>{t("মিনিট", "min")}</span></label></div>}
+        {timer.mode !== 'stopwatch' && <div className="timer-presets">{[25, 45, 60, 120, 180, 240].map(minutes => <button key={minutes} disabled={timer.running} className={timer.durationMin === minutes ? 'active' : ''} onClick={() => timer.setDuration(minutes)}>{minutes >= 60 ? `${bn(minutes / 60)} ঘ.` : `${bn(minutes)} মি.`}</button>)}<label className="custom-duration">{t("নিজের", "Own")}<input type="number" min={1} max={720} value={timer.durationMin} disabled={timer.running} onChange={e => timer.setDuration(Number(e.target.value))} /><span>{t("মিনিট", "min")}</span></label></div>}
         <div className="timer-tagging">
           <label>{t("বিষয়", "Subject")}<select value={timer.subject} onChange={e => timer.setSubject(e.target.value as SubjectId)}>{SUBJECTS.map(subject => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label>
           <label>{t("অধ্যায় (ঐচ্ছিক)", "Chapter (optional)")}<select value={timer.chapterId} onChange={e => timer.setChapter(e.target.value)}><option value="">{t("অধ্যায় বাছো", "Pick a chapter")}</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label>
           <label>{t("লেবেল (ঐচ্ছিক)", "Label (optional)")}<input maxLength={120} value={timer.label} onChange={e => timer.setLabel(e.target.value)} placeholder={t("যেমন: সূত্র ঝালাই", "e.g. formula drill")} /></label>
         </div>
+        {timer.chapterId && CHAPTER_CLASSES[timer.chapterId] && (
+          <div className="timer-chapter-classes">
+            <div className="timer-chapter-classes-head">
+              <strong>{chapterById[timer.chapterId]?.title} — {t('সরাসরি ক্লাস ব্লক', 'Direct class blocks')}</strong>
+              <small>{t('টাইমার চালু রেখে এক ক্লিকে ক্লাস দেখো', 'Watch any class with timer running')}</small>
+            </div>
+            <ClassBlock classes={CHAPTER_CLASSES[timer.chapterId]} compact />
+          </div>
+        )}
         <p className="timer-note"><BellRing size={13} /> ফোন লক থাকলেও সেশন শেষ হলে নোটিফিকেশন পাবে। অ্যাপ বন্ধ হলেও টাইমার ঘড়ির হিসাবে চলবে; ফিরে এলে বাকি সময় ঠিক দেখাবে। {timer.mode === 'pomodoro' && `ফোকাস ${bn(data.settings.pomodoroFocus)} মি. · ছোট বিরতি ${bn(data.settings.pomodoroBreak)} মি. · ৪ ফোকাস পর ${bn(data.settings.pomodoroLongBreak)} মি.`}</p>
       </section>
       <aside className="timer-rail">
         <section className="card break-card"><div className="card-heading"><h3><Coffee size={18} />{t("বিরতি টাইমার", "Break timer")}</h3><span className="tiny-muted">{t("পড়া হিসেবে গোনা হবে না", "Won't count as study")}</span></div><p>চোখ বন্ধ করো, পানি খাও, একটু হাঁটো। ছোট বিরতিই মন ভালো রাখে।</p><div className="break-buttons">{[5, 10, 15].map(minutes => <button key={minutes} className="button secondary small" onClick={() => timer.startBreak(minutes)}><TimerIcon size={15} />{bn(minutes)} মিনিট</button>)}</div></section>
-        <section className="card session-summary"><div className="card-heading"><h3>{t("আজকের মাপা সময়", "Time measured today")}</h3><span className="tiny-muted">{bn(todaySessions.length)}টি সেশন</span></div><div className="session-big">{bn(Math.floor(todayMinutes / 60))}<small>{t("ঘ", "h")}</small> {bn(todayMinutes % 60)}<small>{t("মি", "m")}</small></div><ProgressBar value={percent(todayMinutes, data.settings.dailyHours * 60)} /><div className="session-meta"><span>লক্ষ্য {bn(data.settings.dailyHours)} ঘণ্টা</span><span>সপ্তাহে {bn(Math.floor(weekMinutes / 60))} ঘণ্টা</span></div><div className="session-stats"><span><TrendingUp size={14} />{bn(streakWithTimer)} দিনে টাইমার</span><span><CheckCircle2 size={14} />{bn(data.focus.sessions)} সেশন সর্বকালীন</span></div></section>
+        <section className="card session-summary"><div className="card-heading"><h3>{t("আজকের মাপা সময়", "Time measured today")}</h3><span className="tiny-muted">{bn(todaySessions.length)}টি সেশন</span></div><div className="session-big">{bn(Math.floor(todayMinutes / 60))}<small>{t("ঘ", "h")}</small> {bn(todayMinutes % 60)}<small>{t("মি", "m")}</small></div><ProgressBar value={percent(todayMinutes, todayTargetHours * 60)} /><div className="session-meta"><span>লক্ষ্য {bn(todayTargetHours)} ঘণ্টা</span><span>সপ্তাহে {bn(Math.floor(weekMinutes / 60))} ঘণ্টা</span></div><div className="session-stats"><span><TrendingUp size={14} />{bn(streakWithTimer)} দিনে টাইমার</span><span><CheckCircle2 size={14} />{bn(data.focus.sessions)} সেশন সর্বকালীন</span></div></section>
         <section className="card manual-card"><div className="card-heading"><h3><Plus size={17} />{t("ম্যানুয়াল সময় যোগ", "Add time manually")}</h3><span className="tiny-muted">{t("টাইমার ছাড়া পড়লে", "If you study without the timer")}</span></div><form onSubmit={submitManual} className="manual-form"><label>{t("মিনিট", "min")}<input type="number" min={1} max={720} value={manualMinutes} onChange={e => setManualMinutes(e.target.value)} required /></label><label>{t("বিষয়", "Subject")}<select value={manualSubject} onChange={e => { setManualSubject(e.target.value as SubjectId); setManualChapter(''); }}>{SUBJECTS.map(subject => <option key={subject.id} value={subject.id}>{subject.name}</option>)}</select></label><label>{t("অধ্যায়", "Chapter")}<select value={manualChapter} onChange={e => setManualChapter(e.target.value)}><option value="">{t("ঐচ্ছিক", "Optional")}</option>{CHAPTERS.filter(chapter => chapter.subject === manualSubject).map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label><label>{t("নোট", "Notes")}<input value={manualLabel} maxLength={120} onChange={e => setManualLabel(e.target.value)} placeholder={t("ঐচ্ছিক", "Optional")} /></label><button className="button primary" type="submit"><Plus size={16} />{t("যোগ করো", "Add")}</button></form></section>
       </aside>
     </div>

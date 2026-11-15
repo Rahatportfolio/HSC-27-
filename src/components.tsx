@@ -1,12 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Play, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
-import { subjectById } from './data';
+import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, Minus, NotebookPen, Pause, Play, Plus, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
+import { chapterById, subjectById } from './data';
 import type { SubjectId } from './data';
-import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent, todayKey } from './planner';
+import { bn, dhakaMinutes, effectiveDailyHours, formatDate, formatDayOffset, formatDurationBn, formatTime, getPhases, isTaskCurrent, percent, todayKey, toMinutes, toTimeInput } from './planner';
 import type { Day, Task } from './planner';
 import { useOptionalPlanner, usePlanner } from './context';
 import { isEnglish, t } from './i18n';
+import { CHAPTER_CLASSES } from './classLinks';
 import type { ChapterClasses, ClassOption, LessonLink } from './classLinks';
 import { allOptions, isWatched, lessonKey, toggleClassWatched } from './classes';
 import { backupAgeDays, downloadBackup, needsBackup, shareBackup, snoozeBackup } from './backup';
@@ -58,17 +59,123 @@ export function PhaseJourney({ startDate, activeDate }: { startDate: string; act
   })}</div>;
 }
 export function TaskCard({ task, compact = false }: { task: Task; compact?: boolean }) {
-  const { data, toggleTask, today, now, openMistake } = usePlanner();
+  const { data, setData, toggleTask, today, now, openMistake, openChapter, timer, startTimer, startPresetTimer, navigate } = usePlanner();
   const [expanded, setExpanded] = useState(false);
   const done = !!data.completed[task.id];
   const minute = dhakaMinutes(now);
   const current = !done && isTaskCurrent(task, today, minute);
-  return <article className={`task-card ${done ? 'done' : ''} ${current ? 'current' : ''} ${compact ? 'compact' : ''}`}>
-    <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}{formatDayOffset(task.startMinute)}</span><span className="time-line" /><small>{bn(task.endMinute - task.startMinute)} {t('মি.', 'min')}</small></div>
-    <div className="task-main"><div className="task-topline"><SubjectBadge subject={task.subject} small />{current && <span className="now-badge">{t('এখন চলছে', 'in progress')}</span>}{task.kind === 'exam' && <span className="kind-badge">{t('মডেল টেস্ট', 'model test')}</span>}{task.kind === 'revision' && <span className="kind-badge">{t('রিভিশন', 'revision')}</span>}{task.kind === 'custom' && <span className="kind-badge custom">{t('কাস্টম', 'custom')}</span>}</div>
+  const durationMin = Math.max(15, task.endMinute - task.startMinute);
+  const primaryChapterId = task.chapterIds[0];
+  const primaryChapter = primaryChapterId ? chapterById[primaryChapterId] : undefined;
+  const primaryClasses = primaryChapterId ? CHAPTER_CLASSES[primaryChapterId] : undefined;
+  const isThisTimerActive = timer.taskId === task.id && (timer.running || timer.elapsedSec > 0);
+
+  const launchPreset = () => {
+    if (isThisTimerActive) {
+      if (timer.running) timer.pause();
+      else timer.start();
+      return;
+    }
+    if (startPresetTimer) {
+      startPresetTimer({
+        subject: task.subject,
+        chapterId: primaryChapter?.id,
+        durationMin,
+        label: task.title,
+        taskId: task.id,
+      });
+    } else {
+      startTimer(task.subject, primaryChapter?.id);
+      navigate('timer');
+    }
+  };
+
+  const adjustTaskDuration = (delta: number) => {
+    const nextMin = Math.max(15, Math.min(720, durationMin + delta));
+    setData(d => {
+      const prev = d.dayOverrides?.[task.date] || {};
+      return {
+        ...d,
+        dayOverrides: {
+          ...d.dayOverrides,
+          [task.date]: {
+            ...prev,
+            taskMinutes: { ...(prev.taskMinutes || {}), [task.id]: nextMin },
+          },
+        },
+      };
+    });
+  };
+
+  const adjustTaskStartTime = (timeValue: string) => {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(timeValue)) return;
+    const sm = toMinutes(timeValue);
+    setData(d => {
+      const prev = d.dayOverrides?.[task.date] || {};
+      return {
+        ...d,
+        dayOverrides: {
+          ...d.dayOverrides,
+          [task.date]: {
+            ...prev,
+            taskStartMinutes: { ...(prev.taskStartMinutes || {}), [task.id]: sm },
+          },
+        },
+      };
+    });
+  };
+
+  return <article className={`task-card ${done ? 'done' : ''} ${current || isThisTimerActive ? 'current' : ''} ${compact ? 'compact' : ''}`}>
+    <div className="task-time"><strong>{formatTime(task.startMinute).split(' ')[0]}</strong><span>{formatTime(task.startMinute).split(' ')[1]}{formatDayOffset(task.startMinute)}</span><span className="time-line" /><small>{formatDurationBn(durationMin)}</small></div>
+    <div className="task-main">
+      <div className="task-topline">
+        <SubjectBadge subject={task.subject} small />
+        {current && <span className="now-badge">{t('এখন চলছে', 'in progress')}</span>}
+        {task.kind === 'exam' && <span className="kind-badge">{t('মডেল টেস্ট', 'model test')}</span>}
+        {task.kind === 'revision' && <span className="kind-badge">{t('রিভিশন', 'revision')}</span>}
+        {task.kind === 'custom' && <span className="kind-badge custom">{t('কাস্টম', 'custom')}</span>}
+        {!done && (
+          <button
+            type="button"
+            className={`task-preset-timer-btn ${isThisTimerActive && timer.running ? 'live' : ''}`}
+            onClick={launchPreset}
+            title={t('এই সেশনের নির্ধারিত সময়ের প্রিসেট টাইমার চালু করো', 'Start preset timer for this session')}
+          >
+            {isThisTimerActive && timer.running ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
+            <span>
+              {isThisTimerActive
+                ? `${timer.running ? t('চলছে', 'Running') : t('বিরতি', 'Paused')} · ${bn(String(Math.floor(timer.remainingSec / 60)).padStart(2, '0'))}:${bn(String(timer.remainingSec % 60).padStart(2, '0'))}`
+                : `${t('টাইমার', 'Timer')} · ${formatDurationBn(durationMin)}`}
+            </span>
+          </button>
+        )}
+      </div>
       <button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
-      {expanded && <div className="task-expanded"><span><Clock3 size={14} />{formatTime(task.startMinute)}{formatDayOffset(task.startMinute)} – {formatTime(task.endMinute)}{formatDayOffset(task.endMinute)}</span><button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />{t('ভুলের খাতায় যোগ করো', 'Add to mistake notebook')}</button></div>}
+      {expanded && <div className="task-expanded-wrap">
+        <div className="task-cascade-editor">
+          <label className="cascade-time-field">
+            <span>{t('শুরুর সময়:', 'Start time:')}</span>
+            <input type="time" value={toTimeInput(task.startMinute)} onChange={e => adjustTaskStartTime(e.target.value)} />
+          </label>
+          <div className="cascade-duration-btns">
+            <span>{t('সময়কাল:', 'Duration:')}</span>
+            <button type="button" className="button ghost small" onClick={() => adjustTaskDuration(-15)} disabled={durationMin <= 15}><Minus size={12} />{t('১৫ মি.', '15m')}</button>
+            <strong>{formatDurationBn(durationMin)}</strong>
+            <button type="button" className="button ghost small" onClick={() => adjustTaskDuration(15)}><Plus size={12} />{t('১৫ মি.', '15m')}</button>
+            <button type="button" className="button ghost small" onClick={() => adjustTaskDuration(30)}><Plus size={12} />{t('৩০ মি.', '30m')}</button>
+          </div>
+        </div>
+        {primaryClasses && <div className="task-inline-classes">
+          {compact ? <ClassLinkRow classes={primaryClasses} /> : <ClassBlock classes={primaryClasses} compact />}
+        </div>}
+        <div className="task-expanded">
+          <span><Clock3 size={14} />{formatTime(task.startMinute)}{formatDayOffset(task.startMinute)} – {formatTime(task.endMinute)}{formatDayOffset(task.endMinute)}</span>
+          <button className="text-button" onClick={launchPreset}><Play size={13} />{t('টাইমার শুরু করো', 'Start timer')}</button>
+          {primaryChapter && <button className="text-button" onClick={() => openChapter(primaryChapter)}><BookOpen size={14} />{t('অধ্যায় ও নোট', 'Chapter & notes')}</button>}
+          <button className="text-button" onClick={() => openMistake(task.subject, `${task.title}: `)}><NotebookPen size={14} />{t('ভুলের খাতায় যোগ করো', 'Add to mistake notebook')}</button>
+        </div>
+      </div>}
     </div>
     <button className={`task-check ${done ? 'checked' : ''}`} onClick={() => toggleTask(task.id)} aria-label={`${task.title} — ${done ? t('অসম্পন্ন করো', 'mark incomplete') : t('সম্পন্ন করো', 'mark complete')}`} aria-pressed={done}>{done && <Check size={17} strokeWidth={2.5} />}</button>
   </article>;
@@ -80,7 +187,8 @@ export function WeekChart({ large = false }: { large?: boolean }) {
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.parse(`${monday}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10); return { date: d, day: plan.find(x => x.date === d) }; });
   return <div className={`week-chart ${large ? 'large' : ''}`}>{days.map((d, i) => {
     const minutes = d.day?.tasks.filter(t => data.completed[t.id]).reduce((n, t) => n + t.endMinute - t.startMinute, 0) || 0;
-    return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ${t('ঘণ্টার কাজ সম্পন্ন', 'hours of tasks done')}`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, minutes / (data.settings.dailyHours * 60) * 100))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{(isEnglish() ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'])[i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}{t('ঘ', 'h')}</small>}</button>;
+    const dayTargetMin = effectiveDailyHours(data.settings, d.date, data.dayOverrides?.[d.date]) * 60;
+    return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ${t('ঘণ্টার কাজ সম্পন্ন', 'hours of tasks done')}`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, minutes / dayTargetMin * 100))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{(isEnglish() ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'])[i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}{t('ঘ', 'h')}</small>}</button>;
   })}</div>;
 }
 export function StudyIllustration() {
@@ -101,67 +209,112 @@ export function DaySummary({ day }: { day: Day }) {
   return <div className="day-summary"><span>{bn(done)}/{bn(day.tasks.length)} {t('কাজ শেষ', 'tasks done')}</span><ProgressBar value={percent(done, day.tasks.length)} /></div>;
 }
 
-const CLASS_LABEL = { oneShot: 'ওয়ান শট', mcq: 'MCQ', cq: 'CQ' } as const;
-const classLabel = (kind: 'oneShot' | 'mcq' | 'cq') => (kind === 'oneShot' ? t('ওয়ান শট', 'One shot') : CLASS_LABEL[kind]);
-const CHANNEL_COLOR: Record<string, string> = {
-  'মাশরুর ভাই': '#3f6fa8', 'রাকিব': '#4d7bb0', 'অপুর্ব': '#c2763c', 'আভি দত্ত তুষার': '#6b7f9e',
-  'অলরন': '#3f8f74', 'হাসনাত': '#6a8f3f', 'ফাহাদ': '#8b75ac', 'সাকিব': '#bc737b', 'বন্দি': '#c98a1c',
+const CLASS_KINDS = ['oneShot', 'cq', 'mcq'] as const;
+const CLASS_LABEL = {
+  oneShot: { bn: 'ওয়ান শট ক্লাস', en: 'One-Shot Class', shortBn: 'ওয়ান শট', shortEn: 'One-Shot' },
+  cq: { bn: 'CQ সলভিং ক্লাস', en: 'CQ Solving Class', shortBn: 'CQ সলভিং', shortEn: 'CQ' },
+  mcq: { bn: 'MCQ সলভিং ক্লাস', en: 'MCQ Solving Class', shortBn: 'MCQ সলভিং', shortEn: 'MCQ' },
+} as const;
+const classLabel = (kind: 'oneShot' | 'mcq' | 'cq', short = false) =>
+  short ? t(CLASS_LABEL[kind].shortBn, CLASS_LABEL[kind].shortEn) : t(CLASS_LABEL[kind].bn, CLASS_LABEL[kind].en);
+
+const TEACHER_DISPLAY: Record<string, string> = {
+  'মাশরুর': 'মাশরুর ভাই',
+  'অপূর্ব': 'অপূর্ব দাদা',
+  'রাকিব': 'রাকিব ভাই',
+  'হাসনাত': 'হাসনাত শুভ্র',
+  'ফাহাদ': 'ফাহাদ স্যার',
+  'সাকিব': 'সাকিব স্যার',
+  'বন্দি': 'বন্দি পাঠশালা',
+  'আলোরণ · পাহলভী': 'মোত্তাসিন পাহলভী',
+  'আলোরণ': 'আলোরণ',
+  'চিন্ময়': 'চিন্ময় স্যার',
+  'প্যাভেল': 'প্যাভেল স্যার',
 };
-const baseChannel = (name: string) => name.replace(' (সার্চ)', '').trim();
-const channelColor = (name: string) => CHANNEL_COLOR[baseChannel(name)] || '#7d859b';
+const baseChannel = (name: string) =>
+  name
+    .replace(/\s*\(সার্চ\)\s*/g, '')
+    .replace(/\s+প্লেলিস্ট$/g, '')
+    .replace(/\s+(CQ|MCQ)$/gi, '')
+    .trim();
+
+const formatTeacherLabel = (name: string) => {
+  const clean = baseChannel(name);
+  return TEACHER_DISPLAY[clean] || clean;
+};
 
 /** One class chip plus a "seen it" tick. The tick is stored per url, so a link stays marked everywhere. */
 function ClassLink({ option, kind, showKind }: { option: ClassOption; kind: 'oneShot' | 'mcq' | 'cq'; showKind: boolean }) {
   const planner = useOptionalPlanner();
   const search = option.kind === 'search';
+  const isPlaylist = option.kind === 'playlist';
   const watched = !!planner && !search && isWatched(planner.data, option.url);
-  return <span className={`class-pill ${watched ? 'watched' : ''}`}>
+  const label = formatTeacherLabel(option.channel);
+  return <span className={`class-pill ${search ? 'is-search' : 'is-direct'} ${watched ? 'watched' : ''}`}>
     <a
-      className={`class-link ${search ? 'search' : 'real'}`}
-      style={{ '--ch': channelColor(option.channel) } as CSSProperties}
+      className={`class-link ${search ? 'search' : 'real'} ${isPlaylist ? 'playlist' : ''}`}
       href={option.url} target="_blank" rel="noreferrer"
-      aria-label={`${classLabel(kind)} — ${baseChannel(option.channel)}${search ? t(' (চ্যানেলে খুঁজে দেখো)', ' (search the channel)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}${watched ? t(' (দেখা হয়েছে)', ' (watched)') : ''}`}
-      title={`${classLabel(kind)} · ${option.channel}${search ? t(' — এই চ্যানেলে খুঁজে দেখো', ' — search this channel') : ''}`}>
-      <span className="ch-dot" aria-hidden="true" />
-      {showKind && <span className="class-kind-tag">{classLabel(kind)}</span>}
-      <span className="class-channel">{option.channel}</span>
-      {search ? <Search size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
+      aria-label={`${classLabel(kind)} — ${label}${search ? t(' (ইউটিউবে খুঁজে দেখো)', ' (search on YouTube)') : isPlaylist ? t(' (প্লেলিস্ট)', ' (playlist)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}${watched ? t(' (দেখা হয়েছে)', ' (watched)') : ''}`}
+      title={`${classLabel(kind)} · ${label}${isPlaylist ? t(' (সম্পূর্ণ প্লেলিস্ট)', ' (full playlist)') : search ? t(' — ইউটিউবে খুঁজে দেখো', ' — search on YouTube') : t(' — এক ক্লিকে সরাসরি ক্লাস', ' — click to watch class')}`}>
+      {search ? <Search size={12.5} className="class-play-icon" aria-hidden="true" /> : <Play size={12.5} className="class-play-icon" aria-hidden="true" />}
+      {showKind && <span className="class-kind-tag">{classLabel(kind, true)}</span>}
+      <span className="class-channel">{label}</span>
+      {isPlaylist && <span className="class-playlist-tag">{t('প্লেলিস্ট', 'Playlist')}</span>}
+      {search && <span className="class-search-tag">{t('খুঁজুন', 'Search')}</span>}
     </a>
     {!search && planner && <button type="button" className={`class-watch ${watched ? 'on' : ''}`} aria-pressed={watched}
-      aria-label={`${baseChannel(option.channel)} ${classLabel(kind)} — ${watched ? t('দেখা হয়েছে, টিক সরাও', 'watched, clear the tick') : t('দেখেছি বলে টিক দাও', 'mark as watched')}`}
+      aria-label={`${label} ${classLabel(kind)} — ${watched ? t('দেখা হয়েছে, টিক সরাও', 'watched, clear the tick') : t('দেখেছি বলে টিক দাও', 'mark as watched')}`}
       title={watched ? t('দেখা হয়েছে', 'watched') : t('দেখেছি', 'mark watched')}
       onClick={() => planner.setData(d => toggleClassWatched(d, option.url))}>
-      {watched ? <CheckCheck size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+      {watched ? <CheckCheck size={13} aria-hidden="true" /> : <Check size={13} aria-hidden="true" />}
     </button>}
   </span>;
 }
 
-/** Compact flat chips — used on the Today target card. */
+/** Compact flat chips — one direct class per block (One-Shot · CQ · MCQ). */
 export function ClassLinkRow({ classes }: { classes: ChapterClasses }) {
   return <div className="class-link-row compact">
-    {(['oneShot', 'mcq', 'cq'] as const).map(kind => classes[kind].slice(0, 1).map(option =>
+    {CLASS_KINDS.map(kind => classes[kind].slice(0, 1).map(option =>
       <ClassLink key={`${kind}-${option.url}`} option={option} kind={kind} showKind />))}
   </div>;
 }
 
-/** Grouped block — one labelled line per class type, every teacher shown. */
-export function ClassBlock({ classes, hint }: { classes: ChapterClasses; hint?: string }) {
+/** Structured 3-block class layout: ওয়ান শট ক্লাস → CQ সলভিং ক্লাস → MCQ সলভিং ক্লাস. */
+export function ClassBlock({ classes, hint, compact = false }: { classes: ChapterClasses; hint?: string; compact?: boolean }) {
   const planner = useOptionalPlanner();
-  const total = classes.oneShot.length + classes.mcq.length + classes.cq.length;
-  const real = allOptions(classes).filter(option => option.kind !== 'search');
+  const total = classes.oneShot.length + classes.cq.length + classes.mcq.length;
+  const all = allOptions(classes);
+  const real = all.filter(option => option.kind !== 'search');
+  const hasSearch = all.some(option => option.kind === 'search');
   const seen = planner ? real.filter(option => isWatched(planner.data, option.url)).length : 0;
-  return <div className="class-block">
-    <div className="class-block-head">
-      <strong>{t('এই অধ্যায়ের ক্লাস', 'Classes for this chapter')} <span className="count-badge">{isEnglish() ? `${total} options` : `${bn(total)}টি অপশন`}</span></strong>
-      <span className="class-legend"><i className="dot real" aria-hidden="true" />{t('ভিডিও/প্লেলিস্ট', 'video/playlist')}<i className="dot search" aria-hidden="true" />{t('চ্যানেলে খুঁজো', 'search the channel')}</span>
-    </div>
-    {planner && real.length > 0 && <p className="class-seen-line">{isEnglish() ? `${seen}/${real.length} classes watched` : `${bn(seen)}/${bn(real.length)} ক্লাস দেখা হয়েছে`}{seen === real.length && <span className="class-seen-done">{t('✓ সব শেষ', '✓ all done')}</span>}</p>}
+  return <div className={`class-block ${compact ? 'compact' : ''}`}>
+    {!compact && <div className="class-block-head">
+      <strong>{t('অধ্যায়ের ক্লাসসমূহ', 'Chapter classes')} <span className="count-badge">{isEnglish() ? `${total} links` : `${bn(total)}টি লিংক`}</span></strong>
+      <span className="class-legend">
+        <i className="dot real" aria-hidden="true" />{t('সরাসরি ক্লাস', 'direct class')}
+        {hasSearch && <><i className="dot search" aria-hidden="true" />{t('ইউটিউব সার্চ', 'YouTube search')}</>}
+      </span>
+    </div>}
+    {!compact && planner && real.length > 0 && <p className="class-seen-line">{isEnglish() ? `${seen}/${real.length} classes watched` : `${bn(seen)}/${bn(real.length)} ক্লাস দেখা হয়েছে`}{seen === real.length && <span className="class-seen-done">{t('✓ সব দেখা শেষ', '✓ all done')}</span>}</p>}
     {hint && <p className="class-hint">{hint}</p>}
-    {(['oneShot', 'mcq', 'cq'] as const).map(kind => <div className="class-line" key={kind}>
-      <span className={`class-kind ${kind}`}>{classLabel(kind)}</span>
-      <div className="class-link-row">{classes[kind].slice(0, 4).map(option =>
-        <ClassLink key={`${kind}-${option.url}`} option={option} kind={kind} showKind={false} />)}</div>
-    </div>)}
+    <div className="class-groups-grid">
+      {CLASS_KINDS.map(kind => {
+        const list = [...classes[kind]].sort((a, b) => (a.kind === 'search' ? 1 : 0) - (b.kind === 'search' ? 1 : 0));
+        const directInKind = list.filter(o => o.kind !== 'search');
+        const kindSeen = planner ? directInKind.filter(o => isWatched(planner.data, o.url)).length : 0;
+        return <div className={`class-group-card ${kind}`} key={kind}>
+          <div className="class-group-header">
+            <span className={`class-kind ${kind}`}>{classLabel(kind)}</span>
+            <span className="class-group-count">
+              {planner && kindSeen > 0 ? `${bn(kindSeen)}/${bn(directInKind.length)} ✓` : `${bn(directInKind.length)}${t('টি ক্লাস', ' direct')}`}
+            </span>
+          </div>
+          <div className="class-link-row">
+            {list.map(option => <ClassLink key={`${kind}-${option.url}`} option={option} kind={kind} showKind={false} />)}
+          </div>
+        </div>;
+      })}
+    </div>
   </div>;
 }
 

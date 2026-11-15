@@ -1,10 +1,15 @@
 import { CHAPTERS, CORE, PAPERS, chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import type { Chapter, SubjectId } from './data';
-import type { BoardQuestion, Carryover, ChapterMeta, CqEntry, FormulaEntry, ImportantDate, PersonalNote, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock, SettingsExtras, StudySession, SubjectMarks, TestRecord, VideoLink } from './types';
+import type {
+  BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
+  ImportantDate, PersonalNote, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
+  SettingsExtras, StudySession, SubjectMarks, TestRecord, VideoLink,
+} from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
 export type TaskKind = 'learn' | 'practice' | 'revision' | 'exam' | 'correction' | 'language' | 'ict' | 'recall' | 'practical' | 'custom';
+
 export interface Settings extends SettingsExtras {
   startDate: string;
   startTime: string;
@@ -15,24 +20,73 @@ export interface Settings extends SettingsExtras {
   reminderLead: number;
   syllabusChecked: boolean;
   calendarRevision: number;
-  /** Personal target for the HSC exam; not an official board date. */
+  /** Personal target for the college Test Exam (ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা). */
+  testExamDate: string;
+  /** Personal target for the HSC 2027 Board Exam (জুন ২০২৭ · ঈদুল আজহার পর সম্ভাব্য তারিখ). */
   examDate: string;
 }
+
 export const DEFAULT_SETTINGS: Settings = {
-  startDate: '2026-11-14', startTime: '06:30', dailyHours: 8, board: 'সিলেট', name: '',
-  reminderEnabled: false, reminderLead: 10, syllabusChecked: false, calendarRevision: 0,
-  theme: 'light', language: 'bn', revisionEnabled: true, carryoverMode: 'manual', examDate: '2027-06-30',
-  pomodoroFocus: 25, pomodoroBreak: 5, pomodoroLongBreak: 15, fontScale: 'md',
+  startDate: '2026-11-14',
+  startTime: '06:30',
+  dailyHours: 8,
+  boostEnabled: true,
+  boostStartDate: '2026-12-01',
+  boostDailyHours: 16,
+  board: 'সিলেট',
+  name: '',
+  reminderEnabled: false,
+  reminderLead: 10,
+  syllabusChecked: false,
+  calendarRevision: 0,
+  theme: 'light',
+  language: 'bn',
+  revisionEnabled: true,
+  carryoverMode: 'manual',
+  testExamDate: '2027-02-01',
+  examDate: '2027-06-06',
+  pomodoroFocus: 25,
+  pomodoroBreak: 5,
+  pomodoroLongBreak: 15,
+  fontScale: 'md',
 };
+
 export interface Task {
-  id: string; date: string; dayIndex: number; phase: PhaseId; subject: SubjectId;
-  kind: TaskKind; title: string; detail: string; chapterIds: string[];
-  startMinute: number; endMinute: number; paperId?: string;
+  id: string;
+  date: string;
+  dayIndex: number;
+  phase: PhaseId;
+  subject: SubjectId;
+  kind: TaskKind;
+  title: string;
+  detail: string;
+  chapterIds: string[];
+  startMinute: number;
+  endMinute: number;
+  paperId?: string;
 }
-export interface Day { date: string; index: number; phase: PhaseId; tasks: Task[]; isCatchup: boolean }
-export interface Phase { id: PhaseId; name: string; subtitle: string; start: string; end: string; days: number; color: string }
+
+export interface Day {
+  date: string;
+  index: number;
+  phase: PhaseId;
+  tasks: Task[];
+  isCatchup: boolean;
+}
+
+export interface Phase {
+  id: PhaseId;
+  name: string;
+  subtitle: string;
+  start: string;
+  end: string;
+  days: number;
+  color: string;
+}
+
 export interface ExamResult { score: number; total: number; at: string; mistakes: string }
 export interface Mistake { id: string; subject: SubjectId; text: string; date: string; resolved: boolean }
+
 export interface AppData {
   version: 2;
   settings: Settings;
@@ -61,12 +115,114 @@ export interface AppData {
   importantDates: ImportantDate[];
   /** YouTube url (or Bangla lesson title) → ISO instant the student marked it watched. */
   classWatched: Record<string, string>;
+  /** Date (YYYY-MM-DD) → custom start time / daily hours / task slot overrides with automatic time cascading. */
+  dayOverrides: Record<string, DayScheduleOverride>;
 }
+
 export const freshData = (): AppData => ({
-  version: 2, settings: { ...DEFAULT_SETTINGS }, completed: {}, confidence: {}, notes: {}, exams: {}, mistakes: [],
-  focus: { minutes: 0, sessions: 0 }, studySessions: [], revisions: [], chapterMeta: {}, questions: [], attempts: [],
-  cq: [], tests: [], libraryNotes: [], videos: [], boardQuestions: [], formulas: [], formulaFavorites: [], gpaMarks: {}, carryovers: [], badges: [], routineBlocks: [], importantDates: [], classWatched: {},
+  version: 2,
+  settings: { ...DEFAULT_SETTINGS },
+  completed: {},
+  confidence: {},
+  notes: {},
+  exams: {},
+  mistakes: [],
+  focus: { minutes: 0, sessions: 0 },
+  studySessions: [],
+  revisions: [],
+  chapterMeta: {},
+  questions: [],
+  attempts: [],
+  cq: [],
+  tests: [],
+  libraryNotes: [],
+  videos: [],
+  boardQuestions: [],
+  formulas: [],
+  formulaFavorites: [],
+  gpaMarks: {},
+  carryovers: [],
+  badges: [],
+  routineBlocks: [],
+  importantDates: [],
+  classWatched: {},
+  dayOverrides: {},
 });
+
+/** Effective net daily study hours for a date, accounting for next-month boost and per-day custom override. */
+export function effectiveDailyHours(settings: Settings, date: string, override?: DayScheduleOverride): number {
+  if (override?.dailyHours !== undefined && Number.isFinite(override.dailyHours)) {
+    return Math.max(4, Math.min(18, Math.round(override.dailyHours)));
+  }
+  if (settings.boostEnabled && date >= settings.boostStartDate) {
+    return Math.max(4, Math.min(18, Math.round(settings.boostDailyHours)));
+  }
+  return Math.max(4, Math.min(18, Math.round(settings.dailyHours)));
+}
+
+/** Cascades task start/end times whenever the day's start time, total hours, or any individual slot is adjusted. */
+export function cascadeDayTasks(tasks: Task[], override: DayScheduleOverride | undefined, defaultStartMinute: number): Task[] {
+  if (!tasks.length) return tasks;
+  if (!override) return tasks;
+  const hasAny =
+    override.startMinute !== undefined ||
+    override.dailyHours !== undefined ||
+    (override.taskMinutes && Object.keys(override.taskMinutes).length > 0) ||
+    (override.taskStartMinutes && Object.keys(override.taskStartMinutes).length > 0);
+  if (!hasAny) return tasks;
+
+  const origDurations = tasks.map(t => Math.max(15, t.endMinute - t.startMinute));
+  const origTotal = origDurations.reduce((n, d) => n + d, 0) || 480;
+  const targetTotal = override.dailyHours !== undefined ? Math.max(240, Math.min(1080, Math.round(override.dailyHours * 60))) : origTotal;
+  const scale = targetTotal / origTotal;
+
+  // Scale non-overridden durations cleanly when dailyHours is customized
+  const scaledDurations = origDurations.map((d, idx) => {
+    const customMin = override.taskMinutes?.[tasks[idx].id];
+    if (customMin !== undefined && Number.isFinite(customMin)) return Math.max(15, Math.min(720, Math.round(customMin)));
+    if (tasks[idx].kind === 'exam') return 180;
+    return Math.max(15, Math.round((d * scale) / 5) * 5);
+  });
+
+  // If dailyHours was set and no manual taskMinutes exist, reconcile rounding diff on last non-exam task
+  if (override.dailyHours !== undefined && (!override.taskMinutes || Object.keys(override.taskMinutes).length === 0)) {
+    const diff = targetTotal - scaledDurations.reduce((n, d) => n + d, 0);
+    const lastIdx = scaledDurations.length - 1;
+    if (lastIdx >= 0 && tasks[lastIdx].kind !== 'exam') {
+      scaledDurations[lastIdx] = Math.max(15, scaledDurations[lastIdx] + diff);
+    }
+  }
+
+  const totalHoursApprox = scaledDurations.reduce((n, d) => n + d, 0) / 60;
+  const gapScale = totalHoursApprox >= 16 ? 0.45 : totalHoursApprox >= 12 ? 0.7 : 1;
+
+  let cursor = override.startMinute !== undefined ? Math.max(0, Math.min(1439, Math.round(override.startMinute))) : defaultStartMinute;
+  return tasks.map((task, idx) => {
+    const origGap = idx === 0 ? 0 : Math.max(0, tasks[idx].startMinute - tasks[idx - 1].endMinute);
+    const gap = idx === 0 ? 0 : Math.max(5, Math.round((origGap * gapScale) / 5) * 5);
+    const customStart = override.taskStartMinutes?.[task.id];
+    const startMinute = customStart !== undefined && Number.isFinite(customStart)
+      ? Math.max(0, Math.min(2879, Math.round(customStart)))
+      : (idx === 0 ? cursor : cursor + gap);
+    const duration = scaledDurations[idx];
+    const endMinute = startMinute + duration;
+    cursor = endMinute;
+    return { ...task, startMinute, endMinute };
+  });
+}
+
+/** Applies per-day time/duration overrides on top of the generated plan with full cascading shifts. */
+export function applyDayOverrides(plan: Day[], overrides: Record<string, DayScheduleOverride> | undefined, settings: Settings): Day[] {
+  if (!overrides || !Object.keys(overrides).length) return plan;
+  const defaultStart = toMinutes(settings.startTime);
+  return plan.map(day => {
+    const ov = overrides[day.date];
+    if (!ov) return day;
+    const baseFirstStart = day.tasks[0]?.startMinute ?? defaultStart;
+    return { ...day, tasks: cascadeDayTasks(day.tasks, ov, baseFirstStart) };
+  });
+}
+
 /** Adds the user's recurring weekly blocks on top of the deterministic chapter plan. */
 export function applyRoutine(plan: Day[], blocks: RoutineBlock[]): Day[] {
   if (!blocks.length) return plan;
@@ -78,7 +234,7 @@ export function applyRoutine(plan: Day[], blocks: RoutineBlock[]): Day[] {
   }
   return plan.map(day => {
     const weekday = new Date(`${day.date}T00:00:00Z`).getUTCDay();
-    const entries = byWeekday.get(weekday)?.filter(block => day.date >= block.createdAt.slice(0, 10));
+    const entries = byWeekday.get(weekday)?.filter(block => (block.date ? block.date === day.date : day.date >= todayKey(new Date(block.createdAt))));
     if (!entries?.length) return day;
     const extra: Task[] = entries.map(block => ({
       id: `custom-${day.date}-${block.id}`,
@@ -88,7 +244,7 @@ export function applyRoutine(plan: Day[], blocks: RoutineBlock[]): Day[] {
       subject: block.subject,
       kind: 'custom',
       title: block.title.trim() || `${subjectById[block.subject].name}: কাস্টম সেশন`,
-      detail: 'কাস্টম সাপ্তাহিক রুটিন · নিজের সময়সূচি থেকে যোগ হয়েছে।',
+      detail: block.date ? 'নিজের দৈনিক কাজ।' : 'কাস্টম সাপ্তাহিক রুটিন · নিজের সময়সূচি থেকে যোগ হয়েছে।',
       chapterIds: [],
       startMinute: block.startMinute,
       endMinute: block.startMinute + block.minutes,
@@ -137,6 +293,23 @@ export function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60) % 24, m = Math.round(minutes % 60);
   return `${h % 12 || 12}:${String(m).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
 }
+export function toTimeInput(minutes: number): string {
+  const normalized = ((Math.round(minutes) % 1440) + 1440) % 1440;
+  const h = Math.floor(normalized / 60);
+  const m = normalized % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
+}
+export function formatDurationBn(minutes: number): string {
+  const m = Math.max(0, Math.round(minutes));
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  if (isEnglish()) {
+    if (h && rem) return `${h}h ${rem}m`;
+    return h ? `${h}h` : `${rem}m`;
+  }
+  if (h && rem) return `${bn(h)} ঘণ্টা ${bn(rem)} মি.`;
+  return h ? `${bn(h)} ঘণ্টা` : `${bn(rem)} মিনিট`;
+}
 /** Sessions may cross midnight when the user chooses a late start time. */
 export function dayOffset(minutes: number): number { return Math.max(0, Math.floor(minutes / 1440)); }
 export function formatDayOffset(minutes: number): string { const d = dayOffset(minutes); return d ? ` (+${bn(d)} দিন)` : ''; }
@@ -150,62 +323,197 @@ export function isTaskCurrent(task: Pick<Task, 'date' | 'startMinute' | 'endMinu
 }
 export const toMinutes = (time: string): number => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
 export const percent = (done: number, total: number): number => total ? Math.round(done / total * 100) : 0;
+
 export function getPhases(start: string): Phase[] {
   const a = addMonths(start, 3), b = addMonths(start, 5), c = addMonths(start, 6);
   return [
-    { id: 'learn', name: 'সিলেবাস গড়ি', subtitle: 'বুঝে পড়া · অধ্যায় শেষ', start, end: addDays(a, -1), days: diffDays(start, a), color: '#54866a' },
-    { id: 'revise', name: 'রিভিশন করি', subtitle: 'দুইবার ঝালাই · প্রশ্ন অনুশীলন', start: a, end: addDays(b, -1), days: diffDays(a, b), color: '#b28b50' },
-    { id: 'exam', name: 'পরীক্ষায় ঝালিয়ে নিই', subtitle: '১৩টি মডেল টেস্ট · ভুল সংশোধন', start: b, end: addDays(c, -1), days: diffDays(b, c), color: '#8271a4' },
+    { id: 'learn', name: 'পূর্ণ সিলেবাস (ফেব্রুয়ারি টেস্ট লক্ষ্য)', subtitle: 'দিনে ২টি বিষয় · ধাপে ধাপে সমাপ্তি', start, end: addDays(a, -1), days: diffDays(start, a), color: '#236149' },
+    { id: 'revise', name: 'পূর্ণাঙ্গ রিভিশন ও প্রশ্ন সমাধান', subtitle: 'দুই রাউন্ড রিভিশন · দিনে ২টি বিষয়', start: a, end: addDays(b, -1), days: diffDays(a, b), color: '#9a6722' },
+    { id: 'exam', name: '১৩টি পূর্ণাঙ্গ মডেল টেস্ট', subtitle: 'জুন HSC ’২৭ চূড়ান্ত প্রস্তুতি', start: b, end: addDays(c, -1), days: diffDays(b, c), color: '#5a4b82' },
   ];
 }
-export const phaseName = (id: PhaseId): string => isEnglish() ? ({ learn: 'Syllabus', revise: 'Revision', exam: 'Model tests' })[id] : ({ learn: 'সিলেবাস', revise: 'রিভিশন', exam: 'মডেল টেস্ট' })[id];
-interface Unit { chapter: Chapter; part: number; id: string }
-function makeQueue(subject: SubjectId): Unit[] {
-  return CHAPTERS.filter(c => c.subject === subject).sort((a, b) => a.priority.localeCompare(b.priority)).flatMap(chapter =>
-    Array.from({ length: chapter.effort }, (_, i) => ({ chapter, part: i + 1, id: `${chapter.id}:part-${i + 1}` })));
-}
-function learnDetail(c: Chapter, part: number): string {
-  if (c.subject === 'chemistry' && c.effort === 8) {
-    const topics = ['নামকরণ, সমাণুতা ও functional group', 'হাইড্রোকার্বন ও নির্ধারিত বিক্রিয়া', 'অ্যারোমেটিক যৌগ ও বিক্রিয়া কৌশল', 'অ্যালকোহল, ফেনল ও ইথার', 'অ্যালডিহাইড, কিটোন ও কার্বক্সিলিক এসিড', 'অ্যামিন ও বইয়ের বাকি নির্ধারিত টপিক', 'রূপান্তর ও শনাক্তকরণ: নিজে লিখে অনুশীলন', 'সিলেটসহ বিগত বোর্ডের CQ, MCQ ও ভুল সংশোধন'];
-    return `${topics[part - 1]}। পাঠ্যবইয়ের উদাহরণ আগে; শেষে না দেখে ২টি CQ ও ১৫টি MCQ।`;
-  }
-  if (part === 1) return `${c.focus}। পাঠ্যবই পড়ে বুঝো, solved example দেখো, তারপর নিজের ভাষায় এক পাতার নোট লেখো।`;
-  if (part === c.effort) return `${c.focus}। বই বন্ধ করে মূল পয়েন্ট লেখো। সিলেটসহ বিগত বোর্ড থেকে ২টি CQ ও ২০টি MCQ সমাধান করে ভুল সংশোধন করো।`;
-  return `${c.focus}। আগের অংশ ঝালাই করে উদাহরণ ও অনুশীলনী নিজে সমাধান করো। কঠিন অংশ ভুলের খাতায় লেখো।`;
-}
+export const phaseName = (id: PhaseId): string => isEnglish()
+  ? ({ learn: 'Syllabus', revise: 'Revision', exam: 'Model tests' })[id]
+  : ({ learn: 'সিলেবাস', revise: 'রিভিশন', exam: 'মডেল টেস্ট' })[id];
+
+const ALL_SUBJECTS: SubjectId[] = ['physics', 'chemistry', 'biology', 'math', 'bangla', 'english', 'ict'];
 const kindFor = (s: SubjectId): TaskKind => s === 'bangla' || s === 'english' ? 'language' : s === 'ict' ? 'ict' : 'learn';
-const baseBreaks = [30, 15, 165, 30, 120];
-function timedTasks(day: Omit<Day, 'tasks'>, entries: Omit<Task, 'date' | 'dayIndex' | 'phase' | 'startMinute' | 'endMinute'>[], settings: Settings, exam = false): Task[] {
-  const target = settings.dailyHours * 60;
-  const durations = exam ? [60, 180, 120, 60, 60] : [120, 120, 60, 90, 60, 30];
-  const breaks = exam ? [150, 120, 30, 90] : baseBreaks;
-  const scale = exam ? (target - 180) / 300 : target / 480;
-  const adjusted = durations.map((d, i) => exam && i === 1 ? 180 : Math.round(d * scale));
-  adjusted[adjusted.length - 1] += target - adjusted.reduce((n, d) => n + d, 0);
+
+function learnDetail(c: Chapter, part: number, totalPartsToday: number): string {
+  if (c.subject === 'chemistry' && c.effort === 8) {
+    const topics = [
+      'নামকরণ, সমাণুতা ও কার্যকরী মূলক (ক্লাস ও নোট)',
+      'হাইড্রোকার্বন ও মৌলিক বিক্রিয়া অনুশীলন',
+      'অ্যারোমেটিক যৌগ ও বিক্রিয়া কৌশল',
+      'অ্যালকোহল, ফেনল ও ইথারের বোর্ড প্রশ্ন',
+      'অ্যালডিহাইড, কিটোন ও কার্বক্সিলিক এসিড',
+      'অ্যামিন ও পাঠ্যবইয়ের বাকি অংশ',
+      'রূপান্তর ও শনাক্তকরণ না দেখে লিখে অনুশীলন',
+      'বিগত বোর্ডের বাছাইকৃত CQ ও MCQ সমাধান',
+    ];
+    return `${topics[part - 1]}। শেষে না দেখে ২টি CQ ও ১৫টি MCQ সমাধান করো।`;
+  }
+  if (part === 1) {
+    return `${c.focus}। আগে ওয়ান শট ক্লাস দেখে নাও, এরপর মূল বই থেকে সূত্র ও সংজ্ঞা নিজের খাতায় গুছিয়ে লেখো।`;
+  }
+  if (part === c.effort) {
+    return `${c.focus}। সলভিং ক্লাস দেখে বিগত বোর্ডের অন্তত ৩টি CQ ও ২৫টি MCQ ঘড়ি ধরে সমাধান করো।`;
+  }
+  return `${c.focus}। পাঠ্যবইয়ের উদাহরণ, গাণিতিক সমস্যা ও চিত্র হাতে-কলমে অনুশীলন করো (${bn(totalPartsToday)} ধাপের সেশন)।`;
+}
+
+type RawEntry = Omit<Task, 'date' | 'dayIndex' | 'phase' | 'startMinute' | 'endMinute'> & { weight?: number };
+
+/**
+ * Schedules a day's tasks cleanly across 2 subjects (or Model Test day) so total study minutes = exact daily target,
+ * with realistic short breaks inside a subject and a meal/rest break between Subject 1 and Subject 2.
+ */
+function timedTwoSubjectDay(day: Omit<Day, 'tasks'>, entries: RawEntry[], settings: Settings, exam = false): Task[] {
+  const hours = effectiveDailyHours(settings, day.date);
+  const target = hours * 60;
+
+  let durations: number[];
+  if (exam) {
+    const examCount = entries.filter(e => e.kind === 'exam').length;
+    const rem = Math.max(60, target - examCount * 180);
+    const nonExamWeights = entries.map(e => (e.kind === 'exam' ? 0 : (e.weight ?? 1)));
+    const wSum = nonExamWeights.reduce((n, w) => n + w, 0) || 1;
+    durations = entries.map((e, idx) => (e.kind === 'exam' ? 180 : Math.max(20, Math.round(((rem * nonExamWeights[idx]) / wSum) / 5) * 5)));
+    const diff = target - durations.reduce((n, d) => n + d, 0);
+    const adjustIdx = entries.findIndex(e => e.kind !== 'exam');
+    if (adjustIdx >= 0) durations[adjustIdx] += diff;
+  } else {
+    // Group weights by subject so Subject 1 gets exactly 50% of the day and Subject 2 gets 50%
+    const subjectsInOrder = [...new Set(entries.map(e => e.subject))];
+    if (subjectsInOrder.length === 2) {
+      const halfA = Math.round(target / 2);
+      const halfB = target - halfA;
+      durations = new Array(entries.length).fill(0);
+      subjectsInOrder.forEach((sub, sIdx) => {
+        const subTarget = sIdx === 0 ? halfA : halfB;
+        const indices = entries.map((e, i) => (e.subject === sub ? i : -1)).filter(i => i >= 0);
+        const wSum = indices.reduce((n, i) => n + (entries[i].weight ?? 1), 0) || 1;
+        let used = 0;
+        indices.forEach((entryIdx, k) => {
+          if (k === indices.length - 1) {
+            durations[entryIdx] = Math.max(15, subTarget - used);
+          } else {
+            const d = Math.max(15, Math.round(((subTarget * (entries[entryIdx].weight ?? 1)) / wSum) / 5) * 5);
+            durations[entryIdx] = d;
+            used += d;
+          }
+        });
+      });
+    } else {
+      const wSum = entries.reduce((n, e) => n + (e.weight ?? 1), 0) || 1;
+      durations = entries.map(e => Math.max(15, Math.round(((target * (e.weight ?? 1)) / wSum) / 5) * 5));
+      durations[durations.length - 1] += target - durations.reduce((n, d) => n + d, 0);
+    }
+  }
+
+  // Realistic breaks that scale gently when studying 16-18 hours/day so sessions stay practical
+  const shortBreak = hours >= 16 ? 10 : 15;
+  const mealBreak = hours >= 16 ? 25 : hours >= 12 ? 40 : 60;
+
   let cursor = toMinutes(settings.startTime);
-  return entries.map((entry, i) => {
+  return entries.map((raw, i) => {
+    const { weight: _w, ...entry } = raw;
     const startMinute = cursor;
-    const duration = adjusted[i];
-    cursor += duration;
-    const task: Task = { ...entry, date: day.date, dayIndex: day.index, phase: day.phase, startMinute, endMinute: cursor };
-    cursor += breaks[i] || 0;
-    return task;
+    const endMinute = startMinute + durations[i];
+    cursor = endMinute;
+    if (i < entries.length - 1) {
+      const nextSub = entries[i + 1].subject;
+      cursor += nextSub !== entry.subject ? mealBreak : shortBreak;
+    }
+    return { ...entry, date: day.date, dayIndex: day.index, phase: day.phase, startMinute, endMinute };
   });
 }
 
 export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
   const phases = getPhases(settings.startDate);
   const total = phases.reduce((n, p) => n + p.days, 0);
-  const queues = Object.fromEntries([...CORE, 'bangla', 'english', 'ict'].map(s => [s, makeQueue(s as SubjectId)])) as Record<string, Unit[]>;
-  const pointers: Record<string, number> = Object.fromEntries(Object.keys(queues).map(s => [s, 0]));
-  const nextUnit = (subject: SubjectId): Unit | undefined => queues[subject][pointers[subject]++];
-  const recent: string[] = [];
-  const days: Day[] = [];
-  const languageUnit = (subject: SubjectId, dayKey: string): Omit<Task, 'date' | 'dayIndex' | 'phase' | 'startMinute' | 'endMinute'> => {
-    const u = nextUnit(subject);
-    return u ? { id: u.id, subject, kind: 'language', title: u.chapter.title, detail: learnDetail(u.chapter, u.part), chapterIds: [u.chapter.id] }
-      : { id: `language-${subject}-${dayKey}`, subject, kind: 'practice', title: `${subjectById[subject].name}: টাইমড অনুশীলন`, detail: subject === 'english' ? 'একটি reading section ও একটি writing task নিজে লেখো। ভুলের পুনরাবৃত্তি ঠেকাও।' : 'একটি সাহিত্য CQ ও একটি নির্মিতি লেখো। পাঠ্যবই থেকে ২০টি MCQ অনুশীলন করো।', chapterIds: [] };
+
+  // Per-subject chapter queues ordered Priority A -> Priority B -> textbook order
+  const chapterQueues: Record<SubjectId, Chapter[]> = Object.fromEntries(
+    ALL_SUBJECTS.map(s => [
+      s,
+      CHAPTERS.filter(c => c.subject === s).sort((a, b) => a.priority.localeCompare(b.priority) || a.paper - b.paper),
+    ]),
+  ) as Record<SubjectId, Chapter[]>;
+  const chapterPtr: Record<SubjectId, { chIdx: number; partIdx: number }> = Object.fromEntries(
+    ALL_SUBJECTS.map(s => [s, { chIdx: 0, partIdx: 0 }]),
+  ) as Record<SubjectId, { chIdx: number; partIdx: number }>;
+
+  const hasRemaining = (s: SubjectId) => chapterPtr[s].chIdx < chapterQueues[s].length;
+  const remainingCount = (s: SubjectId) => chapterQueues[s].length - chapterPtr[s].chIdx;
+
+  // Build 1-chapter-per-subject entries for a chosen subject on a learn day
+  const takeSubjectChapterEntries = (s: SubjectId, dayKey: string): RawEntry[] => {
+    const ptr = chapterPtr[s];
+    const ch = chapterQueues[s][ptr.chIdx];
+    if (!ch) {
+      return [
+        {
+          id: `testprep-theory-${s}-${dayKey}`,
+          subject: s,
+          kind: kindFor(s),
+          title: `${subjectById[s].name}: টেস্ট পরীক্ষা রিভিশন`,
+          detail: 'ফেব্রুয়ারির টেস্ট পরীক্ষার জন্য গুরুত্বপূর্ণ অধ্যায়ের সূত্র, নোট ও সংজ্ঞা দ্রুত ঝালাই করো।',
+          chapterIds: [],
+        },
+        {
+          id: `testprep-cqmcq-${s}-${dayKey}`,
+          subject: s,
+          kind: 'practice',
+          title: `${subjectById[s].name}: বোর্ড CQ ও MCQ সলভ`,
+          detail: 'ঘড়ি ধরে ৩টি বোর্ড CQ ও ৩০টি MCQ সমাধান করে ভুলের খাতায় নোট করো।',
+          chapterIds: [],
+        },
+      ];
+    }
+
+    // Complete standard chapters (effort <= 3) in 1 dedicated subject slot; split huge chapters (effort >= 4) into 2 parts/day
+    const takeCount = ch.effort <= 3 ? ch.effort - ptr.partIdx : Math.min(2, ch.effort - ptr.partIdx);
+    const out: RawEntry[] = [];
+    for (let k = 0; k < takeCount; k++) {
+      const partNum = ptr.partIdx + k + 1;
+      const stepLabel = takeCount === 1
+        ? 'ওয়ান শট ক্লাস ও মূল বই'
+        : k === 0
+          ? 'ক্লাস ও মূল ধারণা নোট'
+          : k === takeCount - 1
+            ? 'CQ ও MCQ সমাধান'
+            : 'উদাহরণ ও গাণিতিক অনুশীলন';
+      out.push({
+        id: `${ch.id}:part-${partNum}`,
+        subject: s,
+        kind: kindFor(s),
+        title: `${ch.title} · ${stepLabel}`,
+        detail: `${ch.effort > 1 ? `ধাপ ${bn(partNum)}/${bn(ch.effort)} · ` : ''}${learnDetail(ch, partNum, takeCount)}${ch.note ? ` ${ch.note}` : ''}`,
+        chapterIds: [ch.id],
+      });
+    }
+    // If a light chapter had only 1 effort part, pair it with CQ+MCQ practice of THAT SAME CHAPTER so the subject still has 2 clean study blocks
+    if (out.length === 1) {
+      out.push({
+        id: `chap-practice-${ch.id}-${dayKey}`,
+        subject: s,
+        kind: 'practice',
+        title: `${ch.title} · CQ ও MCQ অনুশীলন`,
+        detail: `${ch.focus}। সলভিং ক্লাস দেখে বিগত বোর্ডের ২টি CQ ও ২৫টি MCQ সমাধান করো।`,
+        chapterIds: [ch.id],
+      });
+    }
+
+    ptr.partIdx += takeCount;
+    recentChapters.push(ch.id);
+    if (ptr.partIdx >= ch.effort) {
+      ptr.chIdx += 1;
+      ptr.partIdx = 0;
+    }
+    return out;
   };
+
   type RevisionGroup = { id: string; subject: SubjectId; chapters: Chapter[] };
   const revisionGroups = (round: number, subject: SubjectId): RevisionGroup[] => {
     const chapters = CHAPTERS.filter(c => c.subject === subject).sort((a, b) => a.paper - b.paper || Number(a.number) - Number(b.number));
@@ -219,106 +527,290 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
   };
   const revisionQueues: Record<string, Record<string, RevisionGroup[]>> = { '1': {}, '2': {} };
   const revisionPointers: Record<string, Record<string, number>> = { '1': {}, '2': {} };
-  for (const round of ['1', '2']) for (const subject of CORE) {
-    revisionQueues[round][subject] = revisionGroups(Number(round), subject);
-    revisionPointers[round][subject] = 0;
+  for (const round of ['1', '2']) {
+    for (const subject of CORE) {
+      revisionQueues[round][subject] = revisionGroups(Number(round), subject);
+      revisionPointers[round][subject] = 0;
+    }
   }
   const takeRevisionGroup = (round: string, subject: SubjectId): RevisionGroup | undefined => {
     const queue = revisionQueues[round][subject] || [];
     const index = revisionPointers[round][subject] || 0;
+    if (index >= queue.length) return undefined;
     revisionPointers[round][subject] = index + 1;
     return queue[index];
   };
+
+  const recentChapters: string[] = [];
+  let prevDaySubjects: SubjectId[] = [];
+  let revSlot = 0;
+  let testPrepSlot = 0;
   const phase2Days = phases[1].days;
-  let coreSlot = 0;
+  const days: Day[] = [];
+
   for (let i = 0; i < total; i++) {
     const date = addDays(settings.startDate, i);
     const phase = phases.find(p => date >= p.start && date <= p.end)!;
     const localDay = diffDays(phase.start, date) + 1;
+    const anyChaptersLeft = ALL_SUBJECTS.some(hasRemaining);
     const isCatchup = phase.id === 'learn' && localDay % 7 === 0;
     const day: Day = { date, index: i + 1, phase: phase.id, tasks: [], isCatchup };
-    const entries: Omit<Task, 'date' | 'dayIndex' | 'phase' | 'startMinute' | 'endMinute'>[] = [];
-    const coreEntry = (b: number) => {
-      if (isCatchup) {
-        const ids = [...new Set(recent)].slice(-4);
-        const subject = CORE[b % 4];
-        return { id: `weekly-learn-${localDay}-b${b}`, subject, kind: 'practice' as const, title: b === 0 ? 'সাপ্তাহিক ব্যাকলগ মিটিয়ে নাও' : b === 1 ? 'এ সপ্তাহের অধ্যায়: না দেখে রিকল' : 'ছোট পরীক্ষা ও ভুল সংশোধন', detail: `${ids.slice(0, 2).map(id => chapterById[id]?.title).filter(Boolean).join(' + ') || 'এ সপ্তাহের নির্ধারিত অধ্যায়'}। আগে অসমাপ্ত কাজ শেষ করো; না থাকলে ২টি CQ, ২৫টি MCQ ও ব্যবহারিক খাতা ঝালাই করো।`, chapterIds: ids.slice(0, 2) };
-      }
-      const subject = CORE[coreSlot++ % CORE.length];
-      const u = nextUnit(subject);
-      if (!u) return { id: `core-practice-learn-${localDay}-b${b}`, subject, kind: 'practice' as const, title: `${subjectById[subject].name}: দুর্বলতা ও বোর্ড প্রশ্ন`, detail: 'ভুলের খাতার একটি টপিক বেছে নাও। ২টি CQ ও ২৫টি MCQ সমাধান করো; প্রতিটি ভুলের কারণ লেখো।', chapterIds: [] };
-      recent.push(u.chapter.id);
-      return { id: u.id, subject, kind: kindFor(subject), title: u.chapter.title, detail: `${u.chapter.effort > 1 ? `ধাপ ${bn(u.part)}/${bn(u.chapter.effort)} · ` : ''}${learnDetail(u.chapter, u.part)}${u.chapter.note ? ` ${u.chapter.note}` : ''}`, chapterIds: [u.chapter.id] };
-    };
-    const ictEntry = (): Omit<Task, 'date' | 'dayIndex' | 'phase' | 'startMinute' | 'endMinute'> => {
-      const u = nextUnit('ict');
-      return u ? { id: u.id, subject: 'ict', kind: 'ict', title: u.chapter.title, detail: learnDetail(u.chapter, u.part), chapterIds: [u.chapter.id] }
-        : { id: `ict-practice-learn-${localDay}`, subject: 'ict', kind: 'practical', title: 'আইসিটি: হাতে-কলমে অনুশীলন', detail: 'দিন অনুযায়ী একটি HTML পাতা, C প্রোগ্রাম, গেট সার্কিট বা ডেটাবেজ query নিজে তৈরি করো। ব্যবহারিক খাতায় লেখো।', chapterIds: [] };
-    };
+    const entries: RawEntry[] = [];
+
     if (phase.id === 'learn') {
-      entries.push(coreEntry(0), coreEntry(1), languageUnit(localDay % 2 === 0 ? 'bangla' : 'english', `learn-${localDay}`), coreEntry(3));
-      entries.push(localDay % 2 === 1 ? ictEntry() : languageUnit(localDay % 2 === 0 ? 'english' : 'bangla', `learn-${localDay}`));
-      entries.push({ id: `recall-learn-${localDay}`, subject: CORE[i % 4], kind: 'recall', title: 'আজকের ৩টি বিষয় মনে করো', detail: 'বই বন্ধ করে আজকের মূল ধারণা, সূত্র বা চিত্র লেখো। ১৫টি MCQ যাচাই করো; আগামীকালের বই গুছিয়ে রাখো।', chapterIds: [] });
+      if (isCatchup) {
+        // Weekly catch-up & revision day — strictly 2 subjects!
+        const s1 = ALL_SUBJECTS[(localDay * 2) % ALL_SUBJECTS.length];
+        const s2 = ALL_SUBJECTS[(localDay * 2 + 3) % ALL_SUBJECTS.length];
+        const recentFor = (s: SubjectId) => [...new Set(recentChapters)].filter(id => chapterById[id]?.subject === s).slice(-1);
+        [s1, s2].forEach((sub, idx) => {
+          const cIds = recentFor(sub);
+          const cTitle = cIds[0] ? chapterById[cIds[0]]?.title : 'এ সপ্তাহের অধ্যায়';
+          entries.push(
+            {
+              id: `weekly-learn-${localDay}-s${idx}-a`,
+              subject: sub,
+              kind: 'practice',
+              title: `${subjectById[sub].name}: সাপ্তাহিক ব্যাকলগ ও নোট ঝালাই`,
+              detail: `${cTitle} — অসমাপ্ত পড়া থাকলে আগে শেষ করো, নতুবা মূল সূত্র ও নোট না দেখে লেখো।`,
+              chapterIds: cIds,
+            },
+            {
+              id: `weekly-learn-${localDay}-s${idx}-b`,
+              subject: sub,
+              kind: 'recall',
+              title: `${subjectById[sub].name}: সাপ্তাহিক CQ ও MCQ যাচাই`,
+              detail: `২টি বোর্ড CQ ও ২৫টি MCQ ঘড়ি ধরে সমাধান করো এবং ভুলের খাতা আপডেট করো।`,
+              chapterIds: cIds,
+            },
+          );
+        });
+        prevDaySubjects = [s1, s2];
+      } else if (anyChaptersLeft) {
+        const active = ALL_SUBJECTS.filter(hasRemaining);
+        const ranked = [...active].sort((a, b) => {
+          // Slight penalty if studied yesterday so consecutive days feel fresh while finishing all 114 chapters before Feb Test Exam
+          const scoreA = remainingCount(a) - (prevDaySubjects.includes(a) && active.length > 2 ? 1.5 : 0);
+          const scoreB = remainingCount(b) - (prevDaySubjects.includes(b) && active.length > 2 ? 1.5 : 0);
+          if (scoreB !== scoreA) return scoreB - scoreA;
+          return ((ALL_SUBJECTS.indexOf(a) + localDay) % 7) - ((ALL_SUBJECTS.indexOf(b) + localDay) % 7);
+        });
+        const chosen = ranked.slice(0, 2);
+        for (const sub of chosen) {
+          entries.push(...takeSubjectChapterEntries(sub, `learn-${localDay}`));
+        }
+        prevDaySubjects = chosen;
+      } else {
+        // All 114 chapters finished before February Test Exam! Run 2-subjects/day Test Exam Final Prep
+        const s1 = ALL_SUBJECTS[testPrepSlot++ % ALL_SUBJECTS.length];
+        const s2 = ALL_SUBJECTS[testPrepSlot++ % ALL_SUBJECTS.length];
+        for (const sub of [s1, s2]) {
+          entries.push(...takeSubjectChapterEntries(sub, `learn-${localDay}`));
+        }
+        prevDaySubjects = [s1, s2];
+      }
     } else if (phase.id === 'revise') {
       const round = localDay <= Math.ceil(phase2Days / 2) ? '1' : '2';
-      const revisionEntry = (b: number) => {
-        const slot = coreSlot++ % CORE.length;
-        const subject = CORE[slot];
-        // Rotate subjects daily; if one queue is exhausted, borrow the next subject's remaining group.
-        let group = takeRevisionGroup(round, subject);
-        if (!group) for (let step = 1; step < CORE.length && !group; step++) group = takeRevisionGroup(round, CORE[(slot + step) % CORE.length]);
-        if (group) {
-          return { id: group.id, subject: group.subject, kind: 'revision' as const, title: `${group.chapters.map(c => c.title).join(' + ')}`, detail: `রিভিশন রাউন্ড ${bn(round)} · নোট থেকে মূল ধারণা ঝালাই করো। প্রতিটি অধ্যায়ের ২টি CQ ও ২০টি MCQ; দুর্বল অংশ চিহ্নিত করো।`, chapterIds: group.chapters.map(c => c.id) };
+      const chosenSubs: SubjectId[] = [];
+      for (let pick = 0; pick < 2; pick++) {
+        let group: RevisionGroup | undefined;
+        for (let step = 0; step < CORE.length; step++) {
+          const candidate = CORE[(revSlot + step) % CORE.length];
+          if (chosenSubs.includes(candidate)) continue;
+          group = takeRevisionGroup(round, candidate);
+          if (group) {
+            revSlot = (CORE.indexOf(candidate) + 1) % CORE.length;
+            break;
+          }
         }
-        return { id: `revision-extra-${localDay}-b${b}`, subject, kind: 'practice' as const, title: 'দুর্বল অধ্যায়ে দ্বিতীয় সুযোগ', detail: 'ভুলের খাতা ও কম আত্মবিশ্বাসের অধ্যায় থেকে ২টি CQ এবং ২৫টি MCQ। নতুন টপিক নয়, নির্ভুলতায় মনোযোগ।', chapterIds: [] };
-      };
-      entries.push(revisionEntry(0), revisionEntry(1), languageUnit(localDay % 2 === 0 ? 'bangla' : 'english', `revise-${localDay}`), revisionEntry(3));
-      entries.push(localDay % 2 === 1 ? { id: `ict-revision-${localDay}`, subject: 'ict', kind: 'ict', title: 'আইসিটি: গেট / HTML / C / ডেটাবেজ', detail: 'দিন অনুযায়ী একটি টপিকের ২টি সৃজনশীল ও ব্যবহারিক অনুশীলন। আগের ভুল নিজে সংশোধন করো।', chapterIds: [] } : languageUnit('english', `revise-${localDay}`));
-      entries.push({ id: `revision-recall-${localDay}`, subject: CORE[i % 4], kind: 'recall', title: localDay % 7 === 0 ? 'সাপ্তাহিক মিনি টেস্ট' : 'রিকল ও ভুলের খাতা', detail: localDay % 7 === 0 ? '৪৫ মিনিটে একটি বিষয়ের MCQ সেট; বাকি সময়ে উত্তর বিশ্লেষণ। নম্বর ও ভুলের কারণ লেখো।' : 'আজকের রিভিশন থেকে ৫টি প্রশ্ন নিজেকে করো। না পারলে আগামীকালের ব্যাকলগে যোগ করো।', chapterIds: [] });
+        if (group) {
+          chosenSubs.push(group.subject);
+          const chIds = group.chapters.map(c => c.id);
+          const chTitles = group.chapters.map(c => c.title).join(' + ');
+          entries.push(
+            {
+              id: group.id,
+              subject: group.subject,
+              kind: 'revision',
+              title: `${chTitles} · রিভিশন`,
+              detail: `রিভিশন রাউন্ড ${bn(round)} · নোট ও ওয়ান শট স্লাইড থেকে মূল ধারণা ও সূত্র ঝালাই করো।`,
+              chapterIds: chIds,
+            },
+            {
+              id: `${group.id}-practice`,
+              subject: group.subject,
+              kind: 'practice',
+              title: `${chTitles} · CQ ও MCQ অনুশীলন`,
+              detail: `প্রতিটি অধ্যায় থেকে ২টি বোর্ড CQ ও ২৫টি MCQ ঘড়ি ধরে সমাধান করো।`,
+              chapterIds: chIds,
+            },
+          );
+        } else {
+          const langPool: SubjectId[] = ['bangla', 'english', 'ict', ...CORE];
+          const fallbackSub = langPool.find(s => !chosenSubs.includes(s)) || CORE[pick];
+          chosenSubs.push(fallbackSub);
+          entries.push(
+            {
+              id: `revision-extra-${localDay}-s${pick}-a`,
+              subject: fallbackSub,
+              kind: kindFor(fallbackSub),
+              title: `${subjectById[fallbackSub].name}: পূর্ণ রিভিশন ও নোট ঝালাই`,
+              detail: 'ভুলের খাতা ও গুরুত্বপূর্ণ টপিকগুলো না দেখে রিকল করো।',
+              chapterIds: [],
+            },
+            {
+              id: `revision-extra-${localDay}-s${pick}-b`,
+              subject: fallbackSub,
+              kind: 'practice',
+              title: `${subjectById[fallbackSub].name}: টাইমড বোর্ড প্রশ্ন সলভ`,
+              detail: '৩টি CQ ও ৩০টি MCQ সমাধান করে দুর্বল অংশ চিহ্নিত করো।',
+              chapterIds: [],
+            },
+          );
+        }
+      }
     } else {
       const mockIndex = Math.floor((localDay - 1) / 2);
       if (mockIndex < PAPERS.length) {
         const paper = PAPERS[mockIndex];
+        const companionSub: SubjectId = paper.subject === 'english' ? 'bangla' : 'english';
         if (localDay % 2 === 1) {
+          // Model Test Day — strictly 2 subjects (Exam Paper Subject + Light Companion Subject)
           entries.push(
-            { id: `prep-${paper.id}`, subject: paper.subject, kind: 'recall', title: 'হালকা ঝালাই ও পরীক্ষার প্রস্তুতি', detail: 'শুধু নিজের সূত্রশিট ও ভুলের খাতা দেখো। কলম, ঘড়ি, উত্তরপত্র ও পানি গুছিয়ে রাখো।', chapterIds: [], paperId: paper.id },
-            { id: `mock-${paper.id}`, subject: paper.subject, kind: 'exam', title: `${paper.name} · মডেল টেস্ট`, detail: `ঘড়ি ধরে ${bn(paper.maxScore === 75 ? 75 : 100)} নম্বরের পূর্ণ তত্ত্বীয় প্রশ্নপত্র সমাধান করো। ${paper.maxScore === 75 ? 'আইসিটি তত্ত্বীয়: ৭৫ নম্বর; ব্যবহারিক আলাদা।' : 'সময় ৩ ঘণ্টা; বই/সমাধান দেখা নয়।'} এটি ব্যক্তিগত মডেল টেস্ট, বোর্ড পরীক্ষা নয়।`, chapterIds: [], paperId: paper.id },
-            { id: `correction-${paper.id}`, subject: paper.subject, kind: 'correction', title: 'নিজের খাতা মূল্যায়ন', detail: 'নম্বর মিলিয়ে Exams পেজে নম্বর ও ভুলগুলো লেখো। অসম্পূর্ণ উত্তর, ধারণাগত ভুল ও সময়ের সমস্যা আলাদা করো।', chapterIds: [], paperId: paper.id },
-            { id: `mock-language-${paper.id}`, subject: i % 2 ? 'bangla' : 'english', kind: 'language', title: 'ভাষা বিষয়ে ছোট অনুশীলন', detail: 'একটি reading/সাহিত্য প্রশ্ন অথবা একটি writing task। মডেল টেস্টের চাপের মধ্যেও ভাষার অনুশীলন রাখো।', chapterIds: [] },
-            { id: `mock-recall-${paper.id}`, subject: paper.subject, kind: 'recall', title: 'আজকের ভুলগুলো আর নয়', detail: 'ভুলের খাতার ৩টি পয়েন্ট পড়ো, একটি দুর্বল টপিকের ছোট অনুশীলন করো। পর্যাপ্ত ঘুমের জন্য আগে শেষ করো।', chapterIds: [], paperId: paper.id },
+            {
+              id: `prep-${paper.id}`,
+              subject: paper.subject,
+              kind: 'recall',
+              title: `${paper.name}: পরীক্ষার পূর্ব প্রস্তুতি`,
+              detail: 'শুধু নিজের সূত্রশিট ও ভুলের খাতা দেখো। কলম, ঘড়ি ও উত্তরপত্র গুছিয়ে নাও।',
+              chapterIds: [],
+              paperId: paper.id,
+              weight: 1,
+            },
+            {
+              id: `mock-${paper.id}`,
+              subject: paper.subject,
+              kind: 'exam',
+              title: `${paper.name} · পূর্ণ মডেল টেস্ট`,
+              detail: `ঘড়ি ধরে ${bn(paper.maxScore === 75 ? 75 : 100)} নম্বরের পূর্ণ প্রশ্নপত্র ৩ ঘণ্টায় সমাধান করো।`,
+              chapterIds: [],
+              paperId: paper.id,
+            },
+            {
+              id: `correction-${paper.id}`,
+              subject: paper.subject,
+              kind: 'correction',
+              title: `${paper.name}: খাতা মূল্যায়ন ও ভুল চিহ্নিতকরণ`,
+              detail: 'নম্বর মিলিয়ে পরীক্ষা পেজে নম্বর ও ভুলগুলো লিখে রাখো।',
+              chapterIds: [],
+              paperId: paper.id,
+              weight: 1.4,
+            },
+            {
+              id: `mock-companion-${paper.id}`,
+              subject: companionSub,
+              kind: 'language',
+              title: `${subjectById[companionSub].name}: হালকা রিভিশন ও অনুশীলন`,
+              detail: 'মডেল টেস্টের পর চাপমুক্ত থেকে একটি ছোট রাইটিং/সাহিত্য বা ব্যাকরণ টপিক ঝালাই করো।',
+              chapterIds: [],
+              weight: 1.2,
+            },
           );
-          days.push({ ...day, tasks: timedTasks(day, entries, settings, true) });
+          day.tasks = timedTwoSubjectDay(day, entries, settings, true);
+          days.push(day);
           continue;
         }
+        const secondSub: SubjectId = CORE[mockIndex % CORE.length] === paper.subject ? 'ict' : CORE[mockIndex % CORE.length];
         entries.push(
-          { id: `analysis-${paper.id}`, subject: paper.subject, kind: 'correction', title: `${subjectById[paper.subject].name}: উত্তর বিশ্লেষণ`, detail: 'গতকালের মডেল টেস্টের প্রতিটি ভুল বোঝো। নম্বর না লিখে থাকলে এখন লেখো; ধারণাগত ভুল আলাদা করো।', chapterIds: [], paperId: paper.id },
-          { id: `resolve-${paper.id}`, subject: paper.subject, kind: 'practice', title: 'ভুল প্রশ্ন আবার নিজে করো', detail: 'গতকালের ভুল CQ ও MCQ সমাধান দেখে নয়, নিজে আবার করো। প্রয়োজনে সংশ্লিষ্ট অধ্যায়ের নোট দেখো।', chapterIds: [], paperId: paper.id },
-          languageUnit('english', `exam-${localDay}`),
-          { id: `weak-${paper.id}`, subject: paper.subject, kind: 'practice', title: 'সবচেয়ে দুর্বল টপিকে ফোকাস', detail: 'মডেল টেস্টে সবচেয়ে কম নম্বর পাওয়া টপিকের ২টি প্রশ্ন করো। একই ভুল আর কতবার হলো লিখে রাখো।', chapterIds: [], paperId: paper.id },
-          { id: `practical-exam-${localDay}`, subject: CORE[i % 4], kind: 'practical', title: 'ব্যবহারিক খাতা ও মৌখিক প্রস্তুতি', detail: 'একটি পরীক্ষণের নীতি, চিত্র/সার্কিট, পর্যবেক্ষণ টেবিল ও সতর্কতা লেখো। শিক্ষকের নির্ধারিত তালিকা অনুসরণ করো।', chapterIds: [] },
-          { id: `exam-recall-${localDay}`, subject: paper.subject, kind: 'recall', title: 'আগামীকালের জন্য হালকা প্রস্তুতি', detail: 'সূত্রশিট ও ভুলের খাতা ছাড়া নতুন কিছু নয়। আগামীকালের প্রশ্নপত্র/সামগ্রী গুছিয়ে রাখো।', chapterIds: [] },
+          {
+            id: `analysis-${paper.id}`,
+            subject: paper.subject,
+            kind: 'correction',
+            title: `${paper.name}: উত্তর বিশ্লেষণ ও ভুল সংশোধন`,
+            detail: 'গতকালের মডেল টেস্টের প্রতিটি ভুল বুঝে নোট করো।',
+            chapterIds: [],
+            paperId: paper.id,
+          },
+          {
+            id: `resolve-${paper.id}`,
+            subject: paper.subject,
+            kind: 'practice',
+            title: `${paper.name}: দুর্বল টপিকের প্রশ্ন পুনরায় সমাধান`,
+            detail: 'সমাধান না দেখে গতকালের ভুল CQ ও MCQ নিজে আবার সমাধান করো।',
+            chapterIds: [],
+            paperId: paper.id,
+          },
+          {
+            id: `nextprep-${paper.id}-a`,
+            subject: secondSub,
+            kind: kindFor(secondSub),
+            title: `${subjectById[secondSub].name}: সূত্র ও মূল ধারণা ঝালাই`,
+            detail: 'পরবর্তী মডেল টেস্টের জন্য মূল অধ্যায়ের নোট ও সূত্রশিট রিভিশন দাও।',
+            chapterIds: [],
+          },
+          {
+            id: `nextprep-${paper.id}-b`,
+            subject: secondSub,
+            kind: 'practice',
+            title: `${subjectById[secondSub].name}: বোর্ড প্রশ্ন ও ব্যবহারিক প্রস্তুতি`,
+            detail: '২টি বোর্ড CQ ও ২৫টি MCQ অনুশীলন করো।',
+            chapterIds: [],
+          },
         );
       } else {
-        const titles = ['সব বিষয়ের সূত্র ও ভুলের খাতা', 'বাংলা–ইংরেজি: শেষ ঝালাই', 'ব্যবহারিক খাতা ও পরীক্ষার সামগ্রী', 'হালকা রিকল, আগে ঘুম'];
+        const pairIdx = (localDay - 27) * 2;
+        const s1 = ALL_SUBJECTS[pairIdx % ALL_SUBJECTS.length];
+        const s2 = ALL_SUBJECTS[(pairIdx + 1) % ALL_SUBJECTS.length];
         entries.push(
-          { id: `final-${localDay}-a`, subject: 'physics', kind: 'recall', title: titles[localDay - 27] || titles[3], detail: 'কেবল পরিচিত নোট ও ভুলের খাতা। নতুন কঠিন টপিক শুরু নয়।', chapterIds: [] },
-          { id: `final-${localDay}-b`, subject: 'chemistry', kind: 'recall', title: 'রসায়ন ও জীববিজ্ঞান: নিজের নোট', detail: 'বিক্রিয়া, চিত্র ও পার্থক্য চোখ বুলিয়ে নাও। যেগুলো আগেই পারো সেগুলোই আত্মবিশ্বাসের সঙ্গে ঝালাই করো।', chapterIds: [] },
-          languageUnit('bangla', `final-${localDay}`),
-          { id: `final-${localDay}-c`, subject: 'math', kind: 'recall', title: 'গণিত ও আইসিটি: ভুলগুলো দেখো', detail: 'সূত্রের শর্ত, একক, gate truth table ও C dry run—নিজের ভুলের খাতা থেকে ঝালাই করো।', chapterIds: [] },
-          { id: `final-${localDay}-d`, subject: 'english', kind: 'language', title: 'ইংরেজি: ছোট লেখা ও vocabulary', detail: 'একটি ছোট writing task ও পরিচিত grammar ভুলগুলো দেখো। ভারী নতুন অনুশীলন নয়।', chapterIds: [] },
-          { id: `final-${localDay}-e`, subject: 'ict', kind: 'recall', title: 'প্রবেশপত্র, কলম, ঘড়ি ও ঘুম', detail: 'বোর্ডের প্রকৃত সময়সূচি ও কেন্দ্র নির্দেশনা আলাদাভাবে যাচাই করো। প্রয়োজনীয় কাগজ গুছিয়ে পর্যাপ্ত ঘুমাও।', chapterIds: [] },
+          { id: `final-${localDay}-a1`, subject: s1, kind: 'recall', title: `${subjectById[s1].name}: শেষ মুহূর্তের সূত্র ও ভুলের খাতা`, detail: 'কেবল পরিচিত নোট ও ভুলের খাতা চোখ বুলিয়ে নাও। নতুন টপিক নয়।', chapterIds: [] },
+          { id: `final-${localDay}-a2`, subject: s1, kind: 'practice', title: `${subjectById[s1].name}: হালকা বোর্ড প্রশ্ন ঝালাই`, detail: 'বাছাইকৃত গুরুত্বপূর্ণ প্রশ্নগুলো রিভিউ করো।', chapterIds: [] },
+          { id: `final-${localDay}-b1`, subject: s2, kind: 'recall', title: `${subjectById[s2].name}: মূল নোট ও সংজ্ঞা রিভিশন`, detail: 'আত্মবিশ্বাসের সঙ্গে মূল পয়েন্টগুলো মনে করো ও পর্যাপ্ত ঘুমাও।', chapterIds: [] },
+          { id: `final-${localDay}-b2`, subject: s2, kind: 'recall', title: `${subjectById[s2].name}: পরীক্ষার সামগ্রী ও চূড়ান্ত প্রস্তুতি`, detail: 'প্রবেশপত্র, কলম, ক্যালকুলেটর ও ঘড়ি গুছিয়ে রাখো।', chapterIds: [] },
         );
       }
     }
-    day.tasks = timedTasks(day, entries, settings);
+
+    day.tasks = timedTwoSubjectDay(day, entries, settings, false);
     days.push(day);
   }
   return days;
 }
 
-export function chapterTasks(plan: Day[], chapterId: string): Task[] { return plan.flatMap(d => d.tasks).filter(t => t.chapterIds.includes(chapterId) && (t.kind === 'learn' || t.kind === 'language' || t.kind === 'ict') && t.id.includes(':part-')); }
-export function isChapterDone(plan: Day[], id: string, completed: Record<string, string>): boolean { const tasks = chapterTasks(plan, id); return tasks.length > 0 && tasks.every(t => !!completed[t.id]); }
-export function chapterFirstDate(plan: Day[], id: string): string | undefined { return chapterTasks(plan, id)[0]?.date; }
+export function chapterTasks(plan: Day[], chapterId: string): Task[] {
+  return plan.flatMap(d => d.tasks).filter(t => t.chapterIds.includes(chapterId) && (t.kind === 'learn' || t.kind === 'language' || t.kind === 'ict') && t.id.includes(':part-'));
+}
+/** Initial learning and its accompanying chapter practice form one completion unit. */
+export function chapterStudyTasks(plan: Day[], chapterId: string): Task[] {
+  return plan.flatMap(d => d.tasks).filter(task => task.chapterIds.includes(chapterId) &&
+    (((task.kind === 'learn' || task.kind === 'language' || task.kind === 'ict') && task.id.includes(':part-')) ||
+     (task.kind === 'practice' && task.id.startsWith(`chap-practice-${chapterId}-`))));
+}
+export function isChapterDone(plan: Day[], id: string, completed: Record<string, string>): boolean {
+  const tasks = chapterStudyTasks(plan, id);
+  return tasks.length > 0 && tasks.every(t => !!completed[t.id]);
+}
+export function chapterFirstDate(plan: Day[], id: string): string | undefined {
+  return chapterTasks(plan, id)[0]?.date;
+}
+export function chapterLastDate(plan: Day[], id: string): string | undefined {
+  const tasks = chapterTasks(plan, id);
+  return tasks[tasks.length - 1]?.date;
+}
+export function isDayComplete(day: Day | undefined, completed: Record<string, string>): boolean {
+  return !!day && day.tasks.length > 0 && day.tasks.every(t => !!completed[t.id]);
+}
+/** Finds the very next day after `afterDate` that still has unfinished study tasks (auto-advance when today finishes early!). */
+export function getNextUnfinishedDay(plan: Day[], afterDate: string, completed: Record<string, string>): Day | undefined {
+  return plan.find(d => d.date > afterDate && d.tasks.some(t => !completed[t.id]));
+}
+/** Returns unfinished tasks from days strictly before `beforeDate` so previous unfinished study appears alongside today's 2 chapters. */
+export function getUnfinishedPastTasks(plan: Day[], beforeDate: string, completed: Record<string, string>): Task[] {
+  return plan
+    .filter(d => d.date < beforeDate)
+    .flatMap(d => d.tasks)
+    .filter(t => taskStart(t).date < beforeDate && !completed[t.id]);
+}
+
 export function getStats(plan: Day[], data: AppData, today: string) {
   const all = plan.flatMap(d => d.tasks);
   const done = all.filter(t => data.completed[t.id]);
@@ -328,9 +820,18 @@ export function getStats(plan: Day[], data: AppData, today: string) {
   while (activeDates.has(cursor)) { streak++; cursor = addDays(cursor, -1); }
   const backlog = all.filter(t => taskStart(t).date < today && !data.completed[t.id]);
   const subjectProgress = Object.fromEntries(Object.keys(subjectById).map(s => {
-    const chapters = CHAPTERS.filter(c => c.subject === s);
-    return [s, { done: chapters.filter(c => isChapterDone(plan, c.id, data.completed)).length, total: chapters.length }];
+    const chs = CHAPTERS.filter(c => c.subject === s);
+    return [s, { done: chs.filter(c => isChapterDone(plan, c.id, data.completed)).length, total: chs.length }];
   })) as Record<SubjectId, { done: number; total: number }>;
-  return { total: all.length, done: done.length, chapters: chapters.length, totalChapters: CHAPTERS.length, streak, backlog, subjectProgress,
-    plannedMinutes: done.reduce((n, t) => n + (t.endMinute - t.startMinute), 0), mocks: Object.keys(data.exams).length };
+  return {
+    total: all.length,
+    done: done.length,
+    chapters: chapters.length,
+    totalChapters: CHAPTERS.length,
+    streak,
+    backlog,
+    subjectProgress,
+    plannedMinutes: done.reduce((n, t) => n + (t.endMinute - t.startMinute), 0),
+    mocks: Object.keys(data.exams).length,
+  };
 }
