@@ -1,5 +1,6 @@
 import type { SubjectId } from './data';
 import type { QuizQuestion } from './types';
+import { BANK_QUESTIONS } from './quiz-bank';
 
 const SEED_AT = '2026-01-01T00:00:00.000Z';
 let seedIndex = 0;
@@ -13,7 +14,7 @@ function q(subject: SubjectId, chapterId: string, question: string, options: str
  * it is not a board question paper, and the app never claims full syllabus coverage.
  * Users add their own questions from books/teachers, which then live in their local data.
  */
-export const STARTER_QUESTIONS: QuizQuestion[] = [
+const BASE_QUESTIONS: QuizQuestion[] = [
   q('physics', 'physics-1-2', 'সমান মানের দুইটি ভেক্টরের লব্ধি সর্বোচ্চ হয় কত কোণে?', ['০°', '৪৫°', '৯০°', '১৮০°'], 0, 'সমান দিক হলে লব্ধি সর্বোচ্চ, অর্থাৎ ০°।'),
   q('physics', 'physics-1-2', 'দুইটি ভেক্টরের ডট গুণফলের ফলাফল কী?', ['স্কেলার', 'ভেক্টর', 'টেনসর', 'মাত্রাহীন ভেক্টর'], 0, 'ডট গুণফল একটি স্কেলার রাশি।'),
   q('physics', 'physics-1-2', 'ক্রস গুণফলের ফলাফল কোন রাশি?', ['ভেক্টর', 'স্কেলার', 'শুধু ধনাত্মক', 'এককবিহীন'], 0, 'ক্রস গুণফল ভেক্টর; দিক ডান হাতের নিয়মে পাওয়া যায়।'),
@@ -78,6 +79,9 @@ export const STARTER_QUESTIONS: QuizQuestion[] = [
   q('ict', 'ict-1-2', 'ROM-এর বৈশিষ্ট্য কোনটি?', ['বিদ্যুৎ বন্ধ হলে তথ্য সাধারণত থাকে', 'শুধু পড়া যায়, কখনো লেখা যায় না', 'প্রচুর ধারণক্ষমতা', 'ক্যাশ মেমোরির অংশ'], 0),
   q('ict', 'ict-1-2', 'তারকা টোপোলজিতে কেন্দ্রীয় ডিভাইস কোনটি?', ['হাব/সুইচ', 'রাউটারবিহীন কেবল', 'প্রিন্টার', 'স্ক্যানার'], 0),
 ];
+
+/** The full starter bank: the original sample plus the chapter-by-chapter additions. */
+export const STARTER_QUESTIONS: QuizQuestion[] = [...BASE_QUESTIONS, ...BANK_QUESTIONS];
 
 export interface BuiltinFormula {
   id: string;
