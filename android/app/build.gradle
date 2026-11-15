@@ -22,13 +22,32 @@ android {
         applicationId "com.prostuti.hsc27"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 17
-        versionName "2.13.1"
+        versionCode 18
+        versionName "2.13.2"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    /**
+     * The debug APK is what every release attaches. Gradle's default debug key is created
+     * fresh on each CI runner, so each release ended up with a different signature and a
+     * phone refused the update with "App not installed". This small, throwaway keystore is
+     * committed so every APK shares one signature; it is NOT a Play Store key.
+     */
+    def stableKeystore = rootProject.file('prostuti-stable.p12')
+    def hasStableKeystore = stableKeystore.exists()
+    if (hasStableKeystore) {
+        signingConfigs {
+            stable {
+                storeFile stableKeystore
+                storePassword 'prostuti'
+                keyAlias 'prostuti'
+                keyPassword 'prostuti'
+                storeType 'PKCS12'
+            }
         }
     }
     // Only declared when the keystore is actually present, so a plain clone still builds.
@@ -43,12 +62,19 @@ android {
         }
     }
     buildTypes {
+        debug {
+            if (hasStableKeystore) {
+                signingConfig signingConfigs.stable
+            }
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
             // Play Store uploads prefer an .aab; the APK stays for direct installs.
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
+            } else if (hasStableKeystore) {
+                signingConfig signingConfigs.stable
             } else {
                 signingConfig signingConfigs.debug
             }

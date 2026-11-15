@@ -85,13 +85,15 @@ The checked-in `package-lock.json` is the source of truth. If an older npm has a
 
 ## Android APK
 
-The APK is an installable debug-signed build. It runs the same offline app inside a Capacitor WebView and adds native local notifications plus a SQLite copy of the data.
+The APK is an installable build. It runs the same offline app inside a Capacitor WebView and adds native local notifications plus a SQLite copy of the data.
 
-**Download the current build:** [প্রস্তুতি 2.13.1 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.13.1) → `prostuti-hsc27-v2.13.1.apk`.
+**Download the current build:** [প্রস্তুতি 2.13.2 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.13.2) → `prostuti-hsc27-v2.13.2.apk`.
 
 1. Download the APK from the release (or from **Actions → Android APK → Artifacts → prostuti-hsc27-apk**).
 2. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.
 3. Install over an older version to keep the existing local data; keep a JSON backup before updating.
+
+Every APK from **2.13.2** onwards is signed with the same small keystore (`android/prostuti-stable.p12`), so later versions install straight over the previous one. Builds from 2.13.1 and earlier were signed with a throwaway key that CI regenerated each run — phones rejected those updates with “App not installed”, so you have to uninstall such a build once (export a JSON backup first) before installing 2.13.2. That keystore is only for sideloading; a Play Store upload still needs your own release keystore through the `ANDROID_KEYSTORE_*` secrets.
 
 Pushing a tag such as `v2.7.0` also attaches the APK to a GitHub Release. Every push to `main` or an `arena/**` branch rebuilds the APK.
 

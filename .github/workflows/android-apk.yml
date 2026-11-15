@@ -69,6 +69,12 @@ jobs:
           java-version: 21
           cache: gradle
 
+      - name: Check the APK signing key
+        run: |
+          # A broken or unreadable keystore must fail here, not halfway through the build.
+          keytool -list -v -keystore android/prostuti-stable.p12 -storetype PKCS12 \
+            -storepass prostuti -alias prostuti | grep -E "Alias name|SHA256:|Valid from" | head -5
+
       - name: Build debug APK
         working-directory: android
         run: |
