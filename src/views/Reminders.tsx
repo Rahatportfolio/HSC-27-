@@ -127,7 +127,7 @@ function NativeReminderCard() {
       await refresh();
       if (permission === 'denied') { notify('ফোনের সেটিংস → Apps → প্রস্তুতি → Notifications থেকে অনুমতি দাও।', 'error'); setStatus('অনুমতি বন্ধ'); return; }
       if (permission !== 'granted') { notify('অনুমতি ছাড়া রিমাইন্ডার সেট করা যায় না।', 'info'); setStatus('অনুমতি দেওয়া হয়নি'); return; }
-      const result = await syncNativeReminders(plan, data, today, { requestPermission: true });
+      const result = await syncNativeReminders(plan, { ...data, settings: { ...data.settings, reminderEnabled: true } }, today, { requestPermission: true });
       if (result.permission !== 'granted') { setStatus('অনুমতি দেওয়া হয়নি'); notify('রিমাইন্ডার সেট করা যায়নি—অনুমতি দরকার।', 'info'); return; }
       setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: true } }));
       setStatus(`${bn(result.scheduled)}টি সেট`);

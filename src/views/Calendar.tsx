@@ -3,7 +3,7 @@ import { ArrowRight, BellRing, CalendarDays, CalendarRange, ChevronDown, Chevron
 import { usePlanner } from '../context';
 import { SUBJECTS, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { addDays, bn, formatDate, getPhases, percent, phaseName, taskStart } from '../planner';
+import { addDays, bn, formatDate, getPhases, isValidDate, percent, phaseName, taskStart } from '../planner';
 import { newId } from '../storage';
 import { startOfWeek, subjectMinutes } from '../analytics';
 import type { PhaseId } from '../planner';
@@ -76,7 +76,7 @@ export default function CalendarView() {
   const addImportantDate = (event: React.FormEvent) => {
     event.preventDefault();
     if (!importantTitle.trim()) { notify('তারিখের নাম লেখো।', 'error'); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(importantDate)) { notify('সঠিক তারিখ বাছো।', 'error'); return; }
+    if (!isValidDate(importantDate)) { notify('সঠিক তারিখ বাছো।', 'error'); return; }
     if (data.importantDates.length >= 200) { notify('সর্বোচ্চ ২০০টি তারিখ রাখা যায়।', 'error'); return; }
     setData(d => ({ ...d, importantDates: [...d.importantDates, { id: newId(), date: importantDate, title: importantTitle.trim(), note: importantNote.trim(), notify: importantNotify, createdAt: new Date().toISOString() }] }));
     setImportantTitle(''); setImportantNote('');

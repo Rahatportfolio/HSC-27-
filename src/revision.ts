@@ -2,7 +2,7 @@ import { CHAPTERS, chapterById } from './data';
 import type { AppData, Day } from './planner';
 import { addDays, chapterStudyTasks, todayKey } from './planner';
 import type { RecallRating, RevisionInterval, RevisionItem } from './types';
-import { newId, nowIso } from './storage';
+import { LIMITS, newId, nowIso } from './storage';
 
 export const REVISION_INTERVALS: RevisionInterval[] = [1, 3, 7, 14, 30];
 export const INTERVAL_LABEL: Record<RevisionInterval, string> = { 1: '১ দিন', 3: '৩ দিন', 7: '৭ দিন', 14: '১৪ দিন', 30: '৩০ দিন' };
@@ -45,10 +45,10 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
     for (const interval of REVISION_INTERVALS) {
       const dueDate = addDays(completedOn, interval);
       const found = items.find(item => item.chapterId === chapter.id && item.interval === interval);
-      if (!found) {
+      if (!found && items.length < LIMITS.revisions) {
         items.push({ id: newId(), chapterId: chapter.id, subject: chapter.subject, dueDate, interval, createdAt: stamp });
         changed = true;
-      } else if (!found.completedAt && !found.adjusted && found.dueDate !== dueDate) {
+      } else if (found && !found.completedAt && !found.adjusted && found.dueDate !== dueDate) {
         items = items.map(item => item.id === found.id ? { ...item, dueDate } : item);
         changed = true;
       }
@@ -91,7 +91,7 @@ export const RECALL_HINT: Record<RecallRating, string> = {
   okay: 'তিন দিন পরে আরেকবার ঝালাই হবে।',
   good: 'পরের ধাপে নিজের সময়েই আসবে।',
 };
-export interface RecallOutcome { data: AppData; dueDate: string | null; created: boolean }
+export interface RecallOutcome { data: AppData; dueDate: string | null; created: boolean; limitReached?: boolean }
 /**
  * Completing a card with a rating is what makes the schedule adaptive: a weak recall
  * pulls the next card to tomorrow, an okay one to three days, and a good one leaves the
@@ -99,7 +99,7 @@ export interface RecallOutcome { data: AppData; dueDate: string | null; created:
  */
 export function completeRevisionWithRecall(data: AppData, id: string, rating: RecallRating, today: string, at = nowIso()): RecallOutcome {
   const item = data.revisions.find(entry => entry.id === id);
-  if (!item) return { data, dueDate: null, created: false };
+  if (!item || item.completedAt) return { data, dueDate: null, created: false };
   let revisions = data.revisions.map(entry => entry.id === id ? { ...entry, completedAt: at, recall: rating } : entry);
   const gap = RECALL_GAP[rating];
   if (!gap) return { data: { ...data, revisions }, dueDate: null, created: false };
@@ -111,6 +111,7 @@ export function completeRevisionWithRecall(data: AppData, id: string, rating: Re
     revisions = revisions.map(entry => entry.id === next.id ? { ...entry, dueDate: target, adjusted: true } : entry);
     return { data: { ...data, revisions }, dueDate: target, created: false };
   }
+  if (revisions.length >= LIMITS.revisions) return { data: { ...data, revisions }, dueDate: null, created: false, limitReached: true };
   const interval: RevisionInterval = gap <= 1 ? 1 : 3;
   revisions = [...revisions, { id: newId(), chapterId: item.chapterId, subject: item.subject, dueDate: target, interval, createdAt: at, adjusted: true, recall: undefined }];
   return { data: { ...data, revisions }, dueDate: target, created: true };
@@ -123,11 +124,24 @@ export function recallSummary(revisions: RevisionItem[], today: string): { weak:
   const score = rated.length ? Math.round((count('good') * 100 + count('okay') * 60 + count('weak') * 20) / rated.length) : 0;
   return { weak: count('weak'), okay: count('okay'), good: count('good'), rated: rated.length, score };
 }
+/** Keep the latest completed card for each chapter/interval so the scheduler
+ * does not recreate already-completed milestones after history is compacted. */
+export function compactRevisionHistory(data: AppData): AppData {
+  const latest = new Map<string, RevisionItem>();
+  for (const item of data.revisions) {
+    if (!item.completedAt) continue;
+    const key = `${item.chapterId}:${item.interval}`;
+    const existing = latest.get(key);
+    if (!existing || (item.completedAt || '') > (existing.completedAt || '')) latest.set(key, item);
+  }
+  const keep = new Set([...latest.values()].map(item => item.id));
+  return { ...data, revisions: data.revisions.filter(item => !item.completedAt || keep.has(item.id)) };
+}
 export function reopenRevision(data: AppData, id: string): AppData {
   return { ...data, revisions: data.revisions.map(item => item.id === id ? { ...item, completedAt: undefined } : item) };
 }
 export function snoozeRevision(data: AppData, id: string, today: string, days = 1): AppData {
-  return { ...data, revisions: data.revisions.map(item => item.id === id && !item.completedAt ? { ...item, dueDate: addDays(item.dueDate < today ? today : item.dueDate, days) } : item) };
+  return { ...data, revisions: data.revisions.map(item => item.id === id && !item.completedAt ? { ...item, dueDate: addDays(item.dueDate < today ? today : item.dueDate, days), adjusted: true } : item) };
 }
 export function revisionDueCount(data: AppData, today: string): number {
   return data.revisions.filter(item => !item.completedAt && item.dueDate <= today).length;

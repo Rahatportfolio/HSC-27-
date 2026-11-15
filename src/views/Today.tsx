@@ -1,3 +1,4 @@
+import { learningDashboard } from '../learning';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -212,7 +213,7 @@ export default function TodayView() {
 
   const runPreset = (tk: Task, chapter?: Chapter, customMinutes?: number) => {
     const mins = customMinutes ?? Math.max(15, tk.endMinute - tk.startMinute);
-    if (timer.taskId === tk.id && (timer.running || timer.elapsedSec > 0)) {
+    if (timer.taskId === tk.id && (timer.running || timer.accumulatedMs > 0)) {
       if (timer.running) timer.pause();
       else timer.start();
       return;
@@ -248,7 +249,7 @@ export default function TodayView() {
         const lastTask = chTasks[chTasks.length - 1];
         const subject = subjectById[chapter.subject];
         const lessonsExpanded = !!openLessons[chapter.id];
-        const activeChapterTimer = chTasks.some(tk => timer.taskId === tk.id && (timer.running || timer.elapsedSec > 0));
+        const activeChapterTimer = chTasks.some(tk => timer.taskId === tk.id && (timer.running || timer.accumulatedMs > 0));
 
         return (
           <article
@@ -305,7 +306,7 @@ export default function TodayView() {
               {chTasks.map(tk => {
                 const tkDone = !!data.completed[tk.id];
                 const tkMin = Math.max(15, tk.endMinute - tk.startMinute);
-                const tkRunning = timer.taskId === tk.id && (timer.running || timer.elapsedSec > 0);
+                const tkRunning = timer.taskId === tk.id && (timer.running || timer.accumulatedMs > 0);
                 return (
                   <div key={tk.id} className={`chapter-step-row ${tkDone ? 'done' : ''} ${tkRunning ? 'running' : ''}`}>
                     <button
@@ -369,7 +370,14 @@ export default function TodayView() {
     </div>
   );
 
+  const learning = learningDashboard(data, plan);
   return <div className="view today-view">
+    <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
+      <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
+      <ProgressBar value={learning.overall.percent} />
+      <p>{t('সম্পন্ন', 'Completed')} {bn(learning.overall.completed)} / {bn(learning.overall.total)} · {t('চলছে', 'In progress')} {bn(learning.overall.inProgress)} · {t('বাকি', 'Remaining')} {bn(learning.overall.remaining)}</p>
+      <div className="test-readiness-subjects">{(['A', 'B', 'C'] as const).map(p => <div className="test-readiness-row" key={p}><span>{p}</span><ProgressBar value={learning.category[p].percent} /><small>{bn(learning.category[p].completed)}/{bn(learning.category[p].total)}</small></div>)}{SUBJECTS.map(sub => <div className="test-readiness-row" key={sub.id}><span>{sub.short}</span><ProgressBar value={learning.subject[sub.id].percent} color={sub.color} /><small>{bn(learning.subject[sub.id].completed)}/{bn(learning.subject[sub.id].total)}</small></div>)}</div>
+    </section>
     <section className="welcome-hero">
       <div className="hero-copy">
         <div className="hero-eyebrow"><span className="live-dot" />{t('লক্ষ্য: ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা · দিনে ২টি বিষয়', 'Target: Feb 2027 Test Exam · 2 Subjects Daily')}</div>
@@ -455,7 +463,7 @@ export default function TodayView() {
           {visibleUnfinished.map(group => {
             const links = group.chapter ? CHAPTER_CLASSES[group.chapter.id] : undefined;
             const firstTk = group.tasks[0];
-            const isRunningThis = group.tasks.some(tk => timer.taskId === tk.id && (timer.running || timer.elapsedSec > 0));
+            const isRunningThis = group.tasks.some(tk => timer.taskId === tk.id && (timer.running || timer.accumulatedMs > 0));
             return (
               <article key={group.key} className="unfinished-item-card" style={{ '--subject': subjectById[group.subject].color, '--subject-tint': subjectById[group.subject].tint } as CSSProperties}>
                 <div className="unfinished-item-top">
@@ -622,7 +630,7 @@ export default function TodayView() {
     <PhaseJourney startDate={data.settings.startDate} activeDate={selectedDate} />
 
     <div className="stats-grid">
-      <button className="stat-card stat-link" onClick={() => navigate('syllabus')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস সম্পন্ন', 'Syllabus progress')}</span><strong>{bn(percent(stats.chapters, stats.totalChapters))}<small>%</small></strong><p>{bn(stats.chapters)} / {bn(stats.totalChapters)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={percent(stats.chapters, stats.totalChapters)} className="stat-progress" /></button>
+      <button className="stat-card stat-link" onClick={() => navigate('syllabus')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস সম্পন্ন', 'Syllabus progress')}</span><strong>{bn(learning.overall.percent)}<small>%</small></strong><p>{bn(learning.overall.completed)} / {bn(learning.overall.total)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={learning.overall.percent} className="stat-progress" /></button>
       <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> ঘণ্টা {bn(weekMinutes % 60)} মি.</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => navigate('analytics')}><span className="stat-icon lavender"><Flame size={19} /></span><div><span>{t('টানা পড়ার ধারা', 'Active streak')}</span><strong>{bn(stats.streak)}<small> {t('দিন', 'days')}</small></strong><p>{stats.streak ? t('ধারাবাহিকতা বজায় রাখো', 'Keep this streak going') : t('আজ থেকেই শুরু হোক', 'Start your streak today')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => { setSelectedDate(today); scrollToSection('today-pending'); }}><span className="stat-icon blue"><ListChecks size={19} /></span><div><span>{t('বাকি কাজ ও রিভিশন', 'Pending & revision')}</span><strong>{bn(pending)}<small> {t('টি কাজ', ' tasks')}</small></strong><p>{due.length ? `${bn(due.length)} ${t('টি রিভিশন বাকি', 'revisions due')}` : t('আজ কোনো রিভিশন বাকি নেই', 'No revision due')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>

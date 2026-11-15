@@ -59,7 +59,7 @@ export function PhaseJourney({ startDate, activeDate }: { startDate: string; act
   })}</div>;
 }
 export function TaskCard({ task, compact = false }: { task: Task; compact?: boolean }) {
-  const { data, setData, toggleTask, today, now, openMistake, openChapter, timer, startTimer, startPresetTimer, navigate } = usePlanner();
+  const { data, setData, plan, notify, toggleTask, today, now, openMistake, openChapter, timer, startTimer, startPresetTimer, navigate } = usePlanner();
   const [expanded, setExpanded] = useState(false);
   const done = !!data.completed[task.id];
   const minute = dhakaMinutes(now);
@@ -109,7 +109,14 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
 
   const adjustTaskStartTime = (timeValue: string) => {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(timeValue)) return;
-    const sm = toMinutes(timeValue);
+    // A session already on the next calendar day must remain on that day.
+    const sm = toMinutes(timeValue) + Math.floor(task.startMinute / 1440) * 1440;
+    const tasks = plan.find(day => day.date === task.date)?.tasks || [];
+    const index = tasks.findIndex(item => item.id === task.id);
+    if (index > 0 && sm < tasks[index - 1].endMinute) {
+      notify(t('আগের সেশন শেষ হওয়ার পরের সময় বেছে নাও।', 'Choose a time after the previous session ends.'), 'error');
+      return;
+    }
     setData(d => {
       const prev = d.dayOverrides?.[task.date] || {};
       return {
@@ -296,6 +303,7 @@ export function ClassBlock({ classes, hint, compact = false }: { classes: Chapte
       </span>
     </div>}
     {!compact && planner && real.length > 0 && <p className="class-seen-line">{isEnglish() ? `${seen}/${real.length} classes watched` : `${bn(seen)}/${bn(real.length)} ক্লাস দেখা হয়েছে`}{seen === real.length && <span className="class-seen-done">{t('✓ সব দেখা শেষ', '✓ all done')}</span>}</p>}
+    {!compact && <p className="class-hint">{t('বিদ্যমান লিংকগুলো বিষয় ও অধ্যায়ের জন্য যাচাই করা হয়নি; খোলার পর মিলিয়ে নাও।', 'Existing links have not been verified for this chapter; check the content after opening.')}</p>}
     {hint && <p className="class-hint">{hint}</p>}
     <div className="class-groups-grid">
       {CLASS_KINDS.map(kind => {
@@ -340,6 +348,7 @@ export function BackupNudge() {
     setBusy(true);
     try {
       const outcome = await shareBackup(data, today);
+      if (outcome === 'cancelled') return;
       notify(outcome === 'shared' ? 'ব্যাকআপ শেয়ার শিটে পাঠানো হয়েছে।' : outcome === 'copied' ? 'ব্যাকআপ JSON কপি হয়েছে — যেখানে খুশি পেস্ট করো।' : 'ব্যাকআপ ফাইল ডাউনলোড হয়েছে।');
       setHidden(true);
     } catch { notify('শেয়ার করা যায়নি। ডাউনলোড করে নাও।', 'error'); }

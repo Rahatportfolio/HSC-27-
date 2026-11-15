@@ -14,7 +14,8 @@
     "android:assets": "node scripts/android-assets.mjs",
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:assets && npm run android:sync && cd android && ./gradlew assembleDebug",
-    "android:open": "cap open android"
+    "android:open": "cap open android",
+    "test:responsive": "node scripts/check-responsive.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
@@ -36,6 +37,7 @@
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.1",
     "jsdom": "^31.0.1",
+    "playwright-core": "^1.65.1",
     "sharp": "^0.35.5",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",

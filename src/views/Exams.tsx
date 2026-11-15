@@ -4,12 +4,13 @@ import { Award, CalendarDays, Check, ClipboardCheck, GraduationCap, Info, Pause,
 import { usePlanner } from '../context';
 import { CHAPTERS, PAPERS, SUBJECTS, SUBJECT_FULL_MARKS, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { bn, diffDays, formatDate, isChapterDone, percent } from '../planner';
+import { bn, diffDays, formatDate, isValidDate, percent } from '../planner';
 import { calculateGpa, gpaTargetLabel } from '../gpa';
 import { newId, nowIso } from '../storage';
 import type { TestKind, TestRecord } from '../types';
 import { EmptyState, Modal, PageHeading, ProgressBar, SubjectIcon } from '../components';
 import { t } from '../i18n';
+import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
 
 const TEST_KIND_LABEL: Record<TestKind, string> = { chapter: 'অধ্যায় টেস্ট', subject: 'বিষয় টেস্ট', model: 'মডেল টেস্ট' };
 function examClock(seconds: number): string {
@@ -28,8 +29,8 @@ export default function ExamsView() {
   const customTests = [...data.tests].sort((a, b) => b.date.localeCompare(a.date));
   const testAverage = customTests.length ? Math.round(customTests.reduce((sum, test) => sum + test.score / test.total * 100, 0) / customTests.length) : 0;
   const bestTest = customTests.reduce((best, test) => Math.max(best, test.score / test.total * 100), 0);
-  const priorityAChapters = CHAPTERS.filter(c => c.priority === 'A');
-  const priorityADone = priorityAChapters.filter(c => isChapterDone(plan, c.id, data.completed)).length;
+  const priorityAChapters = CHAPTERS.filter(c => chapterPriority(c, data) === 'A');
+  const priorityADone = priorityAChapters.filter(c => isLearningComplete(chapterStage(c, data, plan))).length;
   const testDaysLeft = diffDays(today, data.settings.testExamDate);
   const hscDaysLeft = diffDays(today, data.settings.examDate);
   return <div className="view exams-view">
@@ -52,7 +53,7 @@ export default function ExamsView() {
       <div className="test-readiness-subjects">
         {SUBJECTS.map(sub => {
           const subA = priorityAChapters.filter(c => c.subject === sub.id);
-          const subDone = subA.filter(c => isChapterDone(plan, c.id, data.completed)).length;
+          const subDone = subA.filter(c => isLearningComplete(chapterStage(c, data, plan))).length;
           return <div className="test-readiness-row" key={sub.id}>
             <span style={{ color: sub.color }}>{sub.short}</span>
             <ProgressBar value={percent(subDone, subA.length)} color={sub.color} />
@@ -85,22 +86,38 @@ export default function ExamsView() {
 
 function ExamClock() {
   const { notify } = usePlanner();
-  const [duration, setDuration] = useState(180);
-  const [remaining, setRemaining] = useState(180 * 60);
-  const [deadline, setDeadline] = useState<number | null>(null);
+  const [saved] = useState(() => {
+    try {
+      const value = JSON.parse(localStorage.getItem('hsc27-exam-clock-v1') || 'null');
+      if (value && Number.isInteger(value.duration) && value.duration >= 1 && value.duration <= 720 && Number.isFinite(value.remaining) && value.remaining >= 0 && value.remaining <= 720 * 60 && (value.deadline === null || (Number.isFinite(value.deadline) && value.deadline > 0))) return value as { duration: number; remaining: number; deadline: number | null };
+    } catch { /* use the default clock */ }
+    return { duration: 180, remaining: 180 * 60, deadline: null };
+  });
+  const [duration, setDuration] = useState(saved.duration);
+  const [remaining, setRemaining] = useState(saved.remaining);
+  const [deadline, setDeadline] = useState<number | null>(saved.deadline);
+  useEffect(() => { try { localStorage.setItem('hsc27-exam-clock-v1', JSON.stringify({ duration, remaining, deadline })); } catch { /* clock still works in memory */ } }, [duration, remaining, deadline]);
   const [tick, setTick] = useState(Date.now());
-  useEffect(() => { if (!deadline) return; const id = setInterval(() => setTick(Date.now()), 500); return () => clearInterval(id); }, [deadline]);
-  const live = deadline ? Math.max(0, Math.ceil((deadline - tick) / 1000)) : remaining;
+  useEffect(() => {
+    if (!deadline) return;
+    const update = () => setTick(Date.now());
+    const id = setInterval(update, 500);
+    document.addEventListener('visibilitychange', update);
+    window.addEventListener('focus', update);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', update); window.removeEventListener('focus', update); };
+  }, [deadline]);
+  const secondsUntil = (now: number) => Math.min(duration * 60, Math.max(0, Math.ceil(((deadline || now) - now) / 1000)));
+  const live = deadline ? secondsUntil(tick) : remaining;
   useEffect(() => {
     if (deadline && live === 0) {
       setDeadline(null); setRemaining(0);
       notify('পরীক্ষার সময় শেষ! এখন উত্তরপত্র মিলিয়ে নম্বর লেখো।', 'info');
     }
   }, [deadline, live, notify]);
-  const start = () => { const seconds = live || duration * 60; setRemaining(seconds); setDeadline(Date.now() + seconds * 1000); };
-  const pause = () => { setRemaining(live); setDeadline(null); };
+  const start = () => { const seconds = remaining || duration * 60; const now = Date.now(); setTick(now); setRemaining(seconds); setDeadline(now + seconds * 1000); };
+  const pause = () => { const seconds = secondsUntil(Date.now()); setRemaining(seconds); setDeadline(null); if (seconds === 0) notify('পরীক্ষার সময় শেষ! এখন উত্তরপত্র মিলিয়ে নম্বর লেখো।', 'info'); };
   const reset = (minutes = duration) => { setDuration(minutes); setRemaining(minutes * 60); setDeadline(null); };
-  return <section className="card exam-clock-card"><div className="card-heading"><h3><Timer size={18} />{t("পরীক্ষার ঘড়ি", "Exam clock")}</h3><span className="tiny-muted">{t("পড়া হিসেবে গোনা হবে না", "Won’t count as study")}</span></div><div className={`exam-clock-display ${deadline ? 'running' : ''}`}>{examClock(live)}</div><div className="exam-clock-presets">{[30, 60, 90, 120, 180].map(minutes => <button key={minutes} className={duration === minutes ? 'active' : ''} disabled={!!deadline} onClick={() => reset(minutes)}>{bn(minutes)} মি.</button>)}</div><div className="exam-clock-actions"><button className="button primary" onClick={deadline ? pause : start}>{deadline ? <Pause size={16} /> : <Play size={16} />}{deadline ? 'বিরতি' : 'শুরু'}</button><button className="button secondary" onClick={() => reset()}><RotateCcw size={16} />{t("রিসেট", "Reset")}</button></div><p className="tiny-muted">ঘড়ি চলাকালীন অ্যাপ বন্ধ করলেও সময় ঘড়ির হিসাবে চলবে।</p></section>;
+  return <section className="card exam-clock-card"><div className="card-heading"><h3><Timer size={18} />{t("পরীক্ষার ঘড়ি", "Exam clock")}</h3><span className="tiny-muted">{t("পড়া হিসেবে গোনা হবে না", "Won’t count as study")}</span></div><div className={`exam-clock-display ${deadline ? 'running' : ''}`}>{examClock(live)}</div><div className="exam-clock-presets">{[30, 60, 90, 120, 180].map(minutes => <button key={minutes} className={duration === minutes ? 'active' : ''} disabled={!!deadline} onClick={() => reset(minutes)}>{bn(minutes)} মি.</button>)}</div><div className="exam-clock-actions"><button className="button primary" onClick={deadline ? pause : start}>{deadline ? <Pause size={16} /> : <Play size={16} />}{deadline ? 'বিরতি' : 'শুরু'}</button><button className="button secondary" onClick={() => reset()}><RotateCcw size={16} />{t("রিসেট", "Reset")}</button></div><p className="tiny-muted">{t('অ্যাপে ফিরে এলে ঘড়ির হিসাবে বাকি সময় দেখা যাবে; এটি পড়ার সময় হিসেবে সেভ হয় না।', 'On return, remaining time is calculated from the clock; it is not saved as study time.')}</p></section>;
 }
 
 function TestModal({ onClose }: { onClose: () => void }) {
@@ -118,9 +135,9 @@ function TestModal({ onClose }: { onClose: () => void }) {
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const obtained = Number(score), full = Number(total), minutes = Number(duration);
-    if (!Number.isFinite(obtained) || !Number.isFinite(full) || full <= 0 || obtained < 0 || obtained > full) { setError('নম্বর ০ থেকে পূর্ণমানের মধ্যে হতে হবে।'); return; }
-    if (!Number.isFinite(minutes) || minutes < 0 || minutes > 1440) { setError('সময় ০–১৪৪০ মিনিটের মধ্যে হতে হবে।'); return; }
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) { setError('সঠিক তারিখ লেখো।'); return; }
+    if (!score.trim() || !total.trim() || !Number.isFinite(obtained) || !Number.isFinite(full) || full < 1 || full > 1000 || obtained < 0 || obtained > full) { setError('পূর্ণমান ১–১০০০ এবং প্রাপ্ত নম্বর ০ থেকে পূর্ণমানের মধ্যে হতে হবে।'); return; }
+    if (!Number.isInteger(minutes) || minutes < 0 || minutes > 1440) { setError('সময় ০–১৪৪০ মিনিটের মধ্যে হতে হবে।'); return; }
+    if (!isValidDate(date)) { setError('সঠিক তারিখ লেখো।'); return; }
     if (data.tests.length >= 1000) { setError('সর্বোচ্চ ১০০০টি টেস্ট রাখা যায়।'); return; }
     const chapter = chapterId ? CHAPTERS.find(item => item.id === chapterId) : undefined;
     const resolvedTitle = title.trim() || (kind === 'chapter' && chapter ? chapter.title : kind === 'subject' ? `${subjectById[subject].name} টেস্ট` : 'মডেল টেস্ট');
@@ -128,5 +145,5 @@ function TestModal({ onClose }: { onClose: () => void }) {
     setData(d => ({ ...d, tests: [...d.tests, record] }));
     notify('টেস্টের নম্বর সেভ হয়েছে।', 'success'); onClose();
   };
-  return <Modal title={t("নতুন টেস্টের রেকর্ড", "Record a new test")} onClose={onClose}><form onSubmit={submit}><div className="form-grid"><label>{t("টেস্টের ধরন", "Test type")}<select value={kind} onChange={e => setKind(e.target.value as TestKind)}>{(['chapter', 'subject', 'model'] as const).map(item => <option key={item} value={item}>{TEST_KIND_LABEL[item]}</option>)}</select></label><label>{t("বিষয়", "Subject")}<select value={subject} onChange={e => { setSubject(e.target.value as SubjectId); setChapterId(''); }}>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{kind === 'chapter' && <label>{t("অধ্যায়", "Chapter")}<select value={chapterId} onChange={e => setChapterId(e.target.value)}><option value="">{t("বাছো", "Choose")}</option>{CHAPTERS.filter(chapter => chapter.subject === subject).map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label>}<label>{t("শিরোনাম (ঐচ্ছিক)", "Title (optional)")}<input value={title} maxLength={200} onChange={e => setTitle(e.target.value)} placeholder={t("যেমন: ভেক্টর টেস্ট ১", "e.g. vector test 1")} /></label><label>{t("তারিখ", "Date")}<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label>{t("প্রাপ্ত নম্বর", "Marks obtained")}<input data-autofocus type="number" min={0} step="0.5" value={score} onChange={e => setScore(e.target.value)} required /></label><label>{t("পূর্ণমান", "Total marks")}<input type="number" min={1} step="0.5" value={total} onChange={e => setTotal(e.target.value)} required /></label><label>{t("সময় (মিনিট)", "Time (min)")}<input type="number" min={0} max={1440} value={duration} onChange={e => setDuration(e.target.value)} /></label></div><label className="form-label">{t("ভুল ও শেখার নোট", "Mistakes & learning notes")}<textarea rows={3} maxLength={5000} value={notes} onChange={e => setNotes(e.target.value)} placeholder={t("কোন অংশে নম্বর হারালে…", "Where did you lose marks…")} /></label>{error && <p className="field-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button className="button primary" type="submit"><Check size={16} />{t("সেভ করো", "Save")}</button></div></form></Modal>;
+  return <Modal title={t("নতুন টেস্টের রেকর্ড", "Record a new test")} onClose={onClose}><form onSubmit={submit}><div className="form-grid"><label>{t("টেস্টের ধরন", "Test type")}<select value={kind} onChange={e => setKind(e.target.value as TestKind)}>{(['chapter', 'subject', 'model'] as const).map(item => <option key={item} value={item}>{TEST_KIND_LABEL[item]}</option>)}</select></label><label>{t("বিষয়", "Subject")}<select value={subject} onChange={e => { setSubject(e.target.value as SubjectId); setChapterId(''); }}>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>{kind === 'chapter' && <label>{t("অধ্যায়", "Chapter")}<select value={chapterId} onChange={e => setChapterId(e.target.value)}><option value="">{t("বাছো", "Choose")}</option>{CHAPTERS.filter(chapter => chapter.subject === subject).map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label>}<label>{t("শিরোনাম (ঐচ্ছিক)", "Title (optional)")}<input value={title} maxLength={200} onChange={e => setTitle(e.target.value)} placeholder={t("যেমন: ভেক্টর টেস্ট ১", "e.g. vector test 1")} /></label><label>{t("তারিখ", "Date")}<input type="date" value={date} onChange={e => setDate(e.target.value)} /></label><label>{t("প্রাপ্ত নম্বর", "Marks obtained")}<input data-autofocus type="number" min={0} step="0.5" value={score} onChange={e => setScore(e.target.value)} required /></label><label>{t("পূর্ণমান", "Total marks")}<input type="number" min={1} max={1000} step="0.5" value={total} onChange={e => setTotal(e.target.value)} required /></label><label>{t("সময় (মিনিট)", "Time (min)")}<input type="number" min={0} max={1440} step={1} value={duration} onChange={e => setDuration(e.target.value)} /></label></div><label className="form-label">{t("ভুল ও শেখার নোট", "Mistakes & learning notes")}<textarea rows={3} maxLength={5000} value={notes} onChange={e => setNotes(e.target.value)} placeholder={t("কোন অংশে নম্বর হারালে…", "Where did you lose marks…")} /></label>{error && <p className="field-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button className="button primary" type="submit"><Check size={16} />{t("সেভ করো", "Save")}</button></div></form></Modal>;
 }

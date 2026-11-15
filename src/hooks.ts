@@ -53,7 +53,7 @@ export function parseStudyTimer(raw: string | null, settings?: Pick<Settings, 'p
     const mode = modes.has(value.mode) ? value.mode as StudyMode : fresh.mode;
     const phase = phases.has(value.phase) ? value.phase as StudyTimerState['phase'] : fresh.phase;
     const durationMin = Number.isSafeInteger(value.durationMin) && value.durationMin >= 1 && value.durationMin <= 720 ? value.durationMin : fresh.durationMin;
-    const accumulatedMs = Number.isFinite(value.accumulatedMs) && value.accumulatedMs >= 0 && value.accumulatedMs <= 86_400_000 ? value.accumulatedMs : 0;
+    const accumulatedMs = Number.isFinite(value.accumulatedMs) && value.accumulatedMs >= 0 && value.accumulatedMs <= 365 * 86_400_000 ? value.accumulatedMs : 0;
     const running = value.running === true;
     const startedAt = Number.isFinite(value.startedAt) && value.startedAt > 0 && value.startedAt <= Date.now() + 60_000 ? value.startedAt : null;
     if (running && !startedAt) return fresh;
@@ -132,7 +132,7 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
         const long = focusCount % 4 === 0;
         const nextMinutes = long ? settingsNow.pomodoroLongBreak : settingsNow.pomodoroBreak;
         notifyRef.current(`${snapshot.durationMin} মিনিট ফোকাস শেষ! ${nextMinutes} মিনিটের ${long ? 'লম্বা ' : ''}বিরতি।`, 'success');
-        setState(current => ({ ...current, phase: long ? 'long' : 'short', durationMin: nextMinutes, accumulatedMs: 0, running: true, startedAt: Date.now(), logging: false, focusCount }));
+        setState(current => ({ ...current, phase: long ? 'long' : 'short', durationMin: nextMinutes, accumulatedMs: 0, running: true, startedAt: Date.now(), logging: false, taskId: '', focusCount }));
       } else {
         notifyRef.current('বিরতি শেষ। পরের ফোকাস সেশনের জন্য তৈরি হও।', 'info');
         setState(current => ({ ...current, phase: 'focus', durationMin: settingsNow.pomodoroFocus, accumulatedMs: 0, running: false, startedAt: null, logging: true }));
@@ -140,20 +140,25 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
       return;
     }
     notifyRef.current(shouldLog ? `${snapshot.durationMin} মিনিটের সেশন সেভ হয়েছে। দারুণ!` : 'বিরতি শেষ! আবার পড়ায় ফেরো।', shouldLog ? 'success' : 'info');
-    setState(current => ({ ...current, running: false, accumulatedMs: current.durationMin * 60_000, startedAt: null }));
+    setState(current => ({ ...current, running: false, accumulatedMs: 0, startedAt: null, taskId: '', logging: true, label: shouldLog ? current.label : '' }));
   }, [elapsedMs, state, targetMs]);
 
   const start = () => setState(current => {
     if (current.running) return current;
     const atEnd = current.mode !== 'stopwatch' && current.accumulatedMs >= current.durationMin * 60_000;
-    return { ...current, running: true, startedAt: Date.now(), accumulatedMs: atEnd ? 0 : current.accumulatedMs, logging: current.mode === 'pomodoro' ? current.logging : true };
+    return { ...current, running: true, startedAt: Date.now(), accumulatedMs: atEnd ? 0 : current.accumulatedMs, logging: current.logging };
   });
-  const pause = () => setState(current => {
-    if (!current.running || !current.startedAt) return current;
-    const accumulated = current.accumulatedMs + Math.max(0, Date.now() - current.startedAt);
-    const capped = current.mode === 'stopwatch' ? accumulated : Math.min(accumulated, current.durationMin * 60_000);
-    return { ...current, running: false, startedAt: null, accumulatedMs: capped };
-  });
+  const pause = () => {
+    const now = Date.now();
+    setTick(now);
+    setState(current => {
+      if (!current.running || !current.startedAt) return current;
+      const accumulated = current.accumulatedMs + Math.max(1, now - current.startedAt);
+      // Let the completion effect save a countdown that expired between ticks.
+      if (current.mode !== 'stopwatch' && accumulated >= current.durationMin * 60_000) return current;
+      return { ...current, running: false, startedAt: null, accumulatedMs: accumulated };
+    });
+  };
   // Keep ticking cleanly on visibility return so backgrounded tabs snap immediately to exact wall-clock elapsed time
   useEffect(() => {
     const onVisible = () => setTick(Date.now());
@@ -165,10 +170,10 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     };
   }, []);
 
-  const reset = () => setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null, logging: true, taskId: '' }));
+  const reset = () => setState(current => ({ ...current, phase: current.mode === 'pomodoro' ? 'focus' : 'none', durationMin: current.mode === 'pomodoro' && current.phase !== 'focus' ? settingsRef.current.pomodoroFocus : current.durationMin, accumulatedMs: 0, running: false, startedAt: null, label: current.logging ? current.label : '', logging: true, taskId: '' }));
   const setMode = (mode: StudyMode) => setState(current => {
     const minutes = mode === 'pomodoro' ? settingsRef.current.pomodoroFocus : mode === 'countdown' ? 25 : 0;
-    return { ...current, mode, phase: mode === 'pomodoro' ? 'focus' : 'none', durationMin: minutes, accumulatedMs: 0, running: false, startedAt: null, logging: mode !== 'pomodoro', label: '', taskId: '' };
+    return { ...current, mode, phase: mode === 'pomodoro' ? 'focus' : 'none', durationMin: minutes, accumulatedMs: 0, running: false, startedAt: null, logging: true, label: '', taskId: '' };
   });
   const setDuration = (minutes: number) => setState(current => ({ ...current, durationMin: Math.max(1, Math.min(720, Math.round(minutes))), accumulatedMs: 0, running: false, startedAt: null }));
   const setSubject = (subject: SubjectId) => setState(current => ({ ...current, subject, chapterId: '' }));
@@ -193,21 +198,25 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     }));
   };
   const finishNow = (): number => {
-    const minutes = Math.max(1, Math.round(elapsedMs / 60_000));
-    if (elapsedMs >= 15_000 && state.logging) {
+    const currentElapsed = state.accumulatedMs + (state.running && state.startedAt ? Math.max(0, Date.now() - state.startedAt) : 0);
+    const actualMinutes = Math.max(1, Math.round(currentElapsed / 60_000));
+    const minutes = Math.min(720, actualMinutes);
+    if (currentElapsed >= 15_000 && state.logging) {
       doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: state.mode, label: state.label, taskId: state.taskId });
-      notifyRef.current(`${minutes} মিনিটের সেশন সেভ হয়েছে!`, 'success');
+      notifyRef.current(actualMinutes > 720 ? 'সর্বোচ্চ ৭২০ মিনিটের সেশন সেভ হয়েছে; বাকি সময় আলাদা করে যোগ করো।' : `${minutes} মিনিটের সেশন সেভ হয়েছে!`, actualMinutes > 720 ? 'info' : 'success');
     }
     setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null, taskId: '' }));
     return minutes;
   };
   const startBreak = (minutes: number) => setState(current => ({ ...current, mode: 'countdown', phase: 'none', durationMin: minutes, accumulatedMs: 0, running: true, startedAt: Date.now(), logging: false, label: 'বিরতি', taskId: '' }));
   const saveStopwatch = (): number => {
-    const minutes = Math.floor(elapsedMs / 60_000);
+    const currentElapsed = state.accumulatedMs + (state.running && state.startedAt ? Math.max(0, Date.now() - state.startedAt) : 0);
+    const actualMinutes = Math.floor(currentElapsed / 60_000);
+    const minutes = Math.min(720, actualMinutes);
     if (!minutes) { notifyRef.current('কমপক্ষে ১ মিনিট সময় হলে সেভ করা যাবে।', 'info'); return 0; }
     doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: 'stopwatch', label: state.label, taskId: state.taskId });
     setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null, taskId: '' }));
-    notifyRef.current(`${minutes} মিনিটের স্টপওয়াচ সেশন সেভ হয়েছে।`, 'success');
+    notifyRef.current(actualMinutes > 720 ? 'সর্বোচ্চ ৭২০ মিনিট সেভ হয়েছে; বাকি সময় আলাদা করে যোগ করো।' : `${minutes} মিনিটের স্টপওয়াচ সেশন সেভ হয়েছে।`, actualMinutes > 720 ? 'info' : 'success');
     return minutes;
   };
   return {

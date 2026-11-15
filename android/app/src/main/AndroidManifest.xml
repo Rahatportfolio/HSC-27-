@@ -26,6 +26,14 @@
 
         </activity>
 
+        <activity
+            android:name=".TimerPictureInPictureActivity"
+            android:exported="false"
+            android:resizeableActivity="true"
+            android:supportsPictureInPicture="true"
+            android:configChanges="screenSize|smallestScreenSize|screenLayout|orientation|uiMode"
+            android:theme="@android:style/Theme.Material.NoActionBar" />
+
         <service
             android:name=".StudyTimerService"
             android:exported="false"

@@ -132,7 +132,9 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
 /** RFC-4180 style CSV with a BOM so Excel opens Bengali text correctly. */
 export function makeCsv(rows: (string | number)[][]): string {
   const cell = (value: string | number): string => {
-    const text = String(value ?? '');
+    const raw = String(value ?? '');
+    // User-provided cells must remain text in spreadsheet software.
+    const text = typeof value === 'string' && /^[\s\x00-\x1f]*[=+@-]/.test(raw) ? `'${raw}` : raw;
     return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
   };
   return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n';

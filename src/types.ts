@@ -1,4 +1,4 @@
-import type { SubjectId } from './data';
+import type { Priority, SubjectId } from './data';
 import type { Language } from './i18n';
 
 /** All additions are optional at the validation layer so old v1 backups keep working. */
@@ -41,12 +41,17 @@ export interface RevisionItem {
   adjusted?: boolean;
 }
 
+export type ChapterStage = 'notStarted' | 'inProgress' | 'completed' | 'revisionNeeded' | 'fullyRevised';
+export type ChapterStep = 'class' | 'reading' | 'cqPractice' | 'mcqPractice' | 'boardPractice' | 'revision';
 export interface ChapterMeta {
   note: string;
   weak: boolean;
   cq: PrepStatus;
   mcq: PrepStatus;
   updatedAt: string;
+  priority?: Priority;
+  stage?: ChapterStage;
+  steps?: Partial<Record<ChapterStep, boolean>>;
 }
 
 export interface QuizQuestion {

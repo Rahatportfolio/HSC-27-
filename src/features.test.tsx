@@ -241,3 +241,94 @@ describe('direct class archive & test exam readiness', () => {
     expect(await screen.findByText(/পরের দিনের পড়া রেডি/)).toBeTruthy();
   });
 });
+
+describe('timer safeguards', () => {
+  it('asks before replacing a paused preset and refuses premature completion', async () => {
+    render(<App />);
+    go('today');
+    await screen.findAllByRole('button', { name: /টাইমার/ });
+    const presets = Array.from(document.querySelectorAll<HTMLButtonElement>('.preset-launch-btn'));
+    expect(presets.length).toBeGreaterThan(1);
+    fireEvent.click(presets[0]);
+    const bar = document.querySelector('.live-timer-topbar') as HTMLElement;
+    fireEvent.click(within(bar).getByRole('button', { name: /সম্পন্ন ও সেভ/ }));
+    expect(document.querySelector('.live-timer-topbar.running')).toBeTruthy();
+    expect(stored().studySessions).toHaveLength(0);
+    fireEvent.click(within(bar).getByRole('button', { name: /বিরতি/ }));
+    fireEvent.click(presets[1]);
+    expect(await screen.findByText('বর্তমান টাইমার বদলে নতুন টাইমার চালাবে?')).toBeTruthy();
+    expect(document.querySelector('.live-timer-topbar.paused')).toBeTruthy();
+  });
+  it('restores the exam clock deadline after leaving the page', async () => {
+    render(<App />);
+    go('exams');
+    await screen.findByText('পরীক্ষার ঘড়ি');
+    const card = document.querySelector('.exam-clock-card') as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: '৩০ মি.' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'শুরু' }));
+    const saved = JSON.parse(localStorage.getItem('hsc27-exam-clock-v1') || '{}');
+    expect(saved.duration).toBe(30);
+    expect(saved.deadline).toBeGreaterThan(Date.now());
+    go('calendar');
+    go('exams');
+    await screen.findByText('পরীক্ষার ঘড়ি');
+    expect(document.querySelector('.exam-clock-display.running')).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem('hsc27-exam-clock-v1') || '{}').deadline).toBe(saved.deadline);
+  });
+});
+
+describe('input and revision regressions', () => {
+  it('rejects test scores that cannot be saved and accepts valid values', async () => {
+    render(<App />); go('exams');
+    fireEvent.click(await screen.findByRole('button', { name: /নতুন টেস্ট/ }));
+    const dialog = await screen.findByRole('dialog');
+    type(within(dialog).getByLabelText('প্রাপ্ত নম্বর'), '5');
+    type(within(dialog).getByLabelText('পূর্ণমান'), '1001');
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(within(dialog).getByRole('alert').textContent).toContain('১০০০');
+    expect(stored().tests).toHaveLength(0);
+    type(within(dialog).getByLabelText('পূর্ণমান'), '100');
+    type(within(dialog).getByLabelText('সময় (মিনিট)'), '2.5');
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(within(dialog).getByRole('alert').textContent).toContain('সময়');
+    type(within(dialog).getByLabelText('সময় (মিনিট)'), '30');
+    fireEvent.submit(dialog.querySelector('form')!);
+    await waitFor(() => expect(stored().tests).toHaveLength(1));
+  });
+  it('does not silently discard note tags beyond the limit', async () => {
+    render(<App />); go('library');
+    fireEvent.click((await screen.findAllByRole('button', { name: /নোট লেখো/ }))[0]);
+    const dialog = await screen.findByRole('dialog');
+    type(within(dialog).getByLabelText('শিরোনাম'), 'নোট');
+    type(within(dialog).getByLabelText('ট্যাগ'), Array.from({ length: 11 }, (_, i) => `t${i}`).join(','));
+    fireEvent.submit(dialog.querySelector('form')!);
+    expect(within(dialog).getByRole('alert').textContent).toContain('১০টি');
+    expect(stored().libraryNotes).toHaveLength(0);
+  });
+  it('shows cards more than seven days away in the all-pending tab', async () => {
+    const { freshData, addDays, todayKey } = await import('./planner');
+    const data = freshData(); data.settings.revisionEnabled = false;
+    const chapter = CHAPTERS[0];
+    data.revisions.push({ id: 'later', chapterId: chapter.id, subject: chapter.subject, dueDate: addDays(todayKey(), 20), interval: 30, createdAt: new Date().toISOString() });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />); go('revision');
+    fireEvent.click(await screen.findByRole('button', { name: /সব বাকি/ }));
+    expect(document.querySelectorAll('.revision-card')).toHaveLength(1);
+    expect(document.querySelector('.revision-card')?.textContent).toContain(chapter.title);
+  });
+});
+
+it('calculates exam-clock pause from the wall clock even if the UI tick was delayed', async () => {
+  const base = Date.now();
+  const now = vi.spyOn(Date, 'now').mockReturnValue(base);
+  render(<App />); go('exams');
+  await screen.findByText('পরীক্ষার ঘড়ি');
+  const card = document.querySelector('.exam-clock-card') as HTMLElement;
+  fireEvent.click(within(card).getByRole('button', { name: '৩০ মি.' }));
+  // The clock may have sat idle a long time before being started.
+  now.mockReturnValue(base + 60_000);
+  fireEvent.click(within(card).getByRole('button', { name: 'শুরু' }));
+  now.mockReturnValue(base + 70_000);
+  fireEvent.click(within(card).getByRole('button', { name: 'বিরতি' }));
+  expect(JSON.parse(localStorage.getItem('hsc27-exam-clock-v1') || '{}')).toMatchObject({ remaining: 1790, deadline: null });
+});

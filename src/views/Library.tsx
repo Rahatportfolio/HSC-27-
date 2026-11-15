@@ -25,6 +25,7 @@ export default function LibraryView() {
   const counts: Record<Tab, number> = { notes: data.libraryNotes.length, videos: builtInVideos + data.videos.length, formulas: STARTER_FORMULAS.length + data.formulas.length, boards: data.boardQuestions.length };
   return <div className="view library-view">
     <PageHeading eyebrow="YOUR OWN SHELF" title={t("নিজের সংগ্রহ, নিজের হাতে।", "Your collection, in your hands.")} titleEn="Your own shelf, in your hands." description="নোট, ভিডিও, সূত্র আর বোর্ড প্রশ্ন—সব এক জায়গায়। ইন্টারনেট লাগবে শুধু ভিডিও দেখতে; বাকি সব অফলাইনে থাকে।" descriptionEn="Notes, videos, formulas and board questions in one place. Only video playback needs internet." action={<div className="library-total"><strong>{bn(Object.values(counts).reduce((sum, value) => sum + value, 0))}</strong><span>{t("টি সংগ্রহ", " items")}<br />{t("এই ডিভাইসে", "on this device")}</span></div>} />
+    <div className="notice-box"><p>{t('বিদ্যমান ভিডিও লিংক, শিক্ষক ও অধ্যায়ের মিল যাচাই করা হয়নি। ভিডিও দেখতে ইন্টারনেট দরকার; অ্যাপ YouTube ভিডিও ডাউনলোড করে না। যাচাইকৃত PDF সংগ্রহ এখনো যুক্ত করা হয়নি।', 'Existing video links, teachers and chapter matches are unverified. Video playback requires internet; the app does not download YouTube videos. A verified PDF collection has not yet been added.')}</p></div>
     <div className="segmented library-tabs">{TABS.map(item => <button key={item.id} className={tab === item.id ? 'active' : ''} onClick={() => setTab(item.id)}>{item.label} <span className="tab-count">{bn(counts[item.id])}</span></button>)}</div>
     {tab === 'notes' && <NotesTab />}
     {tab === 'videos' && <VideosTab />}
@@ -65,8 +66,10 @@ function NoteModal({ note, onClose }: { note: PersonalNote | null; onClose: () =
     event.preventDefault();
     if (!title.trim()) { setError('নোটের শিরোনাম লেখো।'); return; }
     if (data.libraryNotes.length >= 1000 && !note) { setError('সর্বোচ্চ ১০০০টি নোট রাখা যায়।'); return; }
+    const tagList = tags.split(',').map(tag => tag.trim()).filter(Boolean);
+    if (tagList.length > 10) { setError('সর্বোচ্চ ১০টি ট্যাগ রাখা যায়।'); return; }
     const stamp = nowIso();
-    const entry: PersonalNote = { id: note?.id || newId(), title: title.trim(), body, subject: subject || undefined, chapterId: chapterId || undefined, tags: tags.split(',').map(tag => tag.trim()).filter(Boolean).slice(0, 10), pinned, createdAt: note?.createdAt || stamp, updatedAt: stamp };
+    const entry: PersonalNote = { id: note?.id || newId(), title: title.trim(), body, subject: subject || undefined, chapterId: chapterId || undefined, tags: tagList, pinned, createdAt: note?.createdAt || stamp, updatedAt: stamp };
     setData(d => ({ ...d, libraryNotes: note ? d.libraryNotes.map(item => item.id === note.id ? entry : item) : [...d.libraryNotes, entry] }));
     notify(note ? 'নোট আপডেট হয়েছে।' : 'নোট সেভ হয়েছে।', 'success'); onClose();
   };

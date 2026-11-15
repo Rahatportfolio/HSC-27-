@@ -64,7 +64,7 @@ const tagsOf = (v: unknown): string[] => {
   if (v === undefined) return [];
   if (!Array.isArray(v) || v.length > 10) throw new Error('নোটের ট্যাগ সঠিক নয়।');
   return v.map(tag => {
-    if (!nonEmpty(tag, 30)) throw new Error('নোটের ট্যাগ সঠিক নয়।');
+    if (!nonEmpty(tag, 200)) throw new Error('নোটের ট্যাগ সঠিক নয়।');
     return tag.trim();
   });
 };
@@ -180,7 +180,20 @@ export function parseBackup(rawText: string): AppData {
       const cq = meta.cq === undefined ? 'none' : meta.cq;
       const mcq = meta.mcq === undefined ? 'none' : meta.mcq;
       if (!prepLevels.has(cq as PrepStatus) || !prepLevels.has(mcq as PrepStatus) || !text(meta.note ?? '', 5000) || !bool(meta.weak ?? false) || (meta.updatedAt !== undefined && !validAt(meta.updatedAt))) throw new Error('অধ্যায়ের তথ্য সঠিক নয়।');
-      put(result.chapterMeta, id, { note: (meta.note as string) ?? '', weak: (meta.weak as boolean) ?? false, cq: cq as PrepStatus, mcq: mcq as PrepStatus, updatedAt: (meta.updatedAt as string) ?? new Date().toISOString() });
+      const priority = meta.priority;
+      const stage = meta.stage;
+      if (priority !== undefined && !['A', 'B', 'C'].includes(String(priority))) throw new Error('অধ্যায়ের অগ্রাধিকার সঠিক নয়।');
+      if (stage !== undefined && !['notStarted', 'inProgress', 'completed', 'revisionNeeded', 'fullyRevised'].includes(String(stage))) throw new Error('অধ্যায়ের অবস্থা সঠিক নয়।');
+      let steps: import('./types').ChapterMeta['steps'];
+      if (meta.steps !== undefined) {
+        if (!object(meta.steps)) throw new Error('অধ্যায়ের ধাপ সঠিক নয়।');
+        steps = {};
+        for (const key of ['class', 'reading', 'cqPractice', 'mcqPractice', 'boardPractice', 'revision'] as const) {
+          if (meta.steps[key] !== undefined && !bool(meta.steps[key])) throw new Error('অধ্যায়ের ধাপ সঠিক নয়।');
+          if (meta.steps[key] !== undefined) steps[key] = meta.steps[key] as boolean;
+        }
+      }
+      put(result.chapterMeta, id, { note: (meta.note as string) ?? '', weak: (meta.weak as boolean) ?? false, cq: cq as PrepStatus, mcq: mcq as PrepStatus, updatedAt: (meta.updatedAt as string) ?? new Date().toISOString(), ...(priority !== undefined ? { priority: priority as import('./data').Priority } : {}), ...(stage !== undefined ? { stage: stage as import('./types').ChapterStage } : {}), ...(steps ? { steps } : {}) });
     }
   }
 
@@ -196,12 +209,12 @@ export function parseBackup(rawText: string): AppData {
   });
 
   result.cq = listOf(raw.cq, LIMITS.cq, 'CQ অনুশীলন', item => {
-    if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.question, 5000) || !num(item.marks, 0, 1000) || !num(item.total, 1, 1000) || Number(item.marks) > Number(item.total) || !text(item.note, 5000) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at)) throw new Error('CQ অনুশীলনের তথ্য সঠিক নয়।');
+    if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.question, 5000) || !num(item.marks, 0, Number.MAX_VALUE) || !num(item.total, Number.MIN_VALUE, Number.MAX_VALUE) || Number(item.marks) > Number(item.total) || !text(item.note, 5000) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at)) throw new Error('CQ অনুশীলনের তথ্য সঠিক নয়।');
     return { id: item.id, subject: item.subject, chapterId: item.chapterId, question: item.question, marks: Number(item.marks), total: Number(item.total), note: item.note, date: item.date, at: item.at, mistakeId: optionalText(item.mistakeId, 180, 'CQ তথ্য সঠিক নয়।'), parts: partsOf(item.parts, Number(item.total)) };
   });
 
   result.tests = listOf(raw.tests, LIMITS.tests, 'পরীক্ষা', item => {
-    if (!object(item) || !nonEmpty(item.id, 180) || !testKinds.has(item.kind as TestKind) || !nonEmpty(item.title, 200) || (item.subject !== undefined && !isSubject(item.subject)) || !Array.isArray(item.chapterIds) || item.chapterIds.length > 40 || item.chapterIds.some(c => typeof c !== 'string' || !chapterIds.has(c)) || !num(item.score, 0, 1000) || !num(item.total, 1, 1000) || Number(item.score) > Number(item.total) || !int(item.durationMin, 0, 1440) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at) || !text(item.notes, 5000)) throw new Error('পরীক্ষার তথ্য সঠিক নয়।');
+    if (!object(item) || !nonEmpty(item.id, 180) || !testKinds.has(item.kind as TestKind) || !nonEmpty(item.title, 200) || (item.subject !== undefined && !isSubject(item.subject)) || !Array.isArray(item.chapterIds) || item.chapterIds.length > 40 || item.chapterIds.some(c => typeof c !== 'string' || !chapterIds.has(c)) || !num(item.score, 0, Number.MAX_VALUE) || !num(item.total, Number.MIN_VALUE, Number.MAX_VALUE) || Number(item.score) > Number(item.total) || !num(item.durationMin, 0, 1440) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at) || !text(item.notes, 5000)) throw new Error('পরীক্ষার তথ্য সঠিক নয়।');
     return { id: item.id, kind: item.kind as TestKind, title: item.title, subject: item.subject, chapterIds: item.chapterIds as string[], score: Number(item.score), total: Number(item.total), durationMin: Number(item.durationMin), date: item.date, at: item.at, notes: item.notes };
   });
 
@@ -316,13 +329,17 @@ export function loadData(): { data: AppData; warning: string } {
     return { data: freshData(), warning: 'সেভ করা তথ্য পড়া যায়নি। সম্ভব হলে কাঁচা তথ্য রিকভারি ফাইল হিসেবে রাখা হয়েছে; Settings থেকে নামিয়ে রাখো।' };
   }
 }
-export function saveData(data: AppData): boolean {
+export function saveData(data: AppData, forceTimestamp = false): boolean {
   try {
     const payload = JSON.stringify(data);
     // Keep the previous timestamp when nothing changed, so a newer on-device SQLite snapshot can win on startup.
-    if (localStorage.getItem(STORAGE_KEY) === payload) return true;
+    if (!forceTimestamp && localStorage.getItem(STORAGE_KEY) === payload) return true;
+    const previous = Date.parse(localStorage.getItem(SAVED_AT_KEY) || '');
+    // Keep local snapshots ordered even if the device clock moves backwards or
+    // two changes happen within the same millisecond.
+    const stamp = new Date(Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0)).toISOString();
     localStorage.setItem(STORAGE_KEY, payload);
-    localStorage.setItem(SAVED_AT_KEY, nowIso());
+    localStorage.setItem(SAVED_AT_KEY, stamp);
     return true;
   } catch { return false; }
 }

@@ -205,7 +205,8 @@ export async function cancelTimerAlarm(): Promise<boolean> {
 }
 
 type StudyTimerBridge = {
-  start: (options: { title: string; body: string }) => Promise<unknown>;
+  start: (options: { title: string; body: string; referenceTime?: number; countdown?: boolean }) => Promise<unknown>;
+  enterPictureInPicture?: (options: { title: string; referenceTime: number; countdown: boolean }) => Promise<{ started?: boolean }>;
   stop: () => Promise<unknown>;
 };
 
@@ -221,15 +222,23 @@ function studyTimerBridge(): StudyTimerBridge | null {
  * student is in another app, with an ongoing notification instead of a silent kill.
  * The web build simply returns false — nothing to fake.
  */
-export async function startStudyTimerService(title: string, body: string): Promise<boolean> {
+export async function startStudyTimerService(title: string, body: string, clock?: { referenceTime: number; countdown: boolean }): Promise<boolean> {
   const bridge = studyTimerBridge();
   if (!bridge) return false;
   try {
-    await bridge.start({ title: title.slice(0, 80), body: body.slice(0, 120) });
+    await bridge.start({ title: title.slice(0, 80), body: body.slice(0, 120), ...clock });
     return true;
   } catch {
     return false;
   }
+}
+
+/** Open an Android picture-in-picture clock; unavailable platforms return false. */
+export async function openNativeTimerPictureInPicture(title: string, referenceTime: number, countdown: boolean): Promise<boolean> {
+  const bridge = studyTimerBridge();
+  if (!bridge?.enterPictureInPicture || !Number.isFinite(referenceTime) || referenceTime <= 0) return false;
+  try { return (await bridge.enterPictureInPicture({ title: title.slice(0, 120), referenceTime, countdown })).started === true; }
+  catch { return false; }
 }
 
 export async function stopStudyTimerService(): Promise<boolean> {
@@ -252,17 +261,16 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
 
   let permission = await LocalNotifications.checkPermissions();
   if (permission.display !== 'granted' && options.requestPermission) permission = await LocalNotifications.requestPermissions();
-  if (permission.display !== 'granted') {
-    return { scheduled: 0, permission: permission.display === 'denied' ? 'denied' : 'prompt' };
+  const permissionStatus = permission.display === 'granted' ? 'granted' : permission.display === 'denied' ? 'denied' : 'prompt';
+  // Cancellation must still happen when notification permission was revoked.
+  if (!data.settings.reminderEnabled || permission.display === 'granted') {
+    const pending = await LocalNotifications.getPending();
+    const stale = pending.notifications.filter(item => item.id !== TIMER_ALARM_ID);
+    if (stale.length) await LocalNotifications.cancel({ notifications: stale.map(item => ({ id: item.id })) });
   }
-
+  // The independently controlled timer alarm is intentionally left untouched.
+  if (!data.settings.reminderEnabled || permission.display !== 'granted') return { scheduled: 0, permission: permissionStatus };
   await ensureChannels(LocalNotifications);
-
-  const pending = await LocalNotifications.getPending();
-  const stale = pending.notifications.filter(item => item.id !== TIMER_ALARM_ID);
-  if (stale.length) {
-    await LocalNotifications.cancel({ notifications: stale.map(item => ({ id: item.id })) });
-  }
 
   const lastDate = addDays(today, WINDOW_DAYS);
   const now = Date.now() + 60_000;
