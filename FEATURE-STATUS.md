@@ -1,6 +1,6 @@
 # প্রস্তুতি · HSC 27 — ফিচার স্ট্যাটাস রিপোর্ট
 
-**ভার্সন:** 2.12.0 · **ব্রাঞ্চ:** `arena/74a53f63-hsc-27` · **APK:** [prostuti-hsc27-v2.12.0.apk](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.12.0)
+**ভার্সন:** 2.12.1 · **ব্রাঞ্চ:** `arena/74a53f63-hsc-27` · **APK:** [prostuti-hsc27-v2.12.1.apk](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.12.1)
 **হালনাগাদ:** ২০২৬-১১-১৪ · সব তথ্য কোড ও টেস্ট দেখে যাচাই করা, অনুমান নয়।
 
 ---

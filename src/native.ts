@@ -40,6 +40,8 @@ const SMALL_ICON = 'ic_stat_icon';
 
 type LocalNotificationsPlugin = typeof import('@capacitor/local-notifications')['LocalNotifications'];
 let channelsReady: Promise<void> | null = null;
+/** Android validates channel importance, so the alarm channel uses HIGH (4), not 5. */
+let alarmChannelOk = false;
 
 async function ensureChannels(LocalNotifications: LocalNotificationsPlugin): Promise<void> {
   if (!channelsReady) {
@@ -55,8 +57,9 @@ async function ensureChannels(LocalNotifications: LocalNotificationsPlugin): Pro
       try {
         await LocalNotifications.createChannel({
           id: ALARM_CHANNEL, name: 'টাইমার অ্যালার্ম', description: 'সেশন শেষ হলে বাজবে',
-          importance: 5, visibility: 1, vibration: true, lights: true,
+          importance: 4, visibility: 1, vibration: true, lights: true,
         });
+        alarmChannelOk = true;
         created = true;
       } catch { /* same */ }
       // Nothing worked (bridge not ready yet) — let the next call try again.
@@ -159,7 +162,9 @@ export async function scheduleTimerAlarm(endsAt: number, title: string, body: st
     if (permission.display !== 'granted') permission = await LocalNotifications.requestPermissions();
     if (permission.display !== 'granted') return false;
     const notifications = [{
-      id: TIMER_ALARM_ID, title, body, channelId: ALARM_CHANNEL, smallIcon: SMALL_ICON,
+      // If the alarm channel could not be created, fall back to the reminder channel so the
+      // alarm is never dropped for a missing channel.
+      id: TIMER_ALARM_ID, title, body, channelId: alarmChannelOk ? ALARM_CHANNEL : REMINDER_CHANNEL, smallIcon: SMALL_ICON,
       schedule: { at: new Date(endsAt), allowWhileIdle: true },
     }];
     try {
