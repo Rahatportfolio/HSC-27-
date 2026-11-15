@@ -2,7 +2,7 @@ import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
-import type { PrepStatus, RevisionInterval, StudyMode, TestKind } from './types';
+import type { CqParts, PrepStatus, RevisionInterval, StudyMode, TestKind } from './types';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max = 10000): v is string => typeof v === 'string' && v.length <= max;
@@ -32,6 +32,7 @@ export const MISTAKE_LIMIT = 1000;
 export const LIMITS = {
   sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000,
   libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 40, importantDates: 200,
+  classWatched: 1000,
 };
 
 const optionalAt = (v: unknown, message: string): string | undefined => {
@@ -49,6 +50,14 @@ const listOf = <T>(raw: unknown, limit: number, label: string, parse: (item: unk
   if (!Array.isArray(raw)) throw new Error(`${label}ের তালিকা সঠিক নয়।`);
   if (raw.length > limit) throw new Error(`${label} সর্বোচ্চ ${limit}টি রাখা যায়।`);
   return raw.map((item, index) => parse(item, index));
+};
+/** CQ sub-part marks (ক/খ/গ/ঘ). Absent, null or out-of-range values are simply dropped. */
+const partsOf = (v: unknown, total: number): CqParts | undefined => {
+  if (!object(v)) return undefined;
+  const values = [v.c1, v.c2, v.c3, v.c4];
+  if (!values.every(value => value === undefined || num(value, 0, total))) return undefined;
+  const parts = { c1: Number(v.c1 ?? 0), c2: Number(v.c2 ?? 0), c3: Number(v.c3 ?? 0), c4: Number(v.c4 ?? 0) };
+  return parts.c1 + parts.c2 + parts.c3 + parts.c4 > total ? undefined : parts;
 };
 const tagsOf = (v: unknown): string[] => {
   if (v === undefined) return [];
@@ -79,6 +88,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   const pomodoroBreak = raw.pomodoroBreak === undefined ? d.pomodoroBreak : Number(raw.pomodoroBreak);
   const pomodoroLongBreak = raw.pomodoroLongBreak === undefined ? d.pomodoroLongBreak : Number(raw.pomodoroLongBreak);
   if (!int(pomodoroFocus, 5, 120) || !int(pomodoroBreak, 1, 60) || !int(pomodoroLongBreak, 5, 120)) throw new Error('পোমোডোরোর সময় সঠিক নয়।');
+  const fontScale = raw.fontScale === undefined ? d.fontScale : raw.fontScale;
+  if (!['sm', 'md', 'lg'].includes(String(fontScale))) throw new Error('লেখার আকারের সেটিংস সঠিক নয়।');
   return {
     startDate: raw.startDate, startTime: raw.startTime, dailyHours: Number(raw.dailyHours), board: raw.board, name: raw.name,
     reminderEnabled: raw.reminderEnabled === true, reminderLead: Number(raw.reminderLead), syllabusChecked: raw.syllabusChecked === true,
@@ -89,6 +100,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     revisionEnabled: raw.revisionEnabled === undefined ? d.revisionEnabled : raw.revisionEnabled === true,
     carryoverMode: carryoverMode as Settings['carryoverMode'],
     pomodoroFocus, pomodoroBreak, pomodoroLongBreak,
+    fontScale: fontScale as Settings['fontScale'],
   };
 }
 
@@ -174,7 +186,7 @@ export function parseBackup(rawText: string): AppData {
 
   result.cq = listOf(raw.cq, LIMITS.cq, 'CQ অনুশীলন', item => {
     if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.question, 5000) || !num(item.marks, 0, 1000) || !num(item.total, 1, 1000) || Number(item.marks) > Number(item.total) || !text(item.note, 5000) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at)) throw new Error('CQ অনুশীলনের তথ্য সঠিক নয়।');
-    return { id: item.id, subject: item.subject, chapterId: item.chapterId, question: item.question, marks: Number(item.marks), total: Number(item.total), note: item.note, date: item.date, at: item.at, mistakeId: optionalText(item.mistakeId, 180, 'CQ তথ্য সঠিক নয়।') };
+    return { id: item.id, subject: item.subject, chapterId: item.chapterId, question: item.question, marks: Number(item.marks), total: Number(item.total), note: item.note, date: item.date, at: item.at, mistakeId: optionalText(item.mistakeId, 180, 'CQ তথ্য সঠিক নয়।'), parts: partsOf(item.parts, Number(item.total)) };
   });
 
   result.tests = listOf(raw.tests, LIMITS.tests, 'পরীক্ষা', item => {
@@ -236,6 +248,14 @@ export function parseBackup(rawText: string): AppData {
     if (!nonEmpty(value, 60)) throw new Error('ব্যাজের তথ্য সঠিক নয়।');
     return value;
   });
+  if (raw.classWatched !== undefined) {
+    if (!object(raw.classWatched) || Object.keys(raw.classWatched).length > LIMITS.classWatched) throw new Error('দেখা ক্লাসের তালিকা সঠিক নয়।');
+    for (const [key, value] of Object.entries(raw.classWatched)) {
+      if (!nonEmpty(key, 500) || !validAt(value)) throw new Error('দেখা ক্লাসের তালিকা সঠিক নয়।');
+      put(result.classWatched, key, value);
+    }
+  }
+
   return result;
 }
 

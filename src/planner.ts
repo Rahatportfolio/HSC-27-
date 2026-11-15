@@ -22,7 +22,7 @@ export const DEFAULT_SETTINGS: Settings = {
   startDate: '2026-11-14', startTime: '06:30', dailyHours: 8, board: 'সিলেট', name: '',
   reminderEnabled: false, reminderLead: 10, syllabusChecked: false, calendarRevision: 0,
   theme: 'light', language: 'bn', revisionEnabled: true, carryoverMode: 'manual', examDate: '2027-06-30',
-  pomodoroFocus: 25, pomodoroBreak: 5, pomodoroLongBreak: 15,
+  pomodoroFocus: 25, pomodoroBreak: 5, pomodoroLongBreak: 15, fontScale: 'md',
 };
 export interface Task {
   id: string; date: string; dayIndex: number; phase: PhaseId; subject: SubjectId;
@@ -59,11 +59,13 @@ export interface AppData {
   badges: string[];
   routineBlocks: RoutineBlock[];
   importantDates: ImportantDate[];
+  /** YouTube url (or Bangla lesson title) → ISO instant the student marked it watched. */
+  classWatched: Record<string, string>;
 }
 export const freshData = (): AppData => ({
   version: 2, settings: { ...DEFAULT_SETTINGS }, completed: {}, confidence: {}, notes: {}, exams: {}, mistakes: [],
   focus: { minutes: 0, sessions: 0 }, studySessions: [], revisions: [], chapterMeta: {}, questions: [], attempts: [],
-  cq: [], tests: [], libraryNotes: [], videos: [], boardQuestions: [], formulas: [], formulaFavorites: [], gpaMarks: {}, carryovers: [], badges: [], routineBlocks: [], importantDates: [],
+  cq: [], tests: [], libraryNotes: [], videos: [], boardQuestions: [], formulas: [], formulaFavorites: [], gpaMarks: {}, carryovers: [], badges: [], routineBlocks: [], importantDates: [], classWatched: {},
 });
 /** Adds the user's recurring weekly blocks on top of the deterministic chapter plan. */
 export function applyRoutine(plan: Day[], blocks: RoutineBlock[]): Day[] {

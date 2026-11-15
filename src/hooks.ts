@@ -3,7 +3,7 @@ import { CHAPTERS, SUBJECTS } from './data';
 import type { SubjectId } from './data';
 import { addDays, dhakaMinutes, todayKey } from './planner';
 import type { AppData, Day, Settings } from './planner';
-import type { StudyMode, ThemeMode } from './types';
+import type { FontScale, StudyMode, ThemeMode } from './types';
 
 export function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
@@ -163,6 +163,48 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
   };
 }
 
+/** Reading size. px sizes are scaled by CSS `zoom` on the main content, so nothing is clipped. */
+export function useFontScale(scale: FontScale): void {
+  useEffect(() => { document.documentElement.dataset.font = scale; }, [scale]);
+}
+
+type WakeLockSentinel = { release: () => Promise<void>; released: boolean; addEventListener?: (type: 'release', listener: () => void) => void };
+type WakeLockNavigator = Navigator & { wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinel> } };
+
+/**
+ * Keeps the screen on while a session runs. Browsers drop the lock when the tab is
+ * hidden, so it is re-acquired on the next visible tick — the timer itself is
+ * timestamp based and keeps counting either way.
+ */
+export function useWakeLock(active: boolean): boolean {
+  const [held, setHeld] = useState(false);
+  const lockRef = useRef<WakeLockSentinel | null>(null);
+  useEffect(() => {
+    const nav = navigator as WakeLockNavigator;
+    if (!active || !nav.wakeLock) { setHeld(false); return; }
+    let cancelled = false;
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible' || lockRef.current && !lockRef.current.released) return;
+      try {
+        const lock = await nav.wakeLock!.request('screen');
+        if (cancelled) { void lock.release(); return; }
+        lockRef.current = lock; setHeld(true);
+        lock.addEventListener?.('release', () => { if (!cancelled) setHeld(false); });
+      } catch { setHeld(false); }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void acquire(); };
+    void acquire();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      const lock = lockRef.current; lockRef.current = null; setHeld(false);
+      if (lock && !lock.released) void lock.release().catch(() => undefined);
+    };
+  }, [active]);
+  return held;
+}
+
 export function useTheme(theme: ThemeMode): void {
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
@@ -182,6 +224,19 @@ export async function showNotification(title: string, body: string): Promise<voi
   }
   new Notification(title, { body, icon });
 }
+/**
+ * A finished session is easy to miss when the phone is locked or the app is in the
+ * background, so the completion also goes out as an OS notification. Native devices
+ * use the local-notification plugin; browsers use the service worker.
+ */
+export async function notifySessionDone(title: string, body: string): Promise<boolean> {
+  try {
+    const { nativeNotify, isNativeApp } = await import('./native');
+    if (isNativeApp() && await nativeNotify(title, body)) return true;
+  } catch { /* fall through to the web notification */ }
+  try { await showNotification(title, body); return true; } catch { return false; }
+}
+
 export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpen: () => void) {
   const latest = useRef({ plan, data, enabled, onOpen }); latest.current = { plan, data, enabled, onOpen };
   useEffect(() => {

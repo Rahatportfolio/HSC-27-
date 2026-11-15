@@ -4,7 +4,7 @@ import type { AppData, Day } from './planner';
 import type { Chapter, SubjectId } from './data';
 import type { useStudyTimer } from './hooks';
 import type { NewSession } from './study';
-import type { ThemeMode } from './types';
+import type { FontScale, ThemeMode } from './types';
 
 export type View = 'today' | 'calendar' | 'syllabus' | 'revision' | 'timer' | 'practice' | 'exams' | 'analytics' | 'library' | 'reminders' | 'settings';
 export interface ConfirmRequest { title: string; message: string; label?: string; danger?: boolean; action: () => void }
@@ -24,6 +24,11 @@ export interface PlannerContextValue {
   logSession: (session: NewSession) => void;
   startTimer: (subject: SubjectId, chapterId?: string) => void;
   setTheme: (theme: ThemeMode) => void;
+  setFontScale: (scale: FontScale) => void;
+  /** True while the screen wake lock is held for a running session. */
+  screenAwake: boolean;
 }
 export const PlannerContext = createContext<PlannerContextValue | null>(null);
+/** Same context, but null when a component is rendered outside the app shell (e.g. unit tests). */
+export function useOptionalPlanner(): PlannerContextValue | null { return useContext(PlannerContext); }
 export function usePlanner(): PlannerContextValue { const ctx = useContext(PlannerContext); if (!ctx) throw new Error('PlannerProvider missing'); return ctx; }

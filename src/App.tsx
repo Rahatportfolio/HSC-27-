@@ -9,7 +9,7 @@ import { loadData, parseBackup, saveData, SAVED_AT_KEY } from './storage';
 import { persistToDatabase, restoreFromDatabase } from './db';
 import { STORAGE_KEY } from './planner';
 import { exportCalendar } from './exports';
-import { useNow, useReminders, useRevisionReminder, useStudyTimer, useTheme } from './hooks';
+import { notifySessionDone, useFontScale, useNow, useReminders, useRevisionReminder, useStudyTimer, useTheme, useWakeLock } from './hooks';
 import { isNativeApp, syncNativeReminders } from './native';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover } from './study';
@@ -73,10 +73,18 @@ export default function App() {
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
-    onComplete: session => setData(d => addStudySession(d, { minutes: session.minutes, subject: session.subject, chapterId: session.chapterId || undefined, mode: session.mode, label: session.label || undefined })),
+    onComplete: session => {
+      setData(d => addStudySession(d, { minutes: session.minutes, subject: session.subject, chapterId: session.chapterId || undefined, mode: session.mode, label: session.label || undefined }));
+      // A session that ends while the phone is locked must still tell the student.
+      if (typeof document !== 'undefined' && document.hidden) {
+        void notifySessionDone('সেশন শেষ · প্রস্তুতি', `${bn(session.minutes)} মিনিটের সেশন সেভ হয়েছে। ফিরে এসে পরের ধাপ নাও।`);
+      }
+    },
   });
+  const screenAwake = useWakeLock(timer.running && timer.logging);
   const navigate = useCallback((next: View, date?: string) => { if (date) setSelectedDate(date); setView(next); setMobileMenu(false); window.location.hash = next; window.scrollTo({ top: 0, behavior: 'smooth' }); }, [setSelectedDate]);
   useTheme(data.settings.theme);
+  useFontScale(data.settings.fontScale);
   const dueRevisions = revisionDueCount(data, today);
   const browserReminders = data.settings.reminderEnabled && !isNativeApp();
   useReminders(plan, data, browserReminders, () => navigate('today', todayKey()));
@@ -141,11 +149,12 @@ export default function App() {
     apply();
   }, [timer, navigate]);
   const setTheme = useCallback((theme: AppData['settings']['theme']) => setData(d => ({ ...d, settings: { ...d.settings, theme } })), []);
+  const setFontScale = useCallback((fontScale: AppData['settings']['fontScale']) => setData(d => ({ ...d, settings: { ...d.settings, fontScale } })), []);
   const currentNav = NAV.find(n => n.id === view);
   const context = {
     data, setData, plan, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
-    confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, setTheme,
+    confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, setTheme, setFontScale, screenAwake,
   };
   const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView }[view];
   const examDays = diffDays(today, data.settings.examDate);

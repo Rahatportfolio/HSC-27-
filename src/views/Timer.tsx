@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
-import { AlarmClock, CheckCircle2, Clock3, Coffee, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, Save, Timer as TimerIcon, Trash2, TrendingUp } from 'lucide-react';
+import { AlarmClock, BellRing, CheckCircle2, Clock3, Coffee, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, Save, Sun, Timer as TimerIcon, Trash2, TrendingUp } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
@@ -16,7 +16,7 @@ function clock(seconds: number): string {
 }
 const PHASE_LABEL = { focus: 'ফোকাস সময়', short: 'ছোট বিরতি', long: 'লম্বা বিরতি', none: 'টাইমার' } as const;
 export default function TimerView() {
-  const { data, setData, today, timer, logSession, notify, confirm, navigate } = usePlanner();
+  const { data, setData, today, timer, logSession, notify, confirm, navigate, screenAwake } = usePlanner();
   const [manualMinutes, setManualMinutes] = useState('30');
   const [manualSubject, setManualSubject] = useState<SubjectId>('physics');
   const [manualChapter, setManualChapter] = useState('');
@@ -60,7 +60,7 @@ export default function TimerView() {
     <div className="timer-layout">
       <section className={`card timer-main-card phase-${timer.phase}`}>
         <div className="mode-switch">{(['pomodoro', 'countdown', 'stopwatch'] as const).map(mode => <button key={mode} className={timer.mode === mode ? 'active' : ''} onClick={() => timer.setMode(mode)} disabled={timer.running}>{mode === 'pomodoro' ? 'পোমোডোরো' : mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</button>)}</div>
-        <div className="timer-phase-line"><span className={`phase-dot ${timer.phase}`} />{timer.mode === 'pomodoro' ? PHASE_LABEL[timer.phase] : timer.mode === 'countdown' ? (timer.logging ? 'কাউন্টডাউন' : 'বিরতি') : 'স্টপওয়াচ'}<small>{timer.focusCount ? `${bn(timer.focusCount)}টি ফোকাস সম্পন্ন` : ''}</small></div>
+        <div className="timer-phase-line"><span className={`phase-dot ${timer.phase}`} />{timer.mode === 'pomodoro' ? PHASE_LABEL[timer.phase] : timer.mode === 'countdown' ? (timer.logging ? 'কাউন্টডাউন' : 'বিরতি') : 'স্টপওয়াচ'}<small>{timer.focusCount ? `${bn(timer.focusCount)}টি ফোকাস সম্পন্ন` : ''}</small>{screenAwake && <span className="wake-chip" title="সেশন চলার সময় ফোনের স্ক্রিন বন্ধ হবে না"><Sun size={12} />স্ক্রিন জেগে আছে</span>}</div>
         <ProgressRing value={ringProgress} size={270} stroke={9} color={timer.phase === 'short' || timer.phase === 'long' ? '#d8b26a' : '#8fb573'}>
           <strong className="timer-big-digits">{clock(timer.mode === 'stopwatch' ? timer.elapsedSec : timer.remainingSec)}</strong>
           <span>{timer.running ? 'মনোযোগ ধরে রাখো' : timer.mode === 'stopwatch' ? 'শুরু করলে সময় জমবে' : 'শুরু করার জন্য তৈরি'}</span>
@@ -72,7 +72,7 @@ export default function TimerView() {
           <label>অধ্যায় (ঐচ্ছিক)<select value={timer.chapterId} onChange={e => timer.setChapter(e.target.value)}><option value="">অধ্যায় বাছো</option>{chapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label>
           <label>লেবেল (ঐচ্ছিক)<input maxLength={120} value={timer.label} onChange={e => timer.setLabel(e.target.value)} placeholder="যেমন: সূত্র ঝালাই" /></label>
         </div>
-        <p className="timer-note">অ্যাপ বন্ধ হলেও টাইমার ঘড়ির হিসাবে চলবে; ফিরে এলে বাকি সময় ঠিক দেখাবে। {timer.mode === 'pomodoro' && `ফোকাস ${bn(data.settings.pomodoroFocus)} মি. · ছোট বিরতি ${bn(data.settings.pomodoroBreak)} মি. · ৪ ফোকাস পর ${bn(data.settings.pomodoroLongBreak)} মি.`}</p>
+        <p className="timer-note"><BellRing size={13} /> ফোন লক থাকলেও সেশন শেষ হলে নোটিফিকেশন পাবে। অ্যাপ বন্ধ হলেও টাইমার ঘড়ির হিসাবে চলবে; ফিরে এলে বাকি সময় ঠিক দেখাবে। {timer.mode === 'pomodoro' && `ফোকাস ${bn(data.settings.pomodoroFocus)} মি. · ছোট বিরতি ${bn(data.settings.pomodoroBreak)} মি. · ৪ ফোকাস পর ${bn(data.settings.pomodoroLongBreak)} মি.`}</p>
       </section>
       <aside className="timer-rail">
         <section className="card break-card"><div className="card-heading"><h3><Coffee size={18} />বিরতি টাইমার</h3><span className="tiny-muted">পড়া হিসেবে গোনা হবে না</span></div><p>চোখ বন্ধ করো, পানি খাও, একটু হাঁটো। ছোট বিরতিই মন ভালো রাখে।</p><div className="break-buttons">{[5, 10, 15].map(minutes => <button key={minutes} className="button secondary small" onClick={() => timer.startBreak(minutes)}><TimerIcon size={15} />{bn(minutes)} মিনিট</button>)}</div></section>

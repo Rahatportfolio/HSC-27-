@@ -30,6 +30,21 @@ function instant(date: string, minute: number): number {
   return Date.parse(`${date}T00:00:00+06:00`) + minute * 60000;
 }
 
+/** One immediate OS notification (used when a timer or break finishes in the background). */
+export async function nativeNotify(title: string, body: string): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
+  try {
+    const permission = await LocalNotifications.checkPermissions();
+    if (permission.display !== 'granted') return false;
+    await LocalNotifications.schedule({ notifications: [{
+      id: idFor(`${title}:${body}`) , title, body, channelId: 'study-reminders',
+      schedule: { at: new Date(Date.now() + 400) }, smallIcon: 'ic_stat_icon_config_sample',
+    }] });
+    return true;
+  } catch { return false; }
+}
+
 const WINDOW_DAYS = 14;
 const LIMIT = 64;
 

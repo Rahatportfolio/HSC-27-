@@ -7,6 +7,10 @@ export type StudyMode = 'stopwatch' | 'countdown' | 'pomodoro';
 export type PrepStatus = 'none' | 'practicing' | 'ready';
 export type RevisionInterval = 1 | 3 | 7 | 14 | 30;
 export type TestKind = 'chapter' | 'subject' | 'model';
+/** Reading size for the whole interface: small, comfortable (default) or large. */
+export type FontScale = 'sm' | 'md' | 'lg';
+/** CQ self-marking: ক (knowledge), খ (comprehension), গ (application), ঘ (higher order). */
+export interface CqParts { c1: number; c2: number; c3: number; c4: number }
 
 export interface StudySession {
   id: string;
@@ -74,6 +78,8 @@ export interface CqEntry {
   at: string;
   /** Chapters whose confidence should be marked weak after a low score. */
   mistakeId?: string;
+  /** Optional sub-part breakdown, so the app can point at the weakest skill. */
+  parts?: CqParts;
 }
 
 export interface TestRecord {
@@ -183,4 +189,5 @@ export interface SettingsExtras {
   pomodoroFocus: number;
   pomodoroBreak: number;
   pomodoroLongBreak: number;
+  fontScale: FontScale;
 }

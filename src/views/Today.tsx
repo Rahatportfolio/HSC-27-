@@ -11,7 +11,7 @@ import { revisionBuckets, INTERVAL_LABEL } from '../revision';
 import { t } from '../i18n';
 import { motivationFor } from '../motivation';
 import { carryoversOn, pendingCarryovers, removeCarryover, toggleCarryover } from '../study';
-import { ClassLinkRow, DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
+import { BackupNudge, ClassLinkRow, DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
 
 export default function TodayView() {
   const { plan, data, setData, storageOk, today, selectedDate, setSelectedDate, navigate, exportICS, timer, openChapter } = usePlanner();
@@ -91,6 +91,7 @@ export default function TodayView() {
       </aside>
     </div>
     <SyllabusNotice />
+    <BackupNudge />
     <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? 'সব তথ্য এই ডিভাইসে সেভ হচ্ছে' : 'সেভ হয়নি — ব্যাকআপ রাখো'}</span><button className="text-button" onClick={() => navigate('settings')}>ব্যাকআপ রাখো <ArrowUpRight size={13} /></button></div>
   </div>;
 }

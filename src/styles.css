@@ -934,3 +934,76 @@ html.focus-mode .timer-main-card{max-width:680px;margin:36px auto 0}
 @media (max-width:640px){.channel-grid{grid-template-columns:1fr}}
 .lesson-copy{display:flex;flex-direction:column;gap:2px;min-width:0}
 .lesson-channel{font-size:10.5px;color:var(--muted);letter-spacing:.2px}
+
+/* ===================== v2.7 · reading size, seen-tracker, backup nudge ===================== */
+/* Reading size: px-based layout is scaled with `zoom`, so nothing reflows or clips. */
+html[data-font="sm"] .main-content{zoom:.95}
+html[data-font="lg"] .main-content{zoom:1.1}
+html[data-font="lg"] .modal{zoom:1.06}
+@media(max-width:650px){html[data-font="sm"] .main-content{zoom:.97}html[data-font="lg"] .main-content{zoom:1.06}}
+.font-picker-row{display:flex;align-items:center;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:20px;padding-top:18px;border-top:1px solid var(--line)}
+.font-picker-label{display:flex;align-items:flex-start;gap:9px;color:#657b52}
+.font-picker-label>span{display:flex;flex-direction:column;gap:3px}
+.font-picker-label strong{font-size:12.5px;font-weight:600}
+.font-picker-label small{font-size:11px;color:#87977a;max-width:330px;line-height:1.6}
+.font-picker{display:flex;gap:8px}
+.font-picker button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;padding:7px 10px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--muted);transition:border-color .12s,background .12s}
+.font-picker button.active{border-color:var(--green);background:#eef4e7;color:var(--green)}
+.font-picker .font-sample{line-height:1.2;font-weight:600}
+.font-picker .font-sample.sm{font-size:12px}.font-picker .font-sample.md{font-size:15px}.font-picker .font-sample.lg{font-size:19px}
+.font-picker small{font-size:10px}
+
+/* "Seen it" tick next to every direct class link. */
+.class-pill,.lesson-pill{display:inline-flex;align-items:stretch;gap:0;min-width:0}
+.class-pill .class-link{border-top-right-radius:0;border-bottom-right-radius:0}
+.class-watch{display:inline-flex;align-items:center;justify-content:center;width:30px;min-height:38px;border:1px solid var(--line);border-left:0;border-radius:0 12px 12px 0;background:var(--surface);color:#9aa79a;transition:background .12s,color .12s}
+.class-watch:hover{background:#eef4e7;color:var(--green)}
+.class-watch.on{background:#e7f1dd;color:#3f7a52;border-color:#c9dfb7}
+.class-pill.watched .class-link{opacity:.82}
+.lesson-pill .lesson-row{border-top-right-radius:0;border-bottom-right-radius:0}
+.lesson-pill .class-watch{min-height:42px}
+.lesson-pill.watched .lesson-row{background:#eff5e9}
+.class-seen-line{display:flex;align-items:center;gap:8px;font-size:11px;color:#7d8d6f;margin:4px 0 2px}
+.class-seen-done{color:#3f7a52;font-weight:600}
+
+/* Weekly backup nudge. */
+.backup-nudge{border-color:#dbe6cb;background:#f8fbf3}
+.backup-nudge>div{flex:1;min-width:0}
+.backup-nudge-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.backup-status{font-size:11px;color:#7d8d6f;margin:2px 0 6px}
+.backup-status.stale{color:#a97b4e;font-weight:600}
+
+/* Timer: screen-on chip and background notification note. */
+.wake-chip{display:inline-flex;align-items:center;gap:4px;margin-left:auto;background:#fdf6e2;border:1px solid #f0e3bd;color:#9a7d33;border-radius:999px;padding:3px 9px;font-size:10.5px;font-weight:600}
+.timer-note{display:flex;align-items:flex-start;gap:6px}
+.timer-note svg{margin-top:3px;color:#8a9a72}
+
+/* CQ rubric + sub-part marks. */
+.cq-parts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+.cq-parts>span{font-size:10.5px;font-weight:600;border-radius:999px;padding:3px 8px;background:#f2f4ee;color:#7c876f;border:1px solid #e6eae0}
+.cq-parts>span.full{background:#e9f3df;border-color:#cfe3bb;color:#40773f}
+.cq-parts>span.zero{background:#fbeeee;border-color:#f0d6d3;color:#a45c52}
+.cq-parts>span.partial{background:#fdf5e4;border-color:#f0e2bf;color:#96731f}
+.weak-part-chip{background:#fdf5e4;border:1px solid #efe0bd;border-radius:6px;padding:2px 8px;font-size:10.5px;color:#96731f}
+.rubric-table{display:flex;flex-direction:column;gap:11px;margin:13px 0 10px}
+.rubric-row{display:flex;gap:10px;align-items:flex-start}
+.rubric-mark{flex:none;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;border-radius:8px;background:#eef3e6;color:#3f7a52;font-size:12px;font-weight:700}
+.rubric-mark.c3{background:#fdf1e0;color:#a97b4e}.rubric-mark.c4{background:#eef0f8;color:#5a6b9c}
+.rubric-row strong{font-size:12px;color:#4f6440}
+.rubric-row strong small{font-weight:400;color:#8a9a7c;font-size:10.5px}
+.rubric-row p{font-size:11px;color:#7d8d6f;line-height:1.65;margin-top:2px}
+.part-row{display:flex;align-items:center;gap:10px;margin-top:11px}
+.part-row>span{font-size:11.5px;font-weight:600;color:#5d7350;width:16px}
+.part-row .progress-track{flex:1}
+.part-row small{font-size:10.5px;color:#8a9a7c;width:34px;text-align:right}
+.part-tip{font-size:11px;color:#7d8d6f;margin-top:13px;padding-top:11px;border-top:1px dashed var(--line);line-height:1.65}
+.parts-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin:6px 0 12px}
+.parts-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr)) auto;gap:10px;margin-bottom:14px}
+.parts-field{display:flex;flex-direction:column;gap:5px;border:1px solid var(--line);border-radius:11px;padding:9px 10px;background:#fbfcf8}
+.parts-field>span{display:flex;align-items:center;gap:5px;font-size:10.5px;color:#7d8d6f}
+.parts-field>span strong{font-size:12.5px;color:#3f7a52}
+.parts-field small{font-size:9.5px;color:#9aa79a}
+.parts-field input{min-height:36px;padding:6px 8px;font-size:13px;text-align:center}
+.parts-total{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid #cfe3bb;border-radius:11px;padding:9px 13px;background:#eff5e9;color:#40773f;font-size:10.5px}
+.parts-total strong{font-size:15px}
+@media(max-width:650px){.parts-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.parts-total{grid-column:1/-1;flex-direction:row;gap:8px}}

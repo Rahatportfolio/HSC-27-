@@ -22,6 +22,38 @@ describe('validated local backups', () => {
     expect(() => parseBackup(JSON.stringify({ ...data, exams: { 'physics-1': { score: 101, total: 100, at: '2027-04-16T08:00:00Z', mistakes: '' } } }))).toThrow();
     expect(() => parseBackup(JSON.stringify({ ...data, completed: { x: 'not-a-date' } }))).toThrow();
   });
+  it('keeps the reading size and the watched-class list, and rejects junk', () => {
+    const data = freshData();
+    data.settings.fontScale = 'lg';
+    data.classWatched['https://www.youtube.com/watch?v=pc42PaR2OE8'] = '2026-11-14T09:00:00Z';
+    const parsed = parseBackup(JSON.stringify(data));
+    expect(parsed.settings.fontScale).toBe('lg');
+    expect(Object.keys(parsed.classWatched)).toEqual(['https://www.youtube.com/watch?v=pc42PaR2OE8']);
+    // A backup without the new fields still loads with the comfortable default.
+    expect(parsed.settings.fontScale).toBe('lg');
+    const legacy = JSON.parse(JSON.stringify(data));
+    delete legacy.settings.fontScale;
+    delete legacy.classWatched;
+    expect(parseBackup(JSON.stringify(legacy)).settings.fontScale).toBe('md');
+    expect(parseBackup(JSON.stringify(legacy)).classWatched).toEqual({});
+    expect(() => parseBackup(JSON.stringify({ ...data, settings: { ...data.settings, fontScale: 'huge' } }))).toThrow('লেখার আকার');
+    const longKey = { ['x'.repeat(600)]: '2026-11-14T09:00:00Z' };
+    expect(() => parseBackup(JSON.stringify({ ...data, classWatched: longKey }))).toThrow('দেখা ক্লাস');
+    expect(() => parseBackup(JSON.stringify({ ...data, classWatched: { url: 'not-a-date' } }))).toThrow('দেখা ক্লাস');
+  });
+
+  it('stores CQ sub-part marks only when they add up', () => {
+    const data = freshData();
+    data.cq.push({ id: 'c1', subject: 'physics', question: 'প্রশ্ন', marks: 6, total: 10, note: '', date: '2026-11-14', at: '2026-11-14T09:00:00Z', parts: { c1: 1, c2: 1, c3: 2, c4: 2 } });
+    expect(parseBackup(JSON.stringify(data)).cq[0].parts).toEqual({ c1: 1, c2: 1, c3: 2, c4: 2 });
+    const tooMany = JSON.parse(JSON.stringify(data));
+    tooMany.cq[0].parts = { c1: 4, c2: 4, c3: 4, c4: 4 };
+    expect(parseBackup(JSON.stringify(tooMany)).cq[0].parts).toBeUndefined();
+    const junk = JSON.parse(JSON.stringify(data));
+    junk.cq[0].parts = 'nope';
+    expect(parseBackup(JSON.stringify(junk)).cq[0].parts).toBeUndefined();
+  });
+
   it('rejects impossible timestamps and unsafe prototype keys stay own properties', () => {
     const data = freshData();
     expect(() => parseBackup(JSON.stringify({ ...data, completed: { x: '2026-02-30T08:00:00Z' } }))).toThrow('অগ্রগতির তারিখ');

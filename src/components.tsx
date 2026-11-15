@@ -1,13 +1,15 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Play, Search, Sparkles, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Play, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
 import { subjectById } from './data';
 import type { SubjectId } from './data';
-import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent } from './planner';
+import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent, todayKey } from './planner';
 import type { Day, Task } from './planner';
-import { usePlanner } from './context';
+import { useOptionalPlanner, usePlanner } from './context';
 import { isEnglish, t } from './i18n';
 import type { ChapterClasses, ClassOption, LessonLink } from './classLinks';
+import { allOptions, isWatched, lessonKey, toggleClassWatched } from './classes';
+import { backupAgeDays, downloadBackup, needsBackup, shareBackup, snoozeBackup } from './backup';
 
 export function SubjectBadge({ subject, small = false }: { subject: SubjectId; small?: boolean }) {
   const s = subjectById[subject];
@@ -108,19 +110,30 @@ const CHANNEL_COLOR: Record<string, string> = {
 const baseChannel = (name: string) => name.replace(' (সার্চ)', '').trim();
 const channelColor = (name: string) => CHANNEL_COLOR[baseChannel(name)] || '#7d859b';
 
+/** One class chip plus a "seen it" tick. The tick is stored per url, so a link stays marked everywhere. */
 function ClassLink({ option, kind, showKind }: { option: ClassOption; kind: 'oneShot' | 'mcq' | 'cq'; showKind: boolean }) {
+  const planner = useOptionalPlanner();
   const search = option.kind === 'search';
-  return <a
-    className={`class-link ${search ? 'search' : 'real'}`}
-    style={{ '--ch': channelColor(option.channel) } as CSSProperties}
-    href={option.url} target="_blank" rel="noreferrer"
-    aria-label={`${classLabel(kind)} — ${baseChannel(option.channel)}${search ? t(' (চ্যানেলে খুঁজে দেখো)', ' (search the channel)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}`}
-    title={`${classLabel(kind)} · ${option.channel}${search ? t(' — এই চ্যানেলে খুঁজে দেখো', ' — search this channel') : ''}`}>
-    <span className="ch-dot" aria-hidden="true" />
-    {showKind && <span className="class-kind-tag">{classLabel(kind)}</span>}
-    <span className="class-channel">{option.channel}</span>
-    {search ? <Search size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
-  </a>;
+  const watched = !!planner && !search && isWatched(planner.data, option.url);
+  return <span className={`class-pill ${watched ? 'watched' : ''}`}>
+    <a
+      className={`class-link ${search ? 'search' : 'real'}`}
+      style={{ '--ch': channelColor(option.channel) } as CSSProperties}
+      href={option.url} target="_blank" rel="noreferrer"
+      aria-label={`${classLabel(kind)} — ${baseChannel(option.channel)}${search ? t(' (চ্যানেলে খুঁজে দেখো)', ' (search the channel)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}${watched ? t(' (দেখা হয়েছে)', ' (watched)') : ''}`}
+      title={`${classLabel(kind)} · ${option.channel}${search ? t(' — এই চ্যানেলে খুঁজে দেখো', ' — search this channel') : ''}`}>
+      <span className="ch-dot" aria-hidden="true" />
+      {showKind && <span className="class-kind-tag">{classLabel(kind)}</span>}
+      <span className="class-channel">{option.channel}</span>
+      {search ? <Search size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
+    </a>
+    {!search && planner && <button type="button" className={`class-watch ${watched ? 'on' : ''}`} aria-pressed={watched}
+      aria-label={`${baseChannel(option.channel)} ${classLabel(kind)} — ${watched ? t('দেখা হয়েছে, টিক সরাও', 'watched, clear the tick') : t('দেখেছি বলে টিক দাও', 'mark as watched')}`}
+      title={watched ? t('দেখা হয়েছে', 'watched') : t('দেখেছি', 'mark watched')}
+      onClick={() => planner.setData(d => toggleClassWatched(d, option.url))}>
+      {watched ? <CheckCheck size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+    </button>}
+  </span>;
 }
 
 /** Compact flat chips — used on the Today target card. */
@@ -133,12 +146,16 @@ export function ClassLinkRow({ classes }: { classes: ChapterClasses }) {
 
 /** Grouped block — one labelled line per class type, every teacher shown. */
 export function ClassBlock({ classes, hint }: { classes: ChapterClasses; hint?: string }) {
+  const planner = useOptionalPlanner();
   const total = classes.oneShot.length + classes.mcq.length + classes.cq.length;
+  const real = allOptions(classes).filter(option => option.kind !== 'search');
+  const seen = planner ? real.filter(option => isWatched(planner.data, option.url)).length : 0;
   return <div className="class-block">
     <div className="class-block-head">
       <strong>{t('এই অধ্যায়ের ক্লাস', 'Classes for this chapter')} <span className="count-badge">{isEnglish() ? `${total} options` : `${bn(total)}টি অপশন`}</span></strong>
       <span className="class-legend"><i className="dot real" aria-hidden="true" />{t('ভিডিও/প্লেলিস্ট', 'video/playlist')}<i className="dot search" aria-hidden="true" />{t('চ্যানেলে খুঁজো', 'search the channel')}</span>
     </div>
+    {planner && real.length > 0 && <p className="class-seen-line">{isEnglish() ? `${seen}/${real.length} classes watched` : `${bn(seen)}/${bn(real.length)} ক্লাস দেখা হয়েছে`}{seen === real.length && <span className="class-seen-done">{t('✓ সব শেষ', '✓ all done')}</span>}</p>}
     {hint && <p className="class-hint">{hint}</p>}
     {(['oneShot', 'mcq', 'cq'] as const).map(kind => <div className="class-line" key={kind}>
       <span className={`class-kind ${kind}`}>{classLabel(kind)}</span>
@@ -148,21 +165,74 @@ export function ClassBlock({ classes, hint }: { classes: ChapterClasses; hint?: 
   </div>;
 }
 
+/**
+ * Weekly backup nudge. Manual backups are forgotten within days, so the app asks
+ * again once a week, and can be pushed away for three days.
+ */
+export function BackupNudge() {
+  const { data, notify } = usePlanner();
+  const [hidden, setHidden] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const today = todayKey();
+  if (hidden || !needsBackup(data, today)) return null;
+  const age = backupAgeDays(today);
+  const keep = () => {
+    try {
+      const name = downloadBackup(data, today);
+      notify(`${name} সেভ হয়েছে। নিরাপদ জায়গায় রাখো।`);
+      setHidden(true);
+    } catch { notify('ব্যাকআপ ফাইল তৈরি হয়নি। সেটিংস থেকে আবার চেষ্টা করো।', 'error'); }
+  };
+  const share = async () => {
+    setBusy(true);
+    try {
+      const outcome = await shareBackup(data, today);
+      notify(outcome === 'shared' ? 'ব্যাকআপ শেয়ার শিটে পাঠানো হয়েছে।' : outcome === 'copied' ? 'ব্যাকআপ JSON কপি হয়েছে — যেখানে খুশি পেস্ট করো।' : 'ব্যাকআপ ফাইল ডাউনলোড হয়েছে।');
+      setHidden(true);
+    } catch { notify('শেয়ার করা যায়নি। ডাউনলোড করে নাও।', 'error'); }
+    finally { setBusy(false); }
+  };
+  return <div className="backup-nudge" role="note">
+    <div>
+      <ShieldCheck size={20} />
+      <span><strong>{age === null ? 'এখনও কোনো ব্যাকআপ নেই' : `${bn(age)} দিন ধরে ব্যাকআপ নেওয়া হয়নি`}</strong>{t('ফোন হারালে বা অ্যাপ মুছলে এই অগ্রগতি ফিরে পাওয়ার একটাই উপায়—JSON ব্যাকআপ।', 'One JSON file is the only way to restore this progress if the phone is lost.')}</span>
+    </div>
+    <span className="backup-nudge-actions">
+      <button className="button primary small" onClick={keep}>{t('ব্যাকআপ রাখো', 'Save backup')}</button>
+      <button className="button secondary small" disabled={busy} onClick={() => void share()}>{t('শেয়ার / কপি', 'Share / copy')}</button>
+      <button className="text-button" onClick={() => { snoozeBackup(); setHidden(true); notify(t('তিন দিন পরে আবার মনে করাব।', 'I will remind you again in three days.'), 'info'); }}>{t('পরে', 'Later')}</button>
+    </span>
+  </div>;
+}
+
 /** Bangla 1st paper: lesson-by-lesson classes inside a chapter group. */
 export function LessonList({ lessons, channel = 'shakibsirbangla' }: { lessons: LessonLink[]; channel?: string }) {
+  const planner = useOptionalPlanner();
   const ready = lessons.filter(lesson => lesson.url).length;
+  const seen = planner ? lessons.filter(lesson => lesson.url && isWatched(planner.data, lesson.url)).length : 0;
   return <div className="lesson-block">
     <div className="class-block-head">
       <strong>{t('পাঠভিত্তিক ক্লাস', 'Lesson-by-lesson classes')}</strong>
       <span>{isEnglish() ? `${ready}/${lessons.length} lessons have a video` : `${bn(ready)}/${bn(lessons.length)} পাঠের ভিডিও আছে`}</span>
     </div>
+    {planner && ready > 0 && <p className="class-seen-line">{isEnglish() ? `${seen}/${ready} classes watched` : `${bn(seen)}/${bn(ready)} ক্লাস দেখা হয়েছে`}{seen === ready && <span className="class-seen-done">{t('✓ সব শেষ', '✓ all done')}</span>}</p>}
     <div className="lesson-grid">{lessons.map(lesson => {
       const href = lesson.url || `https://www.youtube.com/@${channel}/search?query=${encodeURIComponent(lesson.title)}`;
-      return <a key={lesson.title} className={`lesson-row ${lesson.url ? 'ready' : 'todo'}`} href={href} target="_blank" rel="noreferrer"
-        aria-label={`${lesson.title}${lesson.channel ? ' — ' + lesson.channel : ''}${lesson.url ? t(' (ক্লাস)', ' (class)') : t(' (চ্যানেলে খুঁজো)', ' (search the channel)')}`}>
-        <span className="lesson-copy"><span className="lesson-title">{lesson.title}</span>{lesson.channel && <span className="lesson-channel">{lesson.channel}</span>}</span>
-        {lesson.url ? <span className="lesson-state ready"><Play size={11} aria-hidden="true" />{t('ক্লাস', 'class')}</span> : <span className="lesson-state"><Search size={11} aria-hidden="true" />{t('খুঁজো', 'search')}</span>}
-      </a>;
+      const key = lesson.url || lessonKey(lesson.title);
+      const watched = !!planner && !!lesson.url && isWatched(planner.data, key);
+      return <span key={lesson.title} className={`lesson-pill ${watched ? 'watched' : ''}`}>
+        <a className={`lesson-row ${lesson.url ? 'ready' : 'todo'}`} href={href} target="_blank" rel="noreferrer"
+          aria-label={`${lesson.title}${lesson.channel ? ' — ' + lesson.channel : ''}${lesson.url ? t(' (ক্লাস)', ' (class)') : t(' (চ্যানেলে খুঁজো)', ' (search the channel)')}${watched ? t(' — দেখা হয়েছে', ' — watched') : ''}`}>
+          <span className="lesson-copy"><span className="lesson-title">{lesson.title}</span>{lesson.channel && <span className="lesson-channel">{lesson.channel}</span>}</span>
+          {lesson.url ? <span className="lesson-state ready"><Play size={11} aria-hidden="true" />{t('ক্লাস', 'class')}</span> : <span className="lesson-state"><Search size={11} aria-hidden="true" />{t('খুঁজো', 'search')}</span>}
+        </a>
+        {lesson.url && planner && <button type="button" className={`class-watch ${watched ? 'on' : ''}`} aria-pressed={watched}
+          aria-label={`${lesson.title} — ${watched ? t('দেখা হয়েছে, টিক সরাও', 'watched, clear the tick') : t('দেখেছি বলে টিক দাও', 'mark as watched')}`}
+          title={watched ? t('দেখা হয়েছে', 'watched') : t('দেখেছি', 'mark watched')}
+          onClick={() => planner.setData(d => toggleClassWatched(d, key))}>
+          {watched ? <CheckCheck size={12} aria-hidden="true" /> : <Check size={12} aria-hidden="true" />}
+        </button>}
+      </span>;
     })}</div>
   </div>;
 }
