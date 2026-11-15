@@ -1,13 +1,13 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Play, Sparkles, X } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, NotebookPen, Play, Search, Sparkles, X } from 'lucide-react';
 import { subjectById } from './data';
 import type { SubjectId } from './data';
 import { bn, dhakaMinutes, formatDate, formatDayOffset, formatTime, getPhases, isTaskCurrent, percent } from './planner';
 import type { Day, Task } from './planner';
 import { usePlanner } from './context';
 import { isEnglish, t } from './i18n';
-import type { ChapterClasses } from './classLinks';
+import type { ChapterClasses, ClassOption, LessonLink } from './classLinks';
 
 export function SubjectBadge({ subject, small = false }: { subject: SubjectId; small?: boolean }) {
   const s = subjectById[subject];
@@ -100,14 +100,68 @@ export function DaySummary({ day }: { day: Day }) {
 }
 
 const CLASS_LABEL = { oneShot: 'ওয়ান শট', mcq: 'MCQ', cq: 'CQ' } as const;
-export function ClassLinkRow({ classes, compact = false }: { classes: ChapterClasses; compact?: boolean }) {
-  return <div className={`class-link-row ${compact ? 'compact' : ''}`}>
-    {(['oneShot', 'mcq', 'cq'] as const).map(kind => classes[kind].slice(0, compact ? 1 : 4).map(option => <a
-      key={`${kind}-${option.channel}-${option.url}`}
-      className={`class-link ${option.kind === 'search' ? 'search' : ''}`}
-      href={option.url} target="_blank" rel="noreferrer"
-      title={`${CLASS_LABEL[kind]} · ${option.channel}${option.kind === 'search' ? ' — চ্যানেলে খুঁজে দেখো' : ''}`}>
-      <Play size={13} /><span>{CLASS_LABEL[kind]}</span><em>{option.channel}</em>
-    </a>))}
+const classLabel = (kind: 'oneShot' | 'mcq' | 'cq') => (kind === 'oneShot' ? t('ওয়ান শট', 'One shot') : CLASS_LABEL[kind]);
+const CHANNEL_COLOR: Record<string, string> = {
+  'রাকিব': '#4d7bb0', 'অপুর্ব': '#c2763c', 'অলরন': '#3f8f74', 'হাসনাত': '#6a8f3f',
+  'ফাহাদ': '#8b75ac', 'সাকিব': '#bc737b', 'বন্দি': '#c98a1c', 'ACS': '#5b6b8c',
+};
+const baseChannel = (name: string) => name.replace(' (সার্চ)', '').trim();
+const channelColor = (name: string) => CHANNEL_COLOR[baseChannel(name)] || '#7d859b';
+
+function ClassLink({ option, kind, showKind }: { option: ClassOption; kind: 'oneShot' | 'mcq' | 'cq'; showKind: boolean }) {
+  const search = option.kind === 'search';
+  return <a
+    className={`class-link ${search ? 'search' : 'real'}`}
+    style={{ '--ch': channelColor(option.channel) } as CSSProperties}
+    href={option.url} target="_blank" rel="noreferrer"
+    aria-label={`${classLabel(kind)} — ${baseChannel(option.channel)}${search ? t(' (চ্যানেলে খুঁজে দেখো)', ' (search the channel)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}`}
+    title={`${classLabel(kind)} · ${option.channel}${search ? t(' — এই চ্যানেলে খুঁজে দেখো', ' — search this channel') : ''}`}>
+    <span className="ch-dot" aria-hidden="true" />
+    {showKind && <span className="class-kind-tag">{classLabel(kind)}</span>}
+    <span className="class-channel">{option.channel}</span>
+    {search ? <Search size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
+  </a>;
+}
+
+/** Compact flat chips — used on the Today target card. */
+export function ClassLinkRow({ classes }: { classes: ChapterClasses }) {
+  return <div className="class-link-row compact">
+    {(['oneShot', 'mcq', 'cq'] as const).map(kind => classes[kind].slice(0, 1).map(option =>
+      <ClassLink key={`${kind}-${option.url}`} option={option} kind={kind} showKind />))}
+  </div>;
+}
+
+/** Grouped block — one labelled line per class type, every teacher shown. */
+export function ClassBlock({ classes, hint }: { classes: ChapterClasses; hint?: string }) {
+  const total = classes.oneShot.length + classes.mcq.length + classes.cq.length;
+  return <div className="class-block">
+    <div className="class-block-head">
+      <strong>{t('এই অধ্যায়ের ক্লাস', 'Classes for this chapter')} <span className="count-badge">{isEnglish() ? `${total} options` : `${bn(total)}টি অপশন`}</span></strong>
+      <span className="class-legend"><i className="dot real" aria-hidden="true" />{t('ভিডিও/প্লেলিস্ট', 'video/playlist')}<i className="dot search" aria-hidden="true" />{t('চ্যানেলে খুঁজো', 'search the channel')}</span>
+    </div>
+    {hint && <p className="class-hint">{hint}</p>}
+    {(['oneShot', 'mcq', 'cq'] as const).map(kind => <div className="class-line" key={kind}>
+      <span className={`class-kind ${kind}`}>{classLabel(kind)}</span>
+      <div className="class-link-row">{classes[kind].slice(0, 4).map(option =>
+        <ClassLink key={`${kind}-${option.url}`} option={option} kind={kind} showKind={false} />)}</div>
+    </div>)}
+  </div>;
+}
+
+/** Bangla 1st paper: lesson-by-lesson classes inside a chapter group. */
+export function LessonList({ lessons, channel = 'shakibsirbangla' }: { lessons: LessonLink[]; channel?: string }) {
+  const ready = lessons.filter(lesson => lesson.url).length;
+  return <div className="lesson-block">
+    <div className="class-block-head">
+      <strong>{t('পাঠভিত্তিক ক্লাস', 'Lesson-by-lesson classes')}</strong>
+      <span>{isEnglish() ? `${ready}/${lessons.length} lessons have a video` : `${bn(ready)}/${bn(lessons.length)} পাঠের ভিডিও আছে`}</span>
+    </div>
+    <div className="lesson-grid">{lessons.map(lesson => {
+      const href = lesson.url || `https://www.youtube.com/@${channel}/search?query=${encodeURIComponent(lesson.title)}`;
+      return <a key={lesson.title} className={`lesson-row ${lesson.url ? 'ready' : 'todo'}`} href={href} target="_blank" rel="noreferrer">
+        <span className="lesson-title">{lesson.title}</span>
+        {lesson.url ? <span className="lesson-state ready"><Play size={11} aria-hidden="true" />{t('ক্লাস', 'class')}</span> : <span className="lesson-state"><Search size={11} aria-hidden="true" />{t('খুঁজো', 'search')}</span>}
+      </a>;
+    })}</div>
   </div>;
 }

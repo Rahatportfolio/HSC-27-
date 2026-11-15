@@ -1,3 +1,5 @@
+import { useState } from 'react';
+import type { CSSProperties } from 'react';
 import { ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, HeartPulse, ListChecks, Pause, Play, RotateCcw, Timer, Trash2 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, chapterById, subjectById } from '../data';
@@ -12,9 +14,10 @@ import { carryoversOn, pendingCarryovers, removeCarryover, toggleCarryover } fro
 import { ClassLinkRow, DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
 
 export default function TodayView() {
-  const { plan, data, setData, storageOk, today, selectedDate, setSelectedDate, navigate, exportICS, timer } = usePlanner();
+  const { plan, data, setData, storageOk, today, selectedDate, setSelectedDate, navigate, exportICS, timer, openChapter } = usePlanner();
   const day = plan.find(item => item.date === selectedDate);
   const stats = getStats(plan, data, today);
+  const [showAllTargets, setShowAllTargets] = useState(false);
   const isToday = selectedDate === today;
   const dayNumber = diffDays(data.settings.startDate, selectedDate) + 1;
   const measured = minutesOn(data.studySessions, selectedDate);
@@ -47,10 +50,10 @@ export default function TodayView() {
     <section className="motivation-card"><span className="motivation-mark" aria-hidden="true">✦</span><div><span className="eyebrow">{t('আজকের অনুপ্রেরণা', 'Today’s motivation')}</span><p>{t(motivation.bn, motivation.en)}</p></div></section>
     <section className="card target-card">
       <div className="card-heading"><h3><ListChecks size={17} />{t('আজকের টার্গেট', 'Today’s targets')}</h3><span className="tiny-muted">{t('এই তারিখের মধ্যে শেষ', 'Finish by this date')}</span></div>
-      {targets.length ? <div className="target-list">{targets.map(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id], links = CHAPTER_CLASSES[chapter.id]; return <div className="target-item" key={chapter.id}>
+      {targets.length ? <div className="target-list">{targets.slice(0, showAllTargets ? targets.length : 4).map(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id], links = CHAPTER_CLASSES[chapter.id]; return <div className="target-item" key={chapter.id} style={{ '--subject': subjectById[chapter.subject].color } as CSSProperties}>
         <div className="target-copy"><strong>{chapter.title}</strong><small>{subjectById[chapter.subject].name} · {bn(slot.hours)} {t('ঘণ্টা', 'h')} · শেষ {formatDate(slot.end)}</small><span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span></div>
-        {links && <ClassLinkRow classes={links} compact />}
-      </div>; })}</div> : <p className="tiny-muted">{t('আজ কোনো নতুন অধ্যায়ের টার্গেট নেই — রিভিশন বা ব্যাকলগ দেখে নাও।', 'No new chapter target today — use it for revision or backlog.')}</p>}
+        {links && <div className="target-links"><ClassLinkRow classes={links} /><button className="text-button target-open" onClick={() => openChapter(chapter)}>{t('সব অপশন', 'All options')} <ChevronRight size={14} /></button></div>}
+      </div>; })}{targets.length > 4 && <button className="text-button target-more" onClick={() => setShowAllTargets(!showAllTargets)}>{showAllTargets ? t('কম দেখাও', 'Show less') : `${t('আরও', 'Show')} ${bn(targets.length - 4)} ${t('টি টার্গেট', 'more targets')}`} <ArrowRight size={14} /></button>}</div> : <p className="tiny-muted">{t('আজ কোনো নতুন অধ্যায়ের টার্গেট নেই — রিভিশন বা ব্যাকলগ দেখে নাও।', 'No new chapter target today — use it for revision or backlog.')}</p>}
     </section>
     <PhaseJourney startDate={data.settings.startDate} activeDate={selectedDate} />
     <div className="stats-grid">
