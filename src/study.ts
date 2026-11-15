@@ -34,14 +34,16 @@ export function deleteStudySession(data: AppData, id: string): AppData {
 export interface NewSession { minutes: number; subject: SubjectId; chapterId?: string; mode: StudyMode; label?: string }
 
 export function carryoversOn(data: AppData, date: string): Carryover[] {
-  return data.carryovers.filter(item => item.date === date).sort((a, b) => Number(!!a.completedAt) - Number(!!b.completedAt) || a.createdAt.localeCompare(b.createdAt));
+  const items = data.carryovers.filter(item => item.date === date).sort((a, b) => Number(!!a.completedAt) - Number(!!b.completedAt) || b.createdAt.localeCompare(a.createdAt));
+  return items.filter((item, index) => items.findIndex(other => other.taskId === item.taskId) === index);
 }
 export function pendingCarryovers(data: AppData): Carryover[] {
-  return data.carryovers.filter(item => !item.completedAt).sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt));
+  const items = data.carryovers.filter(item => !item.completedAt && !data.completed[item.taskId]).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  return items.filter((item, index) => items.findIndex(other => other.taskId === item.taskId) === index);
 }
 export function addCarryover(data: AppData, task: Pick<Task, 'id' | 'title' | 'subject' | 'endMinute' | 'startMinute' | 'date'>, date: string): AppData {
   if (data.carryovers.length >= 2000) return data;
-  const exists = data.carryovers.some(item => item.taskId === task.id && item.date === date && !item.completedAt);
+  const exists = !!data.completed[task.id] || data.carryovers.some(item => item.taskId === task.id && !item.completedAt);
   if (exists) return data;
   const entry: Carryover = {
     id: newId(), taskId: task.id, title: task.title, subject: task.subject,
@@ -49,14 +51,21 @@ export function addCarryover(data: AppData, task: Pick<Task, 'id' | 'title' | 's
   };
   return { ...data, carryovers: [...data.carryovers, entry] };
 }
+/** One completion state for an original task and all of its carried copies. */
+export function setTaskCompletion(data: AppData, ids: string[], done: boolean): AppData {
+  const selected = new Set(ids);
+  const completed = { ...data.completed };
+  const stamp = nowIso();
+  for (const id of selected) {
+    if (done) completed[id] = completed[id] || stamp;
+    else delete completed[id];
+  }
+  return { ...data, completed, carryovers: data.carryovers.map(entry => selected.has(entry.taskId)
+    ? { ...entry, completedAt: done ? completed[entry.taskId] : undefined } : entry) };
+}
 export function toggleCarryover(data: AppData, id: string): AppData {
   const item = data.carryovers.find(entry => entry.id === id);
-  if (!item) return data;
-  const completedAt = item.completedAt ? undefined : nowIso();
-  const completed = { ...data.completed };
-  // Completing the carried copy is the same achievement as completing the original session.
-  if (completedAt && !completed[item.taskId]) completed[item.taskId] = completedAt;
-  return { ...data, completed, carryovers: data.carryovers.map(entry => entry.id === id ? { ...entry, completedAt } : entry) };
+  return item ? setTaskCompletion(data, [item.taskId], !data.completed[item.taskId]) : data;
 }
 export function removeCarryover(data: AppData, id: string): AppData {
   return { ...data, carryovers: data.carryovers.filter(item => item.id !== id) };

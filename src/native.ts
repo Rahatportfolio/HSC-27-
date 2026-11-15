@@ -1,4 +1,9 @@
-import { chapterById, subjectById } from './data';
+import { chapterById } from './data';
+import {
+  buildDailyStatusNotification,
+  buildEveningCheckinNotification,
+  buildTaskReminderNotification,
+} from './notifications';
 import type { AppData, Day } from './planner';
 import { addDays, taskStart } from './planner';
 
@@ -153,7 +158,7 @@ export async function nativeNotify(title: string, body: string, channelId: strin
     if (permission.display !== 'granted') permission = await LocalNotifications.requestPermissions();
     if (permission.display !== 'granted') return false;
     await LocalNotifications.schedule({ notifications: [{
-      id: idFor(`${title}:${body}`), title, body, channelId,
+      id: idFor(`${title}:${body}`), title, body, largeBody: body, channelId,
       schedule: { at: new Date(Date.now() + 400) }, smallIcon: SMALL_ICON,
     }] });
     return true;
@@ -177,7 +182,7 @@ export async function scheduleTimerAlarm(endsAt: number, title: string, body: st
     const notifications = [{
       // If the alarm channel could not be created, fall back to the reminder channel so the
       // alarm is never dropped for a missing channel.
-      id: TIMER_ALARM_ID, title, body, channelId: alarmChannelOk ? ALARM_CHANNEL : REMINDER_CHANNEL, smallIcon: SMALL_ICON,
+      id: TIMER_ALARM_ID, title, body, largeBody: body, channelId: alarmChannelOk ? ALARM_CHANNEL : REMINDER_CHANNEL, smallIcon: SMALL_ICON,
       schedule: { at: new Date(endsAt), allowWhileIdle: true },
     }];
     try {
@@ -262,27 +267,66 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
   const lastDate = addDays(today, WINDOW_DAYS);
   const now = Date.now() + 60_000;
   const notifications: {
-    id: number; title: string; body: string; channelId: string;
+    id: number; title: string; body: string; largeBody?: string; channelId: string;
     schedule: { at: Date; allowWhileIdle: boolean };
   }[] = [];
 
   for (const day of plan) {
     if (day.date < today) continue;
     if (day.date > lastDate) break;
+
+    // 1. Morning daily briefing (20 min before first session, clamped >= 5:45 AM): what to study + total hours + remaining work
+    const incompleteDayTasks = day.tasks.filter(t => !data.completed[t.id]);
+    if (incompleteDayTasks.length > 0) {
+      const firstStart = Math.min(...incompleteDayTasks.map(t => taskStart(t).minute));
+      const briefMinute = Math.max(5 * 60 + 45, firstStart - 20);
+      const briefAt = instant(day.date, briefMinute);
+      if (briefAt > now && briefAt <= instant(lastDate, 24 * 60)) {
+        const brief = buildDailyStatusNotification(plan, data, day.date);
+        notifications.push({
+          id: idFor(`daily-brief:${day.date}`),
+          title: brief.title,
+          body: brief.body,
+          largeBody: brief.body,
+          channelId: REMINDER_CHANNEL,
+          schedule: { at: new Date(briefAt), allowWhileIdle: true },
+        });
+      }
+    }
+
+    // 2. Per-session reminder with full daily context (today's study, total hours, completed vs remaining)
     for (const task of day.tasks) {
       if (data.completed[task.id]) continue;
       const start = taskStart(task);
       const at = instant(start.date, start.minute - data.settings.reminderLead);
       if (at <= now || at > instant(lastDate, 24 * 60)) continue;
-      const subject = subjectById[task.subject].name;
-      const chapters = task.chapterIds.map(id => chapterById[id]?.title).filter(Boolean).slice(0, 2).join(' · ');
+      const reminder = buildTaskReminderNotification(plan, data, task);
       notifications.push({
         id: idFor(`task:${task.id}`),
-        title: `${subject} · পড়ার সময়`,
-        body: chapters || task.title,
+        title: reminder.title,
+        body: reminder.body,
+        largeBody: reminder.body,
         channelId: REMINDER_CHANNEL,
         schedule: { at: new Date(at), allowWhileIdle: true },
       });
+    }
+
+    // 3. Evening remaining-study check-in at 8:30 PM when tasks are still incomplete
+    if (incompleteDayTasks.length > 0) {
+      const eveAt = instant(day.date, 20 * 60 + 30);
+      if (eveAt > now && eveAt <= instant(lastDate, 24 * 60)) {
+        const checkin = buildEveningCheckinNotification(plan, data, day.date);
+        if (checkin) {
+          notifications.push({
+            id: idFor(`evening-checkin:${day.date}`),
+            title: checkin.title,
+            body: checkin.body,
+            largeBody: checkin.body,
+            channelId: REMINDER_CHANNEL,
+            schedule: { at: new Date(eveAt), allowWhileIdle: true },
+          });
+        }
+      }
     }
   }
 

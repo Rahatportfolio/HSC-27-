@@ -163,6 +163,8 @@ export interface Carryover {
 
 export interface RoutineBlock {
   id: string;
+  /** Optional one-off date; absent for recurring weekly blocks. */
+  date?: string;
   /** JavaScript weekday: 0 = Sunday … 6 = Saturday. */
   weekday: number;
   startMinute: number;
@@ -185,6 +187,18 @@ export interface SubjectMarks {
   [subject: string]: number | null;
 }
 
+/** Per-day custom schedule override: changing start time, daily hours, or any task slot cascades subsequent times automatically. */
+export interface DayScheduleOverride {
+  /** Custom start minute of day (0..1439), e.g. 600 for 10:00 AM. */
+  startMinute?: number;
+  /** Custom net study hours (4..18) for this specific date. */
+  dailyHours?: number;
+  /** Custom duration in minutes per taskId; subsequent tasks cascade automatically. */
+  taskMinutes?: Record<string, number>;
+  /** Custom start minute (0..2879) per taskId; subsequent tasks cascade automatically. */
+  taskStartMinutes?: Record<string, number>;
+}
+
 /** Fields shared by the v2 settings object. Kept here so storage and planner use one shape. */
 export interface SettingsExtras {
   theme: ThemeMode;
@@ -195,4 +209,8 @@ export interface SettingsExtras {
   pomodoroBreak: number;
   pomodoroLongBreak: number;
   fontScale: FontScale;
+  /** Next-month / Phase-2 study-hour boost (e.g. 8h in Nov -> 16-18h from Dec). */
+  boostEnabled: boolean;
+  boostStartDate: string;
+  boostDailyHours: number;
 }

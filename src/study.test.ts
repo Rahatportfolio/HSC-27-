@@ -52,3 +52,29 @@ describe('study sessions and carryover', () => {
     expect(result.data.carryovers.every(item => item.date === '2026-11-20')).toBe(true);
   });
 });
+
+describe('completion synchronization', () => {
+  it('synchronizes the original and carried task in both directions without duplicate carries', () => {
+    let data = addCarryover(freshData(), firstTask, '2026-11-20');
+    expect(addCarryover(data, firstTask, '2026-11-21')).toBe(data);
+    const id = data.carryovers[0].id;
+    data = toggleCarryover(data, id);
+    expect(data.completed[firstTask.id]).toBeTruthy();
+    expect(data.carryovers[0].completedAt).toBe(data.completed[firstTask.id]);
+    data = toggleCarryover(data, id);
+    expect(data.completed[firstTask.id]).toBeUndefined();
+    expect(data.carryovers[0].completedAt).toBeUndefined();
+    expect(pendingCarryovers(data)).toHaveLength(1);
+  });
+  it('keeps all copies synchronized when original tasks or whole chapters change', async () => {
+    const { setTaskCompletion } = await import('./study');
+    let data = addCarryover(freshData(), firstTask, '2026-11-20');
+    data.carryovers.push({ ...data.carryovers[0], id: 'legacy-duplicate', date: '2026-11-21' });
+    expect(pendingCarryovers(data)).toHaveLength(1);
+    data = setTaskCompletion(data, [firstTask.id], true);
+    expect(data.carryovers.every(item => item.completedAt === data.completed[firstTask.id])).toBe(true);
+    data = setTaskCompletion(data, [firstTask.id], false);
+    expect(data.carryovers.every(item => !item.completedAt)).toBe(true);
+    expect(pendingCarryovers(data)).toHaveLength(1);
+  });
+});

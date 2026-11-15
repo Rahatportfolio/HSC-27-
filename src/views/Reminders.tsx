@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { ArrowDownToLine, ArrowUpRight, Bell, BellRing, CalendarDays, CheckCircle2, ChevronDown, Clock3, Info, MonitorSmartphone, ShieldCheck } from 'lucide-react';
+import { ArrowDownToLine, ArrowUpRight, Bell, BellRing, CalendarDays, CheckCircle2, ChevronDown, Clock3, Info, MonitorSmartphone, ShieldCheck, Sparkles } from 'lucide-react';
 import { usePlanner } from '../context';
+import { buildDailyNotificationDigest, buildDailyStatusNotification } from '../notifications';
 import { addDays, bn, formatDate, taskStart } from '../planner';
 import { revisionBuckets, revisionDueCount } from '../revision';
 import { showNotification } from '../hooks';
@@ -9,10 +10,12 @@ import { PageHeading } from '../components';
 import { t } from '../i18n';
 
 export default function RemindersView() {
-  const { data, setData, plan, today, notify, exportICS, navigate } = usePlanner();
+  const { data, setData, plan, today, notify, exportICS, navigate, sendStudyStatusNotification } = usePlanner();
   const native = isNativeApp();
   const revisionDue = revisionDueCount(data, today);
   const revisionLate = revisionBuckets(data.revisions, today).overdue.length;
+  const digest = buildDailyNotificationDigest(plan, data, today);
+  const statusPreview = buildDailyStatusNotification(plan, data, today);
   const [permission, setPermission] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
   const [busy, setBusy] = useState(false);
   const request = async (): Promise<boolean> => {
@@ -23,15 +26,84 @@ export default function RemindersView() {
     catch { notify('এই ব্রাউজারে অনুমতি চাওয়া যায়নি। ক্যালেন্ডার রিমাইন্ডার ব্যবহার করো।', 'error'); return false; }
     finally { setBusy(false); }
   };
-  const toggle = async () => { if (data.settings.reminderEnabled) { setData(d => ({ ...d, settings: { ...d.settings, reminderEnabled: false } })); return; } if (permission === 'granted' || await request()) setData(d => ({ ...d, settings: { ...d.settings, reminderEnabled: true } })); };
-  const test = async () => { try { await showNotification('প্রস্তুতি · রিমাইন্ডার কাজ করছে', 'এভাবেই পড়ার সেশনের আগে মনে করিয়ে দেওয়া হবে। অ্যাপ খোলা রাখতে হবে।'); notify('টেস্ট নোটিফিকেশন পাঠানো হয়েছে। ডিভাইসের নোটিফিকেশন সেটিংসও দেখো।'); } catch { notify('নোটিফিকেশন পাঠানো যায়নি। অনুমতি ও ডিভাইসের সেটিংস যাচাই করো।', 'error'); } };
+  const toggle = async () => {
+    if (data.settings.reminderEnabled) { setData(d => ({ ...d, settings: { ...d.settings, reminderEnabled: false } })); return; }
+    if (permission === 'granted' || await request()) {
+      setData(d => ({ ...d, settings: { ...d.settings, reminderEnabled: true } }));
+      const latest = buildDailyStatusNotification(plan, data, today);
+      try { await showNotification(latest.title, latest.body, { tag: 'prostuti-daily-progress' }); } catch { /* ignore */ }
+    }
+  };
+  const test = async () => {
+    try {
+      const latest = buildDailyStatusNotification(plan, data, today);
+      await showNotification(latest.title, latest.body, { tag: 'prostuti-daily-progress' });
+      notify('আজকের কী পড়া, মোট সময় ও কমপ্লিট করার বাকি অংশসহ নোটিফিকেশন পাঠানো হয়েছে!');
+    } catch {
+      notify('নোটিফিকেশন পাঠানো যায়নি। অনুমতি ও ডিভাইসের সেটিংস যাচাই করো।', 'error');
+    }
+  };
+  const sendNow = async () => {
+    const ok = await sendStudyStatusNotification?.(today);
+    if (typeof Notification !== 'undefined') setPermission(Notification.permission);
+    if (!ok && permission === 'granted') void test();
+  };
   const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && taskStart(t).date >= start && (!end || taskStart(t).date < end)).length;
   const ranges = [
     { id: 'day' as const, title: 'আজকের রুটিন', desc: 'শুধু আজকের বাকি সেশনগুলো', icon: Clock3, count: count(today, addDays(today, 1)), date: today },
     { id: 'week' as const, title: 'আগামী ৭ দিন', desc: 'এই সপ্তাহটা গুছিয়ে রাখো', icon: CalendarDays, count: count(today, addDays(today, 7)), date: `${today} → ${addDays(today, 6)}` },
     { id: 'all' as const, title: 'পুরো পরিকল্পনা', desc: 'শুরু থেকে শেষ পর্যন্ত সব বাকি সেশন', icon: ArrowDownToLine, count: count(plan[0].date), date: `${plan[0].date} → ${plan[plan.length - 1].date}` },
   ];
-  return <div className="view reminders-view"><PageHeading eyebrow="A GENTLE NUDGE" title="পড়ার কথা মনে থাকবে।" titleEn="You won’t forget to study." description="দুইভাবে রিমাইন্ডার: ক্যালেন্ডারে অ্যালার্ম, আর অ্যাপ খোলা থাকলে ব্রাউজার নোটিফিকেশন।" descriptionEn="Device notifications in the Android app, browser notifications while the app is open, and calendar alarms." />
+  return <div className="view reminders-view"><PageHeading eyebrow="A GENTLE NUDGE" title="পড়ার কথা মনে থাকবে।" titleEn="You won’t forget to study." description="প্রতিটি নোটিফিকেশনেই থাকবে আজ কী পড়া, মোট কতটুকু পড়া এবং আর কতটুকু কমপ্লিট করা লাগবে।" descriptionEn="Every notification tells you what to study today, total scheduled time, and how much still needs to be completed." />
+    <section className="card live-notif-preview-card" aria-label={t('স্টাডি নোটিফিকেশন প্রিভিউ', 'Study notification preview')}>
+      <div className="live-notif-header">
+        <div>
+          <span className="eyebrow"><Sparkles size={13} /> {t('স্মার্ট স্টাডি ডাইজেস্ট নোটিফিকেশন', 'SMART STUDY DIGEST NOTIFICATION')}</span>
+          <h2>{t('নোটিফিকেশনেই সম্পূর্ণ হিসাব', 'Everything inside your notification')}</h2>
+          <p>{t('সকালের ব্রিফিং, সেশন শুরুর আগে, পড়া টিক দেওয়ার সাথে সাথে এবং রাত ৮টায় — সব নোটিফিকেশনে নিচের তথ্যগুলো অটো আপডেট হয়ে আসবে।', 'Morning briefing, pre-session alerts, live completion updates, and 8 PM evening check-ins all include this full study breakdown.')}</p>
+        </div>
+        <button type="button" className="button primary" onClick={() => void sendNow()}>
+          <BellRing size={16} />{t('এখনই নোটিফিকেশনে পাঠাও', 'Send notification now')}
+        </button>
+      </div>
+      <div className="os-notif-mockup">
+        <div className="os-notif-top">
+          <span className="os-notif-app">{t('প্রস্তুতি · HSC ’27 স্টাডি রিমাইন্ডার', 'Prostuti · HSC ’27 Study Reminder')}</span>
+          <span className="os-notif-time">{t('এখন · লাইভ প্রিভিউ', 'Now · Live preview')}</span>
+        </div>
+        <strong className="os-notif-title">{statusPreview.title}</strong>
+        <div className="os-notif-grid">
+          <div className="os-notif-item">
+            <span>{t('আজ কী পড়া', 'What to study today')}</span>
+            <strong>{digest.whatToStudy}</strong>
+          </div>
+          <div className="os-notif-item">
+            <span>{t('কতটুকু পড়া (মোট)', 'Total scheduled study')}</span>
+            <strong>{digest.totalSummary}</strong>
+          </div>
+          <div className="os-notif-item">
+            <span>{t('সম্পন্ন হয়েছে', 'Completed so far')}</span>
+            <strong>{digest.completedSummary}</strong>
+          </div>
+          <div className="os-notif-item highlight">
+            <span>{t('কতটুকু কমপ্লিট করা লাগবে', 'Still needed to complete')}</span>
+            <strong>{digest.remainingSummary}</strong>
+            {digest.remainingTitles.length > 0 && <small>{digest.remainingTitles.join(' · ')}</small>}
+          </div>
+        </div>
+        {digest.pastUnfinishedCount > 0 && (
+          <div className="os-notif-past">
+            {t(`আগের দিনের অসমাপ্ত বাকি: ${bn(digest.pastUnfinishedCount)}টি সেশন (${digest.pastUnfinishedSummary})`, `Earlier unfinished: ${digest.pastUnfinishedCount} sessions (${digest.pastUnfinishedSummary})`)}
+          </div>
+        )}
+      </div>
+      <div className="notif-schedule-chips">
+        <span><CheckCircle2 size={14} />{t('১. সকালের ডেইলি ব্রিফিং', '1. Morning daily briefing')}</span>
+        <span><CheckCircle2 size={14} />{t('২. প্রতিটি সেশন শুরুর আগে', '2. Before every session')}</span>
+        <span><CheckCircle2 size={14} />{t('৩. পড়া সম্পন্ন করলে লাইভ আপডেট', '3. Live update on task tick')}</span>
+        <span><CheckCircle2 size={14} />{t('৪. রাত ৮টায় বাকি পড়ার রিমাইন্ডার', '4. 8 PM remaining study check-in')}</span>
+      </div>
+    </section>
     {native ? <NativeReminderCard /> : <section className="card browser-reminder-card"><div className="reminder-card-main"><span className="large-icon green"><BellRing size={27} /></span><div><h2>{t("ব্রাউজার রিমাইন্ডার", "Browser reminders")}</h2><p>অ্যাপ খোলা থাকা অবস্থায় প্রতিটি সেশনের আগে মনে করিয়ে দেবে।</p><span className={`permission-status ${permission === 'granted' ? 'granted' : ''}`}><span className="status-dot" />{permission === 'granted' ? 'ব্রাউজারের অনুমতি আছে' : permission === 'denied' ? 'ব্রাউজারে অনুমতি বন্ধ আছে' : permission === 'unsupported' ? 'এই ব্রাউজারে সমর্থিত নয়' : 'এখনও অনুমতি দেওয়া হয়নি'}</span></div><button className={`switch ${data.settings.reminderEnabled ? 'on' : ''}`} role="switch" aria-checked={data.settings.reminderEnabled} aria-label={t("ব্রাউজার রিমাইন্ডার", "Browser reminders")} onClick={() => void toggle()} disabled={busy}><span /></button></div><div className="reminder-controls"><label>{t("কত মিনিট আগে?", "How many minutes before?")}<select value={data.settings.reminderLead} onChange={e => setData(d => ({ ...d, settings: { ...d.settings, reminderLead: Number(e.target.value), calendarRevision: d.settings.calendarRevision + 1 } }))}>{[0, 5, 10, 15, 30].map(n => <option key={n} value={n}>{n === 0 ? 'সেশন শুরুর সময়' : `${bn(n)} মিনিট আগে`}</option>)}</select></label><button className="button secondary" disabled={permission !== 'granted'} onClick={() => void test()}><Bell size={16} />{t("টেস্ট নোটিফিকেশন", "Test notification")}</button>{permission === 'default' && <button className="text-button" disabled={busy} onClick={() => void request()}>{t("অনুমতি দাও", "Grant permission")}<ArrowUpRight size={14} /></button>}</div><div className="inline-note"><Info size={16} /><p>অ্যাপ বা ট্যাব পুরো বন্ধ থাকলে এই ব্রাউজার রিমাইন্ডার কাজ করবে না। সেই সময়ে নিচের ক্যালেন্ডার অ্যালার্ম ব্যবহার করো।</p></div></section>}
     <section className="card revision-reminder-card"><div className="reminder-card-main"><span className="large-icon peach"><Bell size={26} /></span><div><h2>{t("রিভিশন রিমাইন্ডার", "Revision reminders")}</h2><p>রিভিশন কার্ড দরকার হলে অ্যাপ খোলা অবস্থায় দিনে একবার নোটিফিকেশন আসে। এখন {bn(revisionDue)}টি রিভিশন দরকার{revisionLate ? `, তার মধ্যে ${bn(revisionLate)}টি ওভারডিউ` : ''}।</p><span className="permission-status"><span className="status-dot" />{t("ব্রাউজার রিমাইন্ডার চালু থাকলেই কাজ করবে", "Works only while browser reminders stay on")}</span></div><button className="button secondary small" onClick={() => navigate('revision')}>{t("রিভিশন দেখো", "See revision")}<ArrowUpRight size={15} /></button></div></section>
     <div className="section-heading"><h2>{t("ক্যালেন্ডারে রিমাইন্ডার নাও", "Take the reminders into a calendar")}</h2><span>Google Calendar · Apple Calendar · Outlook</span></div><div className="export-grid">{ranges.map(r => <section className={`card export-card ${r.id === 'week' ? 'recommended' : ''}`} key={r.id}>{r.id === 'week' && <span className="recommended-label">{t("শুরু করার জন্য ভালো", "Good to start")}</span>}<span className="large-icon green"><r.icon size={24} /></span><h3>{r.title}</h3><p>{r.desc}</p><strong>{bn(r.count)}<small>{t("টি বাকি সেশন", " sessions pending")}</small></strong><span className="export-date">{r.date}</span><button className={`button ${r.id === 'week' ? 'primary' : 'secondary'} full-width`} disabled={!r.count} onClick={() => exportICS(r.id, today)}><ArrowDownToLine size={16} />{t(".ics ডাউনলোড", "Download .ics")}</button></section>)}</div>
@@ -67,9 +139,10 @@ function NativeReminderCard() {
   };
   const disable = () => { setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: false } })); setStatus('বন্ধ'); };
   const test = async () => {
-    const sent = await nativeNotify('প্রস্তুতি · রিমাইন্ডার কাজ করছে', 'এভাবেই পড়ার সেশনের আগে মনে করিয়ে দেওয়া হবে।');
+    const latest = buildDailyStatusNotification(plan, data, today);
+    const sent = await nativeNotify(latest.title, latest.body);
     notify(sent
-      ? 'টেস্ট নোটিফিকেশন পাঠানো হয়েছে। না এলে ফোনের সেটিংসে এই অ্যাপের নোটিফিকেশন চালু আছে কি না দেখো।'
+      ? 'আজকের কী পড়া, মোট সময় ও কমপ্লিট করার বাকি অংশসহ নোটিফিকেশন পাঠানো হয়েছে!'
       : 'নোটিফিকেশন পাঠানো যায়নি—অনুমতি বা চ্যানেল নেই। উপরের সুইচ চালু করে আবার চেষ্টা করো।', sent ? 'success' : 'error');
     void refresh();
   };

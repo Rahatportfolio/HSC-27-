@@ -33,6 +33,8 @@ describe('audit', () => {
       lessonNoUrl: Object.values(BANGLA_LESSONS).flat().filter(l => l.url && !/^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/.test(l.url)).length,
       badPlaylistId: Object.values(CHAPTER_CLASSES).flatMap(c => [...c.oneShot, ...c.mcq, ...c.cq]).filter(o => o.kind === 'playlist' && !VERIFIED_PLAYLISTS[o.url.split('list=')[1]]).map(o => o.url),
       badVideoId: Object.values(CHAPTER_CLASSES).flatMap(c => [...c.oneShot, ...c.mcq, ...c.cq]).filter(o => o.kind === 'video' && o.url.split('v=')[1].length !== 11).map(o => o.url),
+      emptyDirectType: Object.entries(CHAPTER_CLASSES).flatMap(([id, c]) => (['oneShot','mcq','cq'] as const).filter(k => c[k].filter(o => o.kind !== 'search').length < 2).map(k => `${id}:${k}`)),
+      noSearchBackup: Object.entries(CHAPTER_CLASSES).filter(([, c]) => ![...c.oneShot, ...c.mcq, ...c.cq].some(o => o.kind === 'search')).map(([id]) => id),
       duplicateLinks: Object.entries(CHAPTER_CLASSES).filter(([, c]) => { const urls = [...c.oneShot, ...c.mcq, ...c.cq].map(o => o.url); return new Set(urls).size !== urls.length; }).map(([id]) => id),
     };
     console.log(JSON.stringify({ total: ids.length, ...res }, null, 1));
@@ -43,6 +45,8 @@ describe('audit', () => {
     expect(res.badUrl).toEqual([]);
     expect(res.badPlaylistId).toEqual([]);
     expect(res.badVideoId).toEqual([]);
+    expect(res.emptyDirectType).toEqual([]);
+    expect(res.noSearchBackup).toEqual([]);
     expect(res.duplicateLinks).toEqual([]);
     expect(Object.values(CHAPTER_CLASSES).flatMap(c => [c.oneShot, c.mcq, c.cq]).every(list => list.length >= 2)).toBe(true);
   });

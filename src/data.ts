@@ -22,13 +22,13 @@ export interface Subject {
   optional?: boolean;
 }
 export const SUBJECTS: Subject[] = [
-  { id: 'physics', name: 'পদার্থবিজ্ঞান', short: 'পদার্থ', english: 'Physics', color: '#5278ad', tint: '#edf2fb', code: '174–175' },
-  { id: 'chemistry', name: 'রসায়ন', short: 'রসায়ন', english: 'Chemistry', color: '#b27c42', tint: '#fbf2e5', code: '176–177' },
-  { id: 'biology', name: 'জীববিজ্ঞান', short: 'জীববিজ্ঞান', english: 'Biology', color: '#54866a', tint: '#eaf3ec', code: '178–179' },
-  { id: 'math', name: 'উচ্চতর গণিত', short: 'উ. গণিত', english: 'Higher Math', color: '#8b75ac', tint: '#f2eef8', code: '265–266', optional: true },
-  { id: 'bangla', name: 'বাংলা', short: 'বাংলা', english: 'Bangla', color: '#bc737b', tint: '#faedef', code: '101–102' },
-  { id: 'english', name: 'ইংরেজি', short: 'ইংরেজি', english: 'English', color: '#4d8e99', tint: '#eaf4f6', code: '107–108' },
-  { id: 'ict', name: 'আইসিটি', short: 'আইসিটি', english: 'ICT', color: '#7d859b', tint: '#eef0f6', code: '275' },
+  { id: 'physics', name: 'পদার্থবিজ্ঞান', short: 'পদার্থ', english: 'Physics', color: '#2c5e8a', tint: '#ebf2f8', code: '174–175' },
+  { id: 'chemistry', name: 'রসায়ন', short: 'রসায়ন', english: 'Chemistry', color: '#9c6227', tint: '#fbf3e8', code: '176–177' },
+  { id: 'biology', name: 'জীববিজ্ঞান', short: 'জীববিজ্ঞান', english: 'Biology', color: '#286b4b', tint: '#e8f4ed', code: '178–179' },
+  { id: 'math', name: 'উচ্চতর গণিত', short: 'উ. গণিত', english: 'Higher Math', color: '#64528c', tint: '#f1eef8', code: '265–266', optional: true },
+  { id: 'bangla', name: 'বাংলা', short: 'বাংলা', english: 'Bangla', color: '#9e4756', tint: '#faedf0', code: '101–102' },
+  { id: 'english', name: 'ইংরেজি', short: 'ইংরেজি', english: 'English', color: '#2c707a', tint: '#e8f4f5', code: '107–108' },
+  { id: 'ict', name: 'আইসিটি', short: 'আইসিটি', english: 'ICT', color: '#4e5d73', tint: '#edf0f5', code: '275' },
 ];
 export const subjectById = Object.fromEntries(SUBJECTS.map(s => [s.id, s])) as Record<SubjectId, Subject>;
 export const CORE: SubjectId[] = ['physics', 'chemistry', 'biology', 'math'];

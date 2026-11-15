@@ -5,7 +5,8 @@ import { chapterById } from '../data';
 import { addDays, bn, diffDays, formatDate } from '../planner';
 import { INTERVAL_LABEL, RECALL_HINT, RECALL_LABEL, completeRevision, completeRevisionWithRecall, recallSummary, reopenRevision, revisionBuckets, snoozeRevision } from '../revision';
 import type { RecallRating, RevisionItem } from '../types';
-import { EmptyState, PageHeading, ProgressBar, SubjectBadge } from '../components';
+import { EmptyState, PageHeading, ProgressBar, SubjectBadge, ClassLinkRow } from '../components';
+import { CHAPTER_CLASSES } from '../classLinks';
 import { t } from '../i18n';
 
 type Tab = 'due' | 'upcoming' | 'history' | 'all';
@@ -48,10 +49,17 @@ export default function RevisionView() {
 }
 function RevisionCard({ item, today, onRate, onSnooze, onOpen, onTimer }: { item: RevisionItem; today: string; onRate: (item: RevisionItem, rating: RecallRating) => void; onSnooze: () => void; onOpen: () => void; onTimer: () => void }) {
   const chapter = chapterById[item.chapterId];
+  const links = CHAPTER_CLASSES[item.chapterId];
   const late = item.dueDate < today;
   const days = diffDays(item.dueDate, today);
   return <article className={`card revision-card ${late ? 'late' : ''}`}>
-    <div className="revision-card-main"><div className="revision-card-top"><SubjectBadge subject={item.subject} small /><span className="revision-interval">{item.adjusted ? 'নিজের ছন্দে সরানো' : `${INTERVAL_LABEL[item.interval]} পরের রিভিশন`}</span>{item.completedAt && <span className="exam-status result-recorded">{t("সম্পন্ন", "Done")}</span>}{late && <span className="late-pill">{bn(days)} দিন দেরি</span>}</div><h3>{chapter?.title || 'অধ্যায়'}</h3><p>{chapter?.focus}</p><span className="revision-due"><CalendarClock size={14} />নির্ধারিত {formatDate(item.dueDate, 'long')} · পত্র {chapter ? bn(chapter.paper) : '—'}</span></div>
+    <div className="revision-card-main">
+      <div className="revision-card-top"><SubjectBadge subject={item.subject} small /><span className="revision-interval">{item.adjusted ? 'নিজের ছন্দে সরানো' : `${INTERVAL_LABEL[item.interval]} পরের রিভিশন`}</span>{item.completedAt && <span className="exam-status result-recorded">{t("সম্পন্ন", "Done")}</span>}{late && <span className="late-pill">{bn(days)} দিন দেরি</span>}</div>
+      <h3>{chapter?.title || 'অধ্যায়'}</h3>
+      <p>{chapter?.focus}</p>
+      <span className="revision-due"><CalendarClock size={14} />নির্ধারিত {formatDate(item.dueDate, 'long')} · পত্র {chapter ? bn(chapter.paper) : '—'}</span>
+      {links && <div className="revision-class-row"><ClassLinkRow classes={links} /></div>}
+    </div>
     <div className="revision-actions recall-actions">
       <span className="recall-label">{t("কেমন মনে আছে?", "How well do you remember?")}</span>
       <button className="recall-button weak" onClick={() => onRate(item, 'weak')}><RotateCcw size={14} />{t("ভুলে গেছি", "Forgot")}</button>
