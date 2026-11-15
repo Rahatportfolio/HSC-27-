@@ -1,68 +1,251 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Dispatch, SetStateAction } from 'react';
+import { CHAPTERS, SUBJECTS } from './data';
+import type { SubjectId } from './data';
 import { addDays, dhakaMinutes, todayKey } from './planner';
-import type { AppData, Day } from './planner';
+import type { AppData, Day, Settings } from './planner';
+import type { FontScale, StudyMode, ThemeMode } from './types';
 
 export function useNow(): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const id = setInterval(() => setNow(new Date()), 15000); return () => clearInterval(id); }, []);
   return now;
 }
-interface TimerState { id: string; duration: number; remaining: number; running: boolean; endAt: number }
-const TIMER_KEY = 'hsc27-focus-timer-v1';
-const TIMER_DONE_KEY = 'hsc27-focus-done-v1';
-const freshTimer = (): TimerState => ({ id: '', duration: 25, remaining: 1500, running: false, endAt: 0 });
-const timerId = (): string => `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-export function parseTimerState(raw: string | null): TimerState {
+
+export interface StudyTimerState {
+  mode: StudyMode;
+  phase: 'focus' | 'short' | 'long' | 'none';
+  durationMin: number;
+  accumulatedMs: number;
+  running: boolean;
+  startedAt: number | null;
+  subject: SubjectId;
+  chapterId: string;
+  label: string;
+  /** Breaks are timed but never counted as study time. */
+  logging: boolean;
+  focusCount: number;
+}
+export const TIMER_KEY = 'hsc27-study-timer-v2';
+const CLAIM_KEY = 'hsc27-timer-claimed-v2';
+const chapterIds = new Set(CHAPTERS.map(chapter => chapter.id));
+const subjectIds = new Set(SUBJECTS.map(subject => subject.id));
+const modes = new Set<StudyMode>(['stopwatch', 'countdown', 'pomodoro']);
+const phases = new Set(['focus', 'short', 'long', 'none']);
+
+export function freshTimerState(settings?: Pick<Settings, 'pomodoroFocus'>): StudyTimerState {
+  return {
+    mode: 'pomodoro', phase: 'focus', durationMin: settings?.pomodoroFocus ?? 25,
+    accumulatedMs: 0, running: false, startedAt: null, subject: 'physics', chapterId: '', label: '', logging: true, focusCount: 0,
+  };
+}
+export function parseStudyTimer(raw: string | null, settings?: Pick<Settings, 'pomodoroFocus'>): StudyTimerState {
+  const fresh = freshTimerState(settings);
   try {
-    const t = JSON.parse(raw || 'null');
-    if (t && [25, 50].includes(t.duration) && Number.isFinite(t.remaining) && t.remaining >= 0 && t.remaining <= t.duration * 60 && typeof t.running === 'boolean' && Number.isFinite(t.endAt)) {
-      // A running timer must have a real deadline; endAt=0 used to credit a full session instantly.
-      if (t.running && t.endAt <= 0) return freshTimer();
-      return { id: typeof t.id === 'string' && t.id ? t.id : (t.running ? `legacy-${t.endAt}` : ''), duration: t.duration, remaining: t.remaining, running: t.running, endAt: t.running ? t.endAt : 0 };
-    }
-  } catch { /* use a fresh timer */ }
-  return freshTimer();
+    const value = JSON.parse(raw || 'null');
+    if (!value || typeof value !== 'object') return fresh;
+    const mode = modes.has(value.mode) ? value.mode as StudyMode : fresh.mode;
+    const phase = phases.has(value.phase) ? value.phase as StudyTimerState['phase'] : fresh.phase;
+    const durationMin = Number.isSafeInteger(value.durationMin) && value.durationMin >= 1 && value.durationMin <= 180 ? value.durationMin : fresh.durationMin;
+    const accumulatedMs = Number.isFinite(value.accumulatedMs) && value.accumulatedMs >= 0 && value.accumulatedMs <= 86_400_000 ? value.accumulatedMs : 0;
+    const running = value.running === true;
+    const startedAt = Number.isFinite(value.startedAt) && value.startedAt > 0 && value.startedAt <= Date.now() + 60_000 ? value.startedAt : null;
+    if (running && !startedAt) return fresh;
+    const subject = typeof value.subject === 'string' && subjectIds.has(value.subject) ? value.subject as SubjectId : fresh.subject;
+    const chapterId = typeof value.chapterId === 'string' && chapterIds.has(value.chapterId) ? value.chapterId : '';
+    const label = typeof value.label === 'string' && value.label.length <= 120 ? value.label : '';
+    const logging = value.logging !== false;
+    const focusCount = Number.isSafeInteger(value.focusCount) && value.focusCount >= 0 && value.focusCount < 100000 ? value.focusCount : 0;
+    return { mode, phase, durationMin, accumulatedMs, running, startedAt, subject, chapterId, label, logging, focusCount };
+  } catch {
+    return fresh;
+  }
 }
-const readTimer = (): TimerState => { try { return parseTimerState(localStorage.getItem(TIMER_KEY)); } catch { return freshTimer(); } };
-export function useFocusTimer(setData: Dispatch<SetStateAction<AppData>>, notify: (message: string) => void) {
-  const [timer, setTimer] = useState<TimerState>(readTimer);
-  const [tick, setTick] = useState(Date.now());
+const readTimer = (settings: Pick<Settings, 'pomodoroFocus'>): StudyTimerState => {
+  try { return parseStudyTimer(localStorage.getItem(TIMER_KEY), settings); } catch { return freshTimerState(settings); }
+};
+function claimCompletion(token: string): boolean {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CLAIM_KEY) || '[]');
+    const list: string[] = Array.isArray(parsed) ? parsed.filter((item): item is string => typeof item === 'string') : [];
+    if (list.includes(token)) return false;
+    localStorage.setItem(CLAIM_KEY, JSON.stringify([...list, token].slice(-80)));
+  } catch { /* if storage is unavailable, log once locally */ }
+  return true;
+}
+export interface CompletedSession { minutes: number; subject: SubjectId; chapterId: string; mode: StudyMode; label: string }
+export interface StudyTimerOptions {
+  settings: Settings;
+  onComplete: (session: CompletedSession) => void;
+  notify: (message: string, type?: 'success' | 'info' | 'error') => void;
+}
+export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOptions) {
+  const [state, setState] = useState<StudyTimerState>(() => readTimer(settings));
+  const [tick, setTick] = useState(() => Date.now());
   const notifyRef = useRef(notify); notifyRef.current = notify;
-  useEffect(() => { try { localStorage.setItem(TIMER_KEY, JSON.stringify(timer)); } catch { /* progress storage warning covers persistence */ } }, [timer]);
-  useEffect(() => {
-    const sync = (e: StorageEvent) => { if (e.key === TIMER_KEY) setTimer(parseTimerState(e.newValue)); };
-    window.addEventListener('storage', sync); return () => window.removeEventListener('storage', sync);
-  }, []);
+  const doneRef = useRef(onComplete); doneRef.current = onComplete;
+  const settingsRef = useRef(settings); settingsRef.current = settings;
   useEffect(() => { const id = setInterval(() => setTick(Date.now()), 500); return () => clearInterval(id); }, []);
-  const remaining = timer.running ? Math.max(0, Math.ceil((timer.endAt - tick) / 1000)) : timer.remaining;
   useEffect(() => {
-    if (!timer.running || timer.endAt > tick) return;
-    const finished = timer;
-    setTimer({ id: '', duration: finished.duration, remaining: 0, running: false, endAt: 0 });
-    let claimed = true;
-    try {
-      const parsed = JSON.parse(localStorage.getItem(TIMER_DONE_KEY) || '[]');
-      const done: string[] = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : [];
-      if (finished.id && done.includes(finished.id)) claimed = false;
-      else localStorage.setItem(TIMER_DONE_KEY, JSON.stringify([...done, finished.id || `legacy-${finished.endAt}`].slice(-50)));
-    } catch { /* if storage is unavailable, still count locally once */ }
-    if (!claimed) return;
-    setData(d => ({ ...d, focus: { minutes: d.focus.minutes + finished.duration, sessions: d.focus.sessions + 1 } }));
-    notifyRef.current(`${finished.duration} মিনিটের ফোকাস শেষ! একটু বিরতি নাও।`);
-    if ('Notification' in window && Notification.permission === 'granted') { try { new Notification('ফোকাস শেষ · প্রস্তুতি', { body: 'একটু বিরতি নাও। এরপর পরের ছোট কাজটি শুরু করো।', icon: new URL('icon-192.png', document.baseURI).href }); } catch { /* in-app toast remains */ } }
-  }, [tick, timer, setData]);
-  const toggle = () => setTimer(t => {
-    if (t.running) return { ...t, running: false, remaining: Math.max(0, Math.ceil((t.endAt - Date.now()) / 1000)), endAt: 0 };
-    const remaining = t.remaining || t.duration * 60;
-    const id = t.id && t.remaining > 0 && t.remaining < t.duration * 60 ? t.id : timerId();
-    return { id, duration: t.duration, remaining, running: true, endAt: Date.now() + remaining * 1000 };
+    try { localStorage.setItem(TIMER_KEY, JSON.stringify(state)); } catch { /* storage warning is shown elsewhere */ }
+  }, [state]);
+  useEffect(() => {
+    const sync = (event: StorageEvent) => { if (event.key === TIMER_KEY) setState(parseStudyTimer(event.newValue, settingsRef.current)); };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, []);
+
+  const elapsedMs = state.accumulatedMs + (state.running && state.startedAt ? Math.max(0, tick - state.startedAt) : 0);
+  const targetMs = state.mode === 'stopwatch' ? 0 : state.durationMin * 60_000;
+  const remainingSec = state.mode === 'stopwatch' ? Math.floor(elapsedMs / 1000) : Math.max(0, Math.ceil((targetMs - elapsedMs) / 1000));
+  const elapsedSec = Math.floor(elapsedMs / 1000);
+  const progress = targetMs ? Math.min(100, elapsedMs / targetMs * 100) : 0;
+
+  // Completion runs once per started session, even across reloads/tabs.
+  useEffect(() => {
+    if (!state.running || state.mode === 'stopwatch' || elapsedMs < targetMs) return;
+    const snapshot = state;
+    const token = `${snapshot.mode}:${snapshot.phase}:${snapshot.startedAt}:${snapshot.durationMin}`;
+    if (!claimCompletion(token)) { setState(current => ({ ...current, running: false, accumulatedMs: targetMs, startedAt: null })); return; }
+    const shouldLog = snapshot.logging && snapshot.phase !== 'short' && snapshot.phase !== 'long';
+    if (shouldLog) {
+      doneRef.current({ minutes: snapshot.durationMin, subject: snapshot.subject, chapterId: snapshot.chapterId, mode: snapshot.mode, label: snapshot.label });
+    }
+    const settingsNow = settingsRef.current;
+    if (snapshot.mode === 'pomodoro') {
+      if (snapshot.phase === 'focus') {
+        const focusCount = snapshot.focusCount + 1;
+        const long = focusCount % 4 === 0;
+        const nextMinutes = long ? settingsNow.pomodoroLongBreak : settingsNow.pomodoroBreak;
+        notifyRef.current(`${snapshot.durationMin} মিনিট ফোকাস শেষ! ${nextMinutes} মিনিটের ${long ? 'লম্বা ' : ''}বিরতি।`, 'success');
+        setState(current => ({ ...current, phase: long ? 'long' : 'short', durationMin: nextMinutes, accumulatedMs: 0, running: true, startedAt: Date.now(), logging: false, focusCount }));
+      } else {
+        notifyRef.current('বিরতি শেষ। পরের ফোকাস সেশনের জন্য তৈরি হও।', 'info');
+        setState(current => ({ ...current, phase: 'focus', durationMin: settingsNow.pomodoroFocus, accumulatedMs: 0, running: false, startedAt: null, logging: true }));
+      }
+      return;
+    }
+    notifyRef.current(shouldLog ? `${snapshot.durationMin} মিনিটের সেশন সেভ হয়েছে। দারুণ!` : 'বিরতি শেষ! আবার পড়ায় ফেরো।', shouldLog ? 'success' : 'info');
+    setState(current => ({ ...current, running: false, accumulatedMs: current.durationMin * 60_000, startedAt: null }));
+  }, [elapsedMs, state, targetMs]);
+
+  const start = () => setState(current => {
+    if (current.running) return current;
+    const atEnd = current.mode !== 'stopwatch' && current.accumulatedMs >= current.durationMin * 60_000;
+    return { ...current, running: true, startedAt: Date.now(), accumulatedMs: atEnd ? 0 : current.accumulatedMs, logging: current.mode === 'pomodoro' ? current.logging : true };
   });
-  const reset = () => setTimer(t => ({ id: '', duration: t.duration, remaining: t.duration * 60, running: false, endAt: 0 }));
-  const preset = (duration: number) => setTimer(t => t.running ? t : { id: '', duration, remaining: duration * 60, running: false, endAt: 0 });
-  return { ...timer, remaining, toggle, reset, preset };
+  const pause = () => setState(current => {
+    if (!current.running || !current.startedAt) return current;
+    const accumulated = current.accumulatedMs + Math.max(0, Date.now() - current.startedAt);
+    const capped = current.mode === 'stopwatch' ? accumulated : Math.min(accumulated, current.durationMin * 60_000);
+    return { ...current, running: false, startedAt: null, accumulatedMs: capped };
+  });
+  const reset = () => setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null, logging: true }));
+  const setMode = (mode: StudyMode) => setState(current => {
+    const minutes = mode === 'pomodoro' ? settingsRef.current.pomodoroFocus : mode === 'countdown' ? 25 : 0;
+    return { ...current, mode, phase: mode === 'pomodoro' ? 'focus' : 'none', durationMin: minutes, accumulatedMs: 0, running: false, startedAt: null, logging: mode !== 'pomodoro', label: '' };
+  });
+  const setDuration = (minutes: number) => setState(current => ({ ...current, durationMin: Math.max(1, Math.min(180, Math.round(minutes))), accumulatedMs: 0, running: false, startedAt: null }));
+  const setSubject = (subject: SubjectId) => setState(current => ({ ...current, subject, chapterId: '' }));
+  const setChapter = (chapterId: string) => setState(current => ({ ...current, chapterId }));
+  const setLabel = (label: string) => setState(current => ({ ...current, label: label.slice(0, 120) }));
+  const startBreak = (minutes: number) => setState(current => ({ ...current, mode: 'countdown', phase: 'none', durationMin: minutes, accumulatedMs: 0, running: true, startedAt: Date.now(), logging: false, label: 'বিরতি' }));
+  const saveStopwatch = (): number => {
+    const minutes = Math.floor(elapsedMs / 60_000);
+    if (!minutes) { notifyRef.current('কমপক্ষে ১ মিনিট সময় হলে সেভ করা যাবে।', 'info'); return 0; }
+    doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: 'stopwatch', label: state.label });
+    setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null }));
+    notifyRef.current(`${minutes} মিনিটের স্টপওয়াচ সেশন সেভ হয়েছে।`, 'success');
+    return minutes;
+  };
+  return {
+    ...state, elapsedSec, remainingSec, progress, start, pause, reset, setMode, setDuration,
+    setSubject, setChapter, setLabel, startBreak, saveStopwatch,
+  };
 }
+
+/** Reading size. px sizes are scaled by CSS `zoom` on the main content, so nothing is clipped. */
+export function useFontScale(scale: FontScale): void {
+  useEffect(() => { document.documentElement.dataset.font = scale; }, [scale]);
+}
+
+type WakeLockSentinel = { release: () => Promise<void>; released: boolean; addEventListener?: (type: 'release', listener: () => void) => void };
+type WakeLockNavigator = Navigator & { wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinel> } };
+
+/**
+ * Keeps the screen on while a session runs. Browsers drop the lock when the tab is
+ * hidden, so it is re-acquired on the next visible tick — the timer itself is
+ * timestamp based and keeps counting either way.
+ */
+export function useWakeLock(active: boolean): boolean {
+  const [held, setHeld] = useState(false);
+  const lockRef = useRef<WakeLockSentinel | null>(null);
+  useEffect(() => {
+    const nav = navigator as WakeLockNavigator;
+    if (!active || !nav.wakeLock) { setHeld(false); return; }
+    let cancelled = false;
+    const acquire = async () => {
+      if (document.visibilityState !== 'visible' || lockRef.current && !lockRef.current.released) return;
+      try {
+        const lock = await nav.wakeLock!.request('screen');
+        if (cancelled) { void lock.release(); return; }
+        lockRef.current = lock; setHeld(true);
+        lock.addEventListener?.('release', () => { if (!cancelled) setHeld(false); });
+      } catch { setHeld(false); }
+    };
+    const onVisible = () => { if (document.visibilityState === 'visible') void acquire(); };
+    void acquire();
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', onVisible);
+      const lock = lockRef.current; lockRef.current = null; setHeld(false);
+      if (lock && !lock.released) void lock.release().catch(() => undefined);
+    };
+  }, [active]);
+  return held;
+}
+
+export function useTheme(theme: ThemeMode): void {
+  useEffect(() => {
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const apply = () => {
+      const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
+      document.documentElement.dataset.theme = resolved;
+      // Edge-to-edge phones (Android 14/15/16) need the status bar icons to match.
+      void import('./native')
+        .then(({ setSystemBarsTheme }) => setSystemBarsTheme(resolved === 'dark'))
+        .catch(() => undefined);
+    };
+    apply();
+    media.addEventListener('change', apply);
+    return () => media.removeEventListener('change', apply);
+  }, [theme]);
+}
+
+/**
+ * True when this shell can actually show a notification: the Android app uses the
+ * local-notification plugin (the WebView's own Notification API always reports
+ * 'denied' inside Capacitor), browsers need the granted permission.
+ */
+export function canNotify(): boolean {
+  if (typeof window !== 'undefined') {
+    const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    try { if (capacitor?.isNativePlatform?.()) return true; } catch { /* treat as web */ }
+  }
+  return typeof Notification !== 'undefined' && Notification.permission === 'granted';
+}
+
 export async function showNotification(title: string, body: string): Promise<void> {
+  if (typeof window !== 'undefined') {
+    const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    let native = false;
+    try { native = Boolean(capacitor?.isNativePlatform?.()); } catch { native = false; }
+    if (native) {
+      const { nativeNotify } = await import('./native');
+      if (await nativeNotify(title, body)) return;
+      throw new Error('নোটিফিকেশন পাঠানো যায়নি।');
+    }
+  }
   if (!('Notification' in window) || Notification.permission !== 'granted') throw new Error('নোটিফিকেশনের অনুমতি নেই।');
   const icon = new URL('icon-192.png', document.baseURI).href;
   if ('serviceWorker' in navigator) {
@@ -71,17 +254,29 @@ export async function showNotification(title: string, body: string): Promise<voi
   }
   new Notification(title, { body, icon });
 }
+/**
+ * A finished session is easy to miss when the phone is locked or the app is in the
+ * background, so the completion also goes out as an OS notification. Native devices
+ * use the local-notification plugin; browsers use the service worker.
+ */
+export async function notifySessionDone(title: string, body: string): Promise<boolean> {
+  try {
+    const { nativeNotify, isNativeApp } = await import('./native');
+    if (isNativeApp() && await nativeNotify(title, body)) return true;
+  } catch { /* fall through to the web notification */ }
+  try { await showNotification(title, body); return true; } catch { return false; }
+}
+
 export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpen: () => void) {
   const latest = useRef({ plan, data, enabled, onOpen }); latest.current = { plan, data, enabled, onOpen };
   useEffect(() => {
     const check = async () => {
       const { plan, data, enabled, onOpen } = latest.current;
-      if (!enabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+      if (!enabled || !canNotify()) return;
       const date = todayKey(), minute = dhakaMinutes();
       const nowMs = Date.parse(`${date}T00:00:00Z`) + minute * 60000;
       let sent: string[] = [];
       try { const v = JSON.parse(localStorage.getItem('hsc27-notified-v1') || '[]'); if (Array.isArray(v)) sent = v.filter(x => typeof x === 'string').slice(-500); } catch { /* empty history */ }
-      // Include yesterday so a late-start session that crosses midnight can still remind.
       const candidates = plan.filter(d => d.date >= addDays(date, -1) && d.date <= date).flatMap(d => d.tasks);
       for (const task of candidates) {
         const startMs = Date.parse(`${task.date}T00:00:00Z`) + task.startMinute * 60000;
@@ -98,4 +293,21 @@ export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpe
     };
     void check(); const id = setInterval(() => void check(), 15000); return () => clearInterval(id);
   }, []);
+}
+/** One gentle OS reminder per day when revision cards are due. */
+export function useRevisionReminder(_data: AppData, enabled: boolean, today: string, dueCount: number): void {
+  const ref = useRef({ enabled, today, dueCount }); ref.current = { enabled, today, dueCount };
+  useEffect(() => {
+    const check = async () => {
+      const { enabled, today, dueCount } = ref.current;
+      if (!enabled || dueCount === 0 || !canNotify()) return;
+      const key = 'hsc27-revision-notified-v2';
+      try {
+        if (localStorage.getItem(key) === today) return;
+        await showNotification('রিভিশন সময় হয়েছে · প্রস্তুতি', `${dueCount}টি অধ্যায়ের রিভিশন আজ বা আগেই দরকার।`);
+        localStorage.setItem(key, today);
+      } catch { /* permission may have been revoked */ }
+    };
+    void check();
+  }, [dueCount, enabled, today]);
 }

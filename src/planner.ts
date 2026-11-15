@@ -1,9 +1,11 @@
 import { CHAPTERS, CORE, PAPERS, chapterById, subjectById } from './data';
+import { isEnglish } from './i18n';
 import type { Chapter, SubjectId } from './data';
+import type { BoardQuestion, Carryover, ChapterMeta, CqEntry, FormulaEntry, ImportantDate, PersonalNote, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock, SettingsExtras, StudySession, SubjectMarks, TestRecord, VideoLink } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
-export type TaskKind = 'learn' | 'practice' | 'revision' | 'exam' | 'correction' | 'language' | 'ict' | 'recall' | 'practical';
-export interface Settings {
+export type TaskKind = 'learn' | 'practice' | 'revision' | 'exam' | 'correction' | 'language' | 'ict' | 'recall' | 'practical' | 'custom';
+export interface Settings extends SettingsExtras {
   startDate: string;
   startTime: string;
   dailyHours: number;
@@ -13,10 +15,14 @@ export interface Settings {
   reminderLead: number;
   syllabusChecked: boolean;
   calendarRevision: number;
+  /** Personal target for the HSC exam; not an official board date. */
+  examDate: string;
 }
 export const DEFAULT_SETTINGS: Settings = {
   startDate: '2026-11-14', startTime: '06:30', dailyHours: 8, board: 'সিলেট', name: '',
   reminderEnabled: false, reminderLead: 10, syllabusChecked: false, calendarRevision: 0,
+  theme: 'light', language: 'bn', revisionEnabled: true, carryoverMode: 'manual', examDate: '2027-06-30',
+  pomodoroFocus: 25, pomodoroBreak: 5, pomodoroLongBreak: 15, fontScale: 'md',
 };
 export interface Task {
   id: string; date: string; dayIndex: number; phase: PhaseId; subject: SubjectId;
@@ -28,7 +34,7 @@ export interface Phase { id: PhaseId; name: string; subtitle: string; start: str
 export interface ExamResult { score: number; total: number; at: string; mistakes: string }
 export interface Mistake { id: string; subject: SubjectId; text: string; date: string; resolved: boolean }
 export interface AppData {
-  version: 1;
+  version: 2;
   settings: Settings;
   completed: Record<string, string>;
   confidence: Record<string, 'weak' | 'okay' | 'confident'>;
@@ -36,8 +42,61 @@ export interface AppData {
   exams: Record<string, ExamResult>;
   mistakes: Mistake[];
   focus: { minutes: number; sessions: number };
+  studySessions: StudySession[];
+  revisions: RevisionItem[];
+  chapterMeta: Record<string, ChapterMeta>;
+  questions: QuizQuestion[];
+  attempts: QuizAttempt[];
+  cq: CqEntry[];
+  tests: TestRecord[];
+  libraryNotes: PersonalNote[];
+  videos: VideoLink[];
+  boardQuestions: BoardQuestion[];
+  formulas: FormulaEntry[];
+  formulaFavorites: string[];
+  gpaMarks: SubjectMarks;
+  carryovers: Carryover[];
+  badges: string[];
+  routineBlocks: RoutineBlock[];
+  importantDates: ImportantDate[];
+  /** YouTube url (or Bangla lesson title) → ISO instant the student marked it watched. */
+  classWatched: Record<string, string>;
 }
-export const freshData = (): AppData => ({ version: 1, settings: { ...DEFAULT_SETTINGS }, completed: {}, confidence: {}, notes: {}, exams: {}, mistakes: [], focus: { minutes: 0, sessions: 0 } });
+export const freshData = (): AppData => ({
+  version: 2, settings: { ...DEFAULT_SETTINGS }, completed: {}, confidence: {}, notes: {}, exams: {}, mistakes: [],
+  focus: { minutes: 0, sessions: 0 }, studySessions: [], revisions: [], chapterMeta: {}, questions: [], attempts: [],
+  cq: [], tests: [], libraryNotes: [], videos: [], boardQuestions: [], formulas: [], formulaFavorites: [], gpaMarks: {}, carryovers: [], badges: [], routineBlocks: [], importantDates: [], classWatched: {},
+});
+/** Adds the user's recurring weekly blocks on top of the deterministic chapter plan. */
+export function applyRoutine(plan: Day[], blocks: RoutineBlock[]): Day[] {
+  if (!blocks.length) return plan;
+  const byWeekday = new Map<number, RoutineBlock[]>();
+  for (const block of blocks) {
+    const list = byWeekday.get(block.weekday) || [];
+    list.push(block);
+    byWeekday.set(block.weekday, list);
+  }
+  return plan.map(day => {
+    const weekday = new Date(`${day.date}T00:00:00Z`).getUTCDay();
+    const entries = byWeekday.get(weekday)?.filter(block => day.date >= block.createdAt.slice(0, 10));
+    if (!entries?.length) return day;
+    const extra: Task[] = entries.map(block => ({
+      id: `custom-${day.date}-${block.id}`,
+      date: day.date,
+      dayIndex: day.index,
+      phase: day.phase,
+      subject: block.subject,
+      kind: 'custom',
+      title: block.title.trim() || `${subjectById[block.subject].name}: কাস্টম সেশন`,
+      detail: 'কাস্টম সাপ্তাহিক রুটিন · নিজের সময়সূচি থেকে যোগ হয়েছে।',
+      chapterIds: [],
+      startMinute: block.startMinute,
+      endMinute: block.startMinute + block.minutes,
+    }));
+    return { ...day, tasks: [...day.tasks, ...extra].sort((a, b) => a.startMinute - b.startMinute) };
+  });
+}
+
 export const STORAGE_KEY = 'hsc27-prostuti-v1';
 export const TIMEZONE = 'Asia/Dhaka';
 
@@ -67,12 +126,12 @@ export function dhakaMinutes(now = new Date()): number {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
   return Number(parts.find(p => p.type === 'hour')!.value) * 60 + Number(parts.find(p => p.type === 'minute')!.value);
 }
-export const bn = (value: number | string): string => String(value).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
+export const bn = (value: number | string): string => isEnglish() ? String(value) : String(value).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
 export function formatDate(date: string, style: 'long' | 'short' | 'weekday' | 'month' = 'short'): string {
   const options: Intl.DateTimeFormatOptions = style === 'long' ? { day: 'numeric', month: 'long', year: 'numeric' }
     : style === 'weekday' ? { weekday: 'long' } : style === 'month' ? { month: 'long', year: 'numeric' }
       : { day: 'numeric', month: 'short' };
-  return new Intl.DateTimeFormat('bn-BD', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
+  return new Intl.DateTimeFormat(isEnglish() ? 'en-GB' : 'bn-BD', { ...options, timeZone: 'UTC' }).format(new Date(`${date}T00:00:00Z`));
 }
 export function formatTime(minutes: number): string {
   const h = Math.floor(minutes / 60) % 24, m = Math.round(minutes % 60);
@@ -99,7 +158,7 @@ export function getPhases(start: string): Phase[] {
     { id: 'exam', name: 'পরীক্ষায় ঝালিয়ে নিই', subtitle: '১৩টি মডেল টেস্ট · ভুল সংশোধন', start: b, end: addDays(c, -1), days: diffDays(b, c), color: '#8271a4' },
   ];
 }
-export const phaseName = (id: PhaseId): string => ({ learn: 'সিলেবাস', revise: 'রিভিশন', exam: 'মডেল টেস্ট' })[id];
+export const phaseName = (id: PhaseId): string => isEnglish() ? ({ learn: 'Syllabus', revise: 'Revision', exam: 'Model tests' })[id] : ({ learn: 'সিলেবাস', revise: 'রিভিশন', exam: 'মডেল টেস্ট' })[id];
 interface Unit { chapter: Chapter; part: number; id: string }
 function makeQueue(subject: SubjectId): Unit[] {
   return CHAPTERS.filter(c => c.subject === subject).sort((a, b) => a.priority.localeCompare(b.priority)).flatMap(chapter =>

@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">প্রস্তুতি</string>
+    <string name="title_activity_main">প্রস্তুতি</string>
+    <string name="package_name">com.prostuti.hsc27</string>
+    <string name="custom_url_scheme">com.prostuti.hsc27</string>
+</resources>

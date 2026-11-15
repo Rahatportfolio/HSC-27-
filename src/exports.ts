@@ -61,7 +61,7 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
     '- কোনো অধ্যায় থেকে প্রশ্ন আসা ১০০% নিশ্চিত নয়। পুরোনো প্রশ্ন অনুশীলনের সহায়ক, ভবিষ্যৎ প্রশ্নের ভবিষ্যদ্বাণী নয়।',
     '- শেষ মাসের ১৩টি পরীক্ষা ব্যক্তিগত মডেল টেস্ট। বোর্ড পরীক্ষার প্রকৃত তারিখ/সময় আলাদাভাবে যাচাই করো।',
     '- তারিখ বদলালে অ্যাপের পুরো রুটিন নতুন করে তৈরি হয়। কাজের ID একই থাকায় অগ্রগতি মুছে যায় না; Calendar ফাইল আবার ইমপোর্ট করতে হয়।',
-    '- অসমাপ্ত কাজ নিজে নিজে সরে না। প্রতি ৭ম দিনের ব্যাকলগ সেশনে আগে সেগুলো শেষ করো।', '',
+    '- অসমাপ্ত সেশন Today পেজ থেকে আজকের দিনে যোগ করা যায়। Settings-এ অটো ক্যারিওভার চালু করলে দিনে সর্বোচ্চ ৬টি সেশন পরের দিনে যায়; প্রতি ৭ম দিনের ব্যাকলগ সেশনেও সেগুলো আগে শেষ করো।', '',
     '## তিনটি ধাপ', '', '| ধাপ | শুরু | শেষ | দিন | কাজ |', '|---|---|---|---:|---|',
     ...phases.map(p => `| ${p.name} | ${p.start} | ${p.end} | ${p.days} | ${p.subtitle} |`), '',
     '## প্রতিদিন যেভাবে পড়বে', '',
@@ -100,15 +100,43 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
   lines.push('', '## ভুলের খাতা', '');
   if (!data.mistakes.length) lines.push('এখনও কোনো ভুল যোগ করা হয়নি। পড়ার সময় অ্যাপে যোগ করো।');
   for (const m of data.mistakes) lines.push(`- [${m.resolved ? 'x' : ' '}] **${m.date} · ${subjectById[m.subject].name}:** ${mdCell(m.text)}`);
+  lines.push('', '## কাস্টম সাপ্তাহিক রুটিন', '');
+  if (!data.routineBlocks.length) lines.push('কোনো কাস্টম ব্লক নেই। Calendar পেজ থেকে যোগ করা যায়।');
+  else {
+    const weekdayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+    for (const block of [...data.routineBlocks].sort((a, b) => a.weekday - b.weekday || a.startMinute - b.startMinute)) {
+      lines.push(`- **${weekdayNames[block.weekday]}বার ${String(Math.floor(block.startMinute / 60)).padStart(2, '0')}:${String(block.startMinute % 60).padStart(2, '0')} · ${bn(block.minutes)} মিনিট · ${subjectById[block.subject].name}:** ${mdCell(block.title || 'কাস্টম সেশন')}`);
+    }
+  }
+  lines.push('', '## গুরুত্বপূর্ণ তারিখ', '');
+  if (!data.importantDates.length) lines.push('কোনো গুরুত্বপূর্ণ তারিখ যোগ করা হয়নি।');
+  else {
+    for (const item of [...data.importantDates].sort((a, b) => a.date.localeCompare(b.date))) {
+      lines.push(`- **${item.date} — ${mdCell(item.title)}**${item.note ? `: ${mdCell(item.note)}` : ''}${item.notify ? ' · ডিভাইস রিমাইন্ডার চালু' : ''}`);
+    }
+  }
+
   lines.push('', '## রিমাইন্ডার', '',
     '- অ্যাপের Reminders পেজ থেকে `.ics` ডাউনলোড করে Google Calendar / Apple Calendar-এ ইমপোর্ট করো।',
     `- প্রতিটি সেশনে ${bn(settings.reminderLead)} মিনিট আগের VALARM আছে। ক্যালেন্ডার অ্যাপ/ডিভাইসের নোটিফিকেশন অনুমতি চালু রাখো।`,
     '- ব্রাউজার নোটিফিকেশন শুধু অ্যাপ খোলা থাকা অবস্থায় কাজ করে; বন্ধ অ্যাপের ব্যাকগ্রাউন্ড পুশ সার্ভার এখানে নেই।',
     '- প্রথমবার পুরো রুটিন ইমপোর্ট করতে পারো। তারিখ/সময় বদলালে আলাদা ক্যালেন্ডার মুছে নতুন ফাইল ইমপোর্ট করো, যাতে ডুপ্লিকেট না হয়।',
-    '- অগ্রগতি এই ব্রাউজারের localStorage-এ থাকে; অন্য ডিভাইসে নিজে থেকে যায় না। নিয়মিত JSON ব্যাকআপ রাখো।', '',
+    '- অগ্রগতি ডিভাইসের লোকাল স্টোরেজে (APK-তে SQLite মিররসহ) থাকে; অন্য ডিভাইসে নিজে থেকে যায় না। নিয়মিত JSON ব্যাকআপ রাখো।', '',
     '## তথ্যসূত্র ও যাচাই', '');
   SOURCES.forEach((s, i) => lines.push(`[${i + 1}](${s.url}) — ${s.name}। ${s.note}`));
   lines.push('', 'সরকারি নোটিশের মূল পাতা: https://nctb.gov.bd/pages/notices/ এবং https://sylhetboard.gov.bd/ । অ্যাপের অধ্যায়-নামগুলো সরকারিভাবে ধাপে ধাপে যাচাই করা হয়নি; পরীক্ষার বছরের নোটিশ ও নিজের পাঠ্যবইই চূড়ান্ত।', '',
     `রপ্তানি: ${new Date().toISOString()} · Prostuti / HSC-27`, '');
   return lines.join('\n');
+}
+
+/** RFC-4180 style CSV with a BOM so Excel opens Bengali text correctly. */
+export function makeCsv(rows: (string | number)[][]): string {
+  const cell = (value: string | number): string => {
+    const text = String(value ?? '');
+    return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+  };
+  return '\uFEFF' + rows.map(row => row.map(cell).join(',')).join('\r\n') + '\r\n';
+}
+export function downloadCsv(rows: (string | number)[][], filename: string): void {
+  downloadText(makeCsv(rows), filename, 'text/csv;charset=utf-8');
 }
