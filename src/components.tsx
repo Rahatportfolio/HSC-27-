@@ -102,8 +102,8 @@ export function DaySummary({ day }: { day: Day }) {
 const CLASS_LABEL = { oneShot: 'ওয়ান শট', mcq: 'MCQ', cq: 'CQ' } as const;
 const classLabel = (kind: 'oneShot' | 'mcq' | 'cq') => (kind === 'oneShot' ? t('ওয়ান শট', 'One shot') : CLASS_LABEL[kind]);
 const CHANNEL_COLOR: Record<string, string> = {
-  'রাকিব': '#4d7bb0', 'অপুর্ব': '#c2763c', 'অলরন': '#3f8f74', 'হাসনাত': '#6a8f3f',
-  'ফাহাদ': '#8b75ac', 'সাকিব': '#bc737b', 'বন্দি': '#c98a1c', 'ACS': '#5b6b8c',
+  'মাশরুর ভাই': '#3f6fa8', 'রাকিব': '#4d7bb0', 'অপুর্ব': '#c2763c', 'আভি দত্ত তুষার': '#6b7f9e',
+  'অলরন': '#3f8f74', 'হাসনাত': '#6a8f3f', 'ফাহাদ': '#8b75ac', 'সাকিব': '#bc737b', 'বন্দি': '#c98a1c',
 };
 const baseChannel = (name: string) => name.replace(' (সার্চ)', '').trim();
 const channelColor = (name: string) => CHANNEL_COLOR[baseChannel(name)] || '#7d859b';

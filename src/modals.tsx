@@ -25,7 +25,7 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
     <p className="modal-description">{c.focus}</p>
     {(() => { const sch = scheduleFor(c.id); const links = classLinksFor(c.id); return <>
       {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} aria-label={`গুরুত্ব ${sch.star} স্টার`}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span><span>শেষ করতে হবে <strong>{formatDate(sch.end)}</strong></span></div>}
-      {links && <ClassBlock classes={links} hint="একাধিক শিক্ষক — যেটা ভালো লাগে সেটাই খোলো।" />}
+      {links && <ClassBlock classes={links} hint="দুই শিক্ষক, যেটা বেশি বোঝায় সেটাই খোলো — ভিডিও/প্লেলিস্ট লিংকগুলো YouTube-এ যাচাই করা।" />}
     {BANGLA_LESSONS[c.id] && <LessonList lessons={BANGLA_LESSONS[c.id]} />}
     </>; })()}
     {c.note && <div className="notice-box"><BookOpen size={18} /><p>{c.note}</p></div>}

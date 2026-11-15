@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ArrowUpRight, BookOpen, Check, ChevronRight, FileText, Search, ShieldAlert } from 'lucide-react';
+import { ArrowUpRight, BookOpen, Check, ChevronRight, FileText, Play, Search, ShieldAlert } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, PAPER_NAMES, SUBJECTS, SYLLABUS_NOTE, subjectById } from '../data';
 import type { SubjectId } from '../data';
@@ -19,6 +19,7 @@ export default function SyllabusView() {
   const [query, setQuery] = useState('');
   const [weakOnly, setWeakOnly] = useState(false);
   const [star, setStar] = useState<'all' | 5 | 3 | 1>('all');
+  const [videoOnly, setVideoOnly] = useState(false);
   const s = subjectById[subject];
   const chapters = CHAPTERS.filter(chapter => chapter.subject === subject);
   const done = chapters.filter(chapter => isChapterDone(plan, chapter.id, data.completed)).length;
@@ -27,6 +28,7 @@ export default function SyllabusView() {
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
   const visible = chapters.filter(chapter => (priority === 'all' || chapter.priority === priority)
     && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
+    && (!videoOnly || (() => { const links = CHAPTER_CLASSES[chapter.id]; return !!links && [...links.oneShot, ...links.mcq, ...links.cq].some(option => option.kind !== 'search'); })())
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && `${chapter.title} ${chapter.number} ${chapter.focus}`.toLowerCase().includes(query.toLowerCase()));
   return <div className="view">
@@ -35,7 +37,7 @@ export default function SyllabusView() {
     <section className="card syllabus-card">
       <div className="syllabus-subject-heading"><div><h2>{s.name} {s.optional && <span className="optional-badge">চতুর্থ বিষয়</span>}</h2><p>বিষয় কোড {s.code} · {bn(done)} / {bn(chapters.length)} সম্পন্ন</p></div><div className="syllabus-subject-progress"><strong>{bn(percent(done, chapters.length))}%</strong><ProgressBar value={percent(done, chapters.length)} color={s.color} /></div></div>
       <div className="syllabus-summary"><span><Check size={15} /><strong>{bn(done)}</strong> সম্পন্ন</span><span><ShieldAlert size={15} /><strong>{bn(weak)}</strong> দুর্বল</span><span><FileText size={15} /><strong>{bn(noted)}</strong> নোটযুক্ত</span><span><BookOpen size={15} /><strong>{bn(ready)}</strong> CQ+MCQ প্রস্তুত</span></div>
-      <div className="filter-bar"><label className="search-field"><Search size={17} /><input placeholder="অধ্যায় বা টপিক খুঁজো…" aria-label="অধ্যায় খুঁজো" value={query} onChange={e => setQuery(e.target.value)} /></label><div className="segmented">{(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? 'সব অধ্যায়' : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}</div><div className="segmented star-filter">{(['all', 5, 3, 1] as const).map(value => { const count = value === 'all' ? chapters.length : chapters.filter(chapter => CHAPTER_SCHEDULE[chapter.id]?.star === value).length; return <button key={value} className={star === value ? 'active' : ''} aria-pressed={star === value} onClick={() => setStar(value)} disabled={value !== 'all' && count === 0}>{value === 'all' ? 'সব ★' : `${value}★`}<small>{bn(count)}</small></button>; })}</div><button className={`button ${weakOnly ? 'primary' : 'secondary'} small`} aria-pressed={weakOnly} onClick={() => setWeakOnly(!weakOnly)}><ShieldAlert size={15} />শুধু দুর্বল</button></div>
+      <div className="filter-bar"><label className="search-field"><Search size={17} /><input placeholder="অধ্যায় বা টপিক খুঁজো…" aria-label="অধ্যায় খুঁজো" value={query} onChange={e => setQuery(e.target.value)} /></label><div className="segmented">{(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? 'সব অধ্যায়' : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}</div><div className="segmented star-filter">{(['all', 5, 3, 1] as const).map(value => { const count = value === 'all' ? chapters.length : chapters.filter(chapter => CHAPTER_SCHEDULE[chapter.id]?.star === value).length; return <button key={value} className={star === value ? 'active' : ''} aria-pressed={star === value} onClick={() => setStar(value)} disabled={value !== 'all' && count === 0}>{value === 'all' ? 'সব ★' : `${value}★`}<small>{bn(count)}</small></button>; })}</div><button className={`button ${weakOnly ? 'primary' : 'secondary'} small`} aria-pressed={weakOnly} onClick={() => setWeakOnly(!weakOnly)}><ShieldAlert size={15} />শুধু দুর্বল</button><button className={`button ${videoOnly ? 'primary' : 'secondary'} small`} aria-pressed={videoOnly} onClick={() => setVideoOnly(!videoOnly)} title="যেসব অধ্যায়ে সরাসরি ক্লাস ভিডিও বা প্লেলিস্ট আছে"><Play size={15} />ভিডিও আছে</button></div>
       <p className="plan-legend"><span className="star-badge s5">★★★★★</span> {t('সবচেয়ে গুরুত্বপূর্ণ — প্রথমে পড়ো', 'Most important — study first')}<span className="legend-sep">·</span><span className="star-badge s3">★★★</span> {t('মাঝারি — দ্বিতীয় ধাপে', 'Medium — second pass')}<span className="legend-sep">·</span><span className="star-badge s1">★</span> {t('কম সময় দিলেও চলবে', 'Can take less time')}</p>
       {[1, 2].map(paper => {
         const rows = visible.filter(chapter => chapter.paper === paper);
