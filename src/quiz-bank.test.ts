@@ -41,7 +41,7 @@ describe('starter MCQ bank', () => {
       expect(count, subject.id).toBeGreaterThanOrEqual(20);
     }
     const chaptersWithQuestions = new Set(STARTER_QUESTIONS.map(question => question.chapterId));
-    expect(chaptersWithQuestions.size).toBeGreaterThanOrEqual(55);
+    expect(chaptersWithQuestions.size).toBe(CHAPTERS.length); // every one of the 114 chapters has MCQs
   });
 
   it('explains the trickier additions so a wrong answer still teaches something', () => {
