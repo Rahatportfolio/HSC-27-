@@ -1,7 +1,7 @@
 import { CHAPTERS, chapterById } from './data';
 import type { AppData, Day } from './planner';
 import { addDays, chapterTasks, todayKey } from './planner';
-import type { RevisionInterval, RevisionItem } from './types';
+import type { RecallRating, RevisionInterval, RevisionItem } from './types';
 import { newId, nowIso } from './storage';
 
 export const REVISION_INTERVALS: RevisionInterval[] = [1, 3, 7, 14, 30];
@@ -48,7 +48,7 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
       if (!found) {
         items.push({ id: newId(), chapterId: chapter.id, subject: chapter.subject, dueDate, interval, createdAt: stamp });
         changed = true;
-      } else if (!found.completedAt && found.dueDate !== dueDate) {
+      } else if (!found.completedAt && !found.adjusted && found.dueDate !== dueDate) {
         items = items.map(item => item.id === found.id ? { ...item, dueDate } : item);
         changed = true;
       }
@@ -81,6 +81,47 @@ export function revisionBuckets(revisions: RevisionItem[], today: string): Revis
 
 export function completeRevision(data: AppData, id: string, at = nowIso()): AppData {
   return { ...data, revisions: data.revisions.map(item => item.id === id ? { ...item, completedAt: at } : item) };
+}
+
+export const RECALL_LABEL: Record<RecallRating, string> = { weak: 'ভুলে গেছি', okay: 'মোটামুটি', good: 'মনে ছিল' };
+/** How many days the next card waits after a rating. `good` keeps the fixed 1/3/7/14/30 ladder. */
+export const RECALL_GAP: Record<RecallRating, number> = { weak: 1, okay: 3, good: 0 };
+export const RECALL_HINT: Record<RecallRating, string> = {
+  weak: 'আগামীকালই আবার একবার—এই অধ্যায়টা এখনই দরকার।',
+  okay: 'তিন দিন পরে আরেকবার ঝালাই হবে।',
+  good: 'পরের ধাপে নিজের সময়েই আসবে।',
+};
+export interface RecallOutcome { data: AppData; dueDate: string | null; created: boolean }
+/**
+ * Completing a card with a rating is what makes the schedule adaptive: a weak recall
+ * pulls the next card to tomorrow, an okay one to three days, and a good one leaves the
+ * fixed ladder untouched. Only the next pending card moves, never future history.
+ */
+export function completeRevisionWithRecall(data: AppData, id: string, rating: RecallRating, today: string, at = nowIso()): RecallOutcome {
+  const item = data.revisions.find(entry => entry.id === id);
+  if (!item) return { data, dueDate: null, created: false };
+  let revisions = data.revisions.map(entry => entry.id === id ? { ...entry, completedAt: at, recall: rating } : entry);
+  const gap = RECALL_GAP[rating];
+  if (!gap) return { data: { ...data, revisions }, dueDate: null, created: false };
+  const target = addDays(today, gap);
+  const next = revisions
+    .filter(entry => entry.chapterId === item.chapterId && !entry.completedAt && entry.id !== id)
+    .sort((a, b) => a.dueDate.localeCompare(b.dueDate))[0];
+  if (next) {
+    revisions = revisions.map(entry => entry.id === next.id ? { ...entry, dueDate: target, adjusted: true } : entry);
+    return { data: { ...data, revisions }, dueDate: target, created: false };
+  }
+  const interval: RevisionInterval = gap <= 1 ? 1 : 3;
+  revisions = [...revisions, { id: newId(), chapterId: item.chapterId, subject: item.subject, dueDate: target, interval, createdAt: at, adjusted: true, recall: undefined }];
+  return { data: { ...data, revisions }, dueDate: target, created: true };
+}
+/** Average recall over the last 45 days, only counting rated cards. */
+export function recallSummary(revisions: RevisionItem[], today: string): { weak: number; okay: number; good: number; rated: number; score: number } {
+  const from = addDays(today, -45);
+  const rated = revisions.filter(item => !!item.recall && !!item.completedAt && item.completedAt.slice(0, 10) >= from);
+  const count = (rating: RecallRating) => rated.filter(item => item.recall === rating).length;
+  const score = rated.length ? Math.round((count('good') * 100 + count('okay') * 60 + count('weak') * 20) / rated.length) : 0;
+  return { weak: count('weak'), okay: count('okay'), good: count('good'), rated: rated.length, score };
 }
 export function reopenRevision(data: AppData, id: string): AppData {
   return { ...data, revisions: data.revisions.map(item => item.id === id ? { ...item, completedAt: undefined } : item) };

@@ -2,6 +2,8 @@
 
 A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet board), with Higher Mathematics as the fourth subject. Built with React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API is required.
 
+**Version 2.8** makes revision adaptive and reporting real: every completed card is rated “ভুলে গেছি / মোটামুটি / মনে ছিল”, and that rating moves the next card (tomorrow, three days, or the normal ladder) — the 45-day recall score is shown on the Revision page. Analytics gained a seven-day report with share, copy and a print-to-PDF view. The Android build can now be signed for release: add the four keystore secrets and CI also produces a signed release APK and an `.aab` for the Play Store; without them the same installable debug APK is still built.
+
 **Version 2.7** makes the app easier to live with every day: every direct class link now has a “দেখেছি” (seen it) tick with per-chapter and whole-library progress, the reading size is adjustable (ছোট / স্বাভাবিক / বড়), a weekly backup nudge offers download–share–copy before progress is ever lost, a session that finishes while the phone is locked now sends a real notification and holds the screen awake while it runs, and CQ practice can be marked part by part (ক ১, খ ২, গ ৩, ঘ ৪) with a rubric that shows which part is costing marks.
 
 **Version 2.6** completes the Bangla 1st-paper lesson list: 23 of 24 lessons now have a class (সাকিব স্যার for most, plus তানভীর স্যার/উদ্ভাস/CIADEMY/ACS আবিদা আপু where he has not uploaded one), every lesson row names its teacher, the লালসালু playlist and the সহপাঠ suggestion/MCQ classes are wired in, and the editorial mistake “গত্বে কাবুল” is corrected to গন্তব্য কাবুল.
@@ -83,7 +85,7 @@ The checked-in `package-lock.json` is the source of truth. If an older npm has a
 
 The APK is an installable debug-signed build. It runs the same offline app inside a Capacitor WebView and adds native local notifications plus a SQLite copy of the data.
 
-**Download the current build:** [প্রস্তুতি 2.7.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.7.0) → `prostuti-hsc27-v2.7.0.apk`.
+**Download the current build:** [প্রস্তুতি 2.8.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.8.0) → `prostuti-hsc27-v2.8.0.apk`.
 
 1. Download the APK from the release (or from **Actions → Android APK → Artifacts → prostuti-hsc27-apk**).
 2. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.

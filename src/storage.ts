@@ -2,7 +2,7 @@ import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
-import type { CqParts, PrepStatus, RevisionInterval, StudyMode, TestKind } from './types';
+import type { CqParts, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind } from './types';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max = 10000): v is string => typeof v === 'string' && v.length <= max;
@@ -19,6 +19,7 @@ const confidenceLevels = new Set(['weak', 'okay', 'confident']);
 const prepLevels = new Set<PrepStatus>(['none', 'practicing', 'ready']);
 const studyModes = new Set<StudyMode>(['stopwatch', 'countdown', 'pomodoro']);
 const intervals = new Set<RevisionInterval>([1, 3, 7, 14, 30]);
+const recalls = new Set<string>(['weak', 'okay', 'good']);
 const testKinds = new Set<TestKind>(['chapter', 'subject', 'model']);
 const isSubject = (v: unknown): v is AppData['mistakes'][number]['subject'] => typeof v === 'string' && subjectIds.has(v);
 const optionalChapter = (v: unknown): v is string | undefined => v === undefined || (typeof v === 'string' && chapterIds.has(v));
@@ -159,7 +160,7 @@ export function parseBackup(rawText: string): AppData {
   result.revisions = listOf(raw.revisions, LIMITS.revisions, 'রিভিশন', item => {
     if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.chapterId, 180) || !chapterIds.has(item.chapterId) || !isSubject(item.subject) || !text(item.dueDate, 10) || !isValidDate(item.dueDate) || !validAt(item.createdAt) || !intervals.has(item.interval as RevisionInterval)) throw new Error('রিভিশনের তথ্য সঠিক নয়।');
     if (chapterById[item.chapterId].subject !== item.subject) throw new Error('রিভিশনের বিষয় ও অধ্যায় মিলছে না।');
-    return { id: item.id, chapterId: item.chapterId, subject: item.subject, dueDate: item.dueDate, interval: item.interval as RevisionInterval, createdAt: item.createdAt, completedAt: optionalAt(item.completedAt, 'রিভিশনের তারিখ সঠিক নয়।'), sourceTaskId: optionalText(item.sourceTaskId, 180, 'রিভিশনের তথ্য সঠিক নয়।') };
+    return { id: item.id, chapterId: item.chapterId, subject: item.subject, dueDate: item.dueDate, interval: item.interval as RevisionInterval, createdAt: item.createdAt, completedAt: optionalAt(item.completedAt, 'রিভিশনের তারিখ সঠিক নয়।'), sourceTaskId: optionalText(item.sourceTaskId, 180, 'রিভিশনের তথ্য সঠিক নয়।'), recall: recalls.has(String(item.recall)) ? item.recall as RecallRating : undefined, adjusted: item.adjusted === true ? true : undefined };
   });
 
   if (raw.chapterMeta !== undefined) {

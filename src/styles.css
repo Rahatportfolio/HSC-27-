@@ -1007,3 +1007,41 @@ html[data-font="lg"] .modal{zoom:1.06}
 .parts-total{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;border:1px solid #cfe3bb;border-radius:11px;padding:9px 13px;background:#eff5e9;color:#40773f;font-size:10.5px}
 .parts-total strong{font-size:15px}
 @media(max-width:650px){.parts-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.parts-total{grid-column:1/-1;flex-direction:row;gap:8px}}
+
+/* ===================== v2.8 · adaptive revision, weekly report ===================== */
+.recall-actions{flex-wrap:wrap;gap:7px;align-items:center}
+.recall-label{font-size:10.5px;color:#8a9a7c;font-weight:600;width:100%}
+.recall-button{display:inline-flex;align-items:center;gap:5px;border-radius:999px;padding:7px 12px;font-size:11.5px;font-weight:600;border:1px solid var(--line);background:var(--surface);transition:transform .12s,background .12s,border-color .12s}
+.recall-button:hover{transform:translateY(-1px)}
+.recall-button.weak{border-color:#e8cfc9;color:#a45c52;background:#fdf5f2}
+.recall-button.weak:hover{background:#fbeae4}
+.recall-button.okay{border-color:#eeddb6;color:#96731f;background:#fdf8ec}
+.recall-button.okay:hover{background:#fbf1da}
+.recall-button.good{border-color:#c9dfb7;color:#3f7a52;background:#f2f8ec}
+.recall-button.good:hover{background:#e8f3dd}
+.revision-how{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap}
+.recall-summary{display:grid;grid-template-columns:auto auto;gap:1px 8px;margin-left:auto;align-items:center;padding-left:16px;border-left:1px dashed var(--line)}
+.recall-summary strong{font-size:15px;color:#4d6a4f;text-align:right}
+.recall-summary span{font-size:10.5px;color:#87977a}
+.recall-summary small{grid-column:1/-1;font-size:9.5px;color:#9aa79a;margin-top:5px}
+@media(max-width:650px){.recall-summary{margin-left:0;padding-left:0;border-left:0;border-top:1px dashed var(--line);padding-top:9px;width:100%}}
+
+.weekly-report{margin-bottom:23px;padding:23px 25px}
+.report-actions{display:flex;gap:8px;flex-wrap:wrap}
+.report-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:14px;margin-top:18px}
+.report-grid>div{display:flex;flex-direction:column;gap:3px;padding:12px 13px;border:1px solid var(--line);border-radius:11px;background:#fbfcf8}
+.report-grid span{font-size:10.5px;color:#87977a}
+.report-grid strong{font-size:19px;color:#3f6a4f;font-weight:600}
+.report-grid small{font-size:9.5px;color:#9aa79a;line-height:1.5}
+.report-foot{font-size:11.5px;color:#7d8d6f;margin-top:15px;padding-top:12px;border-top:1px dashed var(--line)}
+@media(max-width:900px){.report-grid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:650px){.weekly-report{padding:19px 17px}.report-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.report-actions{width:100%}}
+
+/* Printing the weekly report on its own: everything else is hidden. */
+@media print{
+  html.print-report .view>*:not(.weekly-report){display:none!important}
+  html.print-report .weekly-report{border:0;box-shadow:none;padding:0;margin:0}
+  html.print-report .report-actions{display:none!important}
+  html.print-report .report-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  html.print-report .weekly-report h2{font-size:20px}
+}

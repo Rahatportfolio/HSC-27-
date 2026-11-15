@@ -25,6 +25,7 @@ export interface StudySession {
   label?: string;
 }
 
+export type RecallRating = 'weak' | 'okay' | 'good';
 export interface RevisionItem {
   id: string;
   chapterId: string;
@@ -34,6 +35,10 @@ export interface RevisionItem {
   createdAt: string;
   completedAt?: string;
   sourceTaskId?: string;
+  /** How well the chapter was recalled when this card was completed. */
+  recall?: RecallRating;
+  /** True when the recall rating moved this date, so the automatic scheduler must not reset it. */
+  adjusted?: boolean;
 }
 
 export interface ChapterMeta {
