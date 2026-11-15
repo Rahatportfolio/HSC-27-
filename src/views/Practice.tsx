@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowRight, BookOpen, Brain, Check, ChevronRight, CircleHelp, ListChecks, NotebookPen, Plus, RotateCcw, Search, Target, Trash2, X } from 'lucide-react';
 import { usePlanner } from '../context';
-import { CHAPTERS, SUBJECTS, chapterById, subjectById } from '../data';
+import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { bn, formatDate, percent, todayKey } from '../planner';
 import { allQuestions, attemptStats, subjectAccuracy } from '../analytics';
@@ -39,7 +39,7 @@ function McqPractice({ stats, weekStats }: { stats: { total: number; correct: nu
   const questions = useMemo(() => allQuestions(data), [data.questions]);
   const latestAttempt = useMemo(() => { const map = new Map<string, boolean>(); for (const attempt of data.attempts) map.set(attempt.questionId, attempt.correct); return map; }, [data.attempts]);
   const accuracyBySubject = subjectAccuracy(data.attempts);
-  const chapters = CHAPTERS.filter(chapter => subject === 'all' || chapter.subject === subject);
+  const chapters = sortChapters(CHAPTERS.filter(chapter => subject === 'all' || chapter.subject === subject));
   const pool = questions.filter(question => (subject === 'all' || question.subject === subject) && (!chapterId || question.chapterId === chapterId) && (!onlyMine || !question.id.startsWith('seed-')) && (!reviewOnly || latestAttempt.get(question.id) === false));
   const active = quiz ? questions.find(question => question.id === quiz.ids[quiz.index]) : null;
   const start = () => {

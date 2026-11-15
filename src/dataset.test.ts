@@ -1,8 +1,26 @@
 import { describe, it, expect } from 'vitest';
-import { CHAPTERS } from './data';
+import { CHAPTERS, SUBJECTS, sortChapters } from './data';
 import { CHAPTER_SCHEDULE } from './schedule';
 import { CHAPTER_CLASSES, BANGLA_LESSONS } from './classLinks';
+const unitNumber = (number: string) => {
+  const bn = '০১২৩৪৫৬৭৮৯';
+  const digits = number.replace(/[^0-9০-৯]/g, '');
+  return digits ? Number([...digits].map(ch => (bn.includes(ch) ? String(bn.indexOf(ch)) : ch)).join('')) : Number.MAX_SAFE_INTEGER;
+};
+
 describe('audit', () => {
+  it('syllabus order follows the textbook', () => {
+    for (const subject of SUBJECTS.map(s => s.id)) {
+      const rows = sortChapters(CHAPTERS.filter(c => c.subject === subject));
+      for (let i = 1; i < rows.length; i++) {
+        const a = rows[i - 1], b = rows[i];
+        const step = (x: typeof a) => [x.paper, unitNumber(x.number)];
+        const [pa, na] = step(a), [pb, nb] = step(b);
+        expect(pa < pb || (pa === pb && na <= nb), `${a.id} before ${b.id}`).toBe(true);
+      }
+    }
+  });
+
   it('coverage', () => {
     const ids = CHAPTERS.map(c => c.id);
     const res = {

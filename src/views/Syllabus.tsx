@@ -2,7 +2,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ArrowUpRight, BookOpen, Check, ChevronRight, FileText, Play, Search, ShieldAlert } from 'lucide-react';
 import { usePlanner } from '../context';
-import { CHAPTERS, PAPER_NAMES, SUBJECTS, SYLLABUS_NOTE, subjectById } from '../data';
+import { CHAPTERS, PAPER_NAMES, SUBJECTS, SYLLABUS_NOTE, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { bn, chapterFirstDate, chapterTasks, formatDate, isChapterDone, percent } from '../planner';
 import { chapterMeta } from '../study';
@@ -21,7 +21,7 @@ export default function SyllabusView() {
   const [star, setStar] = useState<'all' | 5 | 3 | 1>('all');
   const [videoOnly, setVideoOnly] = useState(false);
   const s = subjectById[subject];
-  const chapters = CHAPTERS.filter(chapter => chapter.subject === subject);
+  const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject));
   const done = chapters.filter(chapter => isChapterDone(plan, chapter.id, data.completed)).length;
   const weak = chapters.filter(chapter => chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak').length;
   const noted = chapters.filter(chapter => chapterMeta(data, chapter.id).note.trim()).length;

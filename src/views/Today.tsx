@@ -30,7 +30,7 @@ export default function TodayView() {
   const due = [...buckets.overdue, ...buckets.today];
   const carryovers = carryoversOn(data, selectedDate);
   const motivation = motivationFor(today);
-  const targets = CHAPTERS.filter(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id]; return !!slot && slot.start <= selectedDate && slot.end >= selectedDate; });
+  const targets = CHAPTERS.filter(chapter => { const slot = CHAPTER_SCHEDULE[chapter.id]; return !!slot && slot.start <= selectedDate && slot.end >= selectedDate; }).sort((a, b) => { const sa = CHAPTER_SCHEDULE[a.id], sb = CHAPTER_SCHEDULE[b.id]; return sb.star - sa.star || sa.end.localeCompare(sb.end); });
   const nextImportant = [...data.importantDates].filter(item => item.date >= today).sort((a, b) => a.date.localeCompare(b.date))[0];
   const shiftDate = (amount: number) => { const next = addDays(selectedDate, amount); if (isValidDate(next)) setSelectedDate(next); };
   const timerText = timer.mode === 'stopwatch'

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { FormEvent } from 'react';
 import { AlarmClock, CheckCircle2, Clock3, Coffee, Maximize2, Minimize2, Pause, Play, Plus, RotateCcw, Save, Timer as TimerIcon, Trash2, TrendingUp } from 'lucide-react';
 import { usePlanner } from '../context';
-import { CHAPTERS, SUBJECTS, chapterById, subjectById } from '../data';
+import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { addDays, bn, formatDate, percent } from '../planner';
 import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
@@ -39,7 +39,7 @@ export default function TimerView() {
       else if (!next && document.fullscreenElement) await document.exitFullscreen();
     } catch { /* Fullscreen can be blocked; the CSS focus layout still works. */ }
   };
-  const chapters = CHAPTERS.filter(chapter => chapter.subject === timer.subject);
+  const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === timer.subject));
   const todaySessions = data.studySessions.filter(session => session.date === today).sort((a, b) => b.at.localeCompare(a.at));
   const todayMinutes = minutesOn(data.studySessions, today);
   const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), addDays(startOfWeek(today), 6));

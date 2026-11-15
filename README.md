@@ -2,6 +2,8 @@
 
 A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet board), with Higher Mathematics as the fourth subject. Built with React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API is required.
 
+**Version 2.5.1** fixes chapter order — chemistry, 2nd-paper maths and ICT were listing chapter 1 after later chapters — and sorts the Today targets by importance. All 39 class videos and the playlists are now verified one by one.
+
 **Version 2.5** verifies every class link against YouTube and records the real channel — the physics one-shots turned out to be Mashrur Bhai's (LOBDHI), not the channel they were filed under, and dozens of playlist links were pointing at ids that do not exist. Invalid playlist ids are gone (channel search replaces them), every remaining video/playlist id is length-checked by a test, and Settings now has a channel guide. Syllabus also gained a “has video” filter.
 
 **Version 2.4** fixes the Bangla chapter ids (all 114 chapters now carry a plan and class links — they were silently missing before), and reworks the study UI: the chapter sheet groups classes into one-shot / MCQ / CQ lines with the teacher's colour on every chip, Bangla 1st-paper chapters open a lesson grid (with a working channel-search fallback where a video is not uploaded yet), the Today targets card links straight into the chapter sheet, and the syllabus shows ★ counts plus a star legend.
@@ -77,13 +79,13 @@ The checked-in `package-lock.json` is the source of truth. If an older npm has a
 
 The APK is an installable debug-signed build. It runs the same offline app inside a Capacitor WebView and adds native local notifications plus a SQLite copy of the data.
 
-**Download the current build:** [প্রস্তুতি 2.5.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.5.0) → `prostuti-hsc27-v2.5.0.apk`.
+**Download the current build:** [প্রস্তুতি 2.5.1 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.5.1) → `prostuti-hsc27-v2.5.1.apk`.
 
 1. Download the APK from the release (or from **Actions → Android APK → Artifacts → prostuti-hsc27-apk**).
 2. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.
 3. Install over an older version to keep the existing local data; keep a JSON backup before updating.
 
-Pushing a tag such as `v2.5.0` also attaches the APK to a GitHub Release. Every push to `main` or an `arena/**` branch rebuilds the APK.
+Pushing a tag such as `v2.5.1` also attaches the APK to a GitHub Release. Every push to `main` or an `arena/**` branch rebuilds the APK.
 
 To build locally you need JDK 21 and Android SDK 36:
 

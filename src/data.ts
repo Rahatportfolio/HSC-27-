@@ -40,6 +40,12 @@ const chapter = (subject: SubjectId, paper: 1 | 2, number: string, title: string
 
 // A is a study-order label, not an official board category or a prediction of exam questions.
 // Every textbook chapter is retained. Edition-sensitive language lessons use skill-based units.
+const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
+const unitOrder = (number: string) => {
+  const digits = number.replace(/[^0-9০-৯]/g, '');
+  return digits ? Number([...digits].map(ch => (BN_DIGITS.includes(ch) ? String(BN_DIGITS.indexOf(ch)) : ch)).join('')) : Number.MAX_SAFE_INTEGER;
+};
+
 export const CHAPTERS: Chapter[] = [
   chapter('physics', 1, '2', 'ভেক্টর', 'A', 3, 'ডট–ক্রস গুণন, লব্ধি ও ভেক্টর সংক্রান্ত সমস্যা'),
   chapter('physics', 1, '3', 'গতিবিদ্যা', 'A', 3, 'প্রাসের গতি, লেখচিত্র ও আপেক্ষিক বেগ'),
@@ -162,7 +168,6 @@ export const CHAPTERS: Chapter[] = [
   chapter('ict', 1, '2', 'কমিউনিকেশন সিস্টেমস ও নেটওয়ার্কিং', 'B', 2, 'Transmission, topology, device ও network security'),
   chapter('ict', 1, '1', 'তথ্য ও যোগাযোগ প্রযুক্তি: বিশ্ব ও বাংলাদেশ', 'B', 1, 'প্রয়োগ, ভার্চুয়াল রিয়ালিটি, ethics ও safety'),
 ];
-
 export const PAPER_NAMES: Record<SubjectId, string[]> = {
   physics: ['প্রথম পত্র', 'দ্বিতীয় পত্র'], chemistry: ['প্রথম পত্র', 'দ্বিতীয় পত্র'],
   biology: ['উদ্ভিদবিজ্ঞান · প্রথম পত্র', 'প্রাণিবিজ্ঞান · দ্বিতীয় পত্র'],
@@ -173,6 +178,9 @@ export const PAPERS = SUBJECTS.flatMap(s => (s.id === 'ict' ? [1] : [1, 2]).map(
   id: `${s.id}-${p}`, subject: s.id, paper: p as 1 | 2,
   name: `${s.name} ${PAPER_NAMES[s.id][p - 1]}`, maxScore: s.id === 'ict' ? 75 : 100,
 })));
+// Textbook order (subject → paper → unit). The stored array keeps study order, so this sorts for display only.
+export const sortChapters = (list: Chapter[]) => [...list].sort((a, b) => SUBJECTS.findIndex(s => s.id === a.subject) - SUBJECTS.findIndex(s => s.id === b.subject) || a.paper - b.paper || unitOrder(a.number) - unitOrder(b.number));
+
 export const chapterById = Object.fromEntries(CHAPTERS.map(c => [c.id, c])) as Record<string, Chapter>;
 export const SYLLABUS_NOTE = 'এটি পাঠ্যবইভিত্তিক পরিকল্পনা, বোর্ডের অনুমোদিত সিলেবাস বা কমন প্রশ্নের নিশ্চয়তা নয়। A মানে আগে পড়বে, B মানে এরপর—কোনো অধ্যায় বাদ নয়। বাংলা/ইংরেজিতে দক্ষতাভিত্তিক ইউনিট রাখা হয়েছে; পাঠ নম্বর তোমার HSC 2027 সংস্করণের বইয়ের সঙ্গে মিলাও। নতুন একাদশের ভিন্ন পাঠ্যতালিকা এখানে চাপিয়ে দেওয়া হয়নি।';
 export const SOURCES = [
