@@ -150,7 +150,7 @@ describe('application shell', () => {
     await act(async () => { row.click(); });
     expect(await screen.findByText(/এই অধ্যায়ে কতটা আত্মবিশ্বাসী/)).toBeTruthy();
     // The sheet pushed one history entry; the system back gesture pops it.
-    act(() => { window.dispatchEvent(new PopStateEvent('popstate')); });
+    act(() => { history.back(); });
     await waitFor(() => expect(screen.queryByText(/এই অধ্যায়ে কতটা আত্মবিশ্বাসী/)).toBeNull());
   });
 

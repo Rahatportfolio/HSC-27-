@@ -154,6 +154,8 @@ export default function App() {
    * and the X button walks back through it.
    */
   const sheetInHistory = useRef(false);
+  /** The history entry the open sheet pushed, so a popstate from pushState() itself is ignored. */
+  const sheetState = useRef<unknown>(null);
   const closeModal = useCallback(() => {
     if (sheetInHistory.current) history.back();
     else setModal(null);
@@ -161,9 +163,16 @@ export default function App() {
   useEffect(() => {
     if (!modal) { sheetInHistory.current = false; return; }
     if (!sheetInHistory.current) {
-      try { history.pushState({ sheet: true }, ''); sheetInHistory.current = true; } catch { sheetInHistory.current = false; }
+      try { history.pushState({ sheet: true }, ''); sheetState.current = history.state; sheetInHistory.current = true; } catch { sheetInHistory.current = false; }
     }
-    const onBack = () => { sheetInHistory.current = false; setModal(null); };
+    /**
+     * Android's back gesture pops the entry the sheet pushed. A few WebViews also emit a
+     * popstate from pushState() itself — the entry is then still ours, so ignore it.
+     */
+    const onBack = () => {
+      if (sheetState.current !== null && history.state === sheetState.current) return;
+      sheetInHistory.current = false; setModal(null);
+    };
     window.addEventListener('popstate', onBack);
     return () => window.removeEventListener('popstate', onBack);
   }, [modal]);
