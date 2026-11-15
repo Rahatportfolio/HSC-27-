@@ -3,10 +3,11 @@ import { AlarmClock, CalendarClock, Check, CheckCheck, ChevronRight, Clock3, Rot
 import { usePlanner } from '../context';
 import { chapterById } from '../data';
 import { addDays, bn, diffDays, formatDate } from '../planner';
-import { INTERVAL_LABEL, RECALL_HINT, RECALL_LABEL, completeRevision, completeRevisionWithRecall, recallSummary, reopenRevision, revisionBuckets, snoozeRevision } from '../revision';
+import { INTERVAL_LABEL, RECALL_HINT, RECALL_LABEL, completeRevision, completeRevisionWithRecall, compactRevisionHistory, recallSummary, reopenRevision, revisionBuckets, snoozeRevision } from '../revision';
 import type { RecallRating, RevisionItem } from '../types';
 import { EmptyState, PageHeading, ProgressBar, SubjectBadge, ClassLinkRow } from '../components';
 import { CHAPTER_CLASSES } from '../classLinks';
+import { LIMITS } from '../storage';
 import { t } from '../i18n';
 
 type Tab = 'due' | 'upcoming' | 'history' | 'all';
@@ -15,7 +16,7 @@ export default function RevisionView() {
   const [tab, setTab] = useState<Tab>('due');
   const buckets = useMemo(() => revisionBuckets(data.revisions, today), [data.revisions, today]);
   const due = [...buckets.overdue, ...buckets.today].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  const allPending = [...due, ...buckets.upcoming].sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+  const allPending = data.revisions.filter(item => !item.completedAt).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   const weekAhead = data.revisions.filter(item => !item.completedAt && item.dueDate > addDays(today, 7) && item.dueDate <= addDays(today, 30));
   const totalPending = data.revisions.filter(item => !item.completedAt).length;
   const doneCount = data.revisions.filter(item => !!item.completedAt).length;
@@ -24,13 +25,15 @@ export default function RevisionView() {
   /** Rating the recall is what moves the next card: weak → tomorrow, okay → 3 days. */
   const rate = (item: RevisionItem, rating: RecallRating) => {
     const outcome = completeRevisionWithRecall(data, item.id, rating, today);
-    setData(() => outcome.data);
+    setData(current => completeRevisionWithRecall(current, item.id, rating, today).data);
+    if (outcome.limitReached) { notify(t('রিভিশনের সীমা পূর্ণ। ইতিহাস থেকে জায়গা খালি করলে নতুন কার্ড তৈরি হবে।', 'Revision storage is full. Clear completed history to make room.'), 'info'); return; }
     notify(outcome.dueDate ? `“${RECALL_LABEL[rating]}” — ${RECALL_HINT[rating]}` : `${RECALL_LABEL[rating]} — পরের কার্ড নিজের সময়েই থাকল।`, rating === 'weak' ? 'info' : 'success');
   };
   const open = (chapterId: string) => { const chapter = chapterById[chapterId]; if (chapter) openChapter(chapter); };
   const finishAll = () => confirm({ title: 'আজকের সব রিভিশন সম্পন্ন?', message: `${bn(due.length)}টি রিভিশন একসাথে সম্পন্ন হিসেবে চিহ্নিত হবে। সত্যিই ঝালাই করা হলে তবেই টিক দাও।`, label: 'সব সম্পন্ন করো', action: () => { setData(d => due.reduce((next, item) => completeRevision(next, item.id), d)); notify(`${bn(due.length)}টি রিভিশন সম্পন্ন হয়েছে।`, 'success'); } });
   return <div className="view revision-view">
     <PageHeading eyebrow="MAKE IT STICK" title="ভুলে যাওয়ার আগেই ঝালাই।" titleEn="Review before you forget." description="প্রতিটি অধ্যায় শেষ হলে ১, ৩, ৭, ১৪ ও ৩০ দিনের রিভিশন কার্ড নিজে থেকেই তৈরি হয়। আজ যা দরকার, সেটাই আগে।" descriptionEn="Finishing a chapter creates 1, 3, 7, 14 and 30-day revision cards. Today’s due cards come first." action={<button className="button secondary" onClick={() => navigate('settings')}><AlarmClock size={17} />{t("রিভিশন সেটিংস", "Revision settings")}</button>} />
+    {data.revisions.length >= LIMITS.revisions && <div className="notice-box" role="alert"><p>{t('রিভিশনের সীমা পূর্ণ; অতিরিক্ত পুরোনো ইতিহাস সরিয়ে জায়গা খালি করো। আগে ব্যাকআপ রাখো।', 'Revision storage is full. Back up your data, then remove older duplicate history to make room.')}</p><button className="button secondary small" onClick={() => confirm({ title: t('অতিরিক্ত রিভিশন ইতিহাস মুছবে?', 'Remove older revision history?'), message: t('বাকি কার্ড ও প্রতিটি অধ্যায়ের প্রতিটি ধাপের সর্বশেষ সম্পন্ন রেকর্ড থাকবে; পুরোনো অতিরিক্ত ইতিহাস ও রেটিং মুছে যাবে। আগে ব্যাকআপ রাখো।', 'Pending cards and the latest completed record for each chapter and interval remain. Older duplicate history and ratings are removed. Back up first.'), label: t('ইতিহাস মুছো', 'Delete history'), danger: true, action: () => { setData(compactRevisionHistory); notify(t('অতিরিক্ত পুরোনো ইতিহাস সরানো হয়েছে।', 'Older duplicate history removed.'), 'info'); } })}>{t('অতিরিক্ত ইতিহাস সরাও', 'Remove older history')}</button></div>}
     <div className="revision-overview">
       <section className="card revision-hero-card"><div><span className="eyebrow">{t("আজকের রিভিশন", "Today's revision")}</span><strong className="revision-big-number">{bn(due.length)}</strong><p>{buckets.overdue.length ? `${bn(buckets.overdue.length)}টি ওভারডিউ · ` : ''}{bn(totalPending)}টি মোট বাকি</p></div><div className="revision-ring-short"><ProgressBar value={completion} /><span>সব রিভিশনের {bn(completion)}% সম্পন্ন</span></div>{due.length > 0 && <button className="button primary" onClick={finishAll}><CheckCheck size={17} />{t("সব সম্পন্ন", "All done")}</button>}</section>
       <div className="revision-stat"><span className="stat-icon peach"><AlarmClock size={19} /></span><div><span>{t("ওভারডিউ", "Overdue")}</span><strong>{bn(buckets.overdue.length)}</strong><p>{t("আজ বা আগের", "Today or earlier")}</p></div></div>

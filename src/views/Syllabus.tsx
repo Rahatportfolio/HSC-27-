@@ -4,15 +4,16 @@ import { ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, FileText, Lay
 import { usePlanner } from '../context';
 import { CHAPTERS, PAPER_NAMES, SUBJECTS, SYLLABUS_NOTE, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { bn, chapterFirstDate, chapterStudyTasks, formatDate, isChapterDone, percent } from '../planner';
+import { bn, chapterFirstDate, chapterStudyTasks, formatDate, percent } from '../planner';
 import { chapterMeta } from '../study';
 import { CHAPTER_SCHEDULE } from '../schedule';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
 import { t } from '../i18n';
+import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
 import { chapterClassProgress } from '../classes';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, PageHeading, ProgressBar, SubjectIcon } from '../components';
 
-const PRIORITY_LABEL: Record<string, string> = { A: 'টেস্ট অগ্রাধিকার', B: '২য় ধাপ', C: 'ঐচ্ছিক' };
+const PRIORITY_LABEL: Record<string, string> = { A: 'টেস্ট অগ্রাধিকার', B: '২য় ধাপ', C: 'পরের ধাপ' };
 
 export default function SyllabusView() {
   const { plan, data, openChapter } = usePlanner();
@@ -28,13 +29,13 @@ export default function SyllabusView() {
 
   const s = subjectById[subject];
   const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject));
-  const done = chapters.filter(chapter => isChapterDone(plan, chapter.id, data.completed)).length;
+  const done = chapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
   const weak = chapters.filter(chapter => chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak').length;
   const noted = chapters.filter(chapter => chapterMeta(data, chapter.id).note.trim()).length;
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
 
-  const visible = chapters.filter(chapter => (status === 'all' || (status === 'done') === isChapterDone(plan, chapter.id, data.completed))
-    && (priority === 'all' || chapter.priority === priority)
+  const visible = chapters.filter(chapter => (status === 'all' || (status === 'done') === isLearningComplete(chapterStage(chapter, data, plan)))
+    && (priority === 'all' || chapterPriority(chapter, data) === priority)
     && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && (!unwatchedOnly || (() => { const progress = chapterClassProgress(data, chapter.id); return progress.total > 0 && progress.watched < progress.total; })())
@@ -45,15 +46,15 @@ export default function SyllabusView() {
       eyebrow="SYLLABUS & DIRECT CLASSES"
       title="সিলেবাসটা গুছিয়ে নিই।"
       titleEn="Let’s organise the syllabus."
-      description="প্রতিটি অধ্যায়ের ওয়ান শট ক্লাস, CQ সলভিং এবং MCQ সলভিং ব্লক আলাদা করে সাজানো—এক ক্লিকেই ক্লাস শুরু করো।"
-      descriptionEn="Every chapter has structured One-Shot, CQ Solving and MCQ Solving class blocks — open any class in one click."
+      description="অধ্যায় ও ব্যক্তিগত অগ্রগতি দেখো। বিদ্যমান ক্লাস লিংক ও HSC ২০২৭ সিলেবাস সম্পূর্ণ যাচাই করা হয়নি।"
+      descriptionEn="Track your chapters. Existing class links and the HSC 2027 syllabus have not been fully verified."
       action={<div className="syllabus-total"><strong>{bn(CHAPTERS.length)}</strong><span>{t('অধ্যায় ও ইউনিট', 'Chapters & units')}<br />{t('৭ বিষয় · ১৩ পত্র', '7 subjects · 13 papers')}</span></div>}
     />
 
     <div className="subject-tabs">
       {SUBJECTS.map(sub => {
         const total = CHAPTERS.filter(chapter => chapter.subject === sub.id);
-        const complete = total.filter(chapter => isChapterDone(plan, chapter.id, data.completed)).length;
+        const complete = total.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
         return <button key={sub.id} className={`subject-tab ${subject === sub.id ? 'active' : ''}`} onClick={() => { setSubject(sub.id); setQuery(''); setWeakOnly(false); setUnwatchedOnly(false); setPriority('all'); setStar('all'); setStatus('all'); }} style={{ '--subject': sub.color, '--subject-tint': sub.tint } as CSSProperties}>
           <span className="subject-tab-icon"><SubjectIcon subject={sub.id} /></span>
           <strong>{sub.name}</strong>
@@ -88,7 +89,7 @@ export default function SyllabusView() {
           <input placeholder={t('অধ্যায় বা টপিক খুঁজো…', 'Search chapter or topic…')} aria-label={t('অধ্যায় খুঁজো', 'Search chapters')} value={query} onChange={e => setQuery(e.target.value)} />
         </label>
         <div className="segmented">
-          {(['all', 'A', 'B'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}
+          {(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}
         </div>
         <div className="segmented" aria-label={t('সম্পন্ন অবস্থা', 'Completion status')}>
           {(['all', 'pending', 'done'] as const).map(value => <button key={value} aria-pressed={status === value} className={status === value ? 'active' : ''} onClick={() => setStatus(value)}>{value === 'all' ? t('সব অবস্থা', 'All statuses') : value === 'pending' ? t('বাকি', 'Pending') : t('সম্পন্ন', 'Done')}</button>)}
@@ -127,7 +128,7 @@ export default function SyllabusView() {
             {rows.map(chapter => {
               const tasks = chapterStudyTasks(plan, chapter.id);
               const complete = tasks.filter(task => data.completed[task.id]).length;
-              const isDone = complete === tasks.length && tasks.length > 0;
+              const isDone = isLearningComplete(chapterStage(chapter, data, plan));
               const date = chapterFirstDate(plan, chapter.id);
               const endDate = tasks[tasks.length - 1]?.date;
               const meta = chapterMeta(data, chapter.id);
@@ -159,7 +160,7 @@ export default function SyllabusView() {
                     <small>{bn(slot.hours)} ঘণ্টা · {endDate ? `শেষ ${formatDate(endDate)}` : formatDate(slot.end)}</small>
                     <small className="plan-links">{progress.watched ? `${bn(progress.watched)}/${bn(progress.total)} ক্লাস দেখা` : `${bn(progress.total)}টি সরাসরি ক্লাস`}</small>
                   </span>}
-                  <span className={`priority-badge ${chapter.priority.toLowerCase()}`}>{chapter.priority}</span>
+                  <span className={`priority-badge ${chapterPriority(chapter, data).toLowerCase()}`}>{chapterPriority(chapter, data)}</span>
                   <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} ধাপ</small></span>
                   <ChevronRight size={17} />
                 </button>

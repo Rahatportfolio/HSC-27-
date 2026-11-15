@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { clearDatabase, persistToDatabase, restoreFromDatabase } from './db';
 import {
   cancelTimerAlarm, isNativeApp, nativeNotificationStatus, nativeNotify, openExactAlarmSettings,
@@ -64,5 +64,22 @@ describe('native-only storage and notifications', () => {
     } finally {
       delete (window as unknown as { Capacitor?: unknown }).Capacitor;
     }
+  });
+});
+
+describe('Android live timer clock bridge', () => {
+  it('passes the wall-clock anchor and opens a native floating timer', async () => {
+    const { openNativeTimerPictureInPicture } = await import('./native');
+    const start = vi.fn(async () => ({}));
+    const picture = vi.fn(async () => ({ started: true }));
+    (window as unknown as { Capacitor: unknown }).Capacitor = { isNativePlatform: () => true, Plugins: { StudyTimer: { start, stop: async () => ({}), enterPictureInPicture: picture } } };
+    try {
+      const referenceTime = Date.now() + 90_000;
+      expect(await startStudyTimerService('Test', 'Running', { referenceTime, countdown: true })).toBe(true);
+      expect(start).toHaveBeenCalledWith({ title: 'Test', body: 'Running', referenceTime, countdown: true });
+      expect(await openNativeTimerPictureInPicture('Test', referenceTime, true)).toBe(true);
+      expect(picture).toHaveBeenCalledWith({ title: 'Test', referenceTime, countdown: true });
+      expect(await openNativeTimerPictureInPicture('Test', 0, true)).toBe(false);
+    } finally { delete (window as unknown as { Capacitor?: unknown }).Capacitor; }
   });
 });

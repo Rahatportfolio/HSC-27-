@@ -36,14 +36,15 @@ async function getConnection(): Promise<Db | null> {
       return db;
     })().catch(error => {
       console.warn('SQLite mirror unavailable; staying on local storage.', error);
-      return null;
+      connection = null;
+      throw error;
     });
   }
   return connection;
 }
 
 /** Returns a newer payload than localStorage, or null when local storage is current. */
-export async function restoreFromDatabase(): Promise<string | null> {
+export async function restoreFromDatabase(): Promise<{ payload: string; updatedAt: string } | null> {
   try {
     const db = await getConnection();
     if (!db) return null;
@@ -52,19 +53,31 @@ export async function restoreFromDatabase(): Promise<string | null> {
     if (!row || typeof row.payload !== 'string' || typeof row.updated_at !== 'string') return null;
     const localStamp = localStorage.getItem(SAVED_AT_KEY) || '';
     if (row.updated_at <= localStamp) return null;
-    localStorage.setItem(SAVED_AT_KEY, row.updated_at);
-    return row.payload;
+    // Reading must not mutate storage: callers may have timed out or rejected the snapshot.
+    return { payload: row.payload, updatedAt: row.updated_at };
   } catch (error) {
     console.warn('Could not read the SQLite snapshot.', error);
-    return null;
+    throw error;
   }
 }
 
-export async function persistToDatabase(payload: string, updatedAt: string): Promise<boolean> {
+// Preserve the order of writes and reset operations even when the native bridge is slow.
+let writeQueue: Promise<unknown> = Promise.resolve();
+function queueWrite<T>(work: () => Promise<T>): Promise<T> {
+  const result = writeQueue.catch(() => undefined).then(work);
+  writeQueue = result.catch(() => undefined);
+  return result;
+}
+
+export function persistToDatabase(payload: string, updatedAt: string): Promise<boolean> {
+  return queueWrite(() => writeSnapshot(payload, updatedAt));
+}
+async function writeSnapshot(payload: string, updatedAt: string): Promise<boolean> {
   try {
     const db = await getConnection();
     if (!db) return false;
-    await db.run('INSERT OR REPLACE INTO app_state (id, payload, updated_at) VALUES (1, ?, ?);', [payload, updatedAt]);
+    // INSERT ... SELECT works on older Android SQLite versions too (UPSERT needs SQLite 3.24+).
+    await db.run('INSERT OR REPLACE INTO app_state (id, payload, updated_at) SELECT 1, ?, ? WHERE NOT EXISTS (SELECT 1 FROM app_state WHERE id = 1 AND updated_at > ?);', [payload, updatedAt, updatedAt]);
     return true;
   } catch (error) {
     console.warn('Could not write the SQLite snapshot.', error);
@@ -72,7 +85,10 @@ export async function persistToDatabase(payload: string, updatedAt: string): Pro
   }
 }
 
-export async function clearDatabase(): Promise<void> {
+export function clearDatabase(): Promise<void> {
+  return queueWrite(clearSnapshot);
+}
+async function clearSnapshot(): Promise<void> {
   try {
     const db = await getConnection();
     if (db) await db.run('DELETE FROM app_state;');

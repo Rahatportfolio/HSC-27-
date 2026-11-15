@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS } from './data';
 import { buildPlan, chapterTasks, freshData } from './planner';
-import { completeRevision, completeRevisionWithRecall, ensureRevisions, recallSummary, revisionBuckets, revisionDueCount, snoozeRevision } from './revision';
+import { completeRevision, completeRevisionWithRecall, compactRevisionHistory, ensureRevisions, recallSummary, revisionBuckets, revisionDueCount, snoozeRevision } from './revision';
 
 const plan = buildPlan();
 const physics = CHAPTERS[0];
@@ -86,7 +86,7 @@ describe('1/3/7/14/30-day revision engine', () => {
   it('creates a fresh card when a weak recall has nothing left to pull', () => {
     let data = ensureRevisions(plan, completedChapter());
     const cards = data.revisions.filter(item => item.chapterId === physics.id);
-    for (const card of cards) data = completeRevision(data, card.id, '2026-11-15T08:00:00.000Z');
+    for (const card of cards.slice(1)) data = completeRevision(data, card.id, '2026-11-15T08:00:00.000Z');
     const outcome = completeRevisionWithRecall(data, cards[0].id, 'weak', '2026-11-20');
     expect(outcome.created).toBe(true);
     expect(outcome.dueDate).toBe('2026-11-21');
@@ -101,5 +101,37 @@ describe('1/3/7/14/30-day revision engine', () => {
     expect(summary).toMatchObject({ good: 1, weak: 1, okay: 0, rated: 2 });
     expect(summary.score).toBe(60);
     expect(recallSummary(data.revisions, '2027-06-01').rated).toBe(0);
+  });
+});
+
+
+describe('revision safety and visibility', () => {
+  it('preserves a manually snoozed date when the scheduler runs again', () => {
+    const data = ensureRevisions(plan, completedChapter());
+    const card = data.revisions[0];
+    const delayed = snoozeRevision(data, card.id, '2026-11-20', 2);
+    expect(ensureRevisions(plan, delayed).revisions.find(item => item.id === card.id)?.dueDate).toBe('2026-11-22');
+  });
+  it('ignores duplicate ratings on an already completed card', () => {
+    const data = ensureRevisions(plan, completedChapter());
+    const once = completeRevisionWithRecall(data, data.revisions[0].id, 'weak', '2026-11-15').data;
+    expect(completeRevisionWithRecall(once, data.revisions[0].id, 'weak', '2026-11-15').data).toBe(once);
+  });
+  it('compacts only older duplicates without recreating completed milestones', () => {
+    let data = ensureRevisions(plan, completedChapter());
+    for (const card of data.revisions) data = completeRevision(data, card.id, '2026-11-15T08:00:00.000Z');
+    data.revisions.push({ ...data.revisions[0], id: 'duplicate', completedAt: '2026-11-16T08:00:00.000Z' });
+    const compacted = compactRevisionHistory(data);
+    expect(compacted.revisions).toHaveLength(5);
+    expect(compacted.revisions.some(item => item.id === 'duplicate')).toBe(true);
+    expect(ensureRevisions(plan, compacted).revisions).toHaveLength(5);
+  });
+  it('does not exceed storage limits while creating another recall card', () => {
+    let data = ensureRevisions(plan, completedChapter());
+    const card = data.revisions[0];
+    data.revisions = Array.from({ length: 2500 }, (_, i) => ({ ...card, id: `history-${i}`, completedAt: i ? '2026-11-15T08:00:00.000Z' : undefined }));
+    const outcome = completeRevisionWithRecall(data, 'history-0', 'weak', '2026-11-20');
+    expect(outcome.limitReached).toBe(true);
+    expect(outcome.data.revisions).toHaveLength(2500);
   });
 });

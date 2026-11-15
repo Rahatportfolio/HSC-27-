@@ -2307,7 +2307,7 @@ button, a, .nav-item, .subject-tab, .chapter-row, .search-result, .task-check { 
   color: #efd09e;
 }
 .live-clock-chip strong {
-  font-family: 'DM Sans', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: 'Hind Siliguri', 'DM Sans', sans-serif;
   font-size: 14px;
   font-weight: 700;
   letter-spacing: 0.03em;
@@ -3987,3 +3987,76 @@ body {
 .personal-task-form { display: flex; flex-wrap: wrap; gap: .6rem; margin: .75rem 0; align-items: center; }
 .personal-task-form input, .personal-task-form select { min-width: 0; flex: 1 1 130px; }
 .task-filter-bar { margin: .75rem 0; }
+
+/* Small screens: let text and controls take the space they need rather than overlap. */
+@media (max-width: 650px) {
+  .topbar { gap: 4px; }
+  .topbar-left, .topbar-actions { min-width: 0; }
+  .topbar-left { gap: 0; flex: 0 0 auto; }
+  .topbar-left .breadcrumb { display: none; }
+  .topbar-actions { flex: 1 1 auto; justify-content: flex-end; gap: 4px; }
+  .topbar-progress-pill { flex-shrink: 0; padding: 4px 6px; gap: 5px; }
+  .topbar-progress-pill strong { padding: 1px 4px; }
+  .topbar-quick-tools { flex-shrink: 0; }
+  .topbar-avatar { flex-shrink: 0; }
+  .timer-layout, .mcq-layout, .cq-layout, .exam-split, .analytics-grid,
+  .analytics-grid.second, .timer-rail, .dashboard-grid, .dashboard-rail {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+  .timer-layout > *, .timer-rail > *, .mcq-layout > *, .cq-layout > *,
+  .calendar-layout > *, .card-heading > *, .page-heading > * { min-width: 0; }
+  .card-heading { flex-wrap: wrap; }
+  .card-heading h2, .card-heading h3 { min-width: 0; flex-wrap: wrap; }
+  .task-topline { flex-wrap: wrap; }
+  .task-main, .task-title-button h3, .chapter-step-copy { min-width: 0; overflow-wrap: anywhere; }
+  .task-title-button { align-items: flex-start; }
+  .task-preset-timer-btn, .step-timer-pill { max-width: 100%; white-space: normal; }
+  .chapter-step-row { display: grid; grid-template-columns: 22px minmax(0, 1fr); align-items: start; }
+  .chapter-step-row .step-timer-pill { grid-column: 2; justify-self: start; }
+  .schedule-card .task-card.compact { gap: 8px; }
+  .schedule-card .task-card.compact .task-time { width: 42px; flex: 0 0 42px; }
+  .schedule-card .task-list { padding-left: 12px; padding-right: 12px; }
+  .calendar-day-panel, .calendar-panel, .schedule-card, .daily-hub-card { min-width: 0; }
+  .calendar-cell .cell-label { display: none; }
+  .calendar-cell { min-height: 64px; padding: 6px 3px; }
+  .calendar-cell .progress-track { max-width: 100%; }
+  .filter-bar, .task-filter-bar, .daily-date-bar, .hero-chips, .form-actions,
+  .task-expanded, .routine-row, .backlog-row, .backlog-actions { flex-wrap: wrap; min-width: 0; }
+  .text-button, .button { max-width: 100%; white-space: normal; }
+  .modal-header h2, .modal-body, .modal-body > *, .daily-hub-title, .chapter-copy { min-width: 0; overflow-wrap: anywhere; }
+}
+@media (max-width: 360px) {
+  .topbar { padding-left: 7px; padding-right: 7px; }
+  .topbar-actions { gap: 2px; }
+  .topbar-quick-tools { padding: 1px; gap: 0; }
+  .topbar-quick-tools .icon-button { width: 29px; height: 32px; }
+  .topbar-avatar { width: 29px; height: 29px; }
+  .mobile-bottom-nav { padding-left: 2px; padding-right: 2px; }
+  .mobile-bottom-nav button { min-width: 0; flex: 1 1 0; padding-left: 2px; padding-right: 2px; }
+}
+@media (max-width: 650px) {
+  .manual-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manual-form label, .manual-form input, .manual-form select { min-width: 0; width: 100%; }
+  .hero-primary-cta { text-align: left; }
+  .hero-primary-cta span { min-width: 0; overflow: visible; white-space: normal; overflow-wrap: anywhere; }
+}
+@media (max-width: 650px) {
+  .segmented { max-width: 100%; flex-wrap: wrap; }
+  .segmented button { white-space: normal; }
+  .quiz-setup-grid { grid-template-columns: minmax(0, 1fr); }
+  .quiz-setup-grid > label, .quiz-setup-grid select { min-width: 0; max-width: 100%; }
+}
+
+/* Keep the live clock readable and compact on small phones. */
+@media (max-width: 650px) {
+  .live-timer-topbar { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 8px; padding: calc(6px + var(--safe-top, 0px)) 10px 6px; }
+  .live-timer-indicator { min-width: 0; gap: 5px; }
+  .live-timer-subject { min-width: 0; max-width: 100%; font-size: 12px; }
+  .live-rec-badge { font-size: 10px; padding: 2px 5px; }
+  .live-timer-clocks { flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+  .live-clock-chip { padding: 3px 6px; gap: 3px; }
+  .live-clock-chip small { font-size: 10px; }
+  .live-clock-chip strong { font-size: 13px; }
+  .live-timer-actions { grid-column: 1 / -1; gap: 5px; }
+  .live-btn { min-height: 30px; padding: 3px 7px; font-size: 11px; }
+}

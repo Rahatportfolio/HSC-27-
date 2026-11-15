@@ -203,3 +203,18 @@ describe('chapter and personalized task synchronization', () => {
     expect(oneOff[7].tasks.some(task => task.kind === 'custom')).toBe(false);
   });
 });
+
+describe('schedule override safety', () => {
+  it('keeps exact unrelated durations and prevents a custom start overlapping the prior session', () => {
+    const plan = buildPlan(), date = plan[0].date;
+    const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
+    const routine = applyRoutine(plan, [{ id: 'odd', date, weekday, startMinute: 1250, minutes: 47, subject: 'math', title: 'Practice', createdAt: '2026-11-01T00:00:00Z' }]);
+    const tasks = routine[0].tasks;
+    const id = `custom-${date}-odd`;
+    const result = applyDayOverrides(routine, { [date]: { taskStartMinutes: { [id]: 1 } } }, DEFAULT_SETTINGS)[0].tasks;
+    const index = tasks.findIndex(task => task.id === id);
+    expect(index).toBeGreaterThan(0);
+    expect(result[index].startMinute).toBeGreaterThanOrEqual(result[index - 1].endMinute);
+    expect(result[index].endMinute - result[index].startMinute).toBe(47);
+  });
+});

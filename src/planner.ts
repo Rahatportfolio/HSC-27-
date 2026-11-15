@@ -181,6 +181,7 @@ export function cascadeDayTasks(tasks: Task[], override: DayScheduleOverride | u
     const customMin = override.taskMinutes?.[tasks[idx].id];
     if (customMin !== undefined && Number.isFinite(customMin)) return Math.max(15, Math.min(720, Math.round(customMin)));
     if (tasks[idx].kind === 'exam') return 180;
+    if (override.dailyHours === undefined) return d;
     return Math.max(15, Math.round((d * scale) / 5) * 5);
   });
 
@@ -202,7 +203,7 @@ export function cascadeDayTasks(tasks: Task[], override: DayScheduleOverride | u
     const gap = idx === 0 ? 0 : Math.max(5, Math.round((origGap * gapScale) / 5) * 5);
     const customStart = override.taskStartMinutes?.[task.id];
     const startMinute = customStart !== undefined && Number.isFinite(customStart)
-      ? Math.max(0, Math.min(2879, Math.round(customStart)))
+      ? Math.max(idx === 0 ? 0 : cursor, Math.min(2879, Math.round(customStart)))
       : (idx === 0 ? cursor : cursor + gap);
     const duration = scaledDurations[idx];
     const endMinute = startMinute + duration;

@@ -115,3 +115,16 @@ describe('personal tasks and legacy carryovers', () => {
     expect(restored.carryovers[0].completedAt).toBe(data.completed.task);
   });
 });
+
+describe('previously accepted user data', () => {
+  it('loads long note tags and older large or fractional test records without losing the profile', () => {
+    const data = freshData();
+    data.libraryNotes.push({ id: 'note', title: 'Note', body: '', tags: ['x'.repeat(80)], pinned: false, createdAt: '2026-11-15T00:00:00.000Z', updatedAt: '2026-11-15T00:00:00.000Z' });
+    data.tests.push({ id: 'test', kind: 'model', title: 'Test', chapterIds: [], score: 1001, total: 1200, durationMin: 30.5, date: '2026-11-15', at: '2026-11-15T00:00:00.000Z', notes: '' });
+    data.cq.push({ id: 'cq', subject: 'physics', question: 'CQ', marks: 1001, total: 1200, note: '', date: '2026-11-15', at: '2026-11-15T00:00:00.000Z' });
+    const restored = parseBackup(JSON.stringify(data));
+    expect(restored.libraryNotes[0].tags[0]).toHaveLength(80);
+    expect(restored.tests[0].durationMin).toBe(30.5);
+    expect(restored.cq[0].total).toBe(1200);
+  });
+});

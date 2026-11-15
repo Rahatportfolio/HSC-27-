@@ -5,13 +5,13 @@ import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
 import { applyDayOverrides, applyRoutine, bn, buildPlan, diffDays, formatDate, isValidDate, todayKey } from './planner';
 import type { AppData } from './planner';
-import { loadData, parseBackup, saveData, SAVED_AT_KEY } from './storage';
+import { loadData, parseBackup, saveData, SAVED_AT_KEY, RECOVERY_KEY } from './storage';
 import { persistToDatabase, restoreFromDatabase } from './db';
 import { STORAGE_KEY } from './planner';
 import { exportCalendar } from './exports';
 import { canNotify, clearLiveTimerNotification, notifySessionDone, showNotification, syncDailyProgressNotification, syncLiveTimerNotification, useFontScale, useNow, useReminders, useRevisionReminder, useStudyTimer, useTheme, useWakeLock } from './hooks';
 import type { PresetTimerInput } from './hooks';
-import { cancelTimerAlarm, isNativeApp, nativeNotify, prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
+import { cancelTimerAlarm, isNativeApp, nativeNotify, openNativeTimerPictureInPicture, prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
 import { buildDailyNotificationDigest, buildDailyStatusNotification } from './notifications';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover, setTaskCompletion } from './study';
@@ -58,6 +58,8 @@ type OpenModal = { type: 'chapter'; chapter: Chapter } | { type: 'exam'; paperId
 export default function App() {
   const [initial] = useState(loadData);
   const [data, setData] = useState<AppData>(initial.data);
+  const currentData = useRef(data);
+  currentData.current = data;
   setLanguage(data.settings.language);
   const [storageOk, setStorageOk] = useState(true);
   const [view, setView] = useState<View>(viewFromHash);
@@ -65,6 +67,7 @@ export default function App() {
   const [selectedDate, setSelectedDateState] = useState(today);
   const setSelectedDate = useCallback((date: string) => { if (isValidDate(date)) setSelectedDateState(date); }, []);
   const [dbReady, setDbReady] = useState(() => !isNativeApp());
+  const [dbMirrorSafe, setDbMirrorSafe] = useState(true);
   const [mobileMenu, setMobileMenu] = useState(false);
   const [modal, setModal] = useState<OpenModal>(null);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
@@ -77,19 +80,15 @@ export default function App() {
     settings: data.settings,
     notify,
     onComplete: session => {
-      let updatedSnapshot: AppData | null = null;
       setData(d => {
         const next = addStudySession(d, { minutes: session.minutes, subject: session.subject, chapterId: session.chapterId || undefined, mode: session.mode, label: session.label || undefined });
-        if (session.taskId && !next.completed[session.taskId]) {
-          updatedSnapshot = setTaskCompletion(next, [session.taskId], true);
-          return updatedSnapshot;
-        }
-        updatedSnapshot = next;
-        return next;
+        return session.taskId ? setTaskCompletion(next, [session.taskId], true) : next;
       });
       void clearLiveTimerNotification();
-      const snapshot = updatedSnapshot ?? data;
-      const digest = buildDailyNotificationDigest(plan, snapshot, today);
+      // React may defer the state updater, so derive the notification from the
+      // completed task rather than reading a variable assigned inside setData.
+      const completed = session.taskId ? { ...data.completed, [session.taskId]: new Date().toISOString() } : data.completed;
+      const digest = buildDailyNotificationDigest(plan, { ...data, completed }, today);
       const doneTitle = digest.allDone && digest.totalTasks > 0
         ? t(`🎉 সেশন শেষ (${bn(session.minutes)} মি.) · আজকের সব পড়া কমপ্লিট!`, `🎉 Session done (${session.minutes}m) · All study completed!`)
         : t(`✅ সেশন শেষ (${bn(session.minutes)} মি.) · বাকি: ${digest.remainingSummary}`, `✅ Session done (${session.minutes}m) · Left: ${digest.remainingSummary}`);
@@ -115,34 +114,45 @@ export default function App() {
     return ch || timer.label || subjectById[timer.subject]?.name || 'স্টাডি টাইমার';
   }, [timer.chapterId, timer.label, timer.subject]);
 
+  // Use the saved wall-clock anchor rather than a display tick; it stays correct
+  // after pause/resume, backgrounding and reload. Serialize native operations so
+  // a slow permission prompt cannot reschedule an alarm after the timer was paused.
+  const clockReference = timer.startedAt === null ? 0 : timer.startedAt - timer.accumulatedMs + (timer.mode === 'stopwatch' ? 0 : timer.durationMin * 60_000);
+  const timerNativeQueue = useRef<Promise<void>>(Promise.resolve());
+  const timerSyncVersion = useRef(0);
   useEffect(() => {
-    let alive = true;
+    const version = ++timerSyncVersion.current;
     const subName = subjectById[timer.subject]?.name ?? '';
-    if (timer.running) {
-      void startStudyTimerService(
-        `${subName} · ${timerTitleText}`,
-        'টাইমার ব্যাকগ্রাউন্ডে চলছে — অ্যাপ থেকে বের হলেও সময় গণনা চালু থাকবে।',
-      ).then(started => { if (alive) setServiceRunning(started); });
-      if (timer.mode !== 'stopwatch' && timer.remainingSec > 0) {
-        const digest = buildDailyNotificationDigest(plan, data, today);
-        void scheduleTimerAlarm(
-          Date.now() + timer.remainingSec * 1000,
-          `${subName} · সেশন শেষ!`,
-          `${timerTitleText} — সময় শেষ। আজ কী পড়া: ${digest.whatToStudy} · কমপ্লিট করা বাকি: ${digest.remainingSummary}`,
-        );
+    const running = timer.running;
+    const countdown = timer.mode !== 'stopwatch';
+    timerNativeQueue.current = timerNativeQueue.current.catch(() => {}).then(async () => {
+      if (version !== timerSyncVersion.current) return;
+      if (!running) {
+        setServiceRunning(false);
+        await stopStudyTimerService();
+        await cancelTimerAlarm();
+        return;
       }
-    } else {
-      setServiceRunning(false);
-      void stopStudyTimerService();
-      void cancelTimerAlarm();
-      if (timer.elapsedSec === 0) void clearLiveTimerNotification();
-    }
-    return () => { alive = false; };
-  }, [timer.running, timer.subject, timerTitleText, timer.mode]);
+      const started = await startStudyTimerService(
+        `${subName} · ${timerTitleText}`,
+        t('টাইমার চলছে', 'Timer running'),
+        { referenceTime: clockReference, countdown },
+      );
+      if (version !== timerSyncVersion.current) return;
+      setServiceRunning(started);
+      if (countdown && clockReference > Date.now()) {
+        const digest = buildDailyNotificationDigest(plan, data, today);
+        await scheduleTimerAlarm(clockReference, `${subName} · ${t('সেশন শেষ!', 'Session finished!')}`,
+          `${timerTitleText} — ${t('সময় শেষ।', 'Time is up.')} ${digest.remainingSummary}`);
+      } else {
+        await cancelTimerAlarm();
+      }
+    });
+  }, [timer.running, timer.subject, timerTitleText, timer.mode, clockReference]);
 
   // Live document.title + OS notification bar update + PiP canvas draw
   useEffect(() => {
-    const activeOrPaused = timer.running || timer.elapsedSec > 0;
+    const activeOrPaused = timer.running || timer.accumulatedMs > 0;
     if ( typeof document !== 'undefined') {
       if (activeOrPaused) {
         const display = timer.mode === 'stopwatch' ? formatClock(timer.elapsedSec) : formatClock(timer.remainingSec);
@@ -162,7 +172,7 @@ export default function App() {
         ctx.font = '600 15px sans-serif';
         ctx.fillText(timer.running ? 'পড়া চলছে · প্রস্তুতি' : 'বিরতি · প্রস্তুতি', 46, 37);
         ctx.fillStyle = '#ffffff';
-        ctx.font = '700 42px monospace';
+        ctx.font = "700 42px 'Hind Siliguri', sans-serif";
         const mainClock = timer.mode === 'stopwatch' ? formatClock(timer.elapsedSec) : formatClock(timer.remainingSec);
         ctx.fillText(mainClock, 22, 96);
         ctx.fillStyle = '#cbd5e1';
@@ -172,25 +182,34 @@ export default function App() {
     }
   }, [timer.running, timer.elapsedSec, timer.remainingSec, timer.mode, timerTitleText, formatClock, pipActive]);
 
-  // Silent live OS status-bar notification update when running (every 30s & immediately on tab hide)
+  // Keep the latest reading in a ref: recreating this interval every second
+  // previously prevented the 30-second notification update from ever firing.
+  const timerNotification = useRef({ title: '', body: '' });
+  timerNotification.current = {
+    title: `🔴 ${t('চলছে', 'Running')}: ${timerTitleText}`,
+    body: `${t('অতিবাহিত', 'Elapsed')} ${formatClock(timer.elapsedSec)}${timer.mode === 'stopwatch' ? '' : ` · ${t('বাকি', 'Left')} ${formatClock(timer.remainingSec)}`}`,
+  };
   useEffect(() => {
-    if (!timer.running) return;
-    const pushStatus = () => {
-      const elapsedStr = formatClock(timer.elapsedSec);
-      const remStr = timer.mode === 'stopwatch' ? '' : ` · বাকি ${formatClock(timer.remainingSec)}`;
-      void syncLiveTimerNotification(`🔴 চলছে: ${timerTitleText}`, `অতিবাহিত ${elapsedStr}${remStr}`);
-    };
+    if (!timer.running || isNativeApp()) { void clearLiveTimerNotification(); return; }
+    const pushStatus = () => void syncLiveTimerNotification(timerNotification.current.title, timerNotification.current.body);
     const onVis = () => { if (document.hidden) pushStatus(); };
     document.addEventListener('visibilitychange', onVis);
+    pushStatus();
     const id = window.setInterval(pushStatus, 30000);
-    return () => {
-      document.removeEventListener('visibilitychange', onVis);
-      window.clearInterval(id);
-    };
-  }, [timer.running, timer.elapsedSec, timer.remainingSec, timer.mode, timerTitleText, formatClock]);
+    return () => { document.removeEventListener('visibilitychange', onVis); window.clearInterval(id); void clearLiveTimerNotification(); };
+  }, [timer.running]);
 
   const toggleFloatingPiP = useCallback(async () => {
     try {
+      if (isNativeApp()) {
+        if (!timer.running || !clockReference) {
+          notify(t('ভাসমান ঘড়ির আগে টাইমার চালু করো।', 'Start the timer before opening the floating clock.'), 'info');
+          return;
+        }
+        const opened = await openNativeTimerPictureInPicture(timerTitleText, clockReference, timer.mode !== 'stopwatch');
+        if (!opened) notify(t('এই ডিভাইসে ভাসমান ঘড়ি চালু হয়নি। Android সেটিংসে Picture-in-picture অনুমতি যাচাই করো।', 'Floating clock is unavailable. Check Picture-in-picture permission in Android settings.'), 'info');
+        return;
+      }
       if (document.pictureInPictureElement) {
         await document.exitPictureInPicture();
         setPipActive(false);
@@ -208,7 +227,7 @@ export default function App() {
         ctx.fillStyle = '#14231c';
         ctx.fillRect(0, 0, 360, 160);
         ctx.fillStyle = '#ffffff';
-        ctx.font = '700 38px monospace';
+        ctx.font = "700 38px 'Hind Siliguri', sans-serif";
         ctx.fillText(formatClock(timer.mode === 'stopwatch' ? timer.elapsedSec : timer.remainingSec), 22, 95);
       }
       const capture = (canvas as HTMLCanvasElement & { captureStream?: (fps?: number) => MediaStream }).captureStream;
@@ -229,9 +248,9 @@ export default function App() {
       await video.requestPictureInPicture();
       setPipActive(true);
     } catch {
-      notify('ভাসমান ঘড়ি চালু করা যায়নি — উপরের স্ট্যাটাস বারে লাইভ সময় দেখাচ্ছে।', 'info');
+      notify(t('এই ব্রাউজারে ভাসমান ঘড়ি চালু করা যায়নি। অ্যাপের ভেতরের টাইমার বার দেখো।', 'Floating clock is unavailable in this browser. Use the timer bar inside the app.'), 'info');
     }
-  }, [formatClock, notify, timer.elapsedSec, timer.mode, timer.remainingSec]);
+  }, [formatClock, notify, timer.elapsedSec, timer.mode, timer.remainingSec, timer.running, timerTitleText, clockReference]);
   const navigate = useCallback((next: View, date?: string) => { if (date) setSelectedDate(date); setView(next); setMobileMenu(false); window.location.hash = next; window.scrollTo({ top: 0, behavior: 'smooth' }); }, [setSelectedDate]);
   useTheme(data.settings.theme);
   const isDarkTheme = data.settings.theme === 'dark' || (data.settings.theme === 'system' && typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches));
@@ -244,26 +263,42 @@ export default function App() {
     if (!isNativeApp()) return;
     let active = true;
     let timer = 0;
-    const timeout = new Promise<null>(resolve => { timer = window.setTimeout(() => resolve(null), 4000); });
-    void Promise.race([restoreFromDatabase(), timeout]).then(payload => {
+    const timeout = new Promise<'timeout'>(resolve => { timer = window.setTimeout(() => resolve('timeout'), 4000); });
+    void Promise.race([restoreFromDatabase(), timeout]).then(snapshot => {
       if (!active) return;
-      if (payload) {
-        try { setData(parseBackup(payload)); notify('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'info'); } catch { /* keep the localStorage copy */ }
+      window.clearTimeout(timer);
+      if (snapshot === 'timeout') {
+        setDbMirrorSafe(false);
+        notify('ডাটাবেস লোডে দেরি হচ্ছে; বর্তমান তথ্য রাখা হয়েছে। পরের বার আবার চেষ্টা হবে।', 'info');
+      } else if (snapshot) {
+        const preserveSnapshot = () => {
+          setDbMirrorSafe(false);
+          try { if (!localStorage.getItem(RECOVERY_KEY)) localStorage.setItem(RECOVERY_KEY, snapshot.payload); } catch { /* retain the database copy */ }
+        };
+        // A completion or user edit during the database read must not be overwritten.
+        if (currentData.current !== initial.data) {
+          preserveSnapshot();
+          notify('ডাটাবেস লোডের সময় পরিবর্তন হয়েছে; বর্তমান তথ্য রাখা হয়েছে। আগের কপি Settings-এ রিকভারি ফাইলে দেখো।', 'info');
+        } else {
+          try { setData(parseBackup(snapshot.payload)); notify('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'info'); }
+          catch { preserveSnapshot(); notify('ডাটাবেসের তথ্য পড়া যায়নি; Settings থেকে রিকভারি ফাইল রাখো।', 'error'); }
+        }
       }
       setDbReady(true);
-    }).catch(() => setDbReady(true));
+    }).catch(() => { if (active) { setDbMirrorSafe(false); setDbReady(true); notify('ডাটাবেস পড়া যায়নি; বর্তমান তথ্য রাখা হয়েছে।', 'error'); } });
     return () => { active = false; window.clearTimeout(timer); };
-  }, [notify]);
+  }, [notify, initial.data]);
   useEffect(() => { if (dbReady) setStorageOk(saveData(data)); }, [data, dbReady]);
   useEffect(() => {
-    if (!isNativeApp() || !dbReady) return;
+    if (!isNativeApp() || !dbReady || !dbMirrorSafe) return;
     const payload = JSON.stringify(data);
-    const updatedAt = localStorage.getItem(SAVED_AT_KEY) || new Date().toISOString();
+    let updatedAt = new Date().toISOString();
+    try { updatedAt = localStorage.getItem(SAVED_AT_KEY) || updatedAt; } catch { /* storage may be unavailable */ }
     const handle = window.setTimeout(() => { void persistToDatabase(payload, updatedAt); }, 900);
     return () => window.clearTimeout(handle);
-  }, [data, dbReady]);
-  useEffect(() => { setData(current => ensureRevisions(plan, current)); }, [plan, data.completed, data.settings.revisionEnabled]);
-  useEffect(() => { setData(current => autoCarryover(plan, current, today)); }, [plan, data.settings.carryoverMode, today]);
+  }, [data, dbReady, dbMirrorSafe]);
+  useEffect(() => { if (dbReady) setData(current => ensureRevisions(plan, current)); }, [dbReady, plan, data.completed, data.settings.revisionEnabled]);
+  useEffect(() => { if (dbReady) setData(current => autoCarryover(plan, current, today)); }, [dbReady, plan, data.settings.carryoverMode, today]);
   // Android drops a notification whose channel does not exist, so the channels are
   // created at start-up; the permission dialog only appears when reminders are on.
   useEffect(() => {
@@ -278,11 +313,18 @@ export default function App() {
     try { localStorage.setItem('hsc27-permission-asked', 'yes'); } catch { /* storage may be full */ }
     void requestNativeNotifications();
   }, [data.settings.reminderEnabled]);
+  const reminderQueue = useRef<Promise<void>>(Promise.resolve());
+  const reminderSyncVersion = useRef(0);
   useEffect(() => {
-    if (!data.settings.reminderEnabled || !isNativeApp()) return;
-    const handle = window.setTimeout(() => { void syncNativeReminders(plan, data, today).catch(() => undefined); }, 2000);
+    if (!isNativeApp() || !dbReady) return;
+    const version = ++reminderSyncVersion.current;
+    const handle = window.setTimeout(() => {
+      reminderQueue.current = reminderQueue.current.catch(() => {}).then(async () => {
+        if (version === reminderSyncVersion.current) await syncNativeReminders(plan, data, today);
+      }).catch(() => {});
+    }, data.settings.reminderEnabled ? 2000 : 0);
     return () => window.clearTimeout(handle);
-  }, [plan, data, today]);
+  }, [plan, data, today, dbReady]);
   const progressSyncMounted = useRef(false);
   useEffect(() => {
     if (!progressSyncMounted.current) { progressSyncMounted.current = true; return; }
@@ -355,8 +397,8 @@ export default function App() {
       if (chapterId) timer.setChapter(chapterId);
       navigate('timer');
     };
-    if (timer.running) {
-      setConfirmRequest({ title: 'চলমান টাইমার থামিয়ে নতুন শুরু করবে?', message: 'বর্তমান টাইমারের অগ্রগতি সেভ হবে না। আগে থামিয়ে রাখতে চাইলে টাইমার পেজে যাও।', label: 'নতুন টাইমার শুরু', action: apply });
+    if (timer.running || timer.accumulatedMs > 0) {
+      setConfirmRequest({ title: 'বর্তমান টাইমার বদলে নতুন সেট করবে?', message: 'বর্তমান টাইমারের অগ্রগতি সেভ হবে না। আগে থামিয়ে রাখতে চাইলে টাইমার পেজে যাও।', label: 'নতুন টাইমার সেট করো', action: apply });
       return;
     }
     apply();
@@ -369,10 +411,10 @@ export default function App() {
       timer.startPreset(preset);
       notify(`▶ টাইমার চালু হয়েছে: ${preset.label || subjectById[preset.subject].name} (${bn(preset.durationMin)} মি.)`, 'info');
     };
-    if (timer.running && timer.taskId !== preset.taskId) {
+    if (timer.running || timer.accumulatedMs > 0) {
       setConfirmRequest({
-        title: 'চলমান টাইমার বদলে এই অধ্যায়ের টাইমার চালাবে?',
-        message: 'আগের চলমান টাইমারটি থেমে নতুন প্রিসেট টাইমার শুরু হবে।',
+        title: 'বর্তমান টাইমার বদলে নতুন টাইমার চালাবে?',
+        message: 'আগের সেশনের অগ্রগতি সেভ হবে না।',
         label: 'হ্যাঁ, নতুন টাইমার চালাও',
         action: launch,
       });
@@ -381,13 +423,13 @@ export default function App() {
     launch();
   }, [timer, notify]);
   const finishActiveTimer = useCallback(() => {
-    const linkedTaskId = timer.taskId;
-    timer.finishNow();
-    if (linkedTaskId && !data.completed[linkedTaskId]) {
-      toggleTask(linkedTaskId);
+    if (timer.logging && timer.elapsedSec < 15) {
+      notify(t('অন্তত ১৫ সেকেন্ড পড়ার পর সেশন সেভ করা যাবে।', 'Study for at least 15 seconds before saving the session.'), 'info');
+      return;
     }
+    timer.finishNow();
     void clearLiveTimerNotification();
-  }, [timer, data.completed, toggleTask]);
+  }, [timer, notify]);
   const sendStudyStatusNotification = useCallback(async (targetDate?: string): Promise<boolean> => {
     const dateKey = targetDate || selectedDate || today;
     const nextData: AppData = data.settings.reminderEnabled
@@ -467,9 +509,9 @@ export default function App() {
       </aside>
       <div className="main-shell">
         <div className="top-chrome-stack">
-          {(timer.running || timer.elapsedSec > 0) && (
+          {(timer.running || timer.accumulatedMs > 0) && (
             <div className={`live-timer-topbar ${timer.running ? 'running' : 'paused'}`} role="status" aria-live="off">
-              <div className="live-timer-indicator" onClick={() => navigate('timer')} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter') navigate('timer'); }}>
+              <div className="live-timer-indicator" onClick={() => navigate('timer')} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('timer'); } }}>
                 <span className={`live-rec-dot ${timer.running ? 'pulse' : ''}`} aria-hidden="true" />
                 <span className="live-rec-badge">{timer.running ? t('লাইভ চলছে', 'LIVE') : t('বিরতি', 'PAUSED')}</span>
                 <strong className="live-timer-subject">{subjectById[timer.subject]?.short} · {timerTitleText}</strong>
@@ -497,9 +539,9 @@ export default function App() {
                 </button>
                 <button type="button" className="live-btn done" onClick={finishActiveTimer} title={t('পড়া সেভ করে সম্পন্ন দাও', 'Save session & mark done')}>
                   <Check size={13} />
-                  <span>{t('সম্পন্ন ও সেভ', 'Finish')}</span>
+                  <span>{timer.logging ? t('সম্পন্ন ও সেভ', 'Finish & save') : t('বিরতি শেষ', 'End break')}</span>
                 </button>
-                <button type="button" className="live-btn dismiss" onClick={() => { timer.reset(); void clearLiveTimerNotification(); }} aria-label={t('টাইমার বন্ধ করো', 'Reset timer')}>
+                <button type="button" className="live-btn dismiss" onClick={() => setConfirmRequest({ title: t('টাইমার রিসেট করবে?', 'Reset the timer?'), message: t('এই সেশনের সময় সেভ হবে না।', 'This session will not be saved.'), danger: true, label: t('রিসেট করো', 'Reset'), action: () => { timer.reset(); void clearLiveTimerNotification(); } })} aria-label={t('টাইমার বন্ধ করো', 'Reset timer')}>
                   <X size={14} />
                 </button>
               </div>

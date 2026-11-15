@@ -40,10 +40,17 @@ export function isBackupSnoozed(today = todayKey()): boolean {
   return !!until && until > today;
 }
 /** Anything worth losing: progress, measured sessions, questions, scores or written notes. */
-export function hasStudyData(data: Pick<AppData, 'completed' | 'studySessions' | 'tests' | 'cq' | 'mistakes' | 'libraryNotes' | 'notes' | 'revisions'>): boolean {
+export function hasStudyData(data: AppData): boolean {
   return Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
     || data.cq.length > 0 || data.mistakes.length > 0 || data.libraryNotes.length > 0
-    || Object.values(data.notes).some(note => note.trim()) || data.revisions.some(item => !!item.completedAt);
+    || Object.values(data.notes).some(note => note.trim()) || data.revisions.some(item => !!item.completedAt)
+    || data.questions.length > 0 || data.attempts.length > 0 || data.videos.length > 0
+    || data.formulas.length > 0 || data.boardQuestions.length > 0 || data.routineBlocks.length > 0
+    || data.importantDates.length > 0 || data.carryovers.length > 0 || data.formulaFavorites.length > 0
+    || Object.keys(data.classWatched).length > 0 || Object.keys(data.exams).length > 0
+    || Object.keys(data.gpaMarks).length > 0 || Object.keys(data.confidence).length > 0
+    || Object.keys(data.chapterMeta).length > 0 || Object.keys(data.dayOverrides).length > 0
+    || data.focus.minutes > 0 || data.focus.sessions > 0;
 }
 export function needsBackup(data: Parameters<typeof hasStudyData>[0], today = todayKey()): boolean {
   if (!hasStudyData(data) || isBackupSnoozed(today)) return false;
@@ -58,7 +65,7 @@ export function downloadBackup(data: AppData, today = todayKey()): string {
   return name;
 }
 
-export type ShareOutcome = 'shared' | 'copied' | 'downloaded';
+export type ShareOutcome = 'shared' | 'copied' | 'downloaded' | 'cancelled';
 /**
  * Prefers the Android/system share sheet with a real .json file, then the clipboard,
  * then a plain download — so the button always ends in a saved copy.
@@ -80,11 +87,11 @@ export async function shareBackup(data: AppData, today = todayKey()): Promise<Sh
       }
     } catch (error) {
       // A cancelled share must not silently fall back to a download.
-      if ((error as Error)?.name === 'AbortError') return 'shared';
+      if ((error as Error)?.name === 'AbortError') return 'cancelled';
     }
   }
   if (nav?.share && json.length < 40_000) {
-    try { await nav.share({ title: 'প্রস্তুতি ব্যাকআপ', text: json }); markBackup(); return 'shared'; } catch { /* fall through */ }
+    try { await nav.share({ title: 'প্রস্তুতি ব্যাকআপ', text: json }); markBackup(); return 'shared'; } catch (error) { if ((error as Error)?.name === 'AbortError') return 'cancelled'; /* fall through */ }
   }
   try {
     if (nav?.clipboard && json.length < 120_000) { await nav.clipboard.writeText(json); markBackup(); return 'copied'; }

@@ -9,16 +9,17 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 
 import androidx.core.app.NotificationCompat;
 
 /**
  * Keeps a study session alive while the app sits in the background.
  *
- * The web timer already measures elapsed time from a saved start timestamp, so the
- * numbers stay exact even after the phone sleeps. What this service adds is the
- * ongoing notification plus a foreground process, which stops Android from freezing
- * the WebView (and with it the completion alert) when the student switches apps.
+ * The WebView uses a saved wall-clock timestamp; Android's notification chronometer
+ * independently displays the same clock, including while the WebView is suspended.
+ * Completion alerts are scheduled separately and may be delayed by system settings.
  */
 public class StudyTimerService extends Service {
     public static final String CHANNEL_ID = "study-timer-running";
@@ -27,6 +28,10 @@ public class StudyTimerService extends Service {
     public static final String ACTION_STOP = "com.prostuti.hsc27.STOP";
     public static final String EXTRA_TITLE = "title";
     public static final String EXTRA_BODY = "body";
+    public static final String EXTRA_REFERENCE_TIME = "referenceTime";
+    public static final String EXTRA_COUNTDOWN = "countdown";
+    private final Handler handler = new Handler(Looper.getMainLooper());
+    private final Runnable finishCountdown = this::stopSelf;
 
     @Override
     public IBinder onBind(Intent intent) {
@@ -46,13 +51,24 @@ public class StudyTimerService extends Service {
         if (title == null || title.trim().isEmpty()) title = "পড়া চলছে";
         if (body == null || body.trim().isEmpty()) body = "টাইমার চলছে—অ্যাপ বন্ধ করলেও সময় গণনা চলবে।";
 
+        long referenceTime = intent == null ? 0L : intent.getLongExtra(EXTRA_REFERENCE_TIME, 0L);
+        boolean countdown = intent != null && intent.getBooleanExtra(EXTRA_COUNTDOWN, false);
+        handler.removeCallbacks(finishCountdown);
+        if (referenceTime <= 0 || (countdown && referenceTime <= System.currentTimeMillis())) {
+            stopSelf();
+            return START_NOT_STICKY;
+        }
         createChannel();
-        startForeground(NOTIFICATION_ID, buildNotification(title, body));
-        return START_STICKY;
+        startForeground(NOTIFICATION_ID, buildNotification(title, body, referenceTime, countdown));
+        if (countdown && referenceTime > 0) {
+            handler.postDelayed(finishCountdown, Math.max(0, referenceTime - System.currentTimeMillis()));
+        }
+        return START_REDELIVER_INTENT;
     }
 
     @Override
     public void onDestroy() {
+        handler.removeCallbacks(finishCountdown);
         removeNotification();
         super.onDestroy();
     }
@@ -72,7 +88,7 @@ public class StudyTimerService extends Service {
         manager.createNotificationChannel(channel);
     }
 
-    private Notification buildNotification(String title, String body) {
+    private Notification buildNotification(String title, String body, long referenceTime, boolean countdown) {
         Intent open = new Intent(this, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
         PendingIntent content = PendingIntent.getActivity(
@@ -81,7 +97,7 @@ public class StudyTimerService extends Service {
             open,
             PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
         );
-        return new NotificationCompat.Builder(this, CHANNEL_ID)
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(title)
             .setContentText(body)
             .setSmallIcon(android.R.drawable.ic_menu_recent_history)
@@ -89,9 +105,14 @@ public class StudyTimerService extends Service {
             .setCategory(NotificationCompat.CATEGORY_STOPWATCH)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setShowWhen(false)
-            .setContentIntent(content)
-            .build();
+            .setContentIntent(content);
+        if (referenceTime > 0) {
+            builder.setWhen(referenceTime).setShowWhen(true).setUsesChronometer(true)
+                .setChronometerCountDown(countdown);
+        } else {
+            builder.setShowWhen(false);
+        }
+        return builder.build();
     }
 
     private void removeNotification() {

@@ -3,7 +3,7 @@ import type { CSSProperties, FormEvent } from 'react';
 import { ArrowRight, ArrowUpRight, BellRing, BookOpen, CalendarDays, Check, ChevronRight, Clock3, FolderOpen, NotebookPen, Play, Search, Timer } from 'lucide-react';
 import { CHAPTERS, PAPERS, SUBJECTS, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
-import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, isChapterDone, percent, phaseName } from './planner';
+import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, percent, phaseName } from './planner';
 import { MISTAKE_LIMIT, newId, nowIso } from './storage';
 import { chapterMeta, setTaskCompletion, updateChapterMeta } from './study';
 import { scheduleFor } from './schedule';
@@ -12,29 +12,39 @@ import { INTERVAL_LABEL } from './revision';
 import { usePlanner } from './context';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, Modal, ProgressBar, SubjectBadge } from './components';
 import { t } from './i18n';
+import { chapterPriority, chapterStage, isLearningComplete, STAGES, STEPS } from './learning';
+import type { ChapterStage } from './types';
 
-const PRIORITY_LABEL: Record<string, string> = { A: 'আগে পড়ো', B: 'এরপর পড়ো', C: 'সময় থাকলে' };
+const PRIORITY_LABEL: Record<string, string> = { A: 'আগে পড়ো', B: 'এরপর পড়ো', C: 'পরে পড়ো' };
 const PREP_LABEL = { none: 'শুরু হয়নি', practicing: 'অনুশীলনে', ready: 'প্রস্তুত' } as const;
 
 export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClose: () => void }) {
   const { plan, data, setData, navigate, toggleTask, startTimer } = usePlanner();
   const tasks = chapterStudyTasks(plan, c.id), done = tasks.filter(task => data.completed[task.id]).length;
   const meta = chapterMeta(data, c.id);
+  const priority = chapterPriority(c, data);
+  const stage = chapterStage(c, data, plan);
   const revisions = data.revisions.filter(item => item.chapterId === c.id && !item.completedAt).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return <Modal title={c.title} onClose={onClose} wide>
-    <div className="chapter-modal-meta"><SubjectBadge subject={c.subject} /><span>পত্র {bn(c.paper)} · পাঠ/অধ্যায় {bn(c.number)}</span><span className={`priority-badge ${c.priority.toLowerCase()}`}>{c.priority} · {PRIORITY_LABEL[c.priority]}</span>{meta.weak && <span className="weak-pill">{t("দুর্বল", "Weak")}</span>}</div>
+    <div className="chapter-modal-meta"><SubjectBadge subject={c.subject} /><span>পত্র {bn(c.paper)} · পাঠ/অধ্যায় {bn(c.number)}</span><span className={`priority-badge ${priority.toLowerCase()}`}>{priority} · {PRIORITY_LABEL[priority]}</span>{meta.weak && <span className="weak-pill">{t("দুর্বল", "Weak")}</span>}</div>
     <p className="modal-description">{c.focus}</p>
+    <div className="form-grid">
+      <label>{t('নিজের অগ্রাধিকার', 'Personal priority')}<select value={priority} onChange={e => setData(d => updateChapterMeta(d, c.id, { priority: e.target.value as 'A' | 'B' | 'C' }))}>{(['A','B','C'] as const).map(p => <option key={p} value={p}>{p} · {PRIORITY_LABEL[p]}</option>)}</select></label>
+      <label>{t('অধ্যায়ের অবস্থা', 'Chapter status')}<select value={meta.stage || 'auto'} onChange={e => setData(d => updateChapterMeta(d, c.id, { stage: e.target.value === 'auto' ? undefined : e.target.value as ChapterStage }))}><option value="auto">{t('সেশন থেকে স্বয়ংক্রিয়', 'Automatic from sessions')}</option>{STAGES.map(item => <option key={item.id} value={item.id}>{t(item.bn, item.en)}</option>)}</select></label>
+    </div>
+    <p className="tiny-muted">{t('অগ্রাধিকার পড়ার ক্রমের পরামর্শ, পরীক্ষার পূর্বাভাস নয়। C অধ্যায়ও পড়তে হবে। অগ্রাধিকার বদলালে বর্তমান রুটিনের ক্রম বদলায় না। নিজে অবস্থা বাছলে সেশন টিক তার বদলে গণনা হবে না।', 'Priority suggests study order, not exam predictions. C chapters remain in the syllabus. Changing priority does not reorder the current plan. A chosen status overrides session-derived completion.')}</p>
+    <div className="prep-grid">{STEPS.map(step => <label className="check-line" key={step.id}><input type="checkbox" checked={!!meta.steps?.[step.id]} onChange={e => { const checked = e.target.checked; setData(d => updateChapterMeta(d, c.id, { steps: { ...chapterMeta(d, c.id).steps, [step.id]: checked } })); }} />{t(step.bn, step.en)}</label>)}</div>
     {(() => { const sch = scheduleFor(c.id); const links = classLinksFor(c.id); const lastDate = tasks[tasks.length - 1]?.date || sch?.end; return <>
       {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} aria-label={`গুরুত্ব ${sch.star} স্টার`}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span>{lastDate && <span>{t("রুটিনে শেষ", "Target finish")} <strong>{formatDate(lastDate)}</strong></span>}</div>}
       {links && <ClassBlock classes={links} hint={t("প্রতিটি অংশে সরাসরি ক্লাস ও প্লেলিস্টের পাশাপাশি শিক্ষকদের চ্যানেলে খোঁজার লিংক সাজানো আছে।", "Direct classes and playlists are paired with quick searches on favourite teachers’ channels.")} />}
     {BANGLA_LESSONS[c.id] && <LessonList lessons={BANGLA_LESSONS[c.id]} />}
     </>; })()}
     {c.note && <div className="notice-box"><BookOpen size={18} /><p>{c.note}</p></div>}
-    <div className="chapter-modal-progress"><span>{bn(done)}/{bn(tasks.length)} ধাপ শেষ · {isChapterDone(plan, c.id, data.completed) ? 'অধ্যায় সম্পন্ন' : 'প্রতিটি ধাপ আলাদাভাবে টিক দাও'}</span><ProgressBar value={percent(done, tasks.length)} /></div>
+    <div className="chapter-modal-progress"><span>{bn(done)}/{bn(tasks.length)} ধাপ শেষ · {isLearningComplete(stage) ? 'অধ্যায় সম্পন্ন' : 'প্রতিটি ধাপ আলাদাভাবে টিক দাও'}</span><ProgressBar value={percent(done, tasks.length)} /></div>
     <div className="chapter-session-list">{tasks.map((t, index) => <div key={t.id} className="chapter-session"><button className={`task-check ${data.completed[t.id] ? 'checked' : ''}`} aria-pressed={!!data.completed[t.id]} aria-label={`${formatDate(t.date)} ধাপ সম্পন্ন`} onClick={() => toggleTask(t.id)}>{data.completed[t.id] && <Check size={16} />}</button><div><strong>{formatDate(t.date, 'long')} · ধাপ {bn(index + 1)}</strong><span>{formatTime(t.startMinute)}{formatDayOffset(t.startMinute)} – {formatTime(t.endMinute)}{formatDayOffset(t.endMinute)}</span><p>{t.detail}</p></div></div>)}</div>
     {!tasks.length && <EmptyState title={t("এই ইউনিটের তারিখ পাওয়া যায়নি", "No date found for this unit")} description="সেটিংস থেকে শুরুর তারিখ যাচাই করো।" />}
     <div className="chapter-tool-row">
-      {tasks.length > 0 && <button className="button secondary" onClick={() => setData(d => setTaskCompletion(d, tasks.map(task => task.id), !tasks.every(task => !!d.completed[task.id])))}><Check size={16} />{isChapterDone(plan, c.id, data.completed) ? t('অধ্যায় অসম্পূর্ণ করো', 'Mark chapter incomplete') : t('পুরো অধ্যায় সম্পন্ন করো', 'Mark chapter complete')}</button>}
+      {tasks.length > 0 && <button className="button secondary" onClick={() => setData(d => { const finish = !isLearningComplete(chapterStage(c, d, plan)); return updateChapterMeta(setTaskCompletion(d, tasks.map(task => task.id), finish), c.id, { stage: finish ? 'completed' : 'inProgress' }); })}><Check size={16} />{isLearningComplete(stage) ? t('অধ্যায় অসম্পূর্ণ করো', 'Mark chapter incomplete') : t('পুরো অধ্যায় সম্পন্ন করো', 'Mark chapter complete')}</button>}
       <button className="button secondary" onClick={() => { startTimer(c.subject, c.id); onClose(); }}><Timer size={16} />{t("এই অধ্যায়ে টাইমার", "Timer for this chapter")}</button>
       <button className={`button secondary ${meta.weak ? 'selected' : ''}`} aria-pressed={meta.weak} onClick={() => setData(d => updateChapterMeta(d, c.id, { weak: !meta.weak }))}><NotebookPen size={16} />{meta.weak ? 'দুর্বল তালিকা থেকে সরাও' : 'দুর্বল হিসেবে রাখো'}</button>
       {tasks[0] && <button className="button secondary" onClick={() => { navigate('today', tasks[0].date); onClose(); }}>{t("রুটিনে দেখো", "See it in the routine")}<ArrowRight size={16} /></button>}

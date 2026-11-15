@@ -47,3 +47,11 @@ describe('calendar and Markdown exports', () => {
     expect(makeMarkdown(plan, data)).toContain('| [x] |');
   });
 });
+
+it('prevents spreadsheet formulas in user-supplied CSV cells without changing numeric values', () => {
+  const csv = makeCsv([['=SUM(1,2)', '  +cmd', '@query', '-7', -7, 'normal']]);
+  expect(csv).toContain('"\'=SUM(1,2)"');
+  expect(csv).toContain("'  +cmd");
+  expect(csv).toContain("'@query");
+  expect(csv).toContain("'-7,-7,normal");
+});
