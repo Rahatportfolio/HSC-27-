@@ -30,17 +30,153 @@ function instant(date: string, minute: number): number {
   return Date.parse(`${date}T00:00:00+06:00`) + minute * 60000;
 }
 
+/** Two channels: quiet reminders and a loud timer alarm. Android drops a notification
+ *  whose channel does not exist yet, so both are created before anything is scheduled. */
+export const REMINDER_CHANNEL = 'study-reminders';
+export const ALARM_CHANNEL = 'study-timer-alarm';
+/** Fixed id so a running session only ever has one pending end-of-session alarm. */
+export const TIMER_ALARM_ID = 4127;
+const SMALL_ICON = 'ic_stat_icon';
+
+type LocalNotificationsPlugin = typeof import('@capacitor/local-notifications')['LocalNotifications'];
+let channelsReady: Promise<void> | null = null;
+
+async function ensureChannels(LocalNotifications: LocalNotificationsPlugin): Promise<void> {
+  if (!channelsReady) {
+    channelsReady = (async () => {
+      let created = false;
+      try {
+        await LocalNotifications.createChannel({
+          id: REMINDER_CHANNEL, name: 'পড়ার রিমাইন্ডার', description: 'স্টাডি সেশন ও রিভিশনের সময়',
+          importance: 4, visibility: 1, vibration: true, lights: true,
+        });
+        created = true;
+      } catch { /* Android 7 and older have no channels */ }
+      try {
+        await LocalNotifications.createChannel({
+          id: ALARM_CHANNEL, name: 'টাইমার অ্যালার্ম', description: 'সেশন শেষ হলে বাজবে',
+          importance: 5, visibility: 1, vibration: true, lights: true,
+        });
+        created = true;
+      } catch { /* same */ }
+      // Nothing worked (bridge not ready yet) — let the next call try again.
+      if (!created) channelsReady = null;
+    })();
+  }
+  return channelsReady;
+}
+
+/**
+ * Creates the channels without asking for anything. Called once at start-up so the
+ * very first timer alarm cannot be dropped for a missing channel.
+ */
+export async function prepareNativeNotifications(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    await ensureChannels(LocalNotifications);
+    return true;
+  } catch { return false; }
+}
+
+export type NativeNotificationStatus = {
+  permission: NativePermission;
+  /** Exact alarms (Android 12+). 'denied' means the OS may delay a session alarm. */
+  exact: 'granted' | 'denied' | 'unavailable';
+  channels: boolean;
+};
+
+/** What the phone currently allows, so Settings/Reminders can show the truth. */
+export async function nativeNotificationStatus(): Promise<NativeNotificationStatus> {
+  if (!isNativeApp()) return { permission: 'unavailable', exact: 'unavailable', channels: false };
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    const permission = await LocalNotifications.checkPermissions();
+    let exact: NativeNotificationStatus['exact'] = 'unavailable';
+    try {
+      const setting = await LocalNotifications.checkExactNotificationSetting();
+      exact = setting.exact_alarm === 'granted' ? 'granted' : 'denied';
+    } catch { /* older Android: exact alarms are always allowed */ }
+    return {
+      permission: permission.display === 'granted' ? 'granted' : permission.display === 'denied' ? 'denied' : 'prompt',
+      exact, channels: true,
+    };
+  } catch {
+    return { permission: 'unavailable', exact: 'unavailable', channels: false };
+  }
+}
+
+/** Ask the OS once (Android 13+ shows the system dialog). */
+export async function requestNativeNotifications(): Promise<NativePermission> {
+  if (!isNativeApp()) return 'unavailable';
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    await ensureChannels(LocalNotifications);
+    const permission = await LocalNotifications.requestPermissions();
+    return permission.display === 'granted' ? 'granted' : permission.display === 'denied' ? 'denied' : 'prompt';
+  } catch { return 'unavailable'; }
+}
+
+/** Opens the OS screen for "Alarms & reminders" so exact session alarms can fire on time. */
+export async function openExactAlarmSettings(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    await LocalNotifications.changeExactNotificationSetting();
+    return true;
+  } catch { return false; }
+}
+
 /** One immediate OS notification (used when a timer or break finishes in the background). */
-export async function nativeNotify(title: string, body: string): Promise<boolean> {
+export async function nativeNotify(title: string, body: string, channelId: string = REMINDER_CHANNEL): Promise<boolean> {
   if (!isNativeApp()) return false;
   const { LocalNotifications } = await import('@capacitor/local-notifications');
   try {
-    const permission = await LocalNotifications.checkPermissions();
+    await ensureChannels(LocalNotifications);
+    let permission = await LocalNotifications.checkPermissions();
+    if (permission.display !== 'granted') permission = await LocalNotifications.requestPermissions();
     if (permission.display !== 'granted') return false;
     await LocalNotifications.schedule({ notifications: [{
-      id: idFor(`${title}:${body}`) , title, body, channelId: 'study-reminders',
-      schedule: { at: new Date(Date.now() + 400) }, smallIcon: 'ic_stat_icon_config_sample',
+      id: idFor(`${title}:${body}`), title, body, channelId,
+      schedule: { at: new Date(Date.now() + 400) }, smallIcon: SMALL_ICON,
     }] });
+    return true;
+  } catch { return false; }
+}
+
+/**
+ * The session alarm. Scheduled when a countdown starts, so the phone rings at the right
+ * second even when the WebView is frozen or the app was swiped away.
+ */
+export async function scheduleTimerAlarm(endsAt: number, title: string, body: string): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  if (!Number.isFinite(endsAt) || endsAt <= Date.now()) return false;
+  const { LocalNotifications } = await import('@capacitor/local-notifications');
+  try {
+    await ensureChannels(LocalNotifications);
+    let permission = await LocalNotifications.checkPermissions();
+    // Starting a session is the natural moment for the system dialog (Android 13+).
+    if (permission.display !== 'granted') permission = await LocalNotifications.requestPermissions();
+    if (permission.display !== 'granted') return false;
+    const notifications = [{
+      id: TIMER_ALARM_ID, title, body, channelId: ALARM_CHANNEL, smallIcon: SMALL_ICON,
+      schedule: { at: new Date(endsAt), allowWhileIdle: true },
+    }];
+    try {
+      await LocalNotifications.schedule({ notifications });
+    } catch {
+      // Android 12+ can refuse exact alarms; an inexact one still arrives, just later.
+      await LocalNotifications.schedule({ notifications: notifications.map(item => ({ ...item, schedule: { at: item.schedule.at, allowWhileIdle: false } })) });
+    }
+    return true;
+  } catch { return false; }
+}
+
+export async function cancelTimerAlarm(): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    await LocalNotifications.cancel({ notifications: [{ id: TIMER_ALARM_ID }] });
     return true;
   } catch { return false; }
 }
@@ -97,15 +233,12 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
     return { scheduled: 0, permission: permission.display === 'denied' ? 'denied' : 'prompt' };
   }
 
-  try {
-    await LocalNotifications.createChannel({ id: 'study-reminders', name: 'পড়ার রিমাইন্ডার', description: 'স্টাডি সেশন ও রিভিশনের সময়', importance: 4, visibility: 1, vibration: true });
-  } catch {
-    // Channels exist on Android 8+ only; other platforms ignore this step.
-  }
+  await ensureChannels(LocalNotifications);
 
   const pending = await LocalNotifications.getPending();
-  if (pending.notifications.length) {
-    await LocalNotifications.cancel({ notifications: pending.notifications.map(item => ({ id: item.id })) });
+  const stale = pending.notifications.filter(item => item.id !== TIMER_ALARM_ID);
+  if (stale.length) {
+    await LocalNotifications.cancel({ notifications: stale.map(item => ({ id: item.id })) });
   }
 
   const lastDate = addDays(today, WINDOW_DAYS);
@@ -129,7 +262,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
         id: idFor(`task:${task.id}`),
         title: `${subject} · পড়ার সময়`,
         body: chapters || task.title,
-        channelId: 'study-reminders',
+        channelId: REMINDER_CHANNEL,
         schedule: { at: new Date(at), allowWhileIdle: true },
       });
     }
@@ -144,7 +277,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
       id: idFor(`revision:${item.id}`),
       title: 'রিভিশন দিন',
       body: `${chapterById[item.chapterId]?.title || 'অধ্যায়'} · ${item.interval} দিন পরের রিভিশন`,
-      channelId: 'study-reminders',
+      channelId: REMINDER_CHANNEL,
       schedule: { at: new Date(at), allowWhileIdle: true },
     });
   }
@@ -157,7 +290,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
         id: idFor(`date-day:${item.id}`),
         title: 'গুরুত্বপূর্ণ তারিখ',
         body: `${item.title}${item.note ? ` · ${item.note}` : ''}`,
-        channelId: 'study-reminders',
+        channelId: REMINDER_CHANNEL,
         schedule: { at: new Date(at), allowWhileIdle: true },
       });
     }
@@ -168,7 +301,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
         id: idFor(`date-eve:${item.id}`),
         title: 'আগামীকাল গুরুত্বপূর্ণ তারিখ',
         body: `${item.title} · ${item.date}`,
-        channelId: 'study-reminders',
+        channelId: REMINDER_CHANNEL,
         schedule: { at: new Date(at), allowWhileIdle: true },
       });
     }

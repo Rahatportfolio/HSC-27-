@@ -215,7 +215,30 @@ export function useTheme(theme: ThemeMode): void {
   }, [theme]);
 }
 
+/**
+ * True when this shell can actually show a notification: the Android app uses the
+ * local-notification plugin (the WebView's own Notification API always reports
+ * 'denied' inside Capacitor), browsers need the granted permission.
+ */
+export function canNotify(): boolean {
+  if (typeof window !== 'undefined') {
+    const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    try { if (capacitor?.isNativePlatform?.()) return true; } catch { /* treat as web */ }
+  }
+  return typeof Notification !== 'undefined' && Notification.permission === 'granted';
+}
+
 export async function showNotification(title: string, body: string): Promise<void> {
+  if (typeof window !== 'undefined') {
+    const capacitor = (window as Window & { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    let native = false;
+    try { native = Boolean(capacitor?.isNativePlatform?.()); } catch { native = false; }
+    if (native) {
+      const { nativeNotify } = await import('./native');
+      if (await nativeNotify(title, body)) return;
+      throw new Error('নোটিফিকেশন পাঠানো যায়নি।');
+    }
+  }
   if (!('Notification' in window) || Notification.permission !== 'granted') throw new Error('নোটিফিকেশনের অনুমতি নেই।');
   const icon = new URL('icon-192.png', document.baseURI).href;
   if ('serviceWorker' in navigator) {
@@ -242,7 +265,7 @@ export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpe
   useEffect(() => {
     const check = async () => {
       const { plan, data, enabled, onOpen } = latest.current;
-      if (!enabled || !('Notification' in window) || Notification.permission !== 'granted') return;
+      if (!enabled || !canNotify()) return;
       const date = todayKey(), minute = dhakaMinutes();
       const nowMs = Date.parse(`${date}T00:00:00Z`) + minute * 60000;
       let sent: string[] = [];
@@ -270,7 +293,7 @@ export function useRevisionReminder(_data: AppData, enabled: boolean, today: str
   useEffect(() => {
     const check = async () => {
       const { enabled, today, dueCount } = ref.current;
-      if (!enabled || dueCount === 0 || !('Notification' in window) || Notification.permission !== 'granted') return;
+      if (!enabled || dueCount === 0 || !canNotify()) return;
       const key = 'hsc27-revision-notified-v2';
       try {
         if (localStorage.getItem(key) === today) return;

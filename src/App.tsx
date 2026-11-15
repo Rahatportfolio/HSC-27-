@@ -10,7 +10,7 @@ import { persistToDatabase, restoreFromDatabase } from './db';
 import { STORAGE_KEY } from './planner';
 import { exportCalendar } from './exports';
 import { notifySessionDone, useFontScale, useNow, useReminders, useRevisionReminder, useStudyTimer, useTheme, useWakeLock } from './hooks';
-import { isNativeApp, syncNativeReminders } from './native';
+import { isNativeApp, prepareNativeNotifications, requestNativeNotifications, syncNativeReminders } from './native';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover } from './study';
 import { PlannerContext } from './context';
@@ -113,6 +113,20 @@ export default function App() {
   }, [data, dbReady]);
   useEffect(() => { setData(current => ensureRevisions(plan, current)); }, [plan, data.completed, data.settings.revisionEnabled]);
   useEffect(() => { setData(current => autoCarryover(plan, current, today)); }, [plan, data.settings.carryoverMode, today]);
+  // Android drops a notification whose channel does not exist, so the channels are
+  // created at start-up; the permission dialog only appears when reminders are on.
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    void prepareNativeNotifications();
+  }, []);
+  useEffect(() => {
+    if (!isNativeApp() || !data.settings.reminderEnabled) return;
+    let asked = false;
+    try { asked = localStorage.getItem('hsc27-permission-asked') === 'yes'; } catch { asked = false; }
+    if (asked) return;
+    try { localStorage.setItem('hsc27-permission-asked', 'yes'); } catch { /* storage may be full */ }
+    void requestNativeNotifications();
+  }, [data.settings.reminderEnabled]);
   useEffect(() => {
     if (!data.settings.reminderEnabled || !isNativeApp()) return;
     const handle = window.setTimeout(() => { void syncNativeReminders(plan, data, today).catch(() => undefined); }, 2000);

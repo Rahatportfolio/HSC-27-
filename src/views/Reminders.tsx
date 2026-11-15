@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpRight, Bell, BellRing, CalendarDays, CheckCircle2, ChevronDown, Clock3, Info, MonitorSmartphone, ShieldCheck } from 'lucide-react';
 import { usePlanner } from '../context';
 import { addDays, bn, formatDate, taskStart } from '../planner';
 import { revisionBuckets, revisionDueCount } from '../revision';
 import { showNotification } from '../hooks';
-import { isNativeApp, syncNativeReminders } from '../native';
+import { type NativeNotificationStatus, isNativeApp, nativeNotificationStatus, nativeNotify, openExactAlarmSettings, requestNativeNotifications, syncNativeReminders } from '../native';
 import { PageHeading } from '../components';
 import { t } from '../i18n';
 
@@ -44,18 +44,52 @@ function NativeReminderCard() {
   const { data, setData, plan, today, notify } = usePlanner();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
+  const [health, setHealth] = useState<NativeNotificationStatus | null>(null);
+  const refresh = async () => setHealth(await nativeNotificationStatus());
+  useEffect(() => { void refresh(); }, []);
+
   const run = async () => {
     setBusy(true);
     try {
+      const permission = await requestNativeNotifications();
+      await refresh();
+      if (permission === 'denied') { notify('ফোনের সেটিংস → Apps → প্রস্তুতি → Notifications থেকে অনুমতি দাও।', 'error'); setStatus('অনুমতি বন্ধ'); return; }
+      if (permission !== 'granted') { notify('অনুমতি ছাড়া রিমাইন্ডার সেট করা যায় না।', 'info'); setStatus('অনুমতি দেওয়া হয়নি'); return; }
       const result = await syncNativeReminders(plan, data, today, { requestPermission: true });
-      if (result.permission === 'denied') { setStatus('অনুমতি বন্ধ'); notify('ফোনের সেটিংস থেকে এই অ্যাপের নোটিফিকেশনের অনুমতি দাও।', 'error'); return; }
-      if (result.permission !== 'granted') { setStatus('অনুমতি দেওয়া হয়নি'); notify('অনুমতি ছাড়া রিমাইন্ডার সেট করা যায় না।', 'info'); return; }
+      if (result.permission !== 'granted') { setStatus('অনুমতি দেওয়া হয়নি'); notify('রিমাইন্ডার সেট করা যায়নি—অনুমতি দরকার।', 'info'); return; }
       setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: true } }));
       setStatus(`${bn(result.scheduled)}টি সেট`);
-      notify(`${bn(result.scheduled)}টি রিমাইন্ডার ডিভাইসে সেট হয়েছে।`);
+      notify(result.scheduled
+        ? `${bn(result.scheduled)}টি রিমাইন্ডার ডিভাইসে সেট হয়েছে।`
+        : 'এই ১৪ দিনে নতুন রিমাইন্ডার নেই—সব সেশন তো আগেই সেট করা আছে।', 'success');
     } catch { notify('রিমাইন্ডার সেট করা যায়নি। অ্যাপ আপডেট করে আবার চেষ্টা করো।', 'error'); }
-    finally { setBusy(false); }
+    finally { setBusy(false); void refresh(); }
   };
   const disable = () => { setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: false } })); setStatus('বন্ধ'); };
-  return <section className="card browser-reminder-card"><div className="reminder-card-main"><span className="large-icon green"><BellRing size={27} /></span><div><h2>{t("ডিভাইস নোটিফিকেশন", "Device notifications")}</h2><p>অ্যাপ বন্ধ থাকলেও Android ডিভাইসে সেশন ও রিভিশনের রিমাইন্ডার আসবে। পরের ১৪ দিনের রিমাইন্ডার একবারে সেট হয়।</p><span className={`permission-status ${data.settings.reminderEnabled ? 'granted' : ''}`}><span className="status-dot" />{data.settings.reminderEnabled ? `চালু${status ? ` · ${status}` : ''}` : 'এখনও সেট করা হয়নি'}</span></div><button className={`switch ${data.settings.reminderEnabled ? 'on' : ''}`} role="switch" aria-checked={data.settings.reminderEnabled} aria-label={t("ডিভাইস নোটিফিকেশন", "Device notifications")} onClick={() => data.settings.reminderEnabled ? disable() : void run()} disabled={busy}><span /></button></div><div className="reminder-controls"><button className="button secondary" disabled={busy} onClick={() => void run()}><Bell size={16} />{busy ? 'সেট হচ্ছে…' : 'এখনই সিঙ্ক করো'}</button><span className="export-date">{t("টাইমজোন: Asia/Dhaka", "Time zone: Asia/Dhaka")}</span></div><div className="inline-note"><Info size={16} /><p>ফোনের সেটিংসে ব্যাটারি অপটিমাইজেশন বন্ধ রাখলে রিমাইন্ডার সময়মতো আসে। রুটিন বদলালে আবার সিঙ্ক করো।</p></div></section>;
+  const test = async () => {
+    const sent = await nativeNotify('প্রস্তুতি · রিমাইন্ডার কাজ করছে', 'এভাবেই পড়ার সেশনের আগে মনে করিয়ে দেওয়া হবে।');
+    notify(sent
+      ? 'টেস্ট নোটিফিকেশন পাঠানো হয়েছে। না এলে ফোনের সেটিংসে এই অ্যাপের নোটিফিকেশন চালু আছে কি না দেখো।'
+      : 'নোটিফিকেশন পাঠানো যায়নি—অনুমতি বা চ্যানেল নেই। উপরের সুইচ চালু করে আবার চেষ্টা করো।', sent ? 'success' : 'error');
+    void refresh();
+  };
+  const permissionLabel = health === null ? 'দেখা হচ্ছে…'
+    : health.permission === 'granted' ? 'অনুমতি আছে'
+    : health.permission === 'denied' ? 'ফোনের সেটিংসে বন্ধ'
+    : health.permission === 'unavailable' ? 'এই ডিভাইসে পাওয়া যায়নি'
+    : 'অনুমতি দেওয়া হয়নি';
+  const exactOff = health?.exact === 'denied';
+
+  return <section className="card browser-reminder-card">
+    <div className="reminder-card-main"><span className="large-icon green"><BellRing size={27} /></span><div><h2>{t("ডিভাইস নোটিফিকেশন", "Device notifications")}</h2><p>অ্যাপ বন্ধ থাকলেও Android ফোনে সেশন, রিভিশন আর টাইমার শেষের অ্যালার্ম আসবে। পরের ১৪ দিনের রিমাইন্ডার একবারে সেট হয়।</p><span className={`permission-status ${health?.permission === 'granted' ? 'granted' : ''}`}><span className="status-dot" />{permissionLabel}{data.settings.reminderEnabled && status ? ` · ${status}` : ''}</span></div><button className={`switch ${data.settings.reminderEnabled ? 'on' : ''}`} role="switch" aria-checked={data.settings.reminderEnabled} aria-label={t("ডিভাইস নোটিফিকেশন", "Device notifications")} onClick={() => data.settings.reminderEnabled ? disable() : void run()} disabled={busy}><span /></button></div>
+    <div className="reminder-controls">
+      <button className="button secondary" disabled={busy} onClick={() => void run()}><Bell size={16} />{busy ? 'সেট হচ্ছে…' : 'এখনই সিঙ্ক করো'}</button>
+      <button className="button secondary" disabled={busy} onClick={() => void test()}><BellRing size={16} />{t("টেস্ট নোটিফিকেশন", "Test notification")}</button>
+      {exactOff && <button className="text-button" onClick={() => void openExactAlarmSettings()}><ArrowUpRight size={14} />{t("সঠিক অ্যালার্ম চালু করো", "Allow exact alarms")}</button>}
+      <span className="export-date">{t("টাইমজোন: Asia/Dhaka", "Time zone: Asia/Dhaka")}</span>
+    </div>
+    <div className="inline-note"><Info size={16} /><p>{exactOff
+      ? 'ফোন "Alarms & reminders" বন্ধ রেখেছে—টাইমার শেষের অ্যালার্ম কয়েক মিনিট দেরিতে আসতে পারে। উপরের বোতাম চেপে চালু করো।'
+      : 'ফোনের সেটিংসে ব্যাটারি অপটিমাইজেশন বন্ধ রাখলে রিমাইন্ডার সময়মতো আসে। রুটিন বদলালে আবার সিঙ্ক করো।'}</p></div>
+  </section>;
 }

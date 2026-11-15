@@ -87,7 +87,7 @@ The checked-in `package-lock.json` is the source of truth. If an older npm has a
 
 The APK is an installable debug-signed build. It runs the same offline app inside a Capacitor WebView and adds native local notifications plus a SQLite copy of the data.
 
-**Download the current build:** [প্রস্তুতি 2.11.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.11.0) → `prostuti-hsc27-v2.11.0.apk`.
+**Download the current build:** [প্রস্তুতি 2.12.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.12.0) → `prostuti-hsc27-v2.12.0.apk`.
 
 1. Download the APK from the release (or from **Actions → Android APK → Artifacts → prostuti-hsc27-apk**).
 2. Open the `.apk` on the phone and allow “Install unknown apps” for the browser/file manager you used.

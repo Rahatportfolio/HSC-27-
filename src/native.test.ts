@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import { clearDatabase, persistToDatabase, restoreFromDatabase } from './db';
-import { isNativeApp, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
+import {
+  cancelTimerAlarm, isNativeApp, nativeNotificationStatus, nativeNotify, openExactAlarmSettings,
+  prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm,
+  startStudyTimerService, stopStudyTimerService, syncNativeReminders,
+} from './native';
+import { canNotify } from './hooks';
 import { freshData } from './planner';
 
 describe('native-only storage and notifications', () => {
@@ -15,6 +20,26 @@ describe('native-only storage and notifications', () => {
     const result = await syncNativeReminders([], freshData(), '2026-11-14');
     expect(result).toEqual({ scheduled: 0, permission: 'unavailable' });
   });
+  it('reports notifications as unavailable and never leaks a throw in the browser', async () => {
+    await expect(prepareNativeNotifications()).resolves.toBe(false);
+    await expect(nativeNotify('টাইটেল', 'বডি')).resolves.toBe(false);
+    await expect(requestNativeNotifications()).resolves.toBe('unavailable');
+    await expect(openExactAlarmSettings()).resolves.toBe(false);
+    const status = await nativeNotificationStatus();
+    expect(status.permission).toBe('unavailable');
+    expect(status.exact).toBe('unavailable');
+  });
+
+  it('ignores a session alarm that has no future time or no native shell', async () => {
+    await expect(scheduleTimerAlarm(Date.now() - 1000, 'সেশন শেষ', 'পদার্থ')).resolves.toBe(false);
+    await expect(scheduleTimerAlarm(Date.now() + 60_000, 'সেশন শেষ', 'পদার্থ')).resolves.toBe(false);
+    await expect(cancelTimerAlarm()).resolves.toBe(false);
+  });
+
+  it('knows that a browser without permission cannot notify', () => {
+    expect(canNotify()).toBe(false);
+  });
+
   it('never starts the Android foreground service in the browser', async () => {
     await expect(startStudyTimerService('পদার্থ · পড়া চলছে', 'টাইমার চলছে')).resolves.toBe(false);
     await expect(stopStudyTimerService()).resolves.toBe(false);
