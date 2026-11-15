@@ -1061,3 +1061,104 @@ html[data-font="lg"] .modal{zoom:1.06}
 /* v2.11 · Android foreground-service chip on the timer page */
 .service-chip { background: color-mix(in srgb, var(--accent, #3b82f6) 16%, transparent); color: var(--text, inherit); }
 .service-chip svg { opacity: .8; }
+
+/* ============================================================================
+   v2.13 · Android 14 / 15 / 16
+   Android 15+ forces edge-to-edge, so every fixed bar has to make room for the
+   status bar, the gesture bar and camera cutouts. Capacitor injects the real
+   values as --safe-area-inset-*; env() covers iOS and plain browsers.
+   ========================================================================== */
+:root {
+  --safe-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px));
+  --safe-right: var(--safe-area-inset-right, env(safe-area-inset-right, 0px));
+  --safe-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px));
+  --safe-left: var(--safe-area-inset-left, env(safe-area-inset-left, 0px));
+}
+
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }
+body { overscroll-behavior-y: contain; }
+* { -webkit-tap-highlight-color: transparent; }
+button, a, .nav-item, .subject-tab, .chapter-row, .search-result, .task-check { touch-action: manipulation; }
+.app-shell { min-height: 100vh; min-height: 100dvh; }
+
+/* Top bar: below the status bar, wider than the notch in landscape */
+.topbar {
+  height: auto;
+  min-height: calc(65px + var(--safe-top));
+  padding-top: var(--safe-top);
+  padding-left: max(22px, var(--safe-left));
+  padding-right: max(22px, var(--safe-right));
+}
+@media (min-width: 801px) {
+  .topbar { min-height: calc(76px + var(--safe-top)); padding-left: max(36px, var(--safe-left)); padding-right: max(36px, var(--safe-right)); }
+}
+
+/* Sidebar and reading column */
+.sidebar { padding-top: calc(30px + var(--safe-top)); padding-bottom: var(--safe-bottom); padding-left: calc(18px + var(--safe-left)); }
+.main-content {
+  padding-left: calc(36px + var(--safe-left));
+  padding-right: calc(36px + var(--safe-right));
+}
+@media (max-width: 800px) {
+  .main-content { padding: 23px max(22px, var(--safe-right)) calc(95px + var(--safe-bottom)) max(22px, var(--safe-left)); }
+}
+@media (max-width: 390px) {
+  .main-content { padding-left: max(13px, var(--safe-left)); padding-right: max(13px, var(--safe-right)); }
+}
+
+/* Bottom tab bar floats above the gesture bar, with a Material-style active pill */
+.mobile-bottom-nav {
+  padding-bottom: max(8px, var(--safe-bottom));
+  padding-left: max(10px, var(--safe-left));
+  padding-right: max(10px, var(--safe-right));
+  box-shadow: 0 -8px 28px #1f3a2a14;
+}
+.mobile-bottom-nav button { border-radius: 12px; }
+.mobile-bottom-nav button.active { background: color-mix(in srgb, var(--green, #356342) 14%, transparent); }
+.toast { bottom: calc(27px + var(--safe-bottom)); }
+@media (max-width: 650px) { .toast { bottom: calc(83px + var(--safe-bottom)); } }
+
+/* Sheets clear the cutouts; on phones they slide up from the bottom edge */
+.modal-backdrop {
+  padding-top: max(25px, calc(12px + var(--safe-top)));
+  padding-bottom: max(25px, calc(12px + var(--safe-bottom)));
+  padding-left: max(25px, var(--safe-left));
+  padding-right: max(25px, var(--safe-right));
+}
+@media (max-width: 800px) {
+  .modal-backdrop { align-items: flex-end; padding: 0; }
+  .modal {
+    max-height: calc(92dvh - var(--safe-top));
+    border-radius: 22px 22px 0 0;
+    border-bottom: 0;
+    animation: sheet-in .24s ease;
+  }
+  .modal-header { padding-top: calc(18px + var(--safe-top)); }
+  .modal-body { padding-bottom: calc(19px + var(--safe-bottom)); }
+  .modal-actions { padding-bottom: var(--safe-bottom); }
+}
+@keyframes sheet-in { from { transform: translateY(22px); opacity: .6 } to { transform: translateY(0); opacity: 1 } }
+
+/* Fingers, not mice: 46–52px touch targets and a visible press state */
+@media (pointer: coarse) {
+  .button { min-height: 46px; }
+  .text-button { padding-top: 8px; padding-bottom: 8px; }
+  .nav-item { min-height: 48px; }
+  .mobile-bottom-nav button { min-height: 52px; }
+  .form-grid input, .form-grid select, .filter-bar select, .search-field input,
+  .modal-search input, .reminder-controls select { min-height: 46px; }
+  .task-check { width: 26px; height: 26px; }
+  button:active, .chapter-row:active, .subject-tab:active, .search-result:active { transform: scale(.985); }
+  .card, .chapter-row, .task-card { -webkit-user-select: none; user-select: none; }
+  .chapter-session p, .mistake-row p, .inline-note p, .modal-description { -webkit-user-select: text; user-select: text; }
+}
+
+/* Respect the system "remove animations" setting */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

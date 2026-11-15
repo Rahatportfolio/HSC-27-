@@ -208,7 +208,14 @@ export function useWakeLock(active: boolean): boolean {
 export function useTheme(theme: ThemeMode): void {
   useEffect(() => {
     const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const apply = () => { document.documentElement.dataset.theme = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme; };
+    const apply = () => {
+      const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
+      document.documentElement.dataset.theme = resolved;
+      // Edge-to-edge phones (Android 14/15/16) need the status bar icons to match.
+      void import('./native')
+        .then(({ setSystemBarsTheme }) => setSystemBarsTheme(resolved === 'dark'))
+        .catch(() => undefined);
+    };
     apply();
     media.addEventListener('change', apply);
     return () => media.removeEventListener('change', apply);

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, LibraryBig, LayoutDashboard, Menu, RotateCcw, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Timer, FolderOpen, PenLine, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS } from './data';
@@ -148,6 +148,25 @@ export default function App() {
   }), []);
   const logSession = useCallback((session: Parameters<typeof addStudySession>[1]) => setData(d => addStudySession(d, session)), []);
   const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch { notify('ক্যালেন্ডার ফাইল তৈরি হয়নি। আবার চেষ্টা করো।', 'error'); } }, [plan, data, today, notify]);
+  /**
+   * Android's gesture back (and the predictive-back arrow in 14/15/16) should close an
+   * open sheet instead of leaving the screen, so an open sheet pushes one history entry
+   * and the X button walks back through it.
+   */
+  const sheetInHistory = useRef(false);
+  const closeModal = useCallback(() => {
+    if (sheetInHistory.current) history.back();
+    else setModal(null);
+  }, []);
+  useEffect(() => {
+    if (!modal) { sheetInHistory.current = false; return; }
+    if (!sheetInHistory.current) {
+      try { history.pushState({ sheet: true }, ''); sheetInHistory.current = true; } catch { sheetInHistory.current = false; }
+    }
+    const onBack = () => { sheetInHistory.current = false; setModal(null); };
+    window.addEventListener('popstate', onBack);
+    return () => window.removeEventListener('popstate', onBack);
+  }, [modal]);
   const openMistake = (subject = 'physics', text = '') => setModal({ type: 'mistake', subject: subjectIds(subject), text });
   const startTimer = useCallback((subject: SubjectId, chapterId?: string) => {
     const apply = () => {
@@ -201,10 +220,10 @@ export default function App() {
       </div>
       <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>{[NAV[0], NAV[1], NAV[4], NAV[3], NAV[6]].map(n => <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.short, n.shortEn)}</span></button>)}</nav>
     </div>
-    {modal?.type === 'chapter' && <ChapterModal chapter={modal.chapter} onClose={() => setModal(null)} />}
-    {modal?.type === 'exam' && <ExamModal paperId={modal.paperId} onClose={() => setModal(null)} />}
-    {modal?.type === 'mistake' && <MistakeModal subject={modal.subject} initialText={modal.text} onClose={() => setModal(null)} />}
-    {modal?.type === 'search' && <SearchModal onClose={() => setModal(null)} onChapter={chapter => setModal({ type: 'chapter', chapter })} />}
+    {modal?.type === 'chapter' && <ChapterModal chapter={modal.chapter} onClose={closeModal} />}
+    {modal?.type === 'exam' && <ExamModal paperId={modal.paperId} onClose={closeModal} />}
+    {modal?.type === 'mistake' && <MistakeModal subject={modal.subject} initialText={modal.text} onClose={closeModal} />}
+    {modal?.type === 'search' && <SearchModal onClose={closeModal} onChapter={chapter => setModal({ type: 'chapter', chapter })} />}
     {confirmRequest && <Modal title={confirmRequest.title} onClose={() => setConfirmRequest(null)}><p className="confirm-message">{confirmRequest.message}</p><div className="modal-actions"><button className="button secondary" onClick={() => setConfirmRequest(null)}>{t('বাতিল', 'Cancel')}</button><button className={`button ${confirmRequest.danger ? 'danger' : 'primary'}`} onClick={() => { const action = confirmRequest.action; setConfirmRequest(null); action(); }}>{confirmRequest.label || t('নিশ্চিত করো', 'Confirm')}</button></div></Modal>}
     {toast && <div className={`toast ${toast.type}`} role="status" aria-live="polite"><span>{toast.type === 'success' ? <Check size={18} /> : toast.type === 'error' ? <X size={18} /> : <Bell size={18} />}</span><p>{toast.message}</p><button onClick={() => setToast(null)} aria-label={t('বার্তা বন্ধ করো', 'Dismiss message')}><X size={16} /></button></div>}
   </PlannerContext.Provider>;

@@ -70,6 +70,19 @@ async function ensureChannels(LocalNotifications: LocalNotificationsPlugin): Pro
 }
 
 /**
+ * Android 14/15/16: the app draws behind the status and navigation bars, so the icon
+ * colour has to follow the selected theme or the clock becomes invisible.
+ */
+export async function setSystemBarsTheme(dark: boolean): Promise<boolean> {
+  if (!isNativeApp()) return false;
+  try {
+    const { SystemBars, SystemBarsStyle } = await import('@capacitor/core');
+    await SystemBars.setStyle({ style: dark ? SystemBarsStyle.Dark : SystemBarsStyle.Light });
+    return true;
+  } catch { return false; }
+}
+
+/**
  * Creates the channels without asking for anything. Called once at start-up so the
  * very first timer alarm cannot be dropped for a missing channel.
  */

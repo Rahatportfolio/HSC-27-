@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { clearDatabase, persistToDatabase, restoreFromDatabase } from './db';
 import {
   cancelTimerAlarm, isNativeApp, nativeNotificationStatus, nativeNotify, openExactAlarmSettings,
-  prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm,
+  prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, setSystemBarsTheme,
   startStudyTimerService, stopStudyTimerService, syncNativeReminders,
 } from './native';
 import { canNotify } from './hooks';
@@ -34,6 +34,11 @@ describe('native-only storage and notifications', () => {
     await expect(scheduleTimerAlarm(Date.now() - 1000, 'সেশন শেষ', 'পদার্থ')).resolves.toBe(false);
     await expect(scheduleTimerAlarm(Date.now() + 60_000, 'সেশন শেষ', 'পদার্থ')).resolves.toBe(false);
     await expect(cancelTimerAlarm()).resolves.toBe(false);
+  });
+
+  it('leaves the system bars alone in a browser', async () => {
+    await expect(setSystemBarsTheme(true)).resolves.toBe(false);
+    await expect(setSystemBarsTheme(false)).resolves.toBe(false);
   });
 
   it('knows that a browser without permission cannot notify', () => {

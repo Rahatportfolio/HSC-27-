@@ -143,6 +143,17 @@ describe('application shell', () => {
     act(() => { toggle.click(); });
     expect(document.documentElement.classList.contains('focus-mode')).toBe(true);
   });
+  it('lets the Android back gesture close an open chapter sheet', async () => {
+    render(<App />);
+    go('syllabus');
+    const row = await screen.findByRole('button', { name: new RegExp(CHAPTERS[0].title) });
+    await act(async () => { row.click(); });
+    expect(await screen.findByText(/এই অধ্যায়ে কতটা আত্মবিশ্বাসী/)).toBeTruthy();
+    // The sheet pushed one history entry; the system back gesture pops it.
+    act(() => { window.dispatchEvent(new PopStateEvent('popstate')); });
+    await waitFor(() => expect(screen.queryByText(/এই অধ্যায়ে কতটা আত্মবিশ্বাসী/)).toBeNull());
+  });
+
   it('starts an MCQ quiz and records the answer', async () => {
     render(<App />);
     go('practice');

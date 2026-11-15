@@ -17,6 +17,16 @@ const config: CapacitorConfig = {
       smallIcon: 'ic_stat_icon',
       iconColor: '#28634e',
     },
+    /**
+     * Android 15 and 16 draw every app edge-to-edge. Capacitor then injects the real
+     * insets as `--safe-area-inset-*`, which the stylesheet turns into padding so the
+     * status bar, the gesture bar and camera cutouts never cover content.
+     */
+    SystemBars: {
+      insetsHandling: 'css',
+      style: 'DEFAULT',
+      initialViewportFitValueHint: 'cover',
+    },
   },
 };
 
