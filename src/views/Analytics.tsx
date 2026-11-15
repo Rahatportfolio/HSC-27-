@@ -1,10 +1,12 @@
-import { useState } from 'react';
-import { Award, BarChart3, Check, ChevronRight, Flame, Medal, ShieldAlert, Target, TrendingUp } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Award, BarChart3, Check, ChevronRight, Flame, LibraryBig, Medal, ShieldAlert, Target, TrendingUp } from 'lucide-react';
 import { usePlanner } from '../context';
 import { SUBJECTS, chapterById, subjectById } from '../data';
 import { addDays, bn, formatDate, percent } from '../planner';
 import { attemptStats, badgeList, currentStreak, dailySeries, longestStreak, minutesBetween, startOfWeek, studyDates, subjectAccuracy, subjectMinutes, weakChapters, weeklyReview } from '../analytics';
-import { ProgressBar, PageHeading } from '../components';
+import { learningDashboard } from '../learning';
+import { expectedPercentBy, overallTaskProgress, scheduleStatus } from '../prediction';
+import { ProgressBar, PageHeading, ProgressRing } from '../components';
 import { weekReport } from '../backup';
 import { t } from '../i18n';
 
@@ -28,6 +30,11 @@ export default function AnalyticsView() {
   const best = longestStreak(data);
   const gridStart = addDays(startOfWeek(today), -49);
   const gridDays = Array.from({ length: 56 }, (_, index) => addDays(gridStart, index));
+  // Smart syllabus dashboard: real A/B/C and subject progress from the student's own data.
+  const learning = useMemo(() => learningDashboard(data, plan), [data, plan]);
+  const tasksOverall = useMemo(() => overallTaskProgress(plan, data), [plan, data]);
+  const planStatus = useMemo(() => scheduleStatus(plan, data, today), [plan, data, today]);
+  const expectedAtTest = useMemo(() => expectedPercentBy(plan, data, today, data.settings.testExamDate), [plan, data, today]);
   const shareReport = async () => {
     const text = report.lines.join('\n');
     try {
@@ -50,6 +57,64 @@ export default function AnalyticsView() {
   };
   return <div className="view analytics-view">
     <PageHeading eyebrow="SMALL DATA, HONEST PICTURE" title="নিজের সঙ্গে তুলনা।" titleEn="Compare with yourself." description="মাপা সময়, নির্ভুলতা, দুর্বল অধ্যায় আর সাপ্তাহিক রিপোর্ট—সিদ্ধান্তের জন্য, অপ্রয়োজনীয় চাপের জন্য নয়।" descriptionEn="Measured time, accuracy, weak chapters and a weekly report — for decisions, not pressure." action={<div className="analytics-head"><span><Flame size={16} /><strong>{bn(streak)}</strong>{t("দিনের ধারা", "Day streak")}</span><span><TrendingUp size={16} /><strong>{bn(best)}</strong>{t("দিন সেরা", "Best day")}</span></div>} />
+    <section className="card syllabus-dashboard" aria-label={t('সিলেবাস ড্যাশবোর্ড', 'Syllabus dashboard')}>
+      <div className="card-heading">
+        <div>
+          <h2><LibraryBig size={19} />{t('স্মার্ট সিলেবাস ড্যাশবোর্ড', 'Smart syllabus dashboard')}</h2>
+          <p>{t('সত্যিকার অগ্রগতি — কোনো হার্ডকোডেড নম্বর নয়। কয়েক সেকেন্ডে বোঝা যায় কতটুকু বাকি, A শেষ কি না, কোন বিষয় পিছিয়ে।', 'Real progress — no hardcoded numbers. See in seconds how much remains, whether A is done, and which subject is behind.')}
+          </p>
+        </div>
+        <button className="button secondary small" onClick={() => navigate('syllabus')}>{t('সিলেবাস খোলো', 'Open syllabus')}<ChevronRight size={14} /></button>
+      </div>
+      <div className="syllabus-dash-grid">
+        <div className="syllabus-dash-overall">
+          <ProgressRing value={learning.overall.percent} size={116} stroke={9}>
+            <strong>{bn(learning.overall.percent)}%</strong>
+            <span>{t('সম্পন্ন', 'done')}</span>
+          </ProgressRing>
+          <div className="syllabus-dash-overall-copy">
+            <strong>{t('সমগ্র সিলেবাস', 'Whole syllabus')}</strong>
+            <span>{bn(learning.overall.total)} {t('টি অধ্যায়/ইউনিট', ' chapters & units')}</span>
+            <div className="syllabus-dash-chips">
+              <em className="ok">{bn(learning.overall.completed)} {t('সম্পন্ন', 'done')}</em>
+              <em>{bn(learning.overall.inProgress)} {t('চলছে', 'in progress')}</em>
+              <em className="muted">{bn(learning.overall.remaining)} {t('বাকি', 'left')}</em>
+            </div>
+            <small>{t('টাস্ক হিসাব', 'By tasks')}: {bn(tasksOverall.done)}/{bn(tasksOverall.total)} ({bn(tasksOverall.percent)}%) · {planStatus.status === 'ahead' ? t('সময়ের আগে', 'ahead of schedule') : planStatus.status === 'ontrack' ? t('সময়ের সঙ্গে', 'on track') : t(`${bn(planStatus.gapPercent)}% পিছিয়ে`, `${planStatus.gapPercent}% behind`)}</small>
+          </div>
+        </div>
+        <div className="syllabus-dash-categories">
+          {(['A', 'B', 'C'] as const).map(key => (
+            <button key={key} className={`category-card cat-${key}`} onClick={() => navigate('testprep')}>
+              <span className="category-card-head"><strong>{key}</strong><em>{key === 'A' ? t('সর্বোচ্চ অগ্রাধিকার', 'Highest priority') : key === 'B' ? t('মাঝারি ধাপ', 'Medium step') : t('বাকি ধাপ', 'Remaining step')}</em></span>
+              <strong className="category-count">{bn(learning.category[key].completed)}/{bn(learning.category[key].total)}</strong>
+              <ProgressBar value={learning.category[key].percent} color={key === 'A' ? '#236149' : key === 'B' ? '#9a6722' : '#5a4b82'} />
+              <small>{bn(learning.category[key].percent)}% {t('সম্পন্ন', 'complete')} · {bn(learning.category[key].remaining)} {t('বাকি', 'left')}</small>
+            </button>
+          ))}
+        </div>
+        <div className="syllabus-dash-subjects">
+          {SUBJECTS.map(subject => {
+            const group = learning.subject[subject.id];
+            const behindSubject = group.total > 0 && group.percent < learning.overall.percent - 15;
+            return (
+              <button key={subject.id} className={`subject-progress-row ${behindSubject ? 'behind' : ''}`} onClick={() => navigate('syllabus')}>
+                <span className="subject-progress-name" style={{ color: subject.color }}>{subject.short}</span>
+                <ProgressBar value={group.percent} color={subject.color} />
+                <strong>{bn(group.completed)}/{bn(group.total)}</strong>
+                <small>{bn(group.percent)}%</small>
+                {behindSubject && <em title={t('সমগ্র সিলেবাসের চেয়ে পিছিয়ে', 'Behind the overall syllabus')}>!</em>}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="syllabus-dash-foot">
+        <span>{t('টেস্ট পরীক্ষায় প্রত্যাশিত', 'Expected by Test Exam')}: <strong>{bn(expectedAtTest)}%</strong></span>
+        <span>{t('A শেষ হওয়ার সম্ভাব্য তারিখ', 'Estimated A finish')}: <strong>{learning.category.A.remaining === 0 ? t('হয়ে গেছে', 'done') : t('প্ল্যান অনুযায়ী', 'as planned')}</strong></span>
+        <button className="text-button" onClick={() => navigate('testprep')}>{t('টেস্ট মোড খোলো', 'Open test mode')}<ChevronRight size={14} /></button>
+      </div>
+    </section>
     <div className="analytics-overview">
       <section className="card weekly-hero"><span className="eyebrow">{t("এই সপ্তাহ", "This week")}</span><div className="weekly-hero-numbers"><strong>{bn(Math.floor(weekMinutes / 60))}<small>{t("ঘ", "h")}</small> {bn(weekMinutes % 60)}<small>{t("মি", "m")}</small></strong><span>{t("মাপা পড়ার সময়", "Measured study time")}</span></div><ProgressBar value={percent(weekMinutes, review.targetMinutes)} /><div className="weekly-hero-meta"><span>লক্ষ্য {bn(Math.floor(review.targetMinutes / 60))} ঘণ্টা</span><span>{bn(review.daysStudied)} দিন পড়া</span><span>{bn(review.tasksCompleted)} কাজ সম্পন্ন</span></div></section>
       <div className="analytics-stat"><span className="stat-icon green"><Target size={19} /></span><div><span>{t("সর্বকালীন মাপা সময়", "All-time measured time")}</span><strong>{bn(Math.floor(totalMinutes / 60))}<small>{t("ঘণ্টা", "hours")}</small></strong><p>{bn(data.focus.sessions)}টি সেশন</p></div></div>

@@ -3,6 +3,7 @@ import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
 import type { CqParts, DayScheduleOverride, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind } from './types';
+import { PDF_MATERIAL_IDS } from './pdfCatalog';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 const text = (v: unknown, max = 10000): v is string => typeof v === 'string' && v.length <= max;
@@ -34,6 +35,8 @@ export const LIMITS = {
   sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000,
   libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 500, importantDates: 200,
   classWatched: 1000,
+  classBookmarks: 2000,
+  pdfs: 500, pdfBookmarks: 500, pdfRecent: 30, lockedDates: 1500, taskEdits: 4000, removedTasks: 4000,
 };
 
 const optionalAt = (v: unknown, message: string): string | undefined => {
@@ -314,6 +317,86 @@ export function parseBackup(rawText: string): AppData {
       }
       put(result.dayOverrides, date, parsedOv);
     }
+  }
+
+  // --- Version-2.14 additions: every field is optional so older v1/v2 backups keep loading. ---
+  if (raw.classBookmarks !== undefined) {
+    if (!object(raw.classBookmarks) || Object.keys(raw.classBookmarks).length > LIMITS.classBookmarks) throw new Error('বুকমার্ক করা ক্লাসের তালিকা সঠিক নয়।');
+    for (const [key, value] of Object.entries(raw.classBookmarks)) {
+      if (!nonEmpty(key, 500) || !validAt(value)) throw new Error('বুকমার্ক করা ক্লাসের তালিকা সঠিক নয়।');
+      put(result.classBookmarks, key, value);
+    }
+  }
+  if (raw.pdfs !== undefined) {
+    result.pdfs = listOf(raw.pdfs, LIMITS.pdfs, 'পিডিএফ', item => {
+      if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.title, 300)
+        || (item.url !== undefined && (typeof item.url !== 'string' || item.url.length > 2000 || !/^https?:\/\//i.test(item.url)))
+        || (item.local !== undefined && !bool(item.local))
+        || (item.subject !== undefined && !isSubject(item.subject))
+        || !optionalChapter(item.chapterId)
+        || !PDF_MATERIAL_IDS.has(String(item.material))
+        || (item.sizeBytes !== undefined && !int(Number(item.sizeBytes), 0, 2_000_000_000))
+        || !validAt(item.createdAt)
+        || (item.lastOpenedAt !== undefined && item.lastOpenedAt !== null && !validAt(item.lastOpenedAt))) throw new Error('পিডিএফের তথ্য সঠিক নয়।');
+      if (item.local !== true && !item.url) throw new Error('পিডিএফের লিংক বা লোকাল ফাইল নেই।');
+      return {
+        id: item.id, title: item.title, ...(item.url ? { url: item.url as string } : {}),
+        ...(item.local === true ? { local: true } : {}), ...(item.subject !== undefined ? { subject: item.subject as import('./types').PdfResource['subject'] } : {}),
+        ...(item.chapterId !== undefined ? { chapterId: item.chapterId as string } : {}),
+        material: item.material as import('./types').PdfResource['material'],
+        ...(item.sizeBytes !== undefined ? { sizeBytes: Number(item.sizeBytes) } : {}),
+        createdAt: item.createdAt, ...(item.lastOpenedAt ? { lastOpenedAt: item.lastOpenedAt as string } : {}),
+      };
+    });
+    if (new Set(result.pdfs.map(item => item.id)).size !== result.pdfs.length) throw new Error('পিডিএফ তালিকায় একই ID দুইবার আছে।');
+  }
+  if (raw.pdfBookmarks !== undefined) {
+    result.pdfBookmarks = listOf(raw.pdfBookmarks, LIMITS.pdfBookmarks, 'পিডিএফ বুকমার্ক', value => {
+      if (!nonEmpty(value, 180)) throw new Error('পিডিএফ বুকমার্ক সঠিক নয়।');
+      return value;
+    });
+  }
+  if (raw.pdfRecent !== undefined) {
+    result.pdfRecent = listOf(raw.pdfRecent, LIMITS.pdfRecent, 'সাম্প্রতিক পিডিএফ', item => {
+      if (!object(item) || !nonEmpty(item.id, 180) || !validAt(item.at)) throw new Error('সাম্প্রতিক পিডিএফের তথ্য সঠিক নয়।');
+      return { id: item.id, at: item.at };
+    });
+  }
+  if (raw.lockedDates !== undefined) {
+    result.lockedDates = listOf(raw.lockedDates, LIMITS.lockedDates, 'লক করা তারিখ', value => {
+      if (typeof value !== 'string' || !isValidDate(value)) throw new Error('লক করা তারিখ সঠিক নয়।');
+      return value;
+    });
+  }
+  if (raw.taskEdits !== undefined) {
+    if (!object(raw.taskEdits) || Object.keys(raw.taskEdits).length > LIMITS.taskEdits) throw new Error('সেশন সম্পাদনার তথ্য সঠিক নয়।');
+    for (const [taskId, edit] of Object.entries(raw.taskEdits)) {
+      if (!nonEmpty(taskId, 180) || !object(edit)) throw new Error('সেশন সম্পাদনার তথ্য সঠিক নয়।');
+      const parsed: import('./types').TaskEdit = {};
+      if (edit.date !== undefined) {
+        if (typeof edit.date !== 'string' || !isValidDate(edit.date)) throw new Error('সেশনের তারিখ সঠিক নয়।');
+        parsed.date = edit.date;
+      }
+      if (edit.subject !== undefined) {
+        if (!isSubject(edit.subject)) throw new Error('সেশনের বিষয় সঠিক নয়।');
+        parsed.subject = edit.subject as import('./types').TaskEdit['subject'];
+      }
+      if (edit.title !== undefined) {
+        if (!text(edit.title, 300)) throw new Error('সেশনের শিরোনাম সঠিক নয়।');
+        parsed.title = edit.title;
+      }
+      if (edit.chapterIds !== undefined) {
+        if (!Array.isArray(edit.chapterIds) || edit.chapterIds.length > 10 || edit.chapterIds.some(id => typeof id !== 'string' || !chapterIds.has(id))) throw new Error('সেশনের অধ্যায় সঠিক নয়।');
+        parsed.chapterIds = edit.chapterIds as string[];
+      }
+      put(result.taskEdits, taskId, parsed);
+    }
+  }
+  if (raw.removedTasks !== undefined) {
+    result.removedTasks = listOf(raw.removedTasks, LIMITS.removedTasks, 'মুছে ফেলা সেশন', value => {
+      if (!nonEmpty(value, 180)) throw new Error('মুছে ফেলা সেশনের তালিকা সঠিক নয়।');
+      return value;
+    });
   }
 
   return result;

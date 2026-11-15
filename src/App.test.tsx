@@ -60,7 +60,8 @@ describe('application shell', () => {
     data.settings.language = 'en';
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     render(<App />);
-    expect((await screen.findAllByText("Today's study")).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('Home dashboard')).length).toBeGreaterThan(0);
+    expect((await screen.findAllByText('PDF library')).length).toBeGreaterThan(0);
     go('calendar');
     expect(await screen.findByText('One day. One step.')).toBeTruthy();
     expect(document.documentElement.lang).toBe('en');
@@ -73,7 +74,7 @@ describe('application shell', () => {
     const save = screen.getByRole('button', { name: /সেভ করো/ });
     await act(async () => { save.click(); });
     await waitFor(() => expect(document.documentElement.lang).toBe('en'));
-    expect(await screen.findByText("Today's study")).toBeTruthy();
+    expect(await screen.findByText('Home dashboard')).toBeTruthy();
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').settings.language).toBe('en');
   });
   it('creates revision cards for a completed chapter and shows them', async () => {

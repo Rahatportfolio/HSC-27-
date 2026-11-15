@@ -3,8 +3,8 @@ import { isEnglish } from './i18n';
 import type { Chapter, SubjectId } from './data';
 import type {
   BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
-  ImportantDate, PersonalNote, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
-  SettingsExtras, StudySession, SubjectMarks, TestRecord, VideoLink,
+  ImportantDate, PersonalNote, PdfResource, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
+  SettingsExtras, StudySession, SubjectMarks, TaskEdit, TestRecord, VideoLink,
 } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
@@ -117,6 +117,20 @@ export interface AppData {
   classWatched: Record<string, string>;
   /** Date (YYYY-MM-DD) → custom start time / daily hours / task slot overrides with automatic time cascading. */
   dayOverrides: Record<string, DayScheduleOverride>;
+  /** Class url (or lesson key) → ISO instant the student bookmarked it. */
+  classBookmarks: Record<string, string>;
+  /** PDFs the student added (links or device files) for the offline library. */
+  pdfs: PdfResource[];
+  /** Bookmarked PDF ids. */
+  pdfBookmarks: string[];
+  /** Recently opened PDFs, newest first (max 30). */
+  pdfRecent: { id: string; at: string }[];
+  /** Dates whose schedule is locked: regeneration and auto-rescheduling never touch them. */
+  lockedDates: string[];
+  /** Manual per-task edits (date move, subject/title/chapter change). */
+  taskEdits: Record<string, TaskEdit>;
+  /** Task ids the student deleted from the schedule. */
+  removedTasks: string[];
 }
 
 export const freshData = (): AppData => ({
@@ -147,6 +161,13 @@ export const freshData = (): AppData => ({
   importantDates: [],
   classWatched: {},
   dayOverrides: {},
+  classBookmarks: {},
+  pdfs: [],
+  pdfBookmarks: [],
+  pdfRecent: [],
+  lockedDates: [],
+  taskEdits: {},
+  removedTasks: [],
 });
 
 /** Effective net daily study hours for a date, accounting for next-month boost and per-day custom override. */

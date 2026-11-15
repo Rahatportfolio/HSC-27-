@@ -204,6 +204,40 @@ export interface DayScheduleOverride {
   taskStartMinutes?: Record<string, number>;
 }
 
+/** PDF / study-material kinds offered by the PDF Library. */
+export type PdfMaterialType =
+  | 'notes' | 'lectureSheet' | 'cqSolutions' | 'mcqSolutions' | 'boardQuestions'
+  | 'formulaSheet' | 'suggestions' | 'revisionSheet' | 'practical' | 'other';
+
+/**
+ * A PDF the student added themselves (direct link or a file stored on the device).
+ * The app never fabricates PDF links: material slots without a verified source stay
+ * marked "not added yet" in the catalog instead of becoming fake entries here.
+ */
+export interface PdfResource {
+  id: string;
+  title: string;
+  /** Direct http(s) link to a permitted PDF. Absent for locally stored files. */
+  url?: string;
+  /** True when the bytes are stored in the device file store (IndexedDB). */
+  local?: boolean;
+  subject?: SubjectId;
+  chapterId?: string;
+  material: PdfMaterialType;
+  sizeBytes?: number;
+  createdAt: string;
+  lastOpenedAt?: string;
+}
+
+/** Manual per-task schedule edit applied on top of the generated plan. */
+export interface TaskEdit {
+  /** Move the task to another date (YYYY-MM-DD). */
+  date?: string;
+  subject?: SubjectId;
+  title?: string;
+  chapterIds?: string[];
+}
+
 /** Fields shared by the v2 settings object. Kept here so storage and planner use one shape. */
 export interface SettingsExtras {
   theme: ThemeMode;
