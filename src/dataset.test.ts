@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { CHAPTERS, SUBJECTS, sortChapters } from './data';
 import { CHAPTER_SCHEDULE } from './schedule';
-import { CHAPTER_CLASSES, BANGLA_LESSONS } from './classLinks';
+import { CHAPTER_CLASSES, BANGLA_LESSONS, VERIFIED_PLAYLISTS } from './classLinks';
 const unitNumber = (number: string) => {
   const bn = '০১২৩৪৫৬৭৮৯';
   const digits = number.replace(/[^0-9০-৯]/g, '');
@@ -29,8 +29,9 @@ describe('audit', () => {
       emptyType: Object.entries(CHAPTER_CLASSES).flatMap(([id, c]) => (['oneShot','mcq','cq'] as const).filter(k => c[k].length === 0).map(k => `${id}:${k}`)),
       lessonOrphans: Object.keys(BANGLA_LESSONS).filter(id => !ids.includes(id)),
       badUrl: Object.values(CHAPTER_CLASSES).flatMap(c => [...c.oneShot, ...c.mcq, ...c.cq]).filter(o => !/^https:\/\/www\.youtube\.com\/(watch\?v=[\w-]{11}|playlist\?list=[\w-]{10,}|@[\w]+|@[\w]+\/search\?query=.+)$/.test(o.url)).map(o => o.url).slice(0, 5),
+      lessonNoChannel: Object.values(BANGLA_LESSONS).flat().filter(l => l.url && !l.channel).map(l => l.title),
       lessonNoUrl: Object.values(BANGLA_LESSONS).flat().filter(l => l.url && !/^https:\/\/www\.youtube\.com\/watch\?v=[\w-]{11}$/.test(l.url)).length,
-      badPlaylistId: Object.values(CHAPTER_CLASSES).flatMap(c => [...c.oneShot, ...c.mcq, ...c.cq]).filter(o => o.kind === 'playlist' && o.url.split('list=')[1].length !== 34).map(o => o.url),
+      badPlaylistId: Object.values(CHAPTER_CLASSES).flatMap(c => [...c.oneShot, ...c.mcq, ...c.cq]).filter(o => o.kind === 'playlist' && !VERIFIED_PLAYLISTS[o.url.split('list=')[1]]).map(o => o.url),
       badVideoId: Object.values(CHAPTER_CLASSES).flatMap(c => [...c.oneShot, ...c.mcq, ...c.cq]).filter(o => o.kind === 'video' && o.url.split('v=')[1].length !== 11).map(o => o.url),
       duplicateLinks: Object.entries(CHAPTER_CLASSES).filter(([, c]) => { const urls = [...c.oneShot, ...c.mcq, ...c.cq].map(o => o.url); return new Set(urls).size !== urls.length; }).map(([id]) => id),
     };

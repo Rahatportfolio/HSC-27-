@@ -158,8 +158,9 @@ export function LessonList({ lessons, channel = 'shakibsirbangla' }: { lessons: 
     </div>
     <div className="lesson-grid">{lessons.map(lesson => {
       const href = lesson.url || `https://www.youtube.com/@${channel}/search?query=${encodeURIComponent(lesson.title)}`;
-      return <a key={lesson.title} className={`lesson-row ${lesson.url ? 'ready' : 'todo'}`} href={href} target="_blank" rel="noreferrer">
-        <span className="lesson-title">{lesson.title}</span>
+      return <a key={lesson.title} className={`lesson-row ${lesson.url ? 'ready' : 'todo'}`} href={href} target="_blank" rel="noreferrer"
+        aria-label={`${lesson.title}${lesson.channel ? ' — ' + lesson.channel : ''}${lesson.url ? t(' (ক্লাস)', ' (class)') : t(' (চ্যানেলে খুঁজো)', ' (search the channel)')}`}>
+        <span className="lesson-copy"><span className="lesson-title">{lesson.title}</span>{lesson.channel && <span className="lesson-channel">{lesson.channel}</span>}</span>
         {lesson.url ? <span className="lesson-state ready"><Play size={11} aria-hidden="true" />{t('ক্লাস', 'class')}</span> : <span className="lesson-state"><Search size={11} aria-hidden="true" />{t('খুঁজো', 'search')}</span>}
       </a>;
     })}</div>
