@@ -45,6 +45,45 @@ export async function nativeNotify(title: string, body: string): Promise<boolean
   } catch { return false; }
 }
 
+type StudyTimerBridge = {
+  start: (options: { title: string; body: string }) => Promise<unknown>;
+  stop: () => Promise<unknown>;
+};
+
+function studyTimerBridge(): StudyTimerBridge | null {
+  if (!isNativeApp()) return null;
+  const capacitor = (window as unknown as { Capacitor?: { Plugins?: Record<string, unknown> } }).Capacitor;
+  const plugin = capacitor?.Plugins?.StudyTimer as StudyTimerBridge | undefined;
+  return plugin && typeof plugin.start === 'function' ? plugin : null;
+}
+
+/**
+ * Android foreground service: keeps the WebView (and the session) alive while the
+ * student is in another app, with an ongoing notification instead of a silent kill.
+ * The web build simply returns false — nothing to fake.
+ */
+export async function startStudyTimerService(title: string, body: string): Promise<boolean> {
+  const bridge = studyTimerBridge();
+  if (!bridge) return false;
+  try {
+    await bridge.start({ title: title.slice(0, 80), body: body.slice(0, 120) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function stopStudyTimerService(): Promise<boolean> {
+  const bridge = studyTimerBridge();
+  if (!bridge) return false;
+  try {
+    await bridge.stop();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const WINDOW_DAYS = 14;
 const LIMIT = 64;
 

@@ -1057,3 +1057,7 @@ html[data-font="lg"] .modal{zoom:1.06}
 .model-example ol{margin:6px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:5px}
 .model-example li{font-size:11px;color:#75836b;line-height:1.7}
 .model-example b{color:#4f6440}
+
+/* v2.11 · Android foreground-service chip on the timer page */
+.service-chip { background: color-mix(in srgb, var(--accent, #3b82f6) 16%, transparent); color: var(--text, inherit); }
+.service-chip svg { opacity: .8; }

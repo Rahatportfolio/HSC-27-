@@ -9,6 +9,7 @@ import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
 import { deleteStudySession } from '../study';
 import { PageHeading, ProgressBar, ProgressRing } from '../components';
 import { t } from '../i18n';
+import { startStudyTimerService, stopStudyTimerService } from '../native';
 
 const pad = (value: number): string => bn(String(value).padStart(2, '0'));
 function clock(seconds: number): string {
@@ -32,6 +33,25 @@ export default function TimerView() {
     document.addEventListener('fullscreenchange', onChange);
     return () => document.removeEventListener('fullscreenchange', onChange);
   }, []);
+  // Android: an ongoing foreground-service notification keeps the session alive while
+  // the app is in the background. On the web the same call is a guarded no-op.
+  const [serviceRunning, setServiceRunning] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    const label = subjectById[timer.subject]?.name ?? '';
+    if (timer.running) {
+      void startStudyTimerService(
+        t(`${label} · পড়া চলছে`, `${label} · session running`),
+        t('টাইমার চলছে—অ্যাপ বন্ধ করলেও সময় গণনা চলবে।', 'Timer running — the clock keeps counting in the background.'),
+      ).then(started => { if (alive) setServiceRunning(started); });
+    } else {
+      setServiceRunning(false);
+      void stopStudyTimerService();
+    }
+    return () => { alive = false; };
+  }, [timer.running, timer.subject]);
+  useEffect(() => () => { void stopStudyTimerService(); }, []);
+
   const toggleFocusMode = async () => {
     const next = !focusMode;
     setFocusMode(next);
@@ -61,7 +81,7 @@ export default function TimerView() {
     <div className="timer-layout">
       <section className={`card timer-main-card phase-${timer.phase}`}>
         <div className="mode-switch">{(['pomodoro', 'countdown', 'stopwatch'] as const).map(mode => <button key={mode} className={timer.mode === mode ? 'active' : ''} onClick={() => timer.setMode(mode)} disabled={timer.running}>{mode === 'pomodoro' ? 'পোমোডোরো' : mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</button>)}</div>
-        <div className="timer-phase-line"><span className={`phase-dot ${timer.phase}`} />{timer.mode === 'pomodoro' ? PHASE_LABEL[timer.phase] : timer.mode === 'countdown' ? (timer.logging ? 'কাউন্টডাউন' : 'বিরতি') : 'স্টপওয়াচ'}<small>{timer.focusCount ? `${bn(timer.focusCount)}টি ফোকাস সম্পন্ন` : ''}</small>{screenAwake && <span className="wake-chip" title={t("সেশন চলার সময় ফোনের স্ক্রিন বন্ধ হবে না", "The screen stays on during a session")}><Sun size={12} />{t("স্ক্রিন জেগে আছে", "Screen is awake")}</span>}</div>
+        <div className="timer-phase-line"><span className={`phase-dot ${timer.phase}`} />{timer.mode === 'pomodoro' ? PHASE_LABEL[timer.phase] : timer.mode === 'countdown' ? (timer.logging ? 'কাউন্টডাউন' : 'বিরতি') : 'স্টপওয়াচ'}<small>{timer.focusCount ? `${bn(timer.focusCount)}টি ফোকাস সম্পন্ন` : ''}</small>{serviceRunning && <span className="wake-chip service-chip" title={t("Android ফোরগ্রাউন্ড সার্ভিস চালু", "Android foreground service is on")}><Clock3 size={12} />{t("ব্যাকগ্রাউন্ডে চলছে", "Running in background")}</span>}{screenAwake && <span className="wake-chip" title={t("সেশন চলার সময় ফোনের স্ক্রিন বন্ধ হবে না", "The screen stays on during a session")}><Sun size={12} />{t("স্ক্রিন জেগে আছে", "Screen is awake")}</span>}</div>
         <ProgressRing value={ringProgress} size={270} stroke={9} color={timer.phase === 'short' || timer.phase === 'long' ? '#d8b26a' : '#8fb573'}>
           <strong className="timer-big-digits">{clock(timer.mode === 'stopwatch' ? timer.elapsedSec : timer.remainingSec)}</strong>
           <span>{timer.running ? 'মনোযোগ ধরে রাখো' : timer.mode === 'stopwatch' ? 'শুরু করলে সময় জমবে' : 'শুরু করার জন্য তৈরি'}</span>
