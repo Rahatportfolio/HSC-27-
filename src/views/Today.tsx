@@ -45,7 +45,7 @@ export default function TodayView() {
         <div className="hero-chips"><span><BookOpen size={14} />{bn(data.settings.dailyHours)} {t('ঘণ্টার লক্ষ্য', 'hour target')}</span><span><Clock3 size={14} />{t('আজ মাপা', 'Measured today')} {bn(Math.floor(measured / 60))}{t('ঘ', 'h')} {bn(measured % 60)}{t('মি', 'm')}</span><span><HeartPulse size={14} />{day ? phaseName(day.phase) : t('তোমার পরিকল্পনা', 'your plan')}</span></div>
         <div className="hero-progress"><div><span>{t('আজকের মাপা পড়ার সময়', 'Study time measured today')}</span><strong>{bn(percent(measured, target))}%</strong></div><ProgressBar value={percent(measured, target)} /></div>
       </div>
-      <div className="hero-art"><StudyIllustration /><div className="hero-art-note"><span className="small-spark">✦</span> ছোট পদক্ষেপ। বড় স্বপ্ন।</div></div>
+      <div className="hero-art"><StudyIllustration /><div className="hero-art-note"><span className="small-spark">✦</span>{t("ছোট পদক্ষেপ। বড় স্বপ্ন।", "Small steps. Big dream.")}</div></div>
     </section>
     <section className="motivation-card"><span className="motivation-mark" aria-hidden="true">✦</span><div><span className="eyebrow">{t('আজকের অনুপ্রেরণা', 'Today’s motivation')}</span><p>{t(motivation.bn, motivation.en)}</p></div></section>
     <section className="card target-card">
@@ -75,24 +75,24 @@ export default function TodayView() {
       </section>
       <aside className="dashboard-rail">
         <section className="focus-card">
-          <div className="focus-heading"><span><span className="live-dot" />{timer.mode === 'pomodoro' ? 'পোমোডোরো' : timer.mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</span><button className="mini-link" onClick={() => navigate('timer')}>টাইমার <ArrowUpRight size={13} /></button></div>
+          <div className="focus-heading"><span><span className="live-dot" />{timer.mode === 'pomodoro' ? 'পোমোডোরো' : timer.mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</span><button className="mini-link" onClick={() => navigate('timer')}>{t("টাইমার", "Timer")}<ArrowUpRight size={13} /></button></div>
           <div className="timer-mini-display"><strong>{timerText}</strong><span>{chapterById[timer.chapterId]?.title || subjectById[timer.subject].name}</span></div>
-          <div className="timer-mini-actions"><button className="timer-start" onClick={timer.running ? timer.pause : timer.start}>{timer.running ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}{timer.running ? 'বিরতি' : 'শুরু'}</button><button className="timer-reset" onClick={() => navigate('timer')} aria-label="টাইমার পেজ"><Timer size={16} /></button></div>
+          <div className="timer-mini-actions"><button className="timer-start" onClick={timer.running ? timer.pause : timer.start}>{timer.running ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}{timer.running ? 'বিরতি' : 'শুরু'}</button><button className="timer-reset" onClick={() => navigate('timer')} aria-label={t("টাইমার পেজ", "Timer page")}><Timer size={16} /></button></div>
           <p>মোট {bn(data.focus.sessions)}টি সেশন · {bn(totalHours)} ঘণ্টা</p>
         </section>
         <section className="card revision-mini-card">
-          <div className="card-heading"><h3>আজকের রিভিশন</h3><span className="tiny-muted">{bn(due.length)}টি</span></div>
-          {due.length ? <div className="mini-revision-list">{due.slice(0, 3).map(item => <button key={item.id} onClick={() => navigate('revision')}><span className={`revision-dot ${item.dueDate < today ? 'late' : ''}`} /><span><strong>{chapterById[item.chapterId]?.title}</strong><small>{INTERVAL_LABEL[item.interval]} · {formatDate(item.dueDate)}</small></span><ChevronRight size={15} /></button>)}</div> : <div className="mini-empty"><CheckMark />আপনার রিভিশন আপাতত শেষ</div>}
-          <button className="button secondary full-width small" onClick={() => navigate('revision')}><RotateCcw size={15} />সব রিভিশন দেখো</button>
+          <div className="card-heading"><h3>{t("আজকের রিভিশন", "Today's revision")}</h3><span className="tiny-muted">{bn(due.length)}টি</span></div>
+          {due.length ? <div className="mini-revision-list">{due.slice(0, 3).map(item => <button key={item.id} onClick={() => navigate('revision')}><span className={`revision-dot ${item.dueDate < today ? 'late' : ''}`} /><span><strong>{chapterById[item.chapterId]?.title}</strong><small>{INTERVAL_LABEL[item.interval]} · {formatDate(item.dueDate)}</small></span><ChevronRight size={15} /></button>)}</div> : <div className="mini-empty"><CheckMark />{t("আপনার রিভিশন আপাতত শেষ", "Your revision is done for now")}</div>}
+          <button className="button secondary full-width small" onClick={() => navigate('revision')}><RotateCcw size={15} />{t("সব রিভিশন দেখো", "See all revision")}</button>
         </section>
-        <section className="card week-card"><div className="card-heading"><h3>এ সপ্তাহের পথচলা</h3><span className="tiny-muted">সম্পন্ন কাজের সময়</span></div><WeekChart /><div className="week-legend"><span className="legend-dot" />পরিকল্পিত পড়ার সময়, প্রকৃত ট্র্যাকিং নয়</div></section>
-        <section className="reminder-nudge"><span className="nudge-icon"><Bell size={20} /></span><h3>পড়া যেন মনে থাকে</h3><p>রুটিনটা ক্যালেন্ডারে নাও। প্রতিটি সেশনের আগে রিমাইন্ডার পাবে।</p><button onClick={() => navigate('reminders')}>রিমাইন্ডার সেট করো <ArrowUpRight size={16} /></button></section>
+        <section className="card week-card"><div className="card-heading"><h3>{t("এ সপ্তাহের পথচলা", "This week's progress")}</h3><span className="tiny-muted">{t("সম্পন্ন কাজের সময়", "Time on finished work")}</span></div><WeekChart /><div className="week-legend"><span className="legend-dot" />{t("পরিকল্পিত পড়ার সময়, প্রকৃত ট্র্যাকিং নয়", "Planned study time, not actual tracking")}</div></section>
+        <section className="reminder-nudge"><span className="nudge-icon"><Bell size={20} /></span><h3>{t("পড়া যেন মনে থাকে", "So it sticks")}</h3><p>{t("রুটিনটা ক্যালেন্ডারে নাও। প্রতিটি সেশনের আগে রিমাইন্ডার পাবে।", "Put the routine in your calendar. Get a reminder before each session.")}</p><button onClick={() => navigate('reminders')}>{t("রিমাইন্ডার সেট করো", "Set reminders")}<ArrowUpRight size={16} /></button></section>
         <LocalNote />
       </aside>
     </div>
     <SyllabusNotice />
     <BackupNudge />
-    <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? 'সব তথ্য এই ডিভাইসে সেভ হচ্ছে' : 'সেভ হয়নি — ব্যাকআপ রাখো'}</span><button className="text-button" onClick={() => navigate('settings')}>ব্যাকআপ রাখো <ArrowUpRight size={13} /></button></div>
+    <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? 'সব তথ্য এই ডিভাইসে সেভ হচ্ছে' : 'সেভ হয়নি — ব্যাকআপ রাখো'}</span><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ রাখো", "Keep a backup")}<ArrowUpRight size={13} /></button></div>
   </div>;
 }
 function CheckMark() {

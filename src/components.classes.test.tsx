@@ -44,12 +44,18 @@ describe('chapter class block', () => {
     expect(screen.getAllByRole('link')).toHaveLength(3);
   });
 
+  it('every bangla lesson now opens a real class', () => {
+    const lessons = Object.values(BANGLA_LESSONS).flat();
+    expect(lessons.length).toBeGreaterThan(20);
+    expect(lessons.filter(lesson => !lesson.url)).toEqual([]);
+  });
+
   it('lists bangla lessons with a working fallback search link', () => {
-    const group = Object.keys(BANGLA_LESSONS).find(id => BANGLA_LESSONS[id].some(lesson => !lesson.url))!;
-    render(<LessonList lessons={BANGLA_LESSONS[group]} />);
+    const lessons = [...BANGLA_LESSONS['bangla-1-গদ-য-১'].slice(0, 2), { title: 'নতুন পাঠ' }];
+    render(<LessonList lessons={lessons} />);
     const block = screen.getByText('পাঠভিত্তিক ক্লাস').closest('.lesson-block') as HTMLElement;
     const rows = within(block).getAllByRole('link');
-    expect(rows).toHaveLength(BANGLA_LESSONS[group].length);
+    expect(rows).toHaveLength(lessons.length);
     for (const row of rows) {
       expect(row.getAttribute('href')).toMatch(/^https:\/\/www\.youtube\.com\/(watch\?v=|@shakibsirbangla\/search\?query=)/);
     }
