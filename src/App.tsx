@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, FolderOpen, LayoutDashboard, LibraryBig, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Timer, X } from 'lucide-react';
+import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, FileText, FolderOpen, LayoutDashboard, LibraryBig, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
 import { applyDayOverrides, applyRoutine, bn, buildPlan, diffDays, formatDate, isValidDate, todayKey } from './planner';
+import { applyManualSchedule } from './scheduleEdit';
 import type { AppData } from './planner';
 import { loadData, parseBackup, saveData, SAVED_AT_KEY, RECOVERY_KEY } from './storage';
 import { persistToDatabase, restoreFromDatabase } from './db';
@@ -23,6 +24,9 @@ import { ChapterModal, ExamModal, MistakeModal, SearchModal } from './modals';
 import TodayView from './views/Today';
 import CalendarView from './views/Calendar';
 import SyllabusView from './views/Syllabus';
+import VideosView from './views/Videos';
+import PdfsView from './views/Pdfs';
+import TestPrepView from './views/TestPrep';
 import RevisionView from './views/Revision';
 import TimerView from './views/Timer';
 import PracticeView from './views/Practice';
@@ -34,19 +38,22 @@ import SettingsView from './views/Settings';
 
 type NavItem = { id: View; label: string; labelEn: string; short: string; shortEn: string; icon: LucideIcon };
 const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
-  { label: 'তোমার পথচলা', labelEn: 'Your journey', items: [
-    { id: 'today' as const, label: 'আজকের পড়া', labelEn: "Today's study", short: 'আজ', shortEn: 'Today', icon: LayoutDashboard },
-    { id: 'calendar' as const, label: 'রুটিন ও ক্যালেন্ডার', labelEn: 'Routine & calendar', short: 'রুটিন', shortEn: 'Routine', icon: CalendarDays },
-    { id: 'syllabus' as const, label: 'সিলেবাস ও ক্লাস', labelEn: 'Syllabus & classes', short: 'সিলেবাস', shortEn: 'Classes', icon: LibraryBig },
+  { label: 'পড়াশোনা', labelEn: 'Study', items: [
+    { id: 'today' as const, label: 'হোম ড্যাশবোর্ড', labelEn: 'Home dashboard', short: 'হোম', shortEn: 'Home', icon: LayoutDashboard },
+    { id: 'calendar' as const, label: 'আমার স্টাডি প্ল্যান', labelEn: 'My study plan', short: 'প্ল্যান', shortEn: 'Plan', icon: CalendarDays },
+    { id: 'syllabus' as const, label: 'সিলেবাস', labelEn: 'Syllabus', short: 'সিলেবাস', shortEn: 'Syllabus', icon: LibraryBig },
+    { id: 'videos' as const, label: 'ভিডিও ক্লাস', labelEn: 'Video classes', short: 'ক্লাস', shortEn: 'Classes', icon: Play },
+    { id: 'pdfs' as const, label: 'পিডিএফ লাইব্রেরি', labelEn: 'PDF library', short: 'পিডিএফ', shortEn: 'PDFs', icon: FileText },
+  ] },
+  { label: 'প্রস্তুতি ও অনুশীলন', labelEn: 'Prep & practice', items: [
+    { id: 'testprep' as const, label: 'টেস্ট প্রস্তুতি', labelEn: 'Test preparation', short: 'টেস্ট', shortEn: 'Test', icon: Target },
+    { id: 'practice' as const, label: 'অনুশীলন', labelEn: 'Practice', short: 'অনুশীলন', shortEn: 'Practice', icon: PenLine },
     { id: 'revision' as const, label: 'স্মার্ট রিভিশন', labelEn: 'Smart revision', short: 'রিভিশন', shortEn: 'Revision', icon: RotateCcw },
-  ] },
-  { label: 'অনুশীলন ও মূল্যায়ন', labelEn: 'Practice & review', items: [
-    { id: 'timer' as const, label: 'স্টাডি টাইমার', labelEn: 'Study timer', short: 'টাইমার', shortEn: 'Timer', icon: Timer },
-    { id: 'practice' as const, label: 'MCQ ও CQ অনুশীলন', labelEn: 'MCQ & CQ practice', short: 'অনুশীলন', shortEn: 'Practice', icon: PenLine },
     { id: 'exams' as const, label: 'পরীক্ষা ও GPA', labelEn: 'Exams & GPA', short: 'পরীক্ষা', shortEn: 'Exams', icon: ClipboardCheck },
-    { id: 'analytics' as const, label: 'বিশ্লেষণ ও রিভিউ', labelEn: 'Analytics & review', short: 'বিশ্লেষণ', shortEn: 'Analytics', icon: ChartNoAxesCombined },
+    { id: 'timer' as const, label: 'স্টাডি টাইমার', labelEn: 'Study timer', short: 'টাইমার', shortEn: 'Timer', icon: Timer },
+    { id: 'analytics' as const, label: 'অগ্রগতি ও বিশ্লেষণ', labelEn: 'Progress & analytics', short: 'প্রগতি', shortEn: 'Progress', icon: ChartNoAxesCombined },
   ] },
-  { label: 'সংগ্রহ ও সহায়তা', labelEn: 'Library & help', items: [
+  { label: 'সহায়তা', labelEn: 'Support', items: [
     { id: 'library' as const, label: 'লাইব্রেরি', labelEn: 'Library', short: 'লাইব্রেরি', shortEn: 'Library', icon: FolderOpen },
     { id: 'reminders' as const, label: 'রিমাইন্ডার', labelEn: 'Reminders', short: 'রিমাইন্ডার', shortEn: 'Reminders', icon: Bell },
   ] },
@@ -75,7 +82,10 @@ export default function App() {
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => setToast({ message, type, id: Date.now() }), []);
   const basePlan = useMemo(() => buildPlan(data.settings), [data.settings]);
   const planWithRoutine = useMemo(() => applyRoutine(basePlan, data.routineBlocks), [basePlan, data.routineBlocks]);
-  const plan = useMemo(() => applyDayOverrides(planWithRoutine, data.dayOverrides, data.settings), [planWithRoutine, data.dayOverrides, data.settings]);
+  // Manual edits (moves, deletions, subject/title changes) are re-applied on every build, so a
+  // settings-driven regeneration never silently drops the student's own schedule changes.
+  const planEdited = useMemo(() => applyManualSchedule(planWithRoutine, data), [planWithRoutine, data]);
+  const plan = useMemo(() => applyDayOverrides(planEdited, data.dayOverrides, data.settings), [planEdited, data.dayOverrides, data.settings]);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
@@ -487,7 +497,7 @@ export default function App() {
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView }[view];
+  const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');
@@ -612,7 +622,7 @@ export default function App() {
         <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}<ViewComponent /></main>
       </div>
       <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>
-        {[NAV[0], NAV[2], NAV[1], NAV[4], NAV[5]].map(n => (
+        {(['today', 'calendar', 'syllabus', 'videos'] as const).map(id => NAV.find(n => n.id === id)!).map(n => (
           <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}>
             <span className="mobile-nav-icon-wrap">
               <n.icon size={19} strokeWidth={view === n.id ? 2.1 : 1.7} />

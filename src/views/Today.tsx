@@ -1,4 +1,5 @@
 import { learningDashboard } from '../learning';
+import { classProgress } from '../classes';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -371,6 +372,7 @@ export default function TodayView() {
   );
 
   const learning = learningDashboard(data, plan);
+  const watchedClasses = classProgress(data);
   return <div className="view today-view">
     <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
@@ -389,6 +391,7 @@ export default function TodayView() {
             <span><Zap size={14} />{formatDate(data.settings.boostStartDate)} {t(`থেকে দৈনিক ${bn(data.settings.boostDailyHours)} ঘণ্টা`, `→ ${data.settings.boostDailyHours}h/day`)}</span>
           )}
           <span><Clock3 size={14} />{t('পড়া হয়েছে', 'Studied')} {bn(Math.floor(measured / 60))}{t('ঘ', 'h')} {bn(measured % 60)}{t('মি', 'm')}</span>
+          <button type="button" className="hero-chip-link" onClick={() => navigate('videos')}><Play size={14} />{t(`ক্লাস দেখা চালিয়ে যাও · ${bn(watchedClasses.watched)}/${bn(watchedClasses.total)}`, `Continue classes · ${watchedClasses.watched}/${watchedClasses.total}`)}</button>
           <span><HeartPulse size={14} />{day ? phaseName(day.phase) : t('তোমার পরিকল্পনা', 'your plan')}</span>
         </div>
         <div className="hero-progress-wrap">

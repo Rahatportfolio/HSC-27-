@@ -1,10 +1,11 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
-import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, Minus, NotebookPen, Pause, Play, Plus, Search, ShieldCheck, Sparkles, X } from 'lucide-react';
-import { chapterById, subjectById } from './data';
+import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, Minus, NotebookPen, Pause, Play, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react';
+import { CHAPTERS, chapterById, subjectById } from './data';
 import type { SubjectId } from './data';
-import { bn, dhakaMinutes, effectiveDailyHours, formatDate, formatDayOffset, formatDurationBn, formatTime, getPhases, isTaskCurrent, percent, todayKey, toMinutes, toTimeInput } from './planner';
+import { bn, dhakaMinutes, effectiveDailyHours, formatDate, formatDayOffset, formatDurationBn, formatTime, getPhases, isTaskCurrent, isValidDate, percent, todayKey, toMinutes, toTimeInput } from './planner';
 import type { Day, Task } from './planner';
+import { editTask, moveTask, removeTask } from './scheduleEdit';
 import { useOptionalPlanner, usePlanner } from './context';
 import { isEnglish, t } from './i18n';
 import { CHAPTER_CLASSES } from './classLinks';
@@ -59,7 +60,7 @@ export function PhaseJourney({ startDate, activeDate }: { startDate: string; act
   })}</div>;
 }
 export function TaskCard({ task, compact = false }: { task: Task; compact?: boolean }) {
-  const { data, setData, plan, notify, toggleTask, today, now, openMistake, openChapter, timer, startTimer, startPresetTimer, navigate } = usePlanner();
+  const { data, setData, plan, notify, toggleTask, today, now, openMistake, openChapter, timer, startTimer, startPresetTimer, navigate, confirm } = usePlanner();
   const [expanded, setExpanded] = useState(false);
   const done = !!data.completed[task.id];
   const minute = dhakaMinutes(now);
@@ -160,6 +161,65 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
       <button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
       {expanded && <div className="task-expanded-wrap">
+        <div className="task-move-editor">
+          <label className="move-date-field">
+            <span>{t('তারিখ:', 'Date:')}</span>
+            <input
+              type="date"
+              min={plan[0]?.date}
+              max={plan[plan.length - 1]?.date}
+              value={task.date}
+              onChange={e => {
+                const next = e.target.value;
+                if (!isValidDate(next) || next === task.date) return;
+                setData(d => moveTask(d, task.id, task.date, next));
+                notify(t(`কাজ ${formatDate(next, 'long')} তারিখে সরানো হয়েছে।`, `Task moved to ${formatDate(next, 'long')}.`));
+              }}
+            />
+          </label>
+          {task.chapterIds.length > 0 && chapterById[task.chapterIds[0]] ? (
+            <label className="move-chapter-field">
+              <span>{t('অধ্যায়:', 'Chapter:')}</span>
+              <select
+                value={task.chapterIds[0]}
+                onChange={e => {
+                  const chapter = chapterById[e.target.value];
+                  if (!chapter) return;
+                  setData(d => editTask(d, task.id, { chapterIds: [chapter.id], subject: chapter.subject }));
+                  notify(t('সেশনের অধ্যায় বদলানো হয়েছে।', 'Session chapter updated.'));
+                }}
+              >
+                {CHAPTERS.filter(chapter => chapter.subject === task.subject).map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}
+              </select>
+            </label>
+          ) : (
+            <label className="move-subject-field">
+              <span>{t('বিষয়:', 'Subject:')}</span>
+              <select
+                value={task.subject}
+                onChange={e => {
+                  setData(d => editTask(d, task.id, { subject: e.target.value as SubjectId }));
+                  notify(t('সেশনের বিষয় বদলানো হয়েছে।', 'Session subject updated.'));
+                }}
+              >
+                {(['physics', 'chemistry', 'biology', 'math', 'bangla', 'english', 'ict'] as SubjectId[]).map(id => <option key={id} value={id}>{subjectById[id].short}</option>)}
+              </select>
+            </label>
+          )}
+          <button
+            type="button"
+            className="button ghost small task-delete-btn"
+            onClick={() => confirm({
+              title: t('এই সেশনটি মুছবে?', 'Delete this session?'),
+              message: t('রুটিন থেকে সরানো হবে; সম্পন্ন হয়ে থাকলে সেই হিসাব অক্ষত থাকবে। পরে সেটিংস পরিবর্তনে ফিরে আসতে পারে।', 'It will be removed from the routine. If completed, that record stays. A settings change may bring it back.'),
+              danger: true,
+              label: t('মুছে ফেলো', 'Delete'),
+              action: () => { setData(d => removeTask(d, task.id)); notify(t('সেশন মুছে ফেলা হয়েছে।', 'Session deleted.')); },
+            })}
+          >
+            <Trash2 size={13} />{t('মুছো', 'Delete')}
+          </button>
+        </div>
         <div className="task-cascade-editor">
           <label className="cascade-time-field">
             <span>{t('শুরুর সময়:', 'Start time:')}</span>

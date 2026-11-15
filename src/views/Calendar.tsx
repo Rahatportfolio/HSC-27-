@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowRight, BellRing, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, GripVertical, ListChecks, Plus, Trash2 } from 'lucide-react';
+import type { FormEvent } from 'react';
+import { ArrowRight, BellRing, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Flag, GripVertical, ListChecks, Lock, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react';
 import { usePlanner } from '../context';
-import { SUBJECTS, subjectById } from '../data';
+import { CHAPTERS, SUBJECTS, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { addDays, bn, formatDate, getPhases, isValidDate, percent, phaseName, taskStart } from '../planner';
+import { addDays, bn, diffDays, formatDate, getPhases, isValidDate, percent, phaseName, taskStart } from '../planner';
 import { newId } from '../storage';
 import { startOfWeek, subjectMinutes } from '../analytics';
 import type { PhaseId } from '../planner';
 import { addBacklogToToday, addCarryover } from '../study';
+import { chapterPriority } from '../learning';
+import { categoryScheduleDates, estimatedFinishDate, expectedPercentBy, scheduleStatus } from '../prediction';
+import { isDateLocked, regenerationSummary, rescheduleUnfinished, toggleLockDate } from '../scheduleEdit';
 import { DaySummary, EmptyState, PageHeading, ProgressBar, TaskCard } from '../components';
 import { t } from '../i18n';
 
 export default function CalendarView() {
-  const { plan, data, setData, today, selectedDate, setSelectedDate, navigate, exportICS, notify, toggleTask } = usePlanner();
+  const { plan, data, setData, today, selectedDate, setSelectedDate, navigate, exportICS, notify, toggleTask, confirm } = usePlanner();
   const [month, setMonth] = useState(selectedDate.slice(0, 7));
   const [mode, setMode] = useState<'month' | 'week'>('month');
   const [weekStart, setWeekStart] = useState(startOfWeek(selectedDate));
@@ -84,6 +88,52 @@ export default function CalendarView() {
   };
   const removeImportantDate = (id: string) => setData(d => ({ ...d, importantDates: d.importantDates.filter(item => item.id !== id) }));
   const weekdayNames = ['রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি'];
+  // Full-syllabus timeline + honest completion prediction from the student's own pace.
+  const categoryIds = useMemo(() => {
+    const build = (p: 'A' | 'B' | 'C') => new Set(CHAPTERS.filter(chapter => chapterPriority(chapter, data) === p).map(chapter => chapter.id));
+    return { A: build('A'), B: build('B'), C: build('C') };
+  }, [data]);
+  const categoryDates = useMemo(() => categoryScheduleDates(plan, categoryIds), [plan, categoryIds]);
+  const planStatus = useMemo(() => scheduleStatus(plan, data, today), [plan, data, today]);
+  const expectedAtTest = useMemo(() => expectedPercentBy(plan, data, today, data.settings.testExamDate), [plan, data, today]);
+  const estimatedFinish = useMemo(() => estimatedFinishDate(plan, data, today), [plan, data, today]);
+  const lockedSelected = isDateLocked(data, selectedDate);
+  const [oneOffTitle, setOneOffTitle] = useState('');
+  const [oneOffTime, setOneOffTime] = useState('20:00');
+  const [oneOffMinutes, setOneOffMinutes] = useState('45');
+  const [oneOffSubject, setOneOffSubject] = useState<SubjectId>('physics');
+  const addOneOffTask = (event: FormEvent) => {
+    event.preventDefault();
+    const match = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(oneOffTime);
+    const minutes = Number(oneOffMinutes);
+    if (!oneOffTitle.trim()) { notify('কাজের নাম লেখো।', 'error'); return; }
+    if (!match) { notify('সময় HH:MM ফরম্যাটে লেখো।', 'error'); return; }
+    if (!Number.isInteger(minutes) || minutes < 15 || minutes > 480) { notify('১৫ থেকে ৪৮০ মিনিটের মধ্যে হতে হবে।', 'error'); return; }
+    if (!isValidDate(selectedDate)) { notify('সঠিক তারিখ বাছো।', 'error'); return; }
+    const startMinute = Number(match[1]) * 60 + Number(match[2]);
+    const weekday = new Date(`${selectedDate}T00:00:00Z`).getUTCDay();
+    setData(d => ({ ...d, routineBlocks: [...d.routineBlocks, { id: newId(), date: selectedDate, weekday, startMinute, minutes, subject: oneOffSubject, title: oneOffTitle.trim(), createdAt: new Date().toISOString() }] }));
+    setOneOffTitle('');
+    notify(t('সেদিনের জন্য কাজ যোগ হয়েছে।', 'Task added for that date.'));
+  };
+  const rebalancePlan = () => {
+    const summary = regenerationSummary(data);
+    confirm({
+      title: t('অসমাপ্ত কাজ সামনে সরাবে?', 'Move unfinished work forward?'),
+      message: t(
+        `সম্পন্ন কাজ (${bn(summary.completedPreserved)}টি), লক করা দিন (${bn(summary.lockedDates)}টি), নিজের সম্পাদনা (${bn(summary.editedTasks)}টি) ও কাস্টম ব্লক অক্ষত থাকবে। শুধু অতীতের অসমাপ্ত কাজ আজ বা পরের দিনে সরানো হবে (প্রতি দিন সর্বোচ্চ ৪৫ মিনিট বাড়তে পারে)।`,
+        `Completed work (${summary.completedPreserved}), locked dates (${summary.lockedDates}), your edits (${summary.editedTasks}) and custom blocks stay untouched. Only unfinished past work moves to today or later (up to 45 extra minutes per day).`,
+      ),
+      label: t('রিব্যালেন্স করো', 'Rebalance'),
+      action: () => {
+        const result = rescheduleUnfinished(plan, data, today);
+        setData(result.data);
+        notify(result.moved
+          ? t(`${bn(result.moved)}টি কাজ সামনে সরানো হয়েছে।`, `${result.moved} task(s) moved forward.`)
+          : t('সরানো মতো কোনো অসমাপ্ত কাজ নেই (লক বা সময়সীমা)।', 'Nothing to move (locked or out of budget).'), result.moved ? 'success' : 'info');
+      },
+    });
+  };
   const routineRows = data.routineBlocks.filter(block => !block.date && block.weekday === routineWeekday).sort((a, b) => a.startMinute - b.startMinute);
   const upcomingImportant = [...data.importantDates].sort((a, b) => a.date.localeCompare(b.date)).filter(item => item.date >= today).slice(0, 12);
   const daysUntil = (date: string) => Math.round((Date.parse(`${date}T00:00:00Z`) - Date.parse(`${today}T00:00:00Z`)) / 86400000);
@@ -100,6 +150,34 @@ export default function CalendarView() {
   };
   return <div className="view">
     <PageHeading eyebrow="DAY BY DAY" title={t("এক দিন। এক পদক্ষেপ।", "One day. One step.")} titleEn="One day. One step." description="কোন দিন কী পড়বে, সব আছে এখানে। মাস বা সপ্তাহে দেখো, তারিখে ক্লিক করে সেই দিনের কাজ দেখো।" descriptionEn="See what to study on every day. Switch between month and week, or pick a date to open its sessions." action={<div className="heading-actions"><div className="segmented small"><button className={mode === 'month' ? 'active' : ''} onClick={() => setMode('month')}><CalendarDays size={14} />{t("মাস", "Month")}</button><button className={mode === 'week' ? 'active' : ''} onClick={() => setMode('week')}><CalendarRange size={14} />{t("সপ্তাহ", "Week")}</button></div><button className="button secondary" onClick={() => exportICS('all')}><CalendarDays size={17} />{t("পুরো রুটিন", "Full routine")}</button></div>} />
+    <section className="card plan-timeline-card" aria-label={t('সিলেবাস টাইমলাইন ও পূর্বাভাস', 'Syllabus timeline & forecast')}>
+      <div className="card-heading">
+        <div><h2><Flag size={18} />{t('সম্পূর্ণ পরিকল্পনার টাইমলাইন', 'Full plan timeline')}</h2>
+        <p>{t('ক্যাটাগরি শেষ হওয়ার তারিখ, টেস্ট কাউন্টডাউন ও তোমার আসল গতি থেকে পূর্বাভাস — নিশ্চয়তা নয়।', 'Category finish dates, test countdown and a forecast from your actual pace — not a guarantee.')}</p></div>
+        <button className="button secondary small" onClick={rebalancePlan}><RefreshCw size={14} />{t('বাকি কাজ সরাও', 'Rebalance')}</button>
+      </div>
+      <div className="plan-timeline">
+        {([
+          { key: 'A', label: t('A ক্যাটাগরি শেষ', 'Category A done'), date: categoryDates.A, color: '#236149' },
+          { key: 'B', label: t('B ক্যাটাগরি শেষ', 'Category B done'), date: categoryDates.B, color: '#9a6722' },
+          { key: 'C', label: t('C ক্যাটাগরি শেষ', 'Category C done'), date: categoryDates.C, color: '#5a4b82' },
+          { key: 'full', label: t('পুরো সিলেবাস শেষ', 'Whole syllabus done'), date: plan[plan.length - 1]?.date, color: '#2c5e8a' },
+          { key: 'test', label: t('টেস্ট পরীক্ষা', 'Test Exam'), date: data.settings.testExamDate, color: '#b57463' },
+        ]).map(item => (
+          <div className="plan-timeline-node" key={item.key}>
+            <span className="plan-timeline-dot" style={{ background: item.color }} />
+            <strong>{item.label}</strong>
+            <span>{item.date ? formatDate(item.date, 'long') : '—'}</span>
+            {item.date && <small>{item.date > today ? `${bn(diffDays(today, item.date))} ${t('দিন পরে', 'days away')}` : item.date === today ? t('আজ', 'today') : t('তারিখ পেরিয়েছে', 'past')}</small>}
+          </div>
+        ))}
+      </div>
+      <div className="plan-prediction">
+        <span className={`plan-status-chip ${planStatus.status}`}>{planStatus.status === 'ahead' ? t('সময়ের আগে আছো', 'Ahead of schedule') : planStatus.status === 'ontrack' ? t('সময়ের সঙ্গে আছো', 'On track') : t(`${bn(planStatus.gapPercent)}% পিছিয়ে`, `${planStatus.gapPercent}% behind`)}</span>
+        <span>{t('টেস্ট তারিখে প্রত্যাশিত অগ্রগতি', 'Expected progress by Test Exam')}: <strong>{bn(expectedAtTest)}%</strong></span>
+        <span>{t('এই গতিতে সম্ভাব্য শেষ', 'Estimated finish at this pace')}: <strong>{estimatedFinish ? formatDate(estimatedFinish, 'long') : t('সাম্প্রতিক গতি নেই', 'no recent pace')}</strong></span>
+      </div>
+    </section>
     <div className="filter-bar"><div className="segmented">{(['all', 'learn', 'revise', 'exam'] as const).map(p => <button key={p} className={phase === p ? 'active' : ''} onClick={() => setPhase(p)}>{p === 'all' ? 'সব ধাপ' : phaseName(p)}</button>)}</div><select aria-label={t("বিষয় ফিল্টার", "Subject filter")} value={subject} onChange={e => setSubject(e.target.value as SubjectId | 'all')}><option value="all">{t("সব বিষয়", "All subjects")}</option>{SUBJECTS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select><button className={`button ${backlog ? 'primary' : 'secondary'}`} onClick={() => setBacklog(!backlog)}><ListChecks size={16} />{t("ব্যাকলগ", "Backlog")}<span className="count-badge">{bn(overdue.length)}</span></button></div>
     {backlog ? <section className="card backlog-card"><div className="card-heading"><div><h2>{t("আগের অসমাপ্ত কাজ", "Earlier unfinished work")}</h2><span className="tiny-muted">পুরোনো থেকে নতুন · {bn(overdue.length)}টি</span></div><button className="button secondary small" onClick={takeFive}><Plus size={15} />{t("৫টি আজকের তালিকায়", "5 in today’s list")}</button></div>{overdue.length ? <div className="backlog-list">{overdue.slice(0, 100).map(task => <div key={task.id} className="backlog-row"><button className="task-check" aria-label={t(`${task.title} সম্পন্ন করো`, `Complete ${task.title}`)} aria-pressed={false} onClick={() => toggleTask(task.id)} /><div><span className="eyebrow">{formatDate(task.date)} · {subjectById[task.subject].short} · {phaseName(task.phase)}</span><strong>{task.title}</strong></div><div className="backlog-actions"><button className="button secondary small" disabled={data.carryovers.some(item => item.taskId === task.id && !item.completedAt)} onClick={() => carryToToday(task)}><Plus size={14} />{data.carryovers.some(item => item.taskId === task.id && !item.completedAt) ? t("তালিকায় আছে", "Already added") : t("আজকের তালিকায়", "Add to today")}</button><button className="button ghost small" onClick={() => { setSelectedDate(task.date); setBacklog(false); setMonth(task.date.slice(0, 7)); }}>{t("সেদিনে যাও", "Go to that day")}<ArrowRight size={14} /></button></div></div>)}{overdue.length > 100 && <p className="muted padded">প্রথম ১০০টি দেখানো হচ্ছে। বাকিগুলো সংশ্লিষ্ট তারিখে পাবে।</p>}</div> : <EmptyState title={t("ব্যাকলগ নেই", "No backlog")} description="অতীতের সব নির্ধারিত কাজ শেষ, অথবা এখনও কোনো কাজ বাকি পড়েনি।" />}</section>
       : <div className="calendar-layout">
@@ -126,7 +204,7 @@ export default function CalendarView() {
             <div className="week-allocation"><strong>{t("এই সপ্তাহে বিষয়ভিত্তিক মাপা সময়", "Time by subject this week")}</strong>{SUBJECTS.map(s => <div className="allocation-row" key={s.id}><span>{s.short}</span><ProgressBar value={percent(allocation[s.id], Math.max(...Object.values(allocation), 1))} color={s.color} /><small>{bn(Math.floor(allocation[s.id] / 60))}ঘ {bn(allocation[s.id] % 60)}মি</small></div>)}</div>
           </>}
         </section>
-        <aside className="card calendar-day-panel"><div className="card-heading"><div><span className="eyebrow">{formatDate(selectedDate, 'weekday')}</span><h2>{formatDate(selectedDate, 'long')}</h2></div>{day && <span className="phase-pill">{phaseName(day.phase)}</span>}</div>{day ? <><DaySummary day={day} /><div className="compact-tasks">{visibleTasks.length ? visibleTasks.map(task => <TaskCard key={task.id} task={task} compact />) : <EmptyState title={t("এই বিষয়ে কাজ নেই", "No work left in this subject")} description="ফিল্টার বদলে অন্য বিষয় দেখো।" />}</div><button className="button secondary full-width" onClick={() => navigate('today', selectedDate)}>{t("বিস্তারিত রুটিন", "Detailed routine")}<ArrowRight size={16} /></button></> : <EmptyState title={t("এই দিনে কোনো সেশন নেই", "No session on this day")} description="পরিকল্পনার তারিখের মধ্যে একটি দিন বেছে নাও।" />}</aside>
+        <aside className="card calendar-day-panel"><div className="card-heading"><div><span className="eyebrow">{formatDate(selectedDate, 'weekday')}</span><h2>{formatDate(selectedDate, 'long')}</h2></div><div className="day-panel-heading-actions">{day && <span className="phase-pill">{phaseName(day.phase)}</span>}<button type="button" className={`icon-button date-lock ${lockedSelected ? 'locked' : ''}`} aria-pressed={lockedSelected} aria-label={lockedSelected ? t('দিনের লক খোলো', 'Unlock this date') : t('দিনটি লক করো', 'Lock this date')} title={lockedSelected ? t('লক করা — রিব্যালেন্স এই দিন ছোবে না', 'Locked — rebalancing will not touch this day') : t('লক করলে রিব্যালেন্স এই দিনের কাজ বদলাবে না', 'Lock so rebalancing never changes this day')} onClick={() => { setData(d => toggleLockDate(d, selectedDate)); notify(lockedSelected ? t('দিনটি আনলক করা হয়েছে।', 'Date unlocked.') : t('দিনটি লক করা হয়েছে — স্বয়ংক্রিয় পরিবর্তন থেকে রক্ষা।', 'Date locked from automatic changes.')); }}>{lockedSelected ? <Lock size={15} /> : <Unlock size={15} />}</button></div></div>{day ? <><DaySummary day={day} /><div className="compact-tasks">{visibleTasks.length ? visibleTasks.map(task => <TaskCard key={task.id} task={task} compact />) : <EmptyState title={t("এই বিষয়ে কাজ নেই", "No work left in this subject")} description="ফিল্টার বদলে অন্য বিষয় দেখো।" />}</div><form className="day-add-task" onSubmit={addOneOffTask}><strong>{t('এই দিনে নিজের কাজ যোগ করো', 'Add your own task for this day')}</strong><div className="day-add-task-row"><input value={oneOffTitle} onChange={e => setOneOffTitle(e.target.value)} maxLength={120} placeholder={t('কাজের নাম', 'Task name')} aria-label={t('কাজের নাম', 'Task name')} /><input type="time" value={oneOffTime} onChange={e => setOneOffTime(e.target.value)} aria-label={t('শুরুর সময়', 'Start time')} /><input type="number" min={15} max={480} step={5} value={oneOffMinutes} onChange={e => setOneOffMinutes(e.target.value)} aria-label={t('মিনিট', 'Minutes')} /><select value={oneOffSubject} onChange={e => setOneOffSubject(e.target.value as SubjectId)} aria-label={t('বিষয়', 'Subject')}>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.short}</option>)}</select><button className="button primary small" type="submit" aria-label={t('কাজ যোগ করো', 'Add task')}><Plus size={14} /></button></div></form><button className="button secondary full-width" onClick={() => navigate('today', selectedDate)}>{t("বিস্তারিত রুটিন", "Detailed routine")}<ArrowRight size={16} /></button></> : <EmptyState title={t("এই দিনে কোনো সেশন নেই", "No session on this day")} description="পরিকল্পনার তারিখের মধ্যে একটি দিন বেছে নাও।" />}</aside>
       </div>}
     <section className="card routine-card">
       <div className="card-heading"><div><h2><Clock3 size={20} />{t("কাস্টম সাপ্তাহিক রুটিন", "Custom weekly routine")}</h2><p>অটো রুটিনের সঙ্গে নিজের নির্দিষ্ট সময়ের সেশন যোগ করো। অধ্যায়ের অগ্রগতি বদলাবে না।</p></div><span className="count-badge">{bn(data.routineBlocks.filter(block => !block.date).length)} ব্লক</span></div>
