@@ -23,6 +23,7 @@ import { revisionBuckets, INTERVAL_LABEL } from '../revision';
 import { t } from '../i18n';
 import { newId } from '../storage';
 import { motivationFor } from '../motivation';
+import { testPrepStats } from '../testPrep';
 import { carryoversOn, pendingCarryovers, removeCarryover, setTaskCompletion, toggleCarryover } from '../study';
 import {
   BackupNudge, ClassBlock, DaySummary, EmptyState, LessonList, LocalNote, PhaseJourney,
@@ -373,12 +374,29 @@ export default function TodayView() {
 
   const learning = learningDashboard(data, plan);
   const watchedClasses = classProgress(data);
+  const prep = testPrepStats(data, plan, today);
   return <div className="view today-view">
     <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
       <ProgressBar value={learning.overall.percent} />
       <p>{t('সম্পন্ন', 'Completed')} {bn(learning.overall.completed)} / {bn(learning.overall.total)} · {t('চলছে', 'In progress')} {bn(learning.overall.inProgress)} · {t('বাকি', 'Remaining')} {bn(learning.overall.remaining)}</p>
       <div className="test-readiness-subjects">{(['A', 'B', 'C'] as const).map(p => <div className="test-readiness-row" key={p}><span>{p}</span><ProgressBar value={learning.category[p].percent} /><small>{bn(learning.category[p].completed)}/{bn(learning.category[p].total)}</small></div>)}{SUBJECTS.map(sub => <div className="test-readiness-row" key={sub.id}><span>{sub.short}</span><ProgressBar value={learning.subject[sub.id].percent} color={sub.color} /><small>{bn(learning.subject[sub.id].completed)}/{bn(learning.subject[sub.id].total)}</small></div>)}</div>
+    </section>
+    <section className="card testprep-quick" aria-label={t('টেস্ট প্রস্তুতি সংক্ষিপ্ত', 'Test prep snapshot')}>
+      <div className="testprep-quick-top">
+        <div>
+          <span className="eyebrow">{t('ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা', 'Feb 2027 Test Exam')}</span>
+          <h2>{t('টেস্ট প্রস্তুতি', 'Test prep')} · {t(`${bn(prep.daysLeft)} দিন বাকি`, `${prep.daysLeft} days left`)}</h2>
+        </div>
+        <button type="button" className="button secondary small" onClick={() => navigate('testprep')}>{t('টেস্ট মোডে যাও', 'Open test mode')}<ArrowRight size={13} /></button>
+      </div>
+      <div className="testprep-quick-stats">
+        <div><strong>{bn(prep.percentA)}%</strong><span>{t('A ক্যাটাগরি শেষ', 'Category A done')}</span></div>
+        <div><strong>{bn(prep.doneA)}/{bn(prep.totalA)}</strong><span>{t('A-অধ্যায়', 'A chapters')}</span></div>
+        <div><strong>{bn(prep.requiredTasksPerDay)}</strong><span>{t('A-কাজ/দিন লাগবে', 'A-tasks/day needed')}</span></div>
+      </div>
+      <ProgressBar value={prep.percentA} />
+      {prep.warning && <p className="testprep-quick-warning">{t('পেছিয়ে আছো — আজ অন্তত একটি A-কাজ করে ফেলো।', 'You are behind — do at least one A-task today.')}</p>}
     </section>
     <section className="welcome-hero">
       <div className="hero-copy">
@@ -391,7 +409,7 @@ export default function TodayView() {
             <span><Zap size={14} />{formatDate(data.settings.boostStartDate)} {t(`থেকে দৈনিক ${bn(data.settings.boostDailyHours)} ঘণ্টা`, `→ ${data.settings.boostDailyHours}h/day`)}</span>
           )}
           <span><Clock3 size={14} />{t('পড়া হয়েছে', 'Studied')} {bn(Math.floor(measured / 60))}{t('ঘ', 'h')} {bn(measured % 60)}{t('মি', 'm')}</span>
-          <button type="button" className="hero-chip-link" onClick={() => navigate('videos')}><Play size={14} />{t(`ক্লাস দেখা চালিয়ে যাও · ${bn(watchedClasses.watched)}/${bn(watchedClasses.total)}`, `Continue classes · ${watchedClasses.watched}/${watchedClasses.total}`)}</button>
+          <button type="button" className="hero-chip-link" onClick={() => { sessionStorage.setItem('prostuti.openClass', '1'); navigate('videos'); }}><Play size={14} />{t(`ক্লাস দেখা চালিয়ে যাও · ${bn(watchedClasses.watched)}/${bn(watchedClasses.total)}`, `Continue classes · ${watchedClasses.watched}/${watchedClasses.total}`)}</button>
           <span><HeartPulse size={14} />{day ? phaseName(day.phase) : t('তোমার পরিকল্পনা', 'your plan')}</span>
         </div>
         <div className="hero-progress-wrap">
