@@ -17,6 +17,8 @@ export interface PlannerContextValue {
   openChapter: (chapter: Chapter) => void;
   openExam: (paperId: string) => void;
   openMistake: (subject?: string, text?: string) => void;
+  /** Opens the global search sheet (same as Ctrl/⌘ + K). */
+  openSearch: () => void;
   confirm: (request: ConfirmRequest) => void;
   exportICS: (range: 'day' | 'week' | 'all', date?: string) => void;
   storageOk: boolean;

@@ -18,6 +18,7 @@ import type { ConfirmRequest, View } from './context';
 import { Modal } from './components';
 import { setLanguage, t } from './i18n';
 import { ChapterModal, ExamModal, MistakeModal, SearchModal } from './modals';
+import { QuickActionsFab } from './quick-actions';
 import TodayView from './views/Today';
 import CalendarView from './views/Calendar';
 import SyllabusView from './views/Syllabus';
@@ -50,6 +51,10 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
   ] },
 ];
 const NAV: NavItem[] = NAV_GROUPS.flatMap(group => group.items);
+/** The five tabs that live in a thumb's reach on a phone. */
+const MOBILE_NAV: NavItem[] = ['today', 'calendar', 'timer', 'practice', 'revision']
+  .map(id => NAV.find(item => item.id === id))
+  .filter((item): item is NavItem => !!item);
 const viewFromHash = (): View => { const h = window.location.hash.slice(1); return [...NAV.map(n => n.id), 'settings'].includes(h) ? h as View : 'today'; };
 type OpenModal = { type: 'chapter'; chapter: Chapter } | { type: 'exam'; paperId: string } | { type: 'mistake'; subject: SubjectId; text: string } | { type: 'search' } | null;
 
@@ -196,6 +201,7 @@ export default function App() {
   const context = {
     data, setData, plan, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
+    openSearch: () => setModal({ type: 'search' }),
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, setTheme, setFontScale, screenAwake,
   };
   const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView }[view];
@@ -227,7 +233,8 @@ export default function App() {
         </header>
         <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}<ViewComponent /></main>
       </div>
-      <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>{[NAV[0], NAV[1], NAV[4], NAV[3], NAV[6]].map(n => <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.short, n.shortEn)}</span></button>)}</nav>
+      <QuickActionsFab />
+      <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>{MOBILE_NAV.map(n => <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)} aria-current={view === n.id ? 'page' : undefined}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.short, n.shortEn)}</span>{n.id === 'revision' && dueRevisions > 0 && <span className="mobile-nav-badge">{bn(dueRevisions)}</span>}</button>)}</nav>
     </div>
     {modal?.type === 'chapter' && <ChapterModal chapter={modal.chapter} onClose={closeModal} />}
     {modal?.type === 'exam' && <ExamModal paperId={modal.paperId} onClose={closeModal} />}

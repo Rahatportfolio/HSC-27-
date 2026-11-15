@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
-import { ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, HeartPulse, ListChecks, Pause, Play, RotateCcw, Timer, Trash2 } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Bell, BookOpen, CalendarDays, ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, HeartPulse, ListChecks, Pause, PenLine, Play, RotateCcw, Search, Timer, Trash2 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, chapterById, subjectById } from '../data';
 import { CHAPTER_SCHEDULE } from '../schedule';
@@ -14,7 +14,7 @@ import { carryoversOn, pendingCarryovers, removeCarryover, toggleCarryover } fro
 import { BackupNudge, ClassLinkRow, DaySummary, EmptyState, LocalNote, PhaseJourney, ProgressBar, StudyIllustration, SyllabusNotice, TaskCard, WeekChart } from '../components';
 
 export default function TodayView() {
-  const { plan, data, setData, storageOk, today, selectedDate, setSelectedDate, navigate, exportICS, timer, openChapter } = usePlanner();
+  const { plan, data, setData, storageOk, today, selectedDate, setSelectedDate, navigate, exportICS, timer, openChapter, openSearch } = usePlanner();
   const day = plan.find(item => item.date === selectedDate);
   const stats = getStats(plan, data, today);
   const [showAllTargets, setShowAllTargets] = useState(false);
@@ -46,6 +46,26 @@ export default function TodayView() {
         <div className="hero-progress"><div><span>{t('আজকের মাপা পড়ার সময়', 'Study time measured today')}</span><strong>{bn(percent(measured, target))}%</strong></div><ProgressBar value={percent(measured, target)} /></div>
       </div>
       <div className="hero-art"><StudyIllustration /><div className="hero-art-note"><span className="small-spark">✦</span>{t("ছোট পদক্ষেপ। বড় স্বপ্ন।", "Small steps. Big dream.")}</div></div>
+    </section>
+    <section className="quick-strip" aria-label={t('দ্রুত কাজ', 'Quick actions')}>
+      <button className={`quick-tile ${timer.running ? 'live' : ''}`} onClick={() => { if (timer.running) timer.pause(); else timer.start(); }}>
+        <span className="quick-tile-icon">{timer.running ? <Pause size={17} fill="currentColor" /> : <Play size={17} fill="currentColor" />}</span>
+        <span className="quick-tile-copy"><strong>{timer.running ? t('টাইমার চলছে', 'Timer running') : t('ফোকাস শুরু', 'Start focus')}</strong><small>{timer.running ? t('চাপলে বিরতি', 'Tap to pause') : `${bn(data.settings.pomodoroFocus)} ${t('মিনিট', 'min')}`}</small></span>
+      </button>
+      <button className="quick-tile" onClick={() => navigate('revision')}>
+        <span className="quick-tile-icon amber"><RotateCcw size={17} /></span>
+        <span className="quick-tile-copy"><strong>{t('রিভিশন', 'Revision')}</strong><small>{due.length ? `${bn(due.length)} ${t('টি দরকার', 'due')}` : t('সব ঝালাই', 'all caught up')}</small></span>
+        {due.length > 0 && <span className="quick-tile-count">{bn(due.length)}</span>}
+      </button>
+      <button className="quick-tile" onClick={() => navigate('practice')}>
+        <span className="quick-tile-icon violet"><PenLine size={17} /></span>
+        <span className="quick-tile-copy"><strong>{t('MCQ ও CQ', 'MCQ & CQ')}</strong><small>{t('নিজেকে যাচাই করো', 'Test yourself')}</small></span>
+      </button>
+      <button className="quick-tile" onClick={openSearch}>
+        <span className="quick-tile-icon slate"><Search size={17} /></span>
+        <span className="quick-tile-copy"><strong>{t('খুঁজে নাও', 'Find anything')}</strong><small>{t('অধ্যায়, নোট, সূত্র', 'Chapters, notes, formulas')}</small></span>
+        <kbd className="quick-tile-kbd">⌘K</kbd>
+      </button>
     </section>
     <section className="motivation-card"><span className="motivation-mark" aria-hidden="true">✦</span><div><span className="eyebrow">{t('আজকের অনুপ্রেরণা', 'Today’s motivation')}</span><p>{t(motivation.bn, motivation.en)}</p></div></section>
     <section className="card target-card">

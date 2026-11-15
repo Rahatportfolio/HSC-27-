@@ -57,6 +57,8 @@ A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet
 
 Study calendar, HSC countdown, day journal, streak calendar, achievement badges, **focus mode**, **custom weekly routine**, **important dates with native reminders**, light/dark/system theme, Bangla/English toggle, daily motivation line, global search (`Ctrl/⌘ + K`), settings, JSON/CSV import-export and app information.
 
+- **Quick actions** — the floating button (or the `?` key) opens a six-item sheet from any screen: start focus, search, today’s routine, due revision, theme and settings. On the dashboard a four-tile quick strip does the same in one tap, and the phone tab bar now keeps today, routine, timer, practice and revision under the thumb with a due badge on revision.
+
 **Bangla / English:** Settings → ভাষা / Language switches the shell between বাংলা and English. English mode localises navigation (sidebar, mobile bar, breadcrumb), page headings, dashboard hero, dates, digits and phase names. Chapter names, task titles, the generated plan, notes and hint text stay in Bangla by design — the plan is written as a Bangla study guide, so translating it would be a separate content project, not a string swap. `settings.language` is validated (`bn` | `en`, default `bn`).
 
 **Not implemented yet:** bundled copyrighted board papers (the board-question library is for your own entries).
@@ -73,7 +75,7 @@ npm run dev
 Open http://localhost:3000. The dev server binds to `0.0.0.0` and accepts the Arena preview host.
 
 ```bash
-npm test          # 76 tests: plan, dates, i18n, study sessions, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
+npm test          # 133 tests: plan, dates, i18n, study sessions, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, quick actions, UI smoke
 npm run typecheck
 npm run build     # production PWA build in dist/
 npm run preview   # serve the production build on port 3000
