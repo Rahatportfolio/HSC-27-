@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, FileText, FolderOpen, LayoutDashboard, LibraryBig, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
+import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, Download, FileText, FolderOpen, LayoutDashboard, LibraryBig, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
@@ -62,6 +62,12 @@ const NAV: NavItem[] = NAV_GROUPS.flatMap(group => group.items);
 const viewFromHash = (): View => { const h = window.location.hash.slice(1); return [...NAV.map(n => n.id), 'settings'].includes(h) ? h as View : 'today'; };
 type OpenModal = { type: 'chapter'; chapter: Chapter } | { type: 'exam'; paperId: string } | { type: 'mistake'; subject: SubjectId; text: string } | { type: 'search' } | null;
 
+// Minimal shape of the Chromium `beforeinstallprompt` event (not in lib.dom).
+interface InstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
+}
+
 export default function App() {
   const [initial] = useState(loadData);
   const [data, setData] = useState<AppData>(initial.data);
@@ -111,6 +117,20 @@ export default function App() {
   const [pipActive, setPipActive] = useState(false);
   const pipVideoRef = useRef<HTMLVideoElement | null>(null);
   const pipCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  // Web "Install app" button — captured from beforeinstallprompt (Chrome/Edge/Android).
+  // Hidden until the browser offers it; never shown in an already-installed standalone app.
+  const [installPrompt, setInstallPrompt] = useState<InstallPromptEvent | null>(null);
+  useEffect(() => {
+    const onPrompt = (event: Event) => { event.preventDefault(); setInstallPrompt(event as InstallPromptEvent); };
+    const onInstalled = () => setInstallPrompt(null);
+    window.addEventListener('beforeinstallprompt', onPrompt);
+    window.addEventListener('appinstalled', onInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', onPrompt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
+  }, []);
 
   // Global background timer sync: Android foreground service + OS notification tray + tab title + MediaSession
   const formatClock = useCallback((sec: number) => {
@@ -592,6 +612,27 @@ export default function App() {
                 >
                   {isDarkTheme ? <Sun size={18} strokeWidth={1.75} /> : <Moon size={18} strokeWidth={1.75} />}
                 </button>
+                {installPrompt && (
+                  <button
+                    type="button"
+                    className="icon-button quick-tool-btn install-app-btn"
+                    title={t('অ্যাপটা এই ডিভাইসে ইনস্টল করো', 'Install the app on this device')}
+                    aria-label={t('অ্যাপ ইনস্টল করো', 'Install app')}
+                    onClick={() => {
+                      const promptEvent = installPrompt;
+                      setInstallPrompt(null);
+                      void (async () => {
+                        try {
+                          await promptEvent.prompt();
+                          const choice = await promptEvent.userChoice;
+                          if (choice.outcome === 'accepted') notify(t('ইনস্টল শুরু হয়েছে — হোম স্ক্রিনে অ্যাপ যোগ হবে।', 'Installing — the app will be added to your home screen.'));
+                        } catch { /* dismissed or unsupported — nothing to do */ }
+                      })();
+                    }}
+                  >
+                    <Download size={18} strokeWidth={1.75} />
+                  </button>
+                )}
                 <button
                   type="button"
                   className="lang-toggle-chip"

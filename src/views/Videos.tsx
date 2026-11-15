@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   Bookmark, Check, ChevronRight, ExternalLink, Filter, Play, Search, ShieldCheck,
@@ -99,7 +99,7 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
 }
 
 export default function VideosView() {
-  const { data, setData, openChapter } = usePlanner();
+  const { data, setData, openChapter, plan, today } = usePlanner();
   const [query, setQuery] = useState('');
   const [subject, setSubject] = useState<SubjectId | 'all'>('all');
   const [paper, setPaper] = useState<1 | 2 | 'all'>('all');
@@ -111,6 +111,18 @@ export default function VideosView() {
   const [mode, setMode] = useState<'classes' | 'chapters'>('classes');
   const [playing, setPlaying] = useState<ClassResource | null>(null);
   const [showFilters, setShowFilters] = useState(false);
+  // "ক্লাস দেখা চালিয়ে যাও" from Home deep-links here: open the next unwatched
+  // class player once — today's chapters first, then any unwatched playable class.
+  useEffect(() => {
+    if (!sessionStorage.getItem('prostuti.openClass')) return;
+    sessionStorage.removeItem('prostuti.openClass');
+    const todayChapters = new Set(plan.find(d => d.date === today)?.tasks.flatMap(tk => tk.chapterIds) ?? []);
+    const unwatched = CLASS_CATALOG.filter(c => c.kind !== 'search' && !data.classWatched[c.id]);
+    const next = unwatched.find(c => todayChapters.has(c.chapterId)) ?? unwatched[0];
+    if (next) setPlaying(next);
+    // One-shot handoff from Home — must not re-trigger on later re-renders.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const counts = useMemo(() => classTypeCounts(), []);
   const chapterOptions = useMemo(

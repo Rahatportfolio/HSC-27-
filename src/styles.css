@@ -4391,3 +4391,20 @@ body {
 [data-theme="dark"] .pdf-slot-status.linked{background:#22302a;color:#cfe0d4;border-color:#354b40}
 [data-theme="dark"] .pdf-row-icon{background:#1c3027;color:#7fd0aa}
 [data-theme="dark"] .recent-chip svg,[data-theme="dark"] .pdf-source-row>svg,[data-theme="dark"] .video-verified-note svg{color:var(--green)}
+
+/* ---- v2.15 quick wins: home test-prep snapshot, calendar lock dot, install button ---- */
+.testprep-quick{display:flex;flex-direction:column;gap:14px}
+.testprep-quick-top{display:flex;align-items:flex-start;justify-content:space-between;gap:14px}
+.testprep-quick-top .eyebrow{display:block;font-size:9px;letter-spacing:.6px;text-transform:uppercase;color:#98a18f}
+.testprep-quick-top h2{font-size:16px;font-weight:650;margin-top:4px;color:#3c4a3e}
+.testprep-quick-top .button{flex-shrink:0;white-space:nowrap}
+.testprep-quick-stats{display:flex;gap:22px;flex-wrap:wrap}
+.testprep-quick-stats>div{display:flex;flex-direction:column;gap:2px}
+.testprep-quick-stats strong{font-size:17px;font-weight:650;color:#356342}
+.testprep-quick-stats span{font-size:10px;color:#98a18f}
+.testprep-quick-warning{font-size:11px;line-height:1.6;color:#b45309;background:#fef3e2;border:1px solid #f3ddb8;border-radius:8px;padding:8px 11px;margin:0}
+.cell-lock{position:absolute;top:6px;right:8px;color:#c9803a}
+[data-theme="dark"] .testprep-quick-top h2{color:#d5e2d3}
+[data-theme="dark"] .testprep-quick-stats strong{color:#9ec8a0}
+[data-theme="dark"] .testprep-quick-warning{background:#2a2013;border-color:#4a3a1d;color:#e8b66c}
+[data-theme="dark"] .cell-lock{color:#e0a35c}
