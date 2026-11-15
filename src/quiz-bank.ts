@@ -398,4 +398,68 @@ export const BANK_QUESTIONS: QuizQuestion[] = [
   q('english', 'english-1-Writing-3', 'A report on a chart should begin with—', ['an overview sentence', 'the raw numbers', 'the writer’s opinion', 'a quotation'], 0),
   q('english', 'english-2-Writing-1', 'An argumentative essay requires—', ['a clear position and evidence', 'only examples', 'only description', 'no conclusion'], 0),
   q('english', 'english-2-Writing-2', 'An email to a teacher should open with—', ['Dear Sir/Madam,', 'Hey!', 'Hi dude,', 'Respected all'], 0),
+
+  // ---------------- Completing the last uncovered chapters (114/114) ----------------
+  // Biology 2nd paper — প্রাণীর বিভিন্নতা ও শ্রেণিবিন্যাস
+  q('biology', 'biology-2-1', 'প্রাণীজগতে সবচেয়ে বেশি প্রজাতিসমৃদ্ধ পর্ব কোনটি?', ['Arthropoda', 'Chordata', 'Mollusca', 'Porifera'], 0, 'কীটপতঙ্গ পর্বের প্রাণী প্রাণীজগতের প্রায় তিন-চতুর্থাংশ।'),
+  q('biology', 'biology-2-1', 'Chordata পর্বের প্রাণীর প্রধান বৈশিষ্ট্য কোনটি?', ['দেহে অসংখ্য ছিদ্র থাকা', 'পঞ্চকোণীয় সমমিতি থাকা', 'অঙ্কুরজীবী পর্যায়ে পশ্চাতমেরুদণ্ড বা মেরুদণ্ড থাকা', 'দেহ সমতল ও নরম হওয়া'], 2, 'নোটোকর্ড/মেরুদণ্ড হলো Chordata-এর মূল শনাক্তকারী বৈশিষ্ট্য।'),
+  q('biology', 'biology-2-1', 'Porifera (স্পঞ্জ) পর্বের দেহে বিশেষত্ব কী?', ['দুই স্তরযুক্ত দেহ', 'অসংখ্য ছিদ্র ও অন্তঃকোষযুক্ত গাঁজাযুক্ত দেহ', 'পঞ্চকোণীয় কাঠামো', 'স্নায়ুতন্ত্র বিশিষ্ট মস্তিষ্ক'], 1, 'স্পঞ্জের দেহ ছিদ্র দিয়ে পানি চলাচল করে (পর্যন্ত দ্বারপ্রণালী)।'),
+  q('biology', 'biology-2-1', 'Coelenterata (নিডেরিয়া) পর্বের দেহ কয় স্তরের কোষ দিয়ে গঠিত?', ['এক স্তর', 'দুই স্তর', 'তিন স্তর', 'চার স্তর'], 1, 'এক্টোডার্ম ও এন্ডোডার্ম — দুই স্তর (ডিপ্লোব্লাস্টিক)।'),
+  q('biology', 'biology-2-1', 'প্রাপ্তবয়স্ক Echinodermata (যথাস্থিতি) প্রাণীর সমমিতি কোনটি?', ['দ্বিপার্শ্বিক', 'পঞ্চকোণীয়', 'বৃত্তাকার', 'ত্রিভুজাকার'], 1, 'যথাস্থিতি প্রাপ্তবয়স্ক অবস্থায় পঞ্চকোণীয় তারকাসদৃশ সমমিতি দেখায়।'),
+
+  // Bangla 1st paper — গদ্য: পাঠ ৪–৬ (মূলভাব, প্রসঙ্গ ও উদ্দীপক বিশ্লেষণ)
+  q('bangla', 'bangla-1-গদ-য-২', 'গদ্যপাঠের মূলভাব বলতে কী বোঝায়?', ['লেখকের প্রধান ভাব বা প্রধান বিষয়বস্তু', 'গল্পের চরিত্রের নাম', 'পাঠের শেষ বাক্য', 'লেখকের জন্মতারিখ'], 0, 'যে ভাবটি পুরো পাঠজুড়ে পুনরাবৃত্ত হয় সেটিই মূলভাব।'),
+  q('bangla', 'bangla-1-গদ-য-২', 'CQ উত্তরে "উদ্দীপক" কী?', ['মূলভাবের দিকনির্দেশক প্রসঙ্গ অংশ', 'পাঠের শিরোনাম মাত্র', 'লেখকের সংক্ষিপ্ত জীবনী', 'উত্তরের শেষ বাক্য'], 0, 'উদ্দীপক পাঠের নির্দিষ্ট অংশ থেকে মূলভাবের দিক ইঙ্গিত করে।'),
+  q('bangla', 'bangla-1-গদ-য-২', '"প্রসঙ্গ" বলতে কী বোঝায়?', ['মূল আলোচ্য বিষয়ের পটভূমি বা পার্শ্ববর্তী তথ্য', 'শুধু কাহিনির শেষ', 'প্রশ্নের নম্বর', 'অনুচ্ছেদের সংখ্যা'], 0, 'প্রসঙ্গ মূল ঘটনার পাশে থাকা পরিচয়-তথ্য, যা মূলভাব বোঝাতে সাহায্য করে।'),
+  q('bangla', 'bangla-1-গদ-য-২', 'মূলভাব নির্ণয়ে সবচেয়ে বেশি সাহায্য করে কোনটি?', ['শিরোনাম, উদ্দীপক ও পুনরাবৃত্ত ভাবের সমাহার', 'অনুচ্ছেদের দৈর্ঘ্য', 'ব্যবহৃত রঙ', 'লেখকের বয়স'], 0, 'শিরোনাম ও উদ্দীপক একসাথে মিলিয়ে মূলভাব ধরা যায়।'),
+  q('bangla', 'bangla-1-গদ-য-২', 'সৃজনশীল প্রশ্নের উত্তরে কোনটি সঠিক?', ['নিজের ভাষায় ও নিজের অভিজ্ঞতা থেকে লেখা', 'পাঠ থেকে হুবহু কপি করা', 'শুধু একটি শব্দে উত্তর দেওয়া', 'উত্তর না লেখা'], 0, 'সৃজনশীলতার মানেই নিজস্ব ভাব দিয়ে উত্তর গঠন।'),
+
+  // Bangla 1st paper — গদ্য: পাঠ ৭–৯ (তুলনামূলক পাঠ ও সৃজনশীল অনুশীলন)
+  q('bangla', 'bangla-1-গদ-য-৩', 'তুলনামূলক পাঠে মূল কাজ কী?', ['এক বা একাধিক বিষয়ের সাদৃশ্য ও পার্থক্য বিশ্লেষণ করা', 'শুধু একটি বিষয়ের বর্ণনা দেওয়া', 'শব্দার্থ মাত্র লেখা', 'কবির জীবনী লেখা'], 0, 'তুলনা মানে পাশাপাশি রেখে মিল-বৈসম্য দেখা।'),
+  q('bangla', 'bangla-1-গদ-য-৩', 'তুলনামূলক উত্তরে বিষয়গুলো কোন ক্রমে সাজানো উচিত?', ['একই ভাব ধারাবাহিকভাবে, পাশাপাশি তুলনা করে', 'যেকোনো এলোমেলো ক্রমে', 'শুধু প্রথম বিষয় নিয়ে', 'বাক্য ভেঙে ছোট ছোট করে'], 0, 'একই পয়েন্ট ধারাবাহিকভাবে তুলনা করলে উত্তরটি পরিষ্কার হয়।'),
+  q('bangla', 'bangla-1-গদ-য-৩', 'সৃজনশীল অনুশীলনে সাফল্যের মূল মন্ত্র কোনটি?', ['নিজের ভাব ও অভিজ্ঞতা থেকে উদাহরণ দেওয়া', 'পুরনো উত্তর হুবহু মুখস্থ করা', 'শুধু বড় বড় শব্দ ব্যবহার করা', 'এক লাইনে সব শেষ করা'], 0, 'নিজের অনুভূতি ও পরিবেশ থেকে লেখলে উত্তর বিশ্বস্ত হয়।'),
+  q('bangla', 'bangla-1-গদ-য-৩', 'তুলনামূলক প্রশ্নের উত্তরে কোনটি এড়িয়ে চলা উচিত?', ['কেবল একটি পক্ষ নিয়ে একতরফা বর্ণনা', 'দুই পক্ষের উদাহরণ দেওয়া', 'শিরোনাম লেখা', 'নিজের মত যোগ করা'], 0, 'তুলনায় উভয় পক্ষ সমানভাবে আলোচিত হতে হবে।'),
+  q('bangla', 'bangla-1-গদ-য-৩', 'সৃজনশীল রচনায় ভাষা কেমন হওয়া উচিত?', ['সাবলীল, প্রমিত ও বাক্যগত শুদ্ধ', 'কঠিন সংস্কৃত শব্দে ভরা', 'শুধু ইংরেজি শব্দে', 'এক বাক্যে পুরো উত্তর'], 0, 'সহজ ও শুদ্ধ ভাষায় লিখলে পাঠক সহজে বুঝতে পারে।'),
+
+  // Bangla 1st paper — গদ্য: পাঠ ১০–১২ (লেখক, মূলভাব ও পূর্ণ CQ সেট)
+  q('bangla', 'bangla-1-গদ-য-৪', 'একটি পূর্ণ CQ উত্তরে সাধারণত কতটি উপপ্রশ্ন থাকে?', ['২টি', '৩টি', '৪টি (ক, খ, গ, ঘ)', '৬টি'], 2, 'CQ কাঠামো ক–ঘ চারটি উপপ্রশ্ন নিয়ে গঠিত।'),
+  q('bangla', 'bangla-1-গদ-য-৪', 'লেখক পরিচিতিতে সাধারণত যা থাকে সেটি কোনটি?', ['জীবন-পরিচয়, সাহিত্যকর্ম ও রচনাধারা', 'শুধু জন্মসাল', 'শুধু ছবির বর্ণনা', 'পাঠের শব্দার্থ'], 0, 'লেখক পরিচয়ে তাঁর রচনা-জীবন ও প্রধান কাজ থাকা বাঞ্ছনীয়।'),
+  q('bangla', 'bangla-1-গদ-য-৪', 'CQ উত্তর শুরু করা উচিত কী দিয়ে?', ['প্রশ্নের উত্তর দিয়ে সরাসরি', 'দীর্ঘ ভূমিকা দিয়ে', 'অন্য কোনো বিষয়ের বর্ণনা দিয়ে', 'প্রশ্ন হুবহু কপি করে বারবার'], 0, 'বাহুল্য এড়িয়ে সরাসরি উত্তরে গেলে সময় ও শব্দ বাঁচে।'),
+  q('bangla', 'bangla-1-গদ-য-৪', 'মূলভাব লেখার সময় কোনটি মনে রাখা জরুরি?', ['শিরোনাম, উদ্দীপক ও পাঠের ভাব মিলিয়ে একটি স্পষ্ট বাক্যে আনা', 'প্রতিটি বাক্যে নতুন ভাব আনা', 'শুধু ইংরেজি বাক্য ব্যবহার করা', 'উত্তর খালি রাখা'], 0, 'মূলভাব হতে হবে পাঠের কেন্দ্রীয় ভাবের সংক্ষিপ্ত প্রতিফলন।'),
+  q('bangla', 'bangla-1-গদ-য-৪', 'উত্তর লেখার ভাষা সম্পর্কে কোনটি সঠিক?', ['প্রমিত, সাবলীল ও বাক্যগতভাবে শুদ্ধ হওয়া উচিত', 'যত কঠিন শব্দ, তত ভালো', 'সবসময় কথ্য ভাষা চলবে', 'একটি বাক্যেই পুরো উত্তর বন্ধ করা উচিত'], 0, 'পরিষ্কার প্রমিত ভাষায় লিখলে মূল্যায়ন সহজ হয়।'),
+
+  // Bangla 1st paper — কবিতা: পাঠ ১০–১২ (মূলভাব ও উদ্দীপকের সঙ্গে তুলনা)
+  q('bangla', 'bangla-1-পদ-য-৪', 'কবিতার মূলভাব বলতে কী বোঝায়?', ['কবির প্রধান আশয় বা কেন্দ্রীয় ভাব', 'কবিতার প্রতিটি চরণের অর্থ', 'কবির ঠিকানা', 'কবিতার শেষ শব্দ'], 0, 'মূলভাব হলো কবিতা জুড়ে বারবার ফিরে আসা কেন্দ্রীয় আশয়।'),
+  q('bangla', 'bangla-1-পদ-য-৪', 'উদ্দীপক ও মূলভাবের মূল পার্থক্য কোনটি?', ['উদ্দীপক কোনো ঘটনা বা চিত্র থেকে মূলভাবের দিক দেখায়, আর মূলভাব কবির প্রধান ভাব', 'উদ্দীপক সবসময় শেষে আসে', 'মূলভাব কেবল শিরোনাম', 'কোনো পার্থক্য নেই'], 0, 'উদ্দীপক ইঙ্গিত দেয়, মূলভাব প্রধান ভাব প্রকাশ করে।'),
+  q('bangla', 'bangla-1-পদ-য-৪', 'কবিতায় প্রতীক বলতে কী বোঝায়?', ['গভীর অর্থ বোঝানো চিহ্ন বা শব্দ', 'যেকোনো বিরামচিহ্ন', 'কবিতার সংখ্যা', 'প্রতিটি চরণের দৈর্ঘ্য'], 0, 'প্রতীক সাধারণ জিনিসের মধ্যে বিশেষ অর্থ লুকায়।'),
+  q('bangla', 'bangla-1-পদ-য-৪', 'কাব্য বিশ্লেষণে অলংকারের ভূমিকা কী?', ['কাব্যিক শোভা ও ভাব-প্রবাহ বৃদ্ধি করা', 'শুধু উচ্চারণ ঠিক করা', 'কবিতা ছোট করা', 'মূলভাব মুছে দেওয়া'], 0, 'অলংকার ভাবকে সুন্দর ও স্মরণীয় করে তোলে।'),
+  q('bangla', 'bangla-1-পদ-য-৪', 'কবিতার শব্দার্থ বোঝার সবচেয়ে ভালো উপায় কোনটি?', ['প্রসঙ্গ ও কাব্যের পরিবেশ মিলিয়ে অর্থ নেওয়া', 'শুধু অভিধানের প্রথম অর্থ নেওয়া', 'উদ্দীপক লেখা', 'চরণ সংখ্যা গোনা'], 0, 'কবিতার শব্দ প্রায়ই বিশেষ অর্থে ব্যবহৃত হয়, তাই প্রসঙ্গ দেখতে হবে।'),
+
+  // English 1st paper — Reading: information transfer
+  q('english', 'english-1-Reading-3', '“Information transfer” means—', ['turning a table, chart or flow-chart into sentences', 'memorising the chart by heart', 'drawing a new chart in the exam', 'translating the chart into Bangla'], 0, 'You report what the diagram shows using accurate sentences.'),
+  q('english', 'english-1-Reading-3', 'A flow-chart mainly shows—', ['a sequence of steps or stages', 'only statistics', 'the writer’s opinion', 'a list of difficult words'], 0, 'Flow-charts present a process step by step.'),
+  q('english', 'english-1-Reading-3', 'While transferring information you must NOT—', ['add personal opinions', 'use data from the chart', 'write in complete sentences', 'check the title'], 0, 'Only the given data should be transferred — no invention.'),
+  q('english', 'english-1-Reading-3', 'The title of a chart tells you—', ['what the data is about', 'how old the data is', 'who wrote the essay', 'the number of paragraphs'], 0),
+  q('english', 'english-1-Reading-3', 'The best opening for an information-transfer answer is—', ['a sentence stating what the chart shows', 'a personal anecdote', 'a dictionary definition', 'a rhetorical question only'], 0),
+
+  // English 1st paper — Reading: cloze ও short questions
+  q('english', 'english-1-Reading-4', 'A cloze test presents—', ['a passage with missing words to fill in', 'a poem to memorise', 'a letter to a friend', 'a chart to draw'], 0, 'Blank spaces test both vocabulary and grammar in context.'),
+  q('english', 'english-1-Reading-4', 'To fill a blank you should check—', ['meaning and grammar together', 'only the length of the word', 'only the first letter', 'the punctuation at the end'], 0),
+  q('english', 'english-1-Reading-4', 'A short answer should be—', ['to the point, in complete sentences', 'as long as possible', 'written in bullet signs only', 'in direct speech only'], 0),
+  q('english', 'english-1-Reading-4', 'Before writing a short answer you should—', ['read the referenced lines of the passage carefully', 'guess the answer at once', 'copy the whole passage', 'skip the question'], 0),
+  q('english', 'english-1-Reading-4', 'A word that does NOT fit a blank is one that—', ['breaks the meaning or grammar of the sentence', 'is longer than the others', 'appears in the title', 'has four letters'], 0),
+
+  // English 1st paper — Reading + writing mixed practice
+  q('english', 'english-1-Writing-4', 'In a timed mixed practice you should first—', ['skim the whole paper and allocate time', 'start with the longest essay', 'answer questions in random order', 'copy the question paper'], 0, 'A quick plan keeps you from running out of time.'),
+  q('english', 'english-1-Writing-4', 'After finishing a writing task you should—', ['proofread for grammar and spelling', 'immediately leave the answer sheet', 'add unrelated sentences', 'rewrite it twice'], 0),
+  q('english', 'english-1-Writing-4', 'The topic sentence of a paragraph—', ['states the main idea', 'gives the final example only', 'lists difficult words', 'repeats the title'], 0),
+  q('english', 'english-1-Writing-4', 'Linking words such as “however” and “therefore” are used to—', ['connect ideas between sentences', 'make the paragraph longer', 'start a new paragraph each time', 'replace examples'], 0),
+  q('english', 'english-1-Writing-4', 'The best way to manage exam time is to—', ['stick to a per-question time limit', 'spend equal time on every word', 'leave answers blank', 'write without planning'], 0),
+
+  // English 2nd paper — Grammar + composition mixed practice
+  q('english', 'english-2-Writing-3', 'Before submitting, check that every sentence has—', ['a subject and a verb', 'a comma in the middle', 'at least ten words', 'a question mark'], 0, 'Incomplete sentences lose marks even when the idea is right.'),
+  q('english', 'english-2-Writing-3', 'In a composition, an example should—', ['support the point made just before it', 'introduce a new topic', 'replace the conclusion', 'be copied from the question'], 0),
+  q('english', 'english-2-Writing-3', 'A cliché is—', ['an overused expression that adds no fresh meaning', 'a difficult technical term', 'a misspelled word', 'a short concluding line'], 0),
+  q('english', 'english-2-Writing-3', 'Active voice is usually preferred because it is—', ['clearer and more direct', 'longer', 'more polite always', 'formal only'], 0),
+  q('english', 'english-2-Writing-3', 'The concluding sentence of an essay should—', ['restate the main idea briefly', 'introduce a brand-new argument', 'apologise to the reader', 'repeat the introduction word for word'], 0),
 ];
