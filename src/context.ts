@@ -6,7 +6,7 @@ import type { PresetTimerInput, useStudyTimer } from './hooks';
 import type { NewSession } from './study';
 import type { FontScale, ThemeMode } from './types';
 
-export type View = 'studySystem' | 'today' | 'calendar' | 'syllabus' | 'videos' | 'pdfs' | 'testprep' | 'revision' | 'timer' | 'practice' | 'exams' | 'analytics' | 'library' | 'reminders' | 'settings' | 'flashcards' | 'storage' | 'scanner';
+export type View = 'studySystem' | 'today' | 'calendar' | 'syllabus' | 'videos' | 'pdfs' | 'testprep' | 'revision' | 'timer' | 'practice' | 'examsim' | 'exams' | 'analytics' | 'library' | 'reminders' | 'settings' | 'flashcards' | 'storage' | 'scanner';
 export interface ConfirmRequest { title: string; message: string; label?: string; danger?: boolean; action: () => void }
 export interface PlannerContextValue {
   data: AppData; setData: Dispatch<SetStateAction<AppData>>; plan: Day[]; today: string; now: Date;

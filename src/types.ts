@@ -7,6 +7,28 @@ export type StudyMode = 'stopwatch' | 'countdown' | 'pomodoro';
 export type PrepStatus = 'none' | 'practicing' | 'ready';
 export type RevisionInterval = 1 | 3 | 7 | 14 | 30;
 export type TestKind = 'chapter' | 'subject' | 'model';
+/** Which pool the exam simulator draws its questions from. */
+export type ExamMode = 'chapter' | 'subject' | 'full' | 'mistakes';
+/** One chapter's share of a simulated paper, stored so analysis survives question edits. */
+export interface ExamBreakdownRow { chapterId?: string; subject: SubjectId; correct: number; total: number }
+/** A completed, auto-marked MCQ exam. `score`/`total` are correct answers over asked questions. */
+export interface ExamSession {
+  id: string;
+  mode: ExamMode;
+  title: string;
+  subject?: SubjectId;
+  chapterIds: string[];
+  questionIds: string[];
+  /** questionId → chosen option index. Unanswered questions are simply absent. */
+  answers: Record<string, number>;
+  score: number;
+  total: number;
+  durationMin: number;
+  timeTakenSec: number;
+  date: string;
+  at: string;
+  breakdown: ExamBreakdownRow[];
+}
 /** Reading size for the whole interface: small, comfortable (default) or large. */
 export type FontScale = 'sm' | 'md' | 'lg';
 /** CQ self-marking: ক (knowledge), খ (comprehension), গ (application), ঘ (higher order). */

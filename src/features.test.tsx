@@ -332,3 +332,77 @@ it('calculates exam-clock pause from the wall clock even if the UI tick was dela
   fireEvent.click(within(card).getByRole('button', { name: 'বিরতি' }));
   expect(JSON.parse(localStorage.getItem('hsc27-exam-clock-v1') || '{}')).toMatchObject({ remaining: 1790, deadline: null });
 });
+
+describe('exam simulator screen', () => {
+  it('runs a timed paper, marks it, and stores the result plus the mistake loop', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    // Ten questions, one minute each, from the shipped sample bank.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /পরীক্ষা শুরু করো/ })); });
+    expect(await screen.findByText('চলমান পরীক্ষা')).toBeTruthy();
+    expect(document.querySelectorAll('.exam-palette-cell')).toHaveLength(10);
+
+    // Answer every question with the first option, then submit.
+    for (let index = 0; index < 10; index++) {
+      const options = document.querySelectorAll('.quiz-option');
+      await act(async () => { fireEvent.click(options[0]); });
+      const next = screen.queryByRole('button', { name: /পরের প্রশ্ন/ });
+      if (next) await act(async () => { fireEvent.click(next); });
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+
+    expect(await screen.findByText('ফলাফল')).toBeTruthy();
+    const saved = stored();
+    expect(saved.examSessions).toHaveLength(1);
+    expect(saved.examSessions[0]).toMatchObject({ mode: 'subject', total: 10, durationMin: 10 });
+    expect(saved.examSessions[0].answers).toBeTruthy();
+    expect(saved.examSessions[0].breakdown.length).toBeGreaterThan(0);
+    // The paper is also part of the GPA tracker, and the attempt history drove the mistake loop.
+    expect(saved.tests).toHaveLength(1);
+    expect(saved.attempts).toHaveLength(10);
+    expect(saved.examSessions[0].score).toBe(saved.attempts.filter((item: { correct: boolean }) => item.correct).length);
+    expect(saved.mistakes.length).toBe(10 - saved.examSessions[0].score);
+    // Every wrong answer queued a revision card for tomorrow.
+    if (saved.mistakes.length) expect(saved.revisions.length).toBe(saved.mistakes.length);
+    expect(screen.getByText(/ভুল প্রশ্নগুলো আবার/)).toBeTruthy();
+  });
+
+  it('marks unanswered questions as wrong and shows them in the analysis', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /পরীক্ষা শুরু করো/ })); });
+    await screen.findByText('চলমান পরীক্ষা');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /শেষ করো/ })); });
+    const dialog = await screen.findByRole('dialog');
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'জমা দাও' })); });
+    expect(await screen.findByText('ফলাফল')).toBeTruthy();
+    const saved = stored();
+    expect(saved.examSessions[0]).toMatchObject({ score: 0, total: 10 });
+    // Unanswered questions are not guesses: they never enter the attempt history.
+    expect(saved.attempts).toHaveLength(0);
+    expect(document.querySelectorAll('.exam-wrong-row.unanswered')).toHaveLength(10);
+  });
+
+  it('keeps the stored paper through a reload', async () => {
+    const { freshData, todayKey } = await import('./planner');
+    const { nowIso } = await import('./storage');
+    const data = freshData();
+    const chapter = CHAPTERS.find(item => item.subject === 'physics')!;
+    data.examSessions.push({
+      id: 'sim-1', mode: 'chapter', title: 'ভেক্টর · অধ্যায় পরীক্ষা', chapterIds: [chapter.id],
+      questionIds: ['seed-001', 'seed-002'], answers: { 'seed-001': 0 }, score: 1, total: 2,
+      durationMin: 5, timeTakenSec: 84, date: todayKey(), at: nowIso(),
+      breakdown: [{ chapterId: chapter.id, subject: 'physics', correct: 1, total: 2 }],
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('examsim');
+    expect(await screen.findByText('ভেক্টর · অধ্যায় পরীক্ষা')).toBeTruthy();
+    // 1/2 correct is 50% — the history line shows it and the weakness rail ranks the chapter.
+    expect(document.querySelector('.exam-history-score')?.textContent).toContain('৫০%');
+    expect(document.querySelector('.exam-weak-card')?.textContent).toContain(chapter.title);
+    expect(stored().examSessions).toHaveLength(1);
+  });
+});

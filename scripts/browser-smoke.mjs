@@ -72,6 +72,27 @@ try {
   assert.equal(Object.values((await stored()).exams)[0].score, 72);
   console.log('PASS model-test score');
 
+  // Exam simulator: a timed paper must mark itself and store the result.
+  await nav('সিমুলেটর');
+  await page.locator('button').filter({ hasText: 'পরীক্ষা শুরু করো' }).click();
+  await page.waitForSelector('.exam-palette-cell');
+  const paperSize = await page.locator('.exam-palette-cell').count();
+  for (let i = 0; i < paperSize; i++) {
+    await page.locator('.quiz-option').first().click();
+    const next = page.locator('button').filter({ hasText: 'পরের প্রশ্ন' });
+    if (await next.count()) await next.click();
+  }
+  await page.locator('.exam-run-actions button').filter({ hasText: 'জমা দাও' }).click();
+  await page.waitForSelector('.exam-result-hero');
+  const simulated = (await stored()).examSessions;
+  assert.equal(simulated.length, 1);
+  assert.equal(simulated[0].total, paperSize);
+  assert.equal(simulated[0].answers && Object.keys(simulated[0].answers).length, paperSize);
+  assert.ok((await stored()).tests.length >= 1);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('.exam-history-row').first().waitFor();
+  console.log('PASS exam simulator', simulated[0].score + '/' + simulated[0].total, 'saved and reloaded');
+
   await nav('রিমাইন্ডার');
   await page.getByRole('switch').click();
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).settings.reminderEnabled === true, null, { timeout: 5000 });

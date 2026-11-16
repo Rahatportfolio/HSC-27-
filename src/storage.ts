@@ -3,7 +3,7 @@ import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
-import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta } from './types';
+import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta, ExamMode } from './types';
 import { PDF_MATERIAL_IDS } from './pdfCatalog';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -23,6 +23,7 @@ const studyModes = new Set<StudyMode>(['stopwatch', 'countdown', 'pomodoro']);
 const intervals = new Set<RevisionInterval>([1, 3, 7, 14, 30]);
 const recalls = new Set<string>(['weak', 'okay', 'good']);
 const testKinds = new Set<TestKind>(['chapter', 'subject', 'model']);
+const examModes = new Set<ExamMode>(['chapter', 'subject', 'full', 'mistakes']);
 const isSubject = (v: unknown): v is AppData['mistakes'][number]['subject'] => typeof v === 'string' && subjectIds.has(v);
 const optionalChapter = (v: unknown): v is string | undefined => v === undefined || (typeof v === 'string' && chapterIds.has(v));
 /** Own-property assignment: backup keys such as "__proto__" must never mutate prototypes. */
@@ -33,7 +34,7 @@ export const RECOVERY_KEY = `${STORAGE_KEY}-recovery`;
 export const SAVED_AT_KEY = `${STORAGE_KEY}-saved-at`;
 export const MISTAKE_LIMIT = 1000;
 export const LIMITS = {
-  sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000,
+  sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000, examSessions: 500,
   libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 500, importantDates: 200,
   classWatched: 1000,
   classBookmarks: 2000,
@@ -228,6 +229,21 @@ export function parseBackup(rawText: string): AppData {
   result.tests = listOf(raw.tests, LIMITS.tests, 'পরীক্ষা', item => {
     if (!object(item) || !nonEmpty(item.id, 180) || !testKinds.has(item.kind as TestKind) || !nonEmpty(item.title, 200) || (item.subject !== undefined && !isSubject(item.subject)) || !Array.isArray(item.chapterIds) || item.chapterIds.length > 40 || item.chapterIds.some(c => typeof c !== 'string' || !chapterIds.has(c)) || !num(item.score, 0, Number.MAX_VALUE) || !num(item.total, Number.MIN_VALUE, Number.MAX_VALUE) || Number(item.score) > Number(item.total) || !num(item.durationMin, 0, 1440) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at) || !text(item.notes, 5000)) throw new Error('পরীক্ষার তথ্য সঠিক নয়।');
     return { id: item.id, kind: item.kind as TestKind, title: item.title, subject: item.subject, chapterIds: item.chapterIds as string[], score: Number(item.score), total: Number(item.total), durationMin: Number(item.durationMin), date: item.date, at: item.at, notes: item.notes };
+  });
+
+  result.examSessions = listOf(raw.examSessions, LIMITS.examSessions, 'সিমুলেটেড পরীক্ষা', item => {
+    if (!object(item) || !nonEmpty(item.id, 180) || !examModes.has(item.mode as ExamMode) || !nonEmpty(item.title, 200) || (item.subject !== undefined && !isSubject(item.subject)) || !Array.isArray(item.chapterIds) || item.chapterIds.length > 40 || item.chapterIds.some(c => typeof c !== 'string' || !chapterIds.has(c)) || !Array.isArray(item.questionIds) || item.questionIds.length < 1 || item.questionIds.length > 200 || item.questionIds.some(q => !nonEmpty(q, 180)) || !object(item.answers) || Object.keys(item.answers).length > 200 || !int(item.score, 0, 200) || !int(item.total, 1, 200) || Number(item.score) > Number(item.total) || !int(item.durationMin, 1, 1440) || !int(item.timeTakenSec, 0, 86400) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at) || !Array.isArray(item.breakdown) || item.breakdown.length > 40) throw new Error('সিমুলেটেড পরীক্ষার তথ্য সঠিক নয়।');
+    const answers: Record<string, number> = {};
+    for (const [key, value] of Object.entries(item.answers)) {
+      if (!nonEmpty(key, 180) || !int(value, 0, 3)) throw new Error('সিমুলেটেড পরীক্ষার উত্তর সঠিক নয়।');
+      put(answers, key, Number(value));
+    }
+    const breakdown = item.breakdown.map(row => {
+      if (!object(row) || !optionalChapter(row.chapterId) || !isSubject(row.subject) || !int(row.correct, 0, 200) || !int(row.total, 0, 200) || Number(row.correct) > Number(row.total)) throw new Error('সিমুলেটেড পরীক্ষার বিশ্লেষণ সঠিক নয়।');
+      if (row.chapterId && chapterById[row.chapterId].subject !== row.subject) throw new Error('সিমুলেটেড পরীক্ষার অধ্যায় ও বিষয় মিলছে না।');
+      return { ...(row.chapterId ? { chapterId: row.chapterId } : {}), subject: row.subject, correct: Number(row.correct), total: Number(row.total) };
+    });
+    return { id: item.id, mode: item.mode as ExamMode, title: item.title, subject: item.subject as AppData['mistakes'][number]['subject'] | undefined, chapterIds: item.chapterIds as string[], questionIds: item.questionIds as string[], answers, score: Number(item.score), total: Number(item.total), durationMin: Number(item.durationMin), timeTakenSec: Number(item.timeTakenSec), date: item.date, at: item.at, breakdown };
   });
 
   result.libraryNotes = listOf(raw.libraryNotes, LIMITS.libraryNotes, 'নোট লাইব্রেরি', item => {
