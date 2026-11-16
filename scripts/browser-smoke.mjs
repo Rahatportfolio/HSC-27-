@@ -134,6 +134,15 @@ try {
   }
   console.log('PASS backlog manager', backlogDays, 'days, cap respected');
 
+  // Focus report: the timer page must derive its numbers from saved sessions and
+  // warn about a long unbroken sitting instead of praising volume.
+  await nav('টাইমার');
+  await page.locator('.focus-report-card').waitFor();
+  assert.equal(await page.locator('.focus-kpis > div').count(), 4);
+  assert.equal(await page.locator('.focus-hour').count(), 24);
+  assert.ok((await page.locator('.focus-report-card').innerText()).includes('সব সংখ্যা তোমার সেভ করা সেশন থেকে'));
+  console.log('PASS focus report', await page.locator('.focus-insight').count(), 'insights');
+
   // Rule-based question generation: pick a chapter with verified facts, generate, and
   // confirm the paper carries the generator's own source label.
   await nav('অনুশীলন');
