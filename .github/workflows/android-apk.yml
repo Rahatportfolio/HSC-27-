@@ -192,8 +192,22 @@ jobs:
             const fs = require('fs');
             if (fs.existsSync('android-device.log')) {
               const log = fs.readFileSync('android-device.log', 'utf8');
-              core.error(log.slice(-3500));
+              const important = log.split('\n').filter(line => /failed|failure|exception|error|Test >|What went wrong|Execution failed/i.test(line) && !/^\s*at /.test(line));
+              core.error(important.join('\n').slice(-3500) || log.slice(-3500));
             }
+            const root = 'android/app/build/outputs/androidTest-results';
+            function inspect(dir) {
+              if (!fs.existsSync(dir)) return;
+              for (const item of fs.readdirSync(dir, {withFileTypes: true})) {
+                const path = `${dir}/${item.name}`;
+                if (item.isDirectory()) inspect(path);
+                else if (item.name.endsWith('.xml')) {
+                  const xml = fs.readFileSync(path, 'utf8');
+                  for (const failure of xml.matchAll(/<failure[\s\S]*?<\/failure>/g)) core.error(failure[0].slice(0,3500));
+                }
+              }
+            }
+            inspect(root);
       - name: Save Android test results
         if: always()
         uses: actions/upload-artifact@v4
