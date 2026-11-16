@@ -151,6 +151,20 @@ try {
   assert.ok(/১১৪\s*\/\s*১১৪/.test(paperCheck.replace(/\u09F7/g, '/')), `paper capacity not full: ${paperCheck}`);
   console.log('PASS ten-question pass: all chapters fill a full paper');
 
+  // Golden A+ path arithmetic: the panel must show the real rule and never a forecast.
+  await nav('পরীক্ষা ও GPA');
+  await page.locator('.golden-strip').waitFor();
+  assert.equal(await page.locator('[data-golden-row]').count(), 7);
+  // With no marks entered the verdict must admit what is missing, not claim a GPA.
+  const emptyVerdict = await page.locator('[data-golden-verdict]').innerText();
+  assert.ok(/বাকি|নম্বর/.test(emptyVerdict), `verdict did not admit missing marks: ${emptyVerdict}`);
+  assert.ok(!(await page.locator('[data-golden-verdict]').getAttribute('class')).includes('ok'));
+  // Golden A+ is a different goal and must be selectable.
+  await page.locator('.golden-head .segmented button').filter({ hasText: 'Golden A+' }).click();
+  await page.waitForTimeout(200);
+  assert.ok((await page.locator('[data-golden-verdict]').innerText()).length > 5);
+  console.log('PASS golden A+ path arithmetic', await page.locator('[data-golden-row]').count(), 'subjects');
+
   // Self audit: the page must re-count the bank and state its own limits.
   await nav('অডিট');
   await page.locator('.audit-view').waitFor();

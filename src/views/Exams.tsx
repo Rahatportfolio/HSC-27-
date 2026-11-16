@@ -6,6 +6,8 @@ import { CHAPTERS, PAPERS, SUBJECTS, SUBJECT_FULL_MARKS, subjectById } from '../
 import type { SubjectId } from '../data';
 import { bn, diffDays, formatDate, isValidDate, percent } from '../planner';
 import { calculateGpa, gpaTargetLabel } from '../gpa';
+import { goldenPlan } from '../golden';
+import type { GoldenPlan } from '../golden';
 import { newId, nowIso } from '../storage';
 import type { TestKind, TestRecord } from '../types';
 import { EmptyState, Modal, PageHeading, ProgressBar, SubjectIcon } from '../components';
@@ -30,6 +32,8 @@ export default function ExamsView() {
   const average = results.length ? Math.round(results.reduce((sum, exam) => sum + exam.score / exam.total * 100, 0) / results.length) : 0;
   const next = mocks.find(task => task.date >= today && !data.exams[task.paperId!]) || mocks.find(task => !data.exams[task.paperId!]);
   const gpa = calculateGpa(data.gpaMarks);
+  const [goal, setGoal] = useState<GoldenPlan['goal']>('gpa5');
+  const plan5 = goldenPlan(data.gpaMarks, goal);
   const customTests = [...data.tests].sort((a, b) => b.date.localeCompare(a.date));
   const testAverage = customTests.length ? Math.round(customTests.reduce((sum, test) => sum + test.score / test.total * 100, 0) / customTests.length) : 0;
   const bestTest = customTests.reduce((best, test) => Math.max(best, test.score / test.total * 100), 0);
@@ -74,6 +78,42 @@ export default function ExamsView() {
 
     <section className="card gpa-card">
       <div className="card-heading"><div><h2><GraduationCap size={21} />{t("GPA ও Golden A+ ট্র্যাকার", "GPA & Golden A+ tracker")}</h2><p>প্রতিটি বিষয়ের দুই পত্রের মোট নম্বর লেখো। ICT-এর পূর্ণমান ১০০ (তত্ত্বীয় ৭৫ + ব্যবহারিক ২৫)। উচ্চতর গণিত চতুর্থ বিষয়ের নিয়মে গণনা হবে।</p></div><div className={`gpa-badge ${gpa.golden ? 'golden' : ''}`}><span>GPA</span><strong>{gpa.gpa === null ? '—' : bn(gpa.gpa.toFixed(2))}</strong><small>{gpaTargetLabel(gpa.gpa, gpa.golden)}</small></div></div>
+      <div className="golden-strip">
+        <div className="golden-head">
+          <strong><Target size={17} />{t('পথ-হিসাব: লক্ষ্য পূরণে আর কত?', 'Path arithmetic: what is still missing?')}</strong>
+          <div className="segmented small" role="group" aria-label={t('লক্ষ্য বাছো', 'Pick a goal')}>
+            <button className={goal === 'gpa5' ? 'active' : ''} onClick={() => setGoal('gpa5')}>GPA 5.00</button>
+            <button className={goal === 'golden' ? 'active' : ''} onClick={() => setGoal('golden')}>Golden A+</button>
+          </div>
+        </div>
+        <p className={plan5.reached ? 'golden-verdict ok' : plan5.blocked ? 'golden-verdict bad' : 'golden-verdict'} data-golden-verdict>{plan5.verdictBn}<span className="golden-verdict-nums">{goal === 'golden'
+          ? `${t('আর দরকার', 'Still needed')}: ${bn(plan5.marksToGolden)} ${t('নম্বর', 'marks')}`
+          : plan5.complete ? `${t('গ্রেড পয়েন্ট বাকি', 'Grade points missing')}: ${bn(plan5.pointsGap)}` : ''}</span></p>
+        <div className="golden-facts">
+          <div><span>{t('আবশ্যিক ৬ বিষয়ের পয়েন্ট', 'Points from 6 compulsory')}</span><strong>{bn(plan5.compulsoryPoints)}<small>{`/${bn(30)}`}</small></strong></div>
+          <div><span>{t('৪র্থ বিষয়ের বোনাস', '4th-subject bonus')}</span><strong>{bn(plan5.bonus.toFixed(2))}</strong></div>
+          <div><span>{t('আরও যে পয়েন্ট নষ্ট হতে পারে', 'Points still losable')}</span><strong>{plan5.deficitBudget === null ? '—' : bn(plan5.deficitBudget)}</strong></div>
+          <div><span>{t('দরকারি গ্রেড পয়েন্ট', 'Grade points missing')}</span><strong>{plan5.complete ? bn(plan5.pointsGap) : '—'}</strong></div>
+        </div>
+        <div className="golden-rows">{plan5.rows.map(row => {
+          const subject = subjectById[row.subject];
+          const ratio = row.obtained === null ? 0 : Math.min(1, row.obtained / row.full);
+          const need = goal === 'golden' ? (row.toAPlus ?? row.full) : 0;
+          return <div className={`golden-row ${row.optional ? 'optional' : ''} ${row.grade === 'F' ? 'bad' : ''}`} key={row.subject} data-golden-row={row.subject}>
+            <span className="golden-subject" style={{ color: subject.color }}>{subject.short}{row.optional && <em>{t('৪র্থ', '4th')}</em>}</span>
+            <span className="golden-bar" aria-hidden="true"><i style={{ width: `${ratio * 100}%`, background: subject.color }} /><b style={{ left: '80%' }} /></span>
+            <span className="golden-points">{row.point === null ? '—' : bn(row.point.toFixed(2))}<small>{t('পয়েন্ট', 'pt')}</small></span>
+            <span className="golden-next">{row.grade === null
+              ? t('নম্বর নেই', 'no marks')
+              : row.toAPlus === 0
+                ? t('A+ আছে', 'A+ reached')
+                : goal === 'golden'
+                  ? `${t('A+ পর্যন্ত', 'to A+')} ${bn(need)}`
+                  : row.nextGrade ? `${t(row.nextGrade, row.nextGrade)} ${t('পেতে', 'needs')} ${bn(row.toNextGrade ?? 0)}` : '—'}</span>
+          </div>;
+        })}</div>
+        <p className="golden-note">{t('এটি ভবিষ্যদ্বাণী নয়—বোর্ডের নিয়মে সরল হিসাব: ছয় বিষয়ের পয়েন্ট + ৪র্থ বিষয়ের বোনাস (২-এর বেশি হলে) ≥ ৩০ হলে GPA ৫.০০; Golden A+ মানে প্রতিটি বিষয়ে ৮০% বা বেশি। নম্বর না থাকলে হিসাব “বাকি” দেখায়, শূন্য ধরে না।', 'This is not a forecast — it is the board rule: points from the six compulsory subjects plus the 4th-subject bonus (above 2) must reach 30 for GPA 5.00, and Golden A+ means 80% or more in every subject. Missing marks are shown as missing, never counted as zero.')}</p>
+      </div>
       <div className="gpa-layout">
         <div className="gpa-inputs">{SUBJECTS.map(subject => { const row = gpa.rows.find(item => item.subject === subject.id)!; const full = SUBJECT_FULL_MARKS[subject.id]; return <div className={`gpa-row ${subject.optional ? 'optional' : ''}`} key={subject.id}><span className="gpa-subject" style={{ color: subject.color }}><span className="gpa-subject-icon" style={{ background: subject.tint }}><SubjectIcon subject={subject.id} size={16} /></span>{subject.name}{subject.optional && <em>{t("৪র্থ", "4th")}</em>}</span><div className="gpa-input"><input type="number" min={0} max={full} step="0.5" aria-label={`${subject.name} প্রাপ্ত নম্বর`} value={data.gpaMarks[subject.id] ?? ''} placeholder="—" onChange={e => { const raw = e.target.value; const value = raw === '' ? null : Math.min(full, Math.max(0, Number(raw))); setData(d => ({ ...d, gpaMarks: { ...d.gpaMarks, [subject.id]: value } })); }} /><span>/ {bn(full)}</span></div><span className={`gpa-grade grade-${(row.grade || 'none').replace('+', 'plus').replace('-', 'minus')}`}>{row.grade || '—'}</span></div>; })}</div>
         <div className="gpa-result-panel"><div className="gpa-target"><span>{t("লক্ষ্য", "Target")}</span><strong>GPA 5.00</strong><small>{t("Golden A+ = সব বিষয়ে A+", "Golden A+ = A+ in every subject")}</small></div><div className="gpa-meter"><ProgressBar value={gpa.gpa === null ? 0 : gpa.gpa / 5 * 100} /><div><span>{gpa.complete ? `${bn(gpa.gpa?.toFixed(2) || '0')} / ৫.০০` : `${bn(gpa.missing.length)}টি বিষয়ের নম্বর বাকি`}</span><span>বোনাস {bn(gpa.bonus.toFixed(2))}</span></div></div><div className="gpa-flags"><span className={gpa.golden ? 'on' : ''}><Check size={14} />Golden A+</span><span className={gpa.failed ? 'bad' : ''}>{gpa.failed ? 'কোনো বিষয়ে F আছে' : 'কোনো F নেই'}</span></div>{gpa.complete && <p className="gpa-note">গণনা: ছয়টি আবশ্যিক বিষয়ের গ্রেড পয়েন্ট + চতুর্থ বিষয়ের (২-এর বেশি হলে) বোনাস ÷ ৬। এটি নিজের হিসাব; বোর্ডের ফল নয়।</p>}<button className="text-button" onClick={() => confirm({ title: 'GPA নম্বর মুছে ফেলবে?', message: 'সব বিষয়ের ট্র্যাক করা নম্বর মুছে যাবে। টেস্টের রেকর্ড থাকবে।', label: 'নম্বর মুছো', danger: true, action: () => { setData(d => ({ ...d, gpaMarks: {} })); notify('GPA নম্বর মুছে ফেলা হয়েছে।', 'info'); } })}><RotateCcw size={14} />{t("নম্বর মুছো", "Delete marks")}</button></div>

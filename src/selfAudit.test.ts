@@ -44,6 +44,15 @@ describe('the audit re-counts instead of trusting the interface', () => {
     }
   });
 
+  it('re-derives the Golden A+ arithmetic instead of trusting the GPA page', () => {
+    const golden = report.checks.find(check => check.key === 'golden');
+    expect(golden?.status).toBe('ok');
+    // The sample profile has one subject at A and the 4th subject at A+, so exactly one
+    // point is spent and two remain. If the grade table or the bonus rule changes, this
+    // number changes too — which is the point of the check.
+    expect(golden?.value).toContain('২');
+  });
+
   it('says what the app cannot do instead of implying it can', () => {
     expect(report.limits.length).toBeGreaterThanOrEqual(3);
     expect(report.limits.map(limit => limit.en).join(' ')).toMatch(/no server|server/i);

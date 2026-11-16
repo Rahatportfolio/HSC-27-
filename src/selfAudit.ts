@@ -1,6 +1,7 @@
-import { CHAPTERS, SUBJECTS } from './data';
+import { CHAPTERS, SUBJECTS, SUBJECT_FULL_MARKS } from './data';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { factsFor, generateQuestions, generativeChapters, verifyGenerated } from './questionGen';
+import { goldenPlan } from './golden';
 import { NUMERIC_SCHEMA_COUNT, numericChapters, numericQuestions, verifyNumeric } from './numericGen';
 import { examPool } from './examSim';
 import { focusReport } from './focus';
@@ -114,6 +115,18 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
   const focus = focusReport(data, today);
   const chaptersWithoutBank = CHAPTERS.filter(chapter => !perChapter.has(chapter.id));
 
+  // The Golden A+ check runs on a fixed sample profile so it is comparable run to run.
+  // One subject at A, the rest at A+ — the exact case the 4th-subject bonus decides.
+  const goldenProbe = goldenPlan({
+    physics: Math.round(SUBJECT_FULL_MARKS.physics * 0.74),
+    chemistry: Math.round(SUBJECT_FULL_MARKS.chemistry * 0.85),
+    biology: Math.round(SUBJECT_FULL_MARKS.biology * 0.85),
+    math: Math.round(SUBJECT_FULL_MARKS.math * 0.85),
+    bangla: Math.round(SUBJECT_FULL_MARKS.bangla * 0.85),
+    english: Math.round(SUBJECT_FULL_MARKS.english * 0.85),
+    ict: Math.round(SUBJECT_FULL_MARKS.ict * 0.85),
+  });
+
   const checks: AuditCheck[] = [
     {
       key: 'chapters',
@@ -178,6 +191,20 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       detailBn: 'ফোকাস রিপোর্ট কেবল সেভ করা সেশন থেকে গোনে; মনোযোগের “স্কোর” বানানো হয় না।',
       detailEn: 'The focus report only counts saved sessions; it never invents an attention score.',
       status: 'ok',
+    },
+    {
+      key: 'golden',
+      labelBn: 'Golden A+ হিসাব (নমুনা)', labelEn: 'Golden A+ arithmetic (sample)',
+      // A deliberately awkward profile: one subject below A+, the 4th subject at A+.
+      // The audit re-derives the plan and states what the rule really allows.
+      value: `${bnNum(goldenProbe.deficitBudget ?? 0)} পয়েন্ট`,
+      detailBn: goldenProbe.gpaFive
+        ? `একটি বিষয় A (৪ পয়েন্ট) আর ৪র্থ বিষয় A+ নিয়েও GPA ৫.০০ থাকে—বোনাসের সীমা ${bnNum(goldenProbe.deficitBudget ?? 0)} পয়েন্ট। Golden A+-এর জন্য আর ${bnNum(goldenProbe.marksToGolden)} নম্বর দরকার।`
+        : 'নমুনা হিসাবে GPA ৫.০০ পাওয়া যায়নি—নিয়ম বদলে থাকলে এখানেই ধরা পড়বে।',
+      detailEn: goldenProbe.gpaFive
+        ? `Even with one subject at A (4 points) and the 4th subject at A+, GPA 5.00 holds: the bonus allows ${goldenProbe.deficitBudget ?? 0} lost points. Golden A+ is ${goldenProbe.marksToGolden} marks away.`
+        : 'The sample profile does not reach GPA 5.00 — if the rule ever drifts, this check fails.',
+      status: goldenProbe.gpaFive ? 'ok' : 'fail',
     },
     {
       key: 'storage',
