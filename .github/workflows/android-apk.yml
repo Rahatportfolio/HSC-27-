@@ -2,6 +2,11 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      publish_install:
+        description: Publish a direct-download test APK after all checks pass
+        type: boolean
+        default: false
   push:
     branches: [main, 'arena/**']
     tags: ['v*']
@@ -218,3 +223,48 @@ jobs:
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
           if-no-files-found: ignore
+
+  publish:
+    if: github.event_name == 'workflow_dispatch' && inputs.publish_install
+    needs: [apk, device-checks]
+    permissions:
+      actions: read
+      contents: write
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Download tested APK
+        uses: actions/download-artifact@v4
+        with:
+          name: prostuti-hsc27-apk
+          path: artifacts
+          run-id: ${{ github.run_id }}
+          github-token: ${{ github.token }}
+      - name: Publish direct APK and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ github.sha }}
+          TAG: install-${{ github.run_id }}
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Publish exactly the tested debug APK, not an untested signed variant.
+          mapfile -t apks < <(find artifacts -maxdepth 1 -name '*.apk' ! -name '*-release.apk')
+          test "${#apks[@]}" -eq 1
+          mkdir -p install
+          cp "${apks[0]}" install/prostuti-hsc27.apk
+          (cd install && sha256sum prostuti-hsc27.apk > SHA256SUMS.txt)
+          cat > /tmp/notes.md <<EOF
+          ## Android install
+          Download **prostuti-hsc27.apk** below (not Source code). Open it on Android and allow installation from your browser or file manager when prompted.
+
+          Before updating an existing installation, export a full backup including offline files. This is a **debug-signed test build**, not a Play Store release. An older installation signed with another key cannot be updated in place. Do not uninstall it before exporting and safely saving your backup: uninstalling deletes local app data.
+
+          Verified build and offline Android emulator checks: https://github.com/$GITHUB_REPOSITORY/actions/runs/$RUN_ID
+          Source commit: $SOURCE_SHA
+          Physical-phone manual testing has not been performed.
+          EOF
+          gh release create "$TAG" install/prostuti-hsc27.apk install/SHA256SUMS.txt --target "$SOURCE_SHA" --prerelease --title 'প্রস্তুতি HSC 27 — Install APK' --notes-file /tmp/notes.md
