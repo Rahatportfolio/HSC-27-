@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   native: true,
+  clear: vi.fn(),
   begin: vi.fn(),
   append: vi.fn(),
   commit: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("./nativeFiles", () => ({
 }));
 import {
   downloadToFile,
+  clearFiles,
   getFile,
   playableFile,
   putFile,
@@ -26,6 +28,7 @@ import {
 beforeEach(() => {
   vi.clearAllMocks();
   mock.native = true;
+  mock.clear.mockResolvedValue({ removed: 2 });
   mock.commit.mockResolvedValue(undefined);
   mock.abort.mockResolvedValue(undefined);
   mock.estimate.mockResolvedValue({ usage: 20, quota: 500 });
@@ -34,6 +37,32 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 describe("Android device storage adapter", () => {
+  it("resets native media and prevents an in-flight download from resurrecting a cleared file", async () => {
+    let finish!: (result: { size: number }) => void;
+    mock.remove.mockResolvedValue(undefined);
+    mock.download.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const download = downloadToFile(
+      "https://example.org/movie.mp4",
+      "late",
+      "Video",
+      undefined,
+      "video",
+    );
+    await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+    expect(await clearFiles()).toBe(2);
+    finish({ size: 20 });
+    expect(await download).toMatchObject({
+      ok: false,
+      error: expect.stringContaining("reset"),
+    });
+    expect(mock.remove).toHaveBeenCalledWith({ id: "late" });
+  });
+
   it("keeps native PDF MIME for preview even when the local file server returns octet-stream", async () => {
     mock.info.mockResolvedValueOnce({
       id: "p",
@@ -45,13 +74,11 @@ describe("Android device storage adapter", () => {
     });
     vi.stubGlobal(
       "fetch",
-      vi
-        .fn()
-        .mockResolvedValue(
-          new Response("%PDF-1.7", {
-            headers: { "content-type": "application/octet-stream" },
-          }),
-        ),
+      vi.fn().mockResolvedValue(
+        new Response("%PDF-1.7", {
+          headers: { "content-type": "application/octet-stream" },
+        }),
+      ),
     );
     expect((await getFile("p"))?.blob.type).toBe("application/pdf");
   });

@@ -1,7 +1,7 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePlanner } from "../context";
 import { emptyAdvanced } from "../advanced";
-import { effectiveDailyHours } from "../planner";
+import { dailyGoalDefaults, lockDailyGoals } from "../dailyGoals";
 import { dailyPractice, weeklySubjects, weakChapters } from "../studyMetrics";
 import { subjectById } from "../data";
 import { t } from "../i18n";
@@ -9,36 +9,24 @@ export default function DailyGoals() {
   const { data, setData, today, navigate, openChapter } = usePlanner();
   const a = data.advanced || emptyAdvanced();
   const saved = a.dailyGoals?.[today];
-  const [draft, setDraft] = useState(() => ({
-    minutes: a.targets[today] ?? effectiveDailyHours(data.settings, today) * 60,
-    mcq: saved?.mcq ?? 25,
-    cq: saved?.cq ?? 2,
-    revision:
-      saved?.revision ??
-      data.revisions.filter((r) => !r.completedAt && r.dueDate <= today).length,
-  }));
+  const [draft, setDraft] = useState(() => dailyGoalDefaults(data, today));
+  const target = a.targets[today],
+    override = data.dayOverrides[today]?.dailyHours;
+  useEffect(() => {
+    setDraft(dailyGoalDefaults(data, today));
+  }, [
+    today,
+    saved,
+    target,
+    override,
+    data.settings.dailyHours,
+    data.settings.boostEnabled,
+    data.settings.boostStartDate,
+    data.settings.boostDailyHours,
+  ]);
   const done = dailyPractice(data, today);
   const weak = weakChapters(data);
-  const lock = () =>
-    setData((d) => {
-      const a = d.advanced || emptyAdvanced();
-      return {
-        ...d,
-        advanced: {
-          ...a,
-          targets: { ...a.targets, [today]: draft.minutes },
-          dailyGoals: {
-            ...a.dailyGoals,
-            [today]: {
-              mcq: draft.mcq,
-              cq: draft.cq,
-              revision: draft.revision,
-              locked: true,
-            },
-          },
-        },
-      };
-    });
+  const lock = () => setData((d) => lockDailyGoals(d, today, draft));
   return (
     <section className="study-panel">
       <h2>{t("আজকের অনুশীলনের লক্ষ্য", "Today’s practice targets")}</h2>
@@ -72,7 +60,7 @@ export default function DailyGoals() {
                 : k.toUpperCase()}
               <input
                 type="number"
-                min={k === "minutes" ? 15 : 0}
+                min={0}
                 max={k === "minutes" ? 1440 : 10000}
                 required
                 value={draft[k]}

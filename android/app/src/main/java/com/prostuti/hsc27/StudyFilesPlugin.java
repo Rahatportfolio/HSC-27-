@@ -285,6 +285,27 @@ public class StudyFilesPlugin extends Plugin {
     });
   }
 
+  /** Explicit Settings reset only. Partial downloads cannot commit after their stage is removed. */
+  @PluginMethod
+  public void clear(PluginCall c) {
+    run(c, () -> {
+      int removed = 0;
+      synchronized (this) {
+        File[] dirs = root().listFiles();
+        if (dirs != null) for (File d : dirs) {
+          if (!d.getName().endsWith(".part")) removed++;
+          clean(d);
+          if (d.exists()) throw new IOException(
+            "Some device files could not be removed"
+          );
+        }
+      }
+      JSObject r = new JSObject();
+      r.put("removed", removed);
+      c.resolve(r);
+    });
+  }
+
   @PluginMethod
   public void estimate(PluginCall c) {
     run(c, () -> {
@@ -305,6 +326,13 @@ public class StudyFilesPlugin extends Plugin {
     if (
       !url.getProtocol().equals("https") || url.getUserInfo() != null
     ) throw new IOException("Native downloads require public HTTPS");
+    if (
+      kind.equals("video") &&
+      (!url.getPath().toLowerCase().matches(".*\\.(mp4|webm|ogg|m4v)$") ||
+        host.equals("youtu.be") ||
+        host.endsWith("youtube.com") ||
+        host.endsWith("vimeo.com"))
+    ) throw new IOException("Only permitted direct video files");
     InetAddress[] addresses = InetAddress.getAllByName(host);
     for (InetAddress a : addresses)
       if (
@@ -313,13 +341,6 @@ public class StudyFilesPlugin extends Plugin {
         a.isLinkLocalAddress() ||
         a.isSiteLocalAddress()
       ) throw new IOException("Private address not allowed");
-    if (
-      kind.equals("video") &&
-      (!url.getPath().toLowerCase().matches(".*\\.(mp4|webm|ogg|m4v)$") ||
-        host.equals("youtu.be") ||
-        host.endsWith("youtube.com") ||
-        host.endsWith("vimeo.com"))
-    ) throw new IOException("Only permitted direct video files");
     return url;
   }
 

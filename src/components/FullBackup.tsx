@@ -15,6 +15,8 @@ export default function FullBackup() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const input = useRef<HTMLInputElement>(null);
+  const latestData = useRef(data);
+  latestData.current = data;
   const progress = (done: number, total: number) =>
     setStatus(`${done} / ${total} files`);
   const exportAll = async () => {
@@ -52,8 +54,13 @@ export default function FullBackup() {
             setBusy(true);
             let staged:
               Awaited<ReturnType<typeof stageMediaRestore>> | undefined;
+            const expected = latestData.current;
             try {
               staged = await stageMediaRestore(backup, progress);
+              if (latestData.current !== expected)
+                throw new Error(
+                  "Study data changed during restore. New progress was kept; retry when no session is being saved.",
+                );
               if (!saveData(staged.data, true))
                 throw new Error(
                   "Metadata could not be saved. Existing data is unchanged.",

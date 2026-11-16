@@ -9,6 +9,7 @@ interface NativeFileInfo {
   uri: string;
 }
 interface NativeFilesPlugin {
+  clear(): Promise<{ removed: number }>;
   exportFile(options: {
     id: string;
     name: string;
