@@ -166,7 +166,7 @@ jobs:
           npm run android:assets
           npm run android:sync
           cd android
-          ./gradlew assembleDebug assembleDebugAndroidTest --no-daemon --max-workers=2 2>&1 | tee ../android-device.log
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=2 2>&1 | tee ../android-device.log
       - name: Enable emulator hardware acceleration
         run: |
           echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
@@ -183,7 +183,7 @@ jobs:
           script: |
             adb shell svc wifi disable
             adb shell svc data disable
-            cd android && bash -o pipefail -c './gradlew connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log'
+            cd android && bash -o pipefail -c './gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log'
       - name: Surface device failure details
         if: failure()
         uses: actions/github-script@v7
