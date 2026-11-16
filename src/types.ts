@@ -109,6 +109,12 @@ export interface QuizQuestion {
   explanation?: string;
   source?: string;
   createdAt: string;
+  /**
+   * True for every question that ships with the app. The "only questions I added"
+   * filter reads this flag instead of guessing from the id prefix, so a new bank id
+   * range can never be mistaken for the student's own questions.
+   */
+  bank?: true;
 }
 
 export interface QuizAttempt {

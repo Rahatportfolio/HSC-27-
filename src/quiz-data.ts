@@ -1,12 +1,13 @@
 import type { SubjectId } from './data';
 import type { QuizQuestion } from './types';
 import { BANK_QUESTIONS } from './quiz-bank';
+import { DEPTH_QUESTIONS, DEPTH_QUESTIONS_2 } from './quiz-depth';
 
 const SEED_AT = '2026-01-01T00:00:00.000Z';
 let seedIndex = 0;
 function q(subject: SubjectId, chapterId: string, question: string, options: string[], answer: number, explanation?: string): QuizQuestion {
   seedIndex++;
-  return { id: `seed-${String(seedIndex).padStart(3, '0')}`, subject, chapterId, question, options, answer, explanation, source: 'প্রাথমিক নমুনা ব্যাংক', createdAt: SEED_AT };
+  return { id: `seed-${String(seedIndex).padStart(3, '0')}`, subject, chapterId, question, options, answer, explanation, source: 'প্রাথমিক নমুনা ব্যাংক', createdAt: SEED_AT, bank: true };
 }
 
 /**
@@ -81,7 +82,7 @@ const BASE_QUESTIONS: QuizQuestion[] = [
 ];
 
 /** The full starter bank: the original sample plus the chapter-by-chapter additions. */
-export const STARTER_QUESTIONS: QuizQuestion[] = [...BASE_QUESTIONS, ...BANK_QUESTIONS];
+export const STARTER_QUESTIONS: QuizQuestion[] = [...BASE_QUESTIONS, ...BANK_QUESTIONS, ...DEPTH_QUESTIONS, ...DEPTH_QUESTIONS_2];
 
 export interface BuiltinFormula {
   id: string;

@@ -11,10 +11,12 @@ describe('starter MCQ bank', () => {
     expect(BANK_QUESTIONS.length).toBeGreaterThanOrEqual(350);
   });
 
-  it('uses unique ids and a seed- prefix so “only mine” filtering stays correct', () => {
+  it('uses unique ids and marks every shipped question as banked', () => {
     const ids = STARTER_QUESTIONS.map(question => question.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.every(id => id.startsWith('seed-'))).toBe(true);
+    // The "only my questions" filter reads `bank`, not an id prefix, so adding a new
+    // bank range can never make a shipped question look like the student's own.
+    expect(STARTER_QUESTIONS.every(question => question.bank === true)).toBe(true);
   });
 
   it('points every question at a real chapter of the same subject', () => {

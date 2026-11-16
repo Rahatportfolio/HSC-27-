@@ -122,9 +122,14 @@ describe('the exam simulator can top up a thin chapter', () => {
     const data = freshData();
     const plain = buildExamQuestions(data, { mode: 'chapter', chapterId: 'biology-1-6', count: 10 }, () => 0.5);
     const generated = buildExamQuestions(data, { mode: 'chapter', chapterId: 'biology-1-6', count: 10, generate: true, variant: 'gen' }, () => 0.5);
-    expect(plain).toHaveLength(1);
-    expect(generated).toHaveLength(2);
-    expect(generated.filter(question => question.id.startsWith(GENERATED_PREFIX))).toHaveLength(1);
+    // The rule is about where questions come from, not about how many the bank holds:
+    // without `generate` a paper may only use banked questions, and with it the paper
+    // may add generated ones to reach the requested size.
+    const plainGenerated = plain.filter(question => question.id.startsWith(GENERATED_PREFIX) || question.id.startsWith('num|'));
+    expect(plainGenerated).toHaveLength(0);
+    expect(plain.length).toBeGreaterThan(0);
+    expect(generated.length).toBeGreaterThanOrEqual(plain.length);
+    expect(generated.every(question => question.bank === true || question.id.startsWith(GENERATED_PREFIX) || question.id.startsWith('num|'))).toBe(true);
   });
 
   it('still auto-marks a generated paper correctly', () => {

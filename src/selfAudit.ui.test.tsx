@@ -4,6 +4,7 @@ import { act, cleanup, render, screen } from '@testing-library/react';
 import App from './App';
 import { STORAGE_KEY, freshData } from './planner';
 import { CHAPTERS } from './data';
+import { STARTER_QUESTIONS } from './quiz-data';
 
 beforeAll(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -35,8 +36,8 @@ it('re-counts the app from the source and shows each check', async () => {
   expect(document.querySelectorAll('.audit-check').length).toBeGreaterThanOrEqual(8);
   // The banked count on screen must equal the bank itself, not a rounded label.
   // The bank count appears twice on purpose (check card + engine counts): same number.
-  const banked = screen.getAllByText('৪৭১');
-  expect(banked.length).toBeGreaterThanOrEqual(1);
+  const expected = String(STARTER_QUESTIONS.length).replace(/\d/g, digit => '০১২৩৪৫৬৭৮৯'[Number(digit)]);
+  expect(screen.getAllByText(expected).length).toBeGreaterThanOrEqual(1);
   expect(screen.getAllByText(String(CHAPTERS.length).replace(/\d/g, digit => '০১২৩৪৫৬৭৮৯'[Number(digit)])).length).toBeGreaterThan(0);
 });
 
@@ -59,12 +60,14 @@ it('lists the chapters that cannot fill a ten-question paper yet', async () => {
   expect(rows).toBeLessThanOrEqual(24);
 });
 
-it('never shows a green headline when a check is only a warning', async () => {
+it('lets the headline turn green only when every check passes', async () => {
   render(<App />);
   await screen.findByText(/এগিয়ে যাই/);
   await go('অডিট');
   const headline = document.querySelector('.audit-headline') as HTMLElement;
   await screen.findByRole('heading', { name: /প্রতিটি সংখ্যা আবার গোনা হয়েছে/ });
-  expect(headline.classList.contains('ok')).toBe(false);
-  expect(headline.textContent).toMatch(/সীমা/);
+  // The rule under test: the headline mirrors the weakest check, whatever it is.
+  const warned = document.querySelectorAll('.audit-check.warn, .audit-check.fail').length;
+  expect(headline.classList.contains('ok')).toBe(warned === 0);
+  if (warned > 0) expect(headline.textContent).toMatch(/সীমা|ব্যর্থ/);
 });

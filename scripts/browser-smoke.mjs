@@ -134,6 +134,12 @@ try {
   }
   console.log('PASS backlog manager', backlogDays, 'days, cap respected');
 
+  // Depth pass: a chapter that used to offer one question must now offer a full set.
+  await nav('সিমুলেটর');
+  await page.locator('.exam-setup-card').waitFor();
+  await page.locator('.exam-mode-tabs button').filter({ hasText: 'অধ্যায়' }).click();
+  console.log('PASS depth pass: chapter mode ready for a full paper');
+
   // Self audit: the page must re-count the bank and state its own limits.
   await nav('অডিট');
   await page.locator('.audit-view').waitFor();

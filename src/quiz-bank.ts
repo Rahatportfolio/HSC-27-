@@ -7,7 +7,7 @@ function q(subject: SubjectId, chapterId: string, question: string, options: str
   bankIndex += 1;
   return {
     id: `seed-${String(300 + bankIndex)}`, subject, chapterId, question, options, answer, explanation,
-    source: 'নমুনা ব্যাংক · অধ্যায়ভিত্তিক', createdAt: BANK_AT,
+    source: 'নমুনা ব্যাংক · অধ্যায়ভিত্তিক', createdAt: BANK_AT, bank: true,
   };
 }
 
