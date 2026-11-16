@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  ENGINE_LABEL, GENERATED_PREFIX, GENERATIVE_CHAPTER_COUNT, factsFor, generateForSubject, generateQuestions,
-  generativeChapters, generativeGap, verifyGenerated,
+  ENGINE_LABEL, FACT_POOL_SIZE, GENERATED_PREFIX, GENERATIVE_CHAPTER_COUNT, RECOVERED_FACT_COUNT,
+  factsFor, generateForSubject, generateQuestions, generativeChapters, generativeGap, verifyGenerated,
 } from './questionGen';
 import { CHAPTERS, chapterById } from './data';
 import { buildExamQuestions } from './examSim';
@@ -14,7 +14,7 @@ const everyQuestion = everyChapter.flatMap(chapterId => generateQuestions(chapte
 describe('every generated question is verifiable', () => {
   it('passes the verifier with zero issues across every generative chapter', () => {
     expect(everyChapter.length).toBe(GENERATIVE_CHAPTER_COUNT);
-    expect(everyQuestion.length).toBeGreaterThan(120);
+    expect(everyQuestion.length).toBe(FACT_POOL_SIZE);
     expect(verifyGenerated(everyQuestion)).toEqual([]);
   });
 
@@ -146,5 +146,94 @@ describe('the exam simulator can top up a thin chapter', () => {
 
   it('keeps the engine label honest for the UI', () => {
     expect(ENGINE_LABEL).toContain('নিয়মভিত্তিক');
+  });
+});
+
+describe('the pool is as deep as the bank already was', () => {
+  it('recovered most of its facts from questions the app already shipped', () => {
+    // Before v2.33 the engine had 130 hand-written facts, and 98 of the 114
+    // chapters could only ever produce a single question.
+    expect(RECOVERED_FACT_COUNT).toBeGreaterThan(700);
+    expect(FACT_POOL_SIZE).toBeGreaterThan(800);
+    expect(FACT_POOL_SIZE).toBeGreaterThan(130 + RECOVERED_FACT_COUNT - 1);
+  });
+
+  it('gives almost every chapter enough for a real test instead of one question', () => {
+    const counts = CHAPTERS.map(chapter => factsFor(chapter.id).length);
+    expect(Math.min(...counts)).toBeGreaterThan(0);
+    // A three-question minimum is what makes a chapter test worth sitting.
+    const thin = CHAPTERS.filter(chapter => factsFor(chapter.id).length < 3);
+    expect(thin.length).toBeLessThanOrEqual(3);
+    expect(Math.max(...counts)).toBeGreaterThanOrEqual(10);
+  });
+
+  it('keeps every recovered answer verifiable against the shipped bank', () => {
+    const shipped = new Set(STARTER_QUESTIONS.filter(seed => seed.chapterId)
+      .map(seed => `${seed.chapterId}|${seed.options[seed.answer]}`));
+    for (const chapterId of generativeChapters()) {
+      for (const fact of factsFor(chapterId)) {
+        expect(shipped.has(`${fact.chapterId}|${fact.value}`), `${fact.prompt}`).toBe(true);
+        expect(fact.prompt.trim().length).toBeGreaterThan(3);
+        expect(fact.origin.trim().length).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('only recovers facts that come with their own reasoning', () => {
+    // A recovered fact is only useful if the bank explains why it is right, so
+    // every one of them must carry a non-empty `why`.
+    for (const chapterId of generativeChapters()) {
+      for (const fact of factsFor(chapterId)) {
+        if (fact.origin !== 'শিপ করা ব্যাংকের ব্যাখ্যা') continue;
+        expect(fact.why?.trim().length ?? 0, `${fact.prompt}`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it('never offers a recovered answer as one of its own wrong options', () => {
+    for (const chapterId of generativeChapters()) {
+      for (const question of generateQuestions(chapterId, { variant: 'collide' })) {
+        const correct = question.options[question.answer];
+        expect(question.options.filter(option => option === correct)).toHaveLength(1);
+      }
+    }
+  });
+
+  it('asks genuinely different questions, not the same one reworded', () => {
+    const chapterId = 'physics-1-2';
+    const questions = generateQuestions(chapterId, { variant: 'distinct' });
+    expect(questions.length).toBeGreaterThan(4);
+    const prompts = new Set(questions.map(question => question.question));
+    const answers = new Set(questions.map(question => question.options[question.answer]));
+    expect(prompts.size).toBe(questions.length);
+    expect(answers.size).toBe(questions.length);
+  });
+});
+
+describe('a chapter test is a real test now, not a single question', () => {
+  it('fills a ten-question paper for every chapter once generation is on', () => {
+    const data = freshData();
+    const short = CHAPTERS.filter(chapter =>
+      buildExamQuestions(data, { mode: 'chapter', chapterId: chapter.id, count: 10, generate: true, variant: 'e2e' }, () => 0.5).length < 10,
+    ).map(chapter => chapter.id);
+    expect(short).toEqual([]);
+  });
+
+  it('still refuses to pad with anything it cannot verify', () => {
+    const data = freshData();
+    const paper = buildExamQuestions(data, { mode: 'chapter', chapterId: 'chemistry-1-3', count: 10, generate: true, variant: 'thin' }, () => 0.5);
+    // chemistry-1-3 is one of the three thinnest chapters. A plain bank item may
+    // ship without an explanation (a known gap in the bank itself, not something
+    // the generator adds), but anything the *generator* contributes must still be
+    // fully explained and four-optioned.
+    const generated = paper.filter(question => question.id.startsWith(GENERATED_PREFIX));
+    expect(generated.length).toBeGreaterThan(0);
+    for (const question of paper) {
+      expect(question.options).toHaveLength(4);
+      expect(question.options[question.answer]).toBeTruthy();
+    }
+    for (const question of generated) {
+      expect(question.explanation?.trim().length ?? 0).toBeGreaterThan(0);
+    }
   });
 });

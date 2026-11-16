@@ -321,6 +321,75 @@ const D: Record<string, Distractor[]> = {
   'english-2-Writing-3': [{ value: 'a newly coined technical word', valueEn: 'a newly coined technical word' }, { value: 'a correct but rare word', valueEn: 'a correct but rare word' }, { value: 'a short concluding line', valueEn: 'a short concluding line' }],
 };
 
+/**
+ * Facts recovered from the shipped bank itself.
+ *
+ * 98 of the 114 chapters ship exactly one hand-written fact, so a "10-question
+ * chapter test" could only ever produce one item. But the same bank already
+ * carries many more textbook-checked answers per chapter — they were simply
+ * never wired into the generator.
+ *
+ * A recovered fact is only allowed when:
+ *  - its chapter matches (so the question still belongs where it says it does),
+ *  - it carries a non-empty explanation (an un-explained row is not a study fact),
+ *  - its answer is not already claimed by a hand-written fact (no paraphrased twin),
+ *  - and its answer is not one of that chapter's own distractor values.
+ *
+ * Nothing is invented here: the stem, the answer and the reasoning are the ones
+ * already shipping in the bank, and `verifyGenerated` re-checks every answer
+ * against the same bank afterwards.
+ */
+const D_MIN = 3; // a fact needs three distractors to become an MCQ
+
+function recoverFacts(): FactPair[] {
+  const manual = new Map<string, Set<string>>();
+  for (const fact of P) {
+    const set = manual.get(fact.chapterId) ?? new Set<string>();
+    set.add(fact.value);
+    manual.set(fact.chapterId, set);
+  }
+  const out: FactPair[] = [];
+  const seen = new Set<string>();
+  for (const question of STARTER_QUESTIONS) {
+    const chapterId = question.chapterId;
+    if (!chapterId) continue;
+    const reasoning = question.explanation?.trim();
+    if (!reasoning) continue;
+    const answer = question.options[question.answer];
+    if (!answer) continue;
+    const already = manual.get(chapterId);
+    if (already?.has(answer)) continue;
+    // A recovered answer must not collide with a distractor of the same chapter,
+    // otherwise the item would offer the answer as a wrong option.
+    if ((D[chapterId] ?? []).some(item => item.value === answer)) continue;
+    const key = `${chapterId}|${answer}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({
+      chapterId,
+      prompt: question.question,
+      promptEn: question.question,
+      value: answer,
+      valueEn: answer,
+      origin: 'শিপ করা ব্যাংকের ব্যাখ্যা',
+      originEn: 'the explanation shipped with this bank item',
+      why: reasoning,
+      whyEn: reasoning,
+    });
+  }
+  return out;
+}
+
+const RECOVERED: FactPair[] = recoverFacts();
+
+/** Hand-written facts first, then the ones recovered from the bank. */
+const ALL_FACTS: FactPair[] = [...P, ...RECOVERED];
+
+/** How many facts the engine can draw on once the bank is read as well. */
+export const FACT_POOL_SIZE = ALL_FACTS.length;
+
+export const RECOVERED_FACT_COUNT = RECOVERED.length;
+
 export const GENERATED_PREFIX = 'gen|';
 export const GENERATED_SOURCE = 'স্বয়ংক্রিয় · পাঠ্যবই-যাচাইকৃত তথ্যপুল';
 export const ENGINE_LABEL = 'নিয়মভিত্তিক প্রশ্ন ইঞ্জিন';
@@ -346,18 +415,18 @@ function hash(text: string): number {
   return value >>> 0;
 }
 
-export const factsFor = (chapterId: string): FactPair[] => P.filter(fact => fact.chapterId === chapterId);
+export const factsFor = (chapterId: string): FactPair[] => ALL_FACTS.filter(fact => fact.chapterId === chapterId);
 
-export const generativeChapters = (): string[] => [...new Set(P.map(fact => fact.chapterId))];
+export const generativeChapters = (): string[] => [...new Set(ALL_FACTS.map(fact => fact.chapterId))];
 
-export const GENERATIVE_CHAPTER_COUNT = new Set(P.map(fact => fact.chapterId)).size;
+export const GENERATIVE_CHAPTER_COUNT = new Set(ALL_FACTS.map(fact => fact.chapterId)).size;
 
 /** Why a chapter produced nothing — the honest version of "no questions found". */
 export function generativeGap(chapterId: string): 'ok' | 'no-fact' | 'no-distractor' | 'unknown-chapter' {
   if (!chapterById[chapterId]) return 'unknown-chapter';
   const facts = factsFor(chapterId);
   if (!facts.length) return 'no-fact';
-  if (!facts.some(fact => (D[fact.chapterId]?.length ?? 0) >= 3)) return 'no-distractor';
+  if (!facts.some(fact => (D[fact.chapterId]?.length ?? 0) >= D_MIN)) return 'no-distractor';
   return 'ok';
 }
 
