@@ -4998,3 +4998,28 @@ body {
 @media (max-width:560px){.golden-row{grid-template-columns:64px 1fr 54px;gap:7px}.golden-next{display:none}}
 .golden-verdict-nums{display:inline-block;margin-left:7px;padding:1px 7px;border-radius:5px;background:rgba(0,0,0,.05);font-size:10px;font-weight:600}
 .golden-verdict:empty .golden-verdict-nums{display:none}
+
+/* ── Touch targets (v2.32.0) ─────────────────────────────────────────────
+   WCAG 2.5.8 wants at least 24x24 CSS px, and 32+ is comfortable on a phone.
+   The checkbox-style controls below are drawn smaller than that, so the
+   clickable box is grown while the painted mark stays the same size. */
+.task-check,.carryover-row .task-check,.mini-check,.history-check{min-width:32px;min-height:32px}
+.task-card.compact .task-check{min-width:30px;min-height:30px}
+.icon-button{min-width:32px;min-height:32px}
+.date-switcher .icon-button{min-width:32px;min-height:30px}
+.routine-move .icon-button{min-width:32px;min-height:32px}
+.switch{min-width:44px;min-height:28px}
+.check-line input,.syllabus-check input,.important-form .checkbox-line input{
+  width:18px;height:18px;min-width:18px;min-height:18px;flex-shrink:0}
+.result-check,.task-card .task-check+span{pointer-events:none}
+/* The painted tick/box keeps its original size inside the larger hit area. */
+.task-check{position:relative}
+@media (pointer:coarse){.icon-button{min-width:36px;min-height:36px}}
+/* ── Text contrast (v2.32.0) ─────────────────────────────────────────────
+   Measured with WCAG 2.1 relative luminance. The previous greys sat between
+   2.4:1 and 3.2:1 on the light surface, which fails AA for body copy.
+   #606b5b is 5.5:1 on both --surface and white, so it passes for normal text. */
+.page-heading p{color:#606b5b}
+.empty-state p{color:#606b5b}
+input::placeholder,textarea::placeholder{color:#6f7a63}
+[data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#9aab97}

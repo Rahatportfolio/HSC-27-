@@ -13,7 +13,11 @@ import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
 import { chapterClassProgress } from '../classes';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, PageHeading, ProgressBar, SubjectIcon } from '../components';
 
-const PRIORITY_LABEL: Record<string, string> = { A: 'টেস্ট অগ্রাধিকার', B: '২য় ধাপ', C: 'পরের ধাপ' };
+// Resolved per render: a module-level object would freeze the language at import.
+const priorityLabel = (priority: string): string =>
+  priority === 'A' ? t('টেস্ট অগ্রাধিকার', 'Test priority')
+    : priority === 'B' ? t('২য় ধাপ', 'Second pass')
+      : t('পরের ধাপ', 'Later pass');
 
 export default function SyllabusView() {
   const { plan, data, openChapter } = usePlanner();
@@ -89,7 +93,7 @@ export default function SyllabusView() {
           <input placeholder={t('অধ্যায় বা টপিক খুঁজো…', 'Search chapter or topic…')} aria-label={t('অধ্যায় খুঁজো', 'Search chapters')} value={query} onChange={e => setQuery(e.target.value)} />
         </label>
         <div className="segmented">
-          {(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : `${p} · ${PRIORITY_LABEL[p]}`}</button>)}
+          {(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : `${p} · ${priorityLabel(p)}`}</button>)}
         </div>
         <div className="segmented" aria-label={t('সম্পন্ন অবস্থা', 'Completion status')}>
           {(['all', 'pending', 'done'] as const).map(value => <button key={value} aria-pressed={status === value} className={status === value ? 'active' : ''} onClick={() => setStatus(value)}>{value === 'all' ? t('সব অবস্থা', 'All statuses') : value === 'pending' ? t('বাকি', 'Pending') : t('সম্পন্ন', 'Done')}</button>)}
@@ -97,7 +101,7 @@ export default function SyllabusView() {
         <div className="segmented star-filter">
           {(['all', 5, 3, 1] as const).map(value => {
             const count = value === 'all' ? chapters.length : chapters.filter(chapter => CHAPTER_SCHEDULE[chapter.id]?.star === value).length;
-            return <button key={value} className={star === value ? 'active' : ''} aria-pressed={star === value} onClick={() => setStar(value)} disabled={value !== 'all' && count === 0}>{value === 'all' ? 'সব ★' : `${value}★`}<small>{bn(count)}</small></button>;
+            return <button key={value} className={star === value ? 'active' : ''} aria-pressed={star === value} onClick={() => setStar(value)} disabled={value !== 'all' && count === 0}>{value === 'all' ? t('সব ★', 'All ★') : `${value}★`}<small>{bn(count)}</small></button>;
           })}
         </div>
         <button className={`button ${weakOnly ? 'primary' : 'secondary'} small`} aria-pressed={weakOnly} onClick={() => setWeakOnly(!weakOnly)}><ShieldAlert size={15} />{t('শুধু দুর্বল', 'Weak only')}</button>

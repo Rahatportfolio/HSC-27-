@@ -12,7 +12,7 @@ import type { SubjectId } from '../data';
 import { bn, formatDurationBn, percent } from '../planner';
 import { toggleClassWatched } from '../classes';
 import { EmptyState, Modal, PageHeading, ProgressBar } from '../components';
-import { t } from '../i18n';
+import { isEnglish, t } from '../i18n';
 import {
   CLASS_CATALOG, CLASS_TYPES, TEACHERS, classTypeCounts, classTypeLabel, filterClasses,
 } from '../videoCatalog';
@@ -64,7 +64,7 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
   return (
     <Modal title={resource.title} onClose={onClose} wide>
       <div className="chapter-modal-meta">
-        <span className={`video-type-badge t-${resource.classType}`}>{classTypeLabel(resource.classType)}</span>
+        <span className={`video-type-badge t-${resource.classType}`}>{classTypeLabel(resource.classType, isEnglish())}</span>
         <span>{subjectById[resource.subject].name} · {t('পত্র', 'Paper')} {bn(resource.paper)}</span>
         <span>{resource.channel}</span>
         {chapter && <span>{chapter.title}</span>}
@@ -239,7 +239,7 @@ export default function VideosView() {
             onClick={() => setClassType(type.id)}
             title={counts[type.id] === 0 ? t('এই ধরনের যাচাই করা রিসোর্স এখনো যোগ করা হয়নি।', 'No verified resource of this type yet.') : undefined}
           >
-            <strong>{classTypeLabel(type.id)}</strong><span>{bn(counts[type.id])}</span>
+            <strong>{classTypeLabel(type.id, isEnglish())}</strong><span>{bn(counts[type.id])}</span>
           </button>
         ))}
       </section>
@@ -324,7 +324,7 @@ export default function VideosView() {
                     return (
                       <article className={`video-card ${isWatched ? 'watched' : ''}`} key={item.id}>
                         <div className="video-card-top">
-                          <span className={`video-type-badge t-${item.classType}`}>{classTypeLabel(item.classType)}</span>
+                          <span className={`video-type-badge t-${item.classType}`}>{classTypeLabel(item.classType, isEnglish())}</span>
                           {item.kind === 'playlist' && <span className="video-kind-badge">{t('প্লেলিস্ট', 'Playlist')}</span>}
                           {item.kind === 'search' && <span className="video-kind-badge search">{t('সার্চ', 'Search')}</span>}
                         </div>

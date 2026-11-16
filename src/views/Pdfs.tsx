@@ -159,8 +159,8 @@ export default function PdfsView() {
   const addPdf = (event: FormEvent) => {
     event.preventDefault();
     let cleanUrl: string;
-    try { cleanUrl = canonicalUrl(url); if(sourceUrl) canonicalUrl(sourceUrl); } catch { notify('সঠিক public HTTP/HTTPS লিংক দাও', 'error'); return; }
-    if(data.pdfs.some(p => p.url && resourceKey(p.url) === resourceKey(cleanUrl))) { notify('এই resource আগেই যোগ করা আছে', 'info'); return; }
+    try { cleanUrl = canonicalUrl(url); if(sourceUrl) canonicalUrl(sourceUrl); } catch { notify(t('সঠিক public HTTP/HTTPS লিংক দাও', 'Provide a valid public HTTP/HTTPS link'), 'error'); return; }
+    if(data.pdfs.some(p => p.url && resourceKey(p.url) === resourceKey(cleanUrl))) { notify(t('এই resource আগেই যোগ করা আছে', 'This resource was already added'), 'info'); return; }
     if (!title.trim()) { notify(t('ফাইলের নাম লেখো।', 'Give the file a title.'), 'error'); return; }
     if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) { notify(t('লিংক http/https দিয়ে শুরু হতে হবে।', 'The link must start with http/https.'), 'error'); return; }
     if (!cleanUrl) { notify(t('একটি পিডিএফ লিংক দাও অথবা নিচ থেকে ফাইল বাছো।', 'Paste a PDF link or pick a file below.'), 'error'); return; }
@@ -175,7 +175,7 @@ export default function PdfsView() {
   };
 
   const importFile = async (file: File) => {
-    try{if(sourceUrl)canonicalUrl(sourceUrl);}catch{notify('সঠিক source HTTP/HTTPS link দাও','error');return;}
+    try{if(sourceUrl)canonicalUrl(sourceUrl);}catch{notify(t('সঠিক source HTTP/HTTPS link দাও', 'Provide a valid public source HTTP/HTTPS link'),'error');return;}
     if (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       notify(t('শুধু PDF ফাইল বাছো।', 'Choose a PDF file only.'), 'error');
       return;
@@ -188,8 +188,8 @@ export default function PdfsView() {
     try {
       if(!(await file.slice(0,5).text()).startsWith('%PDF-')) throw new Error('Not a PDF');
       fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))).map(b=>b.toString(16).padStart(2,'0')).join('');
-    } catch { setImporting(false); notify('PDF যাচাই করা যায়নি', 'error'); return; }
-    if(data.pdfs.some(p=>p.fingerprint===fingerprint)){setImporting(false);notify('একই PDF আগেই আছে','info');return;}
+    } catch { setImporting(false); notify(t('PDF যাচাই করা যায়নি', 'The PDF could not be verified'), 'error'); return; }
+    if(data.pdfs.some(p=>p.fingerprint===fingerprint)){setImporting(false);notify(t('একই PDF আগেই আছে', 'The same PDF is already added'),'info');return;}
     const id = newId();
     const ok = await putFile({ id, blob: new Blob([file],{type:'application/pdf'}), name: file.name, size: file.size, createdAt: nowIso() });
     setImporting(false);

@@ -40,10 +40,10 @@ export default function AnalyticsView() {
     try {
       if (typeof navigator !== 'undefined' && navigator.share) { await navigator.share({ title: 'প্রস্তুতি · সাপ্তাহিক রিপোর্ট', text }); return; }
       await navigator.clipboard.writeText(text);
-      notify('রিপোর্ট লেখা হিসেবে কপি হয়েছে — যেখানে খুশি পেস্ট করো।');
+      notify(t('রিপোর্ট লেখা হিসেবে কপি হয়েছে — যেখানে খুশি পেস্ট করো।', 'The report was copied as text — paste it anywhere you like.'));
     } catch (error) {
       if ((error as Error)?.name === 'AbortError') return;
-      notify('শেয়ার করা যায়নি। প্রিন্ট করে PDF রাখো।', 'error');
+      notify(t('শেয়ার করা যায়নি। প্রিন্ট করে PDF রাখো।', 'Sharing failed. Print it to keep a PDF.'), 'error');
     }
   };
   /** Prints only the report card; the browser's "Save as PDF" turns it into a file. */
@@ -134,7 +134,7 @@ export default function AnalyticsView() {
       <p className="report-foot">{report.topSubject ? `সবচেয়ে বেশি সময় ${report.topSubject}-এ।` : 'এখনও মাপা সময় নেই।'} {report.chaptersDone === 0 ? 'নতুন অধ্যায় শুরু করতে পারলে সপ্তাহটা আরও এগোবে।' : 'এই গতি ধরে রাখলে সিলেবাস সময়ের আগেই শেষ হবে।'}</p>
     </section>
     <div className="analytics-grid">
-      <section className="card study-chart-card"><div className="card-heading"><div><h2>{t("পড়ার ছন্দ", "Study rhythm")}</h2><p>টাইমারে মাপা মিনিট। ধূসর রেখা দৈনিক লক্ষ্য।</p></div><div className="segmented small">{([7, 30, 90] as const).map(value => <button key={value} className={range === value ? 'active' : ''} onClick={() => setRange(value)}>{value === 7 ? '৭ দিন' : value === 30 ? '৩০ দিন' : '৯০ দিন'}</button>)}</div></div><div className={`study-bars range-${range}`}>{series.map(point => <div className={`study-bar ${point.date === today ? 'today' : ''} ${point.minutes === 0 ? 'empty' : ''}`} key={point.date} title={`${formatDate(point.date, 'long')}: ${bn(point.minutes)} মিনিট`}><span style={{ height: `${Math.max(point.minutes ? 4 : 1, point.minutes / maxMinutes * 100)}%` }} />{range === 7 && <small>{formatDate(point.date).split(' ')[0]}</small>}</div>)}</div><div className="chart-footer"><span>সর্বোচ্চ {bn(Math.round(maxMinutes))} মি. · গড় {bn(Math.round(series.reduce((sum, point) => sum + point.minutes, 0) / series.length))} মি.</span><span>দৈনিক লক্ষ্য {bn(data.settings.dailyHours * 60)} মি.</span></div></section>
+      <section className="card study-chart-card"><div className="card-heading"><div><h2>{t("পড়ার ছন্দ", "Study rhythm")}</h2><p>{t('টাইমারে মাপা মিনিট। ধূসর রেখা দৈনিক লক্ষ্য।', 'Minutes measured by the timer. The grey line is your daily goal.')}</p></div><div className="segmented small">{([7, 30, 90] as const).map(value => <button key={value} className={range === value ? 'active' : ''} onClick={() => setRange(value)}>{value === 7 ? t('৭ দিন', '7 days') : value === 30 ? t('৩০ দিন', '30 days') : t('৯০ দিন', '90 days')}</button>)}</div></div><div className={`study-bars range-${range}`}>{series.map(point => <div className={`study-bar ${point.date === today ? 'today' : ''} ${point.minutes === 0 ? 'empty' : ''}`} key={point.date} title={`${formatDate(point.date, 'long')}: ${bn(point.minutes)} মিনিট`}><span style={{ height: `${Math.max(point.minutes ? 4 : 1, point.minutes / maxMinutes * 100)}%` }} />{range === 7 && <small>{formatDate(point.date).split(' ')[0]}</small>}</div>)}</div><div className="chart-footer"><span>সর্বোচ্চ {bn(Math.round(maxMinutes))} মি. · গড় {bn(Math.round(series.reduce((sum, point) => sum + point.minutes, 0) / series.length))} মি.</span><span>দৈনিক লক্ষ্য {bn(data.settings.dailyHours * 60)} মি.</span></div></section>
       <section className="card subject-time-card"><div className="card-heading"><h2>{t("শেষ ৩০ দিনে বিষয়ভিত্তিক সময়", "Time by subject, last 30 days")}</h2><span className="tiny-muted">মোট {bn(Math.round(Object.values(bySubject).reduce((sum, value) => sum + value, 0) / 60))} ঘণ্টা</span></div>{SUBJECTS.map(subject => <div className="subject-time-row" key={subject.id}><span style={{ color: subject.color }}>{subject.short}</span><ProgressBar value={percent(bySubject[subject.id], Math.max(...Object.values(bySubject), 1))} color={subject.color} /><small>{bn(Math.floor(bySubject[subject.id] / 60))}ঘ {bn(bySubject[subject.id] % 60)}মি</small></div>)}</section>
     </div>
     <div className="analytics-grid second">

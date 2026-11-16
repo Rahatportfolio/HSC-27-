@@ -19,11 +19,11 @@ export default function RemindersView() {
   const [permission, setPermission] = useState(typeof Notification !== 'undefined' ? Notification.permission : 'unsupported');
   const [busy, setBusy] = useState(false);
   const request = async (): Promise<boolean> => {
-    if (!('Notification' in window)) { notify('এই ব্রাউজারে নোটিফিকেশন নেই। ক্যালেন্ডার রিমাইন্ডার ব্যবহার করো।', 'info'); return false; }
-    if (!window.isSecureContext) { notify('নোটিফিকেশনের জন্য HTTPS দরকার। ক্যালেন্ডার এক্সপোর্ট ব্যবহার করতে পারো।', 'info'); return false; }
+    if (!('Notification' in window)) { notify(t('এই ব্রাউজারে নোটিফিকেশন নেই। ক্যালেন্ডার রিমাইন্ডার ব্যবহার করো।', 'This browser has no notifications. Use calendar reminders.'), 'info'); return false; }
+    if (!window.isSecureContext) { notify(t('নোটিফিকেশনের জন্য HTTPS দরকার। ক্যালেন্ডার এক্সপোর্ট ব্যবহার করতে পারো।', 'Notifications need HTTPS. You can use the calendar export instead.'), 'info'); return false; }
     setBusy(true);
-    try { const p = await Notification.requestPermission(); setPermission(p); if (p === 'granted') { notify('ব্রাউজার রিমাইন্ডারের অনুমতি দেওয়া হয়েছে।'); return true; } notify('অনুমতি পাওয়া যায়নি। ব্রাউজারের site settings থেকে দিতে পারো; ক্যালেন্ডার রিমাইন্ডারও কাজ করবে।', 'info'); return false; }
-    catch { notify('এই ব্রাউজারে অনুমতি চাওয়া যায়নি। ক্যালেন্ডার রিমাইন্ডার ব্যবহার করো।', 'error'); return false; }
+    try { const p = await Notification.requestPermission(); setPermission(p); if (p === 'granted') { notify(t('ব্রাউজার রিমাইন্ডারের অনুমতি দেওয়া হয়েছে।', 'Browser reminder permission granted.')); return true; } notify(t('অনুমতি পাওয়া যায়নি। ব্রাউজারের site settings থেকে দিতে পারো; ক্যালেন্ডার রিমাইন্ডারও কাজ করবে।', 'Permission was not granted. You can allow it in the browser site settings; calendar reminders still work.'), 'info'); return false; }
+    catch { notify(t('এই ব্রাউজারে অনুমতি চাওয়া যায়নি। ক্যালেন্ডার রিমাইন্ডার ব্যবহার করো।', 'This browser could not ask for permission. Use calendar reminders.'), 'error'); return false; }
     finally { setBusy(false); }
   };
   const toggle = async () => {
@@ -38,9 +38,9 @@ export default function RemindersView() {
     try {
       const latest = buildDailyStatusNotification(plan, data, today);
       await showNotification(latest.title, latest.body, { tag: 'prostuti-daily-progress' });
-      notify('আজকের কী পড়া, মোট সময় ও কমপ্লিট করার বাকি অংশসহ নোটিফিকেশন পাঠানো হয়েছে!');
+      notify(t('আজকের কী পড়া, মোট সময় ও কমপ্লিট করার বাকি অংশসহ নোটিফিকেশন পাঠানো হয়েছে!', 'Notification sent with today’s study list, total time and what is left!'));
     } catch {
-      notify('নোটিফিকেশন পাঠানো যায়নি। অনুমতি ও ডিভাইসের সেটিংস যাচাই করো।', 'error');
+      notify(t('নোটিফিকেশন পাঠানো যায়নি। অনুমতি ও ডিভাইসের সেটিংস যাচাই করো।', 'The notification could not be sent. Check permission and device settings.'), 'error');
     }
   };
   const sendNow = async () => {
@@ -50,9 +50,9 @@ export default function RemindersView() {
   };
   const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && taskStart(t).date >= start && (!end || taskStart(t).date < end)).length;
   const ranges = [
-    { id: 'day' as const, title: 'আজকের রুটিন', desc: 'শুধু আজকের বাকি সেশনগুলো', icon: Clock3, count: count(today, addDays(today, 1)), date: today },
-    { id: 'week' as const, title: 'আগামী ৭ দিন', desc: 'এই সপ্তাহটা গুছিয়ে রাখো', icon: CalendarDays, count: count(today, addDays(today, 7)), date: `${today} → ${addDays(today, 6)}` },
-    { id: 'all' as const, title: 'পুরো পরিকল্পনা', desc: 'শুরু থেকে শেষ পর্যন্ত সব বাকি সেশন', icon: ArrowDownToLine, count: count(plan[0].date), date: `${plan[0].date} → ${plan[plan.length - 1].date}` },
+    { id: 'day' as const, title: t('আজকের রুটিন', 'Today’s routine'), desc: t('শুধু আজকের বাকি সেশনগুলো', 'Only today’s remaining sessions'), icon: Clock3, count: count(today, addDays(today, 1)), date: today },
+    { id: 'week' as const, title: t('আগামী ৭ দিন', 'Next 7 days'), desc: t('এই সপ্তাহটা গুছিয়ে রাখো', 'Keep this week organised'), icon: CalendarDays, count: count(today, addDays(today, 7)), date: `${today} → ${addDays(today, 6)}` },
+    { id: 'all' as const, title: t('পুরো পরিকল্পনা', 'Whole plan'), desc: t('শুরু থেকে শেষ পর্যন্ত সব বাকি সেশন', 'Every remaining session, start to finish'), icon: ArrowDownToLine, count: count(plan[0].date), date: `${plan[0].date} → ${plan[plan.length - 1].date}` },
   ];
   return <div className="view reminders-view"><PageHeading eyebrow="A GENTLE NUDGE" title="পড়ার কথা মনে থাকবে।" titleEn="You won’t forget to study." description="প্রতিটি নোটিফিকেশনেই থাকবে আজ কী পড়া, মোট কতটুকু পড়া এবং আর কতটুকু কমপ্লিট করা লাগবে।" descriptionEn="Every notification tells you what to study today, total scheduled time, and how much still needs to be completed." />
     <section className="card live-notif-preview-card" aria-label={t('স্টাডি নোটিফিকেশন প্রিভিউ', 'Study notification preview')}>
@@ -125,16 +125,16 @@ function NativeReminderCard() {
     try {
       const permission = await requestNativeNotifications();
       await refresh();
-      if (permission === 'denied') { notify('ফোনের সেটিংস → Apps → প্রস্তুতি → Notifications থেকে অনুমতি দাও।', 'error'); setStatus('অনুমতি বন্ধ'); return; }
-      if (permission !== 'granted') { notify('অনুমতি ছাড়া রিমাইন্ডার সেট করা যায় না।', 'info'); setStatus('অনুমতি দেওয়া হয়নি'); return; }
+      if (permission === 'denied') { notify(t('ফোনের সেটিংস → Apps → প্রস্তুতি → Notifications থেকে অনুমতি দাও।', 'Allow it from phone Settings → Apps → Prostuti → Notifications.'), 'error'); setStatus('অনুমতি বন্ধ'); return; }
+      if (permission !== 'granted') { notify(t('অনুমতি ছাড়া রিমাইন্ডার সেট করা যায় না।', 'A reminder cannot be set without permission.'), 'info'); setStatus('অনুমতি দেওয়া হয়নি'); return; }
       const result = await syncNativeReminders(plan, { ...data, settings: { ...data.settings, reminderEnabled: true } }, today, { requestPermission: true });
-      if (result.permission !== 'granted') { setStatus('অনুমতি দেওয়া হয়নি'); notify('রিমাইন্ডার সেট করা যায়নি—অনুমতি দরকার।', 'info'); return; }
+      if (result.permission !== 'granted') { setStatus('অনুমতি দেওয়া হয়নি'); notify(t('রিমাইন্ডার সেট করা যায়নি—অনুমতি দরকার।', 'The reminder could not be set — permission is needed.'), 'info'); return; }
       setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: true } }));
       setStatus(`${bn(result.scheduled)}টি সেট`);
       notify(result.scheduled
         ? `${bn(result.scheduled)}টি রিমাইন্ডার ডিভাইসে সেট হয়েছে।`
         : 'এই ১৪ দিনে নতুন রিমাইন্ডার নেই—সব সেশন তো আগেই সেট করা আছে।', 'success');
-    } catch { notify('রিমাইন্ডার সেট করা যায়নি। অ্যাপ আপডেট করে আবার চেষ্টা করো।', 'error'); }
+    } catch { notify(t('রিমাইন্ডার সেট করা যায়নি। অ্যাপ আপডেট করে আবার চেষ্টা করো।', 'The reminder could not be set. Update the app and try again.'), 'error'); }
     finally { setBusy(false); void refresh(); }
   };
   const disable = () => { setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: false } })); setStatus('বন্ধ'); };

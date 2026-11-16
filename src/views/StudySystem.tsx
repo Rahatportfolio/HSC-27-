@@ -527,7 +527,7 @@ export default function StudySystem() {
         <>
           <section className="study-panel">
             <h2>
-              {tab === "offline" ? "Offline Classes Library" : "আমার ক্লাস"}
+              {tab === "offline" ? "Offline Classes Library" : t("আমার ক্লাস", "My classes")}
             </h2>
             <input
               aria-label="Search classes"
@@ -742,15 +742,15 @@ export default function StudySystem() {
             >
               <h2>{t("ক্লাস যোগ করো", "Add class")}</h2>
               <label>
-                Class name
+                {t("ক্লাসের নাম", "Class name")}
                 <input name="title" required maxLength={300} />
               </label>
               <label>
-                URL
+                {t("লিংক", "URL")}
                 <input name="url" type="url" required maxLength={2000} />
               </label>
               <label>
-                Chapter
+                {t("অধ্যায়", "Chapter")}
                 <select name="chapter">
                   {CHAPTERS.map((c) => (
                     <option key={c.id} value={c.id}>
@@ -760,7 +760,7 @@ export default function StudySystem() {
                 </select>
               </label>
               <label>
-                Teacher
+                {t("শিক্ষক", "Teacher")}
                 <input name="teacher" maxLength={200} />
               </label>
               <label>
@@ -775,10 +775,10 @@ export default function StudySystem() {
                 />
               </label>
               <label className="check-line">
-                <input name="permission" type="checkbox" /> মালিক এই direct
-                video file download করার অনুমতি দিয়েছেন
+                <input name="permission" type="checkbox" />{" "}
+                {t("মালিক এই direct video file download করার অনুমতি দিয়েছেন", "The owner allows downloading this direct video file")}
               </label>
-              <button className="button primary">Add class / bookmark</button>
+              <button className="button primary">{t("ক্লাস যোগ করো / বুকমার্ক", "Add class / bookmark")}</button>
             </form>
           )}
         </>

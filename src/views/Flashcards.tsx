@@ -74,7 +74,7 @@ export default function FlashcardsView() {
   const duePercent = total ? Math.round((due / total) * 100) : 0;
 
   return (
-    <div className="page">
+    <div className="view flashcards-view">
       <PageHeading
         eyebrow={t('স্মার্ট ফ্ল্যাশকার্ড', 'Smart flashcards')}
         title={t('ফ্ল্যাশকার্ড রিভিশন', 'Flashcard revision')}
