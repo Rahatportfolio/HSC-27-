@@ -5023,3 +5023,36 @@ body {
 .empty-state p{color:#606b5b}
 input::placeholder,textarea::placeholder{color:#6f7a63}
 [data-theme="dark"] input::placeholder,[data-theme="dark"] textarea::placeholder{color:#9aab97}
+/* ── Sources panel (v2.34.0) ────────────────────────────────────────────
+   The audit page now shows, per chapter, what is really verified: class
+   links, banked MCQs and the generator's fact pool. Search-only links are
+   excluded from every count, so a chapter cannot look sourced because a
+   YouTube search URL exists for it. */
+.audit-sources .audit-source-verdict{
+  margin:0 0 14px;padding:12px 14px;border-radius:10px;
+  background:var(--surface-soft,#f3f5f0);color:#4a5545;font-size:.92rem;line-height:1.6}
+.audit-source-gaps{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-end}
+.audit-source-gaps small{
+  display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:999px;
+  background:#fdf3e3;color:#8a5a12;font-size:.72rem;font-weight:600;line-height:1.3}
+.audit-source-row{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:8px 0;border-bottom:1px solid var(--border-soft,#e6e9e1)}
+.audit-source-row:last-child{border-bottom:0}
+.audit-source-row strong{display:block;font-size:.9rem;color:#2f3a2b}
+.audit-source-row small{color:#606b5b;font-size:.76rem}
+@media (max-width:640px){
+  .audit-source-gaps{justify-content:flex-start}
+  .audit-sources .audit-source-verdict{font-size:.86rem}
+}
+/* ── Chapter source note (v2.34.0) ──────────────────────────────────────
+   Stated inside the chapter itself, where the student actually practices,
+   so nobody has to reach the audit page to learn the questions are not
+   board papers. Numbers come from the bank; nothing is hardcoded. */
+.chapter-source-note{
+  margin:14px 0;padding:12px 14px;border-radius:10px;
+  background:var(--surface-soft,#f3f5f0);border-left:3px solid #719475}
+.chapter-source-note p{margin:0;font-size:.86rem;line-height:1.6;color:#4a5545}
+.chapter-source-note p+p{margin-top:6px}
+.chapter-source-note strong{display:block;font-size:.8rem;color:#2f3a2b;margin-bottom:3px}
+.chapter-source-note .tiny-muted{color:#606b5b}

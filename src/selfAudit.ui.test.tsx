@@ -78,3 +78,24 @@ it('lets the headline turn green only when every check passes', async () => {
   expect(headline.classList.contains('ok')).toBe(warned === 0);
   if (warned > 0) expect(headline.textContent).toMatch(/সীমা|ব্যর্থ/);
 });
+
+it('shows where the questions come from, and says they are not board papers', async () => {
+  render(<App />);
+  await screen.findByText(/এগিয়ে যাই/);
+  await go('অডিট');
+  await screen.findByRole('heading', { name: /প্রশ্ন কোথা থেকে আসছে/ });
+  const panel = document.querySelector('.audit-sources') as HTMLElement;
+  expect(panel).toBeTruthy();
+  // The verdict must be the honest one, and it must name the board-paper limit.
+  expect(panel.textContent).toContain('বোর্ডের মূল প্রশ্নপত্র থেকে নয়');
+  // Search-only links must never be counted as classes.
+  const labels = [...panel.querySelectorAll('.audit-count-grid span')].map(node => node.textContent ?? '');
+  expect(labels.some(label => label.includes('সার্চ-লিংক'))).toBe(true);
+  // Every listed chapter carries at least one stated gap; none is silently clean.
+  const rows = panel.querySelectorAll('.audit-source-row').length;
+  expect(rows).toBeGreaterThan(0);
+  // Each row names its own gaps, so no chapter can look fully sourced by omission.
+  expect(panel.querySelectorAll('.audit-source-gaps small').length).toBeGreaterThanOrEqual(rows);
+  // The board-video shortfall is stated as a number, not implied.
+  expect(panel.textContent).toMatch(/বোর্ড ভিডিও\s*[০-৯]+\s*\/\s*[০-৯]+/);
+});

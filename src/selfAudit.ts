@@ -8,6 +8,7 @@ import { focusReport } from './focus';
 import { planBacklog } from './backlog';
 import { LIMITS } from './storage';
 import { buildPlan, freshData, todayKey } from './planner';
+import { buildSourcesReport } from './sources';
 import type { AppData } from './planner';
 
 /**
@@ -60,6 +61,8 @@ export interface AuditReport {
     verifyIssues: number;
     duplicates: number;
   };
+  /** Per-chapter provenance: videos, banked MCQs and what is still missing. */
+  sources: ReturnType<typeof buildSourcesReport>;
   /** Things the app deliberately does not do, stated plainly. */
   limits: { bn: string; en: string }[];
 }
@@ -126,6 +129,8 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
     english: Math.round(SUBJECT_FULL_MARKS.english * 0.85),
     ict: Math.round(SUBJECT_FULL_MARKS.ict * 0.85),
   });
+
+  const sources = buildSourcesReport();
 
   const checks: AuditCheck[] = [
     {
@@ -207,6 +212,14 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       status: goldenProbe.gpaFive ? 'ok' : 'fail',
     },
     {
+      key: 'sources',
+      labelBn: 'প্রশ্নের আসল উৎস', labelEn: 'Where the questions really come from',
+      value: `${bnNum(CHAPTERS.length - sources.totals.chaptersWithBoardVideo)} অধ্যায়ে বোর্ড ভিডিও নেই`,
+      detailBn: `${bnNum(sources.totals.bankQuestions)}টি প্রশ্নই অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে—বোর্ডের মূল প্রশ্নপত্র নয়। ${bnNum(sources.totals.verifiedLinks)}টি যাচাই করা ক্লাস লিংকের মধ্যে ${bnNum(sources.totals.chaptersWithBoardVideo)}টি অধ্যায়ে বোর্ড-প্রশ্নের প্লেলিস্ট আছে; বাকি ${bnNum(CHAPTERS.length - sources.totals.chaptersWithBoardVideo)}টিতে নেই।`,
+      detailEn: `All ${sources.totals.bankQuestions} questions come from the app's own textbook-checked bank, not from an original board paper. Of ${sources.totals.verifiedLinks} verified class links, ${sources.totals.chaptersWithBoardVideo} chapters have a board-question playlist and ${CHAPTERS.length - sources.totals.chaptersWithBoardVideo} do not.`,
+      status: 'warn',
+    },
+    {
       key: 'storage',
       labelBn: 'স্টোরেজের সীমা', labelEn: 'Storage limits',
       value: bnNum(LIMITS.sessions),
@@ -221,12 +234,14 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
     { bn: 'অ্যাপ বন্ধ থাকলে পুশ নোটিফিকেশন আসে না (ওয়েবে); Android অ্যাপে লোকাল নোটিফিকেশন আছে।', en: 'Push notifications need a server; the web build cannot alert while closed. The Android build has local notifications.' },
     { bn: 'পরীক্ষার “আনুমানিক গ্রেড” MCQ শতাংশ থেকে—বোর্ডের CQ/সৃজনশীল নম্বরের সঙ্গে মেলানো যায় না।', en: 'The approximate grade comes from MCQ percentage only; it is not a board CQ mark.' },
     { bn: 'জেনারেটর কেবল যাচাই করা তথ্য/সূত্র থেকে প্রশ্ন বানায়—তাই নতুন প্রশ্নের বৈচিত্র্য ব্যাংকের আকারেই সীমিত।', en: 'The generators only use verified facts and formulas, so variety is bounded by the size of those pools.' },
+    { bn: 'অ্যাপে কোনো বোর্ডের মূল প্রশ্নপত্র বান্ডল করা নেই—কারণ সেগুলো কপিরাইটযুক্ত। নিজের বোর্ড প্রশ্ন “বোর্ড প্রশ্ন” ট্যাবে লিখে যোগ করলে বোর্ড ও সাল আপনি নিজেই দিচ্ছেন।', en: 'No board paper is bundled — they are copyrighted. The Board questions tab lets you add your own, and you supply the board and year yourself.' },
   ];
 
   return {
     generatedAt: new Date().toISOString(),
     checks,
     thin: thinList.slice(0, 60),
+    sources,
     counts: {
       chapters: CHAPTERS.length,
       subjects: SUBJECTS.length,

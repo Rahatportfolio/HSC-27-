@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   ENGINE_LABEL, FACT_POOL_SIZE, GENERATED_PREFIX, GENERATIVE_CHAPTER_COUNT, RECOVERED_FACT_COUNT,
-  factsFor, generateForSubject, generateQuestions, generativeChapters, generativeGap, verifyGenerated,
+  factsFor, generateForSubject, generateQuestions, generativeChapters, generativeGap, sourceAnswerOf, verifyGenerated,
 } from './questionGen';
 import { CHAPTERS, chapterById } from './data';
+import { setLanguage } from './i18n';
 import { buildExamQuestions } from './examSim';
 import { freshData } from './planner';
 import { STARTER_QUESTIONS } from './quiz-data';
@@ -234,6 +235,62 @@ describe('a chapter test is a real test now, not a single question', () => {
     }
     for (const question of generated) {
       expect(question.explanation?.trim().length ?? 0).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('the verifier cannot be talked into accepting a fake', () => {
+  it('rejects a hand-edited id and a hand-edited answer', () => {
+    const question = generateQuestions('physics-1-2', { variant: 'tamper' })[0];
+    expect(verifyGenerated([question])).toEqual([]);
+
+    const fakeId = { ...question, id: `gen|physics-1-2|abc|${encodeURIComponent('বানানো')}` };
+    expect(verifyGenerated([fakeId]).map(issue => issue.problem)).toContain('fact-not-in-bank');
+
+    const fakeAnswer = { ...question, options: [...question.options] };
+    fakeAnswer.options[fakeAnswer.answer] = 'বানানো';
+    expect(verifyGenerated([fakeAnswer]).map(issue => issue.problem)).toContain('fact-not-in-bank');
+  });
+
+  it('traces a generated answer back to the exact shipped bank row', () => {
+    const question = generateQuestions('physics-1-2', { variant: 'trace' })[0];
+    const source = sourceAnswerOf(question.id);
+    expect(source).toBeTruthy();
+    expect(factsFor('physics-1-2').some(fact => fact.value === source)).toBe(true);
+  });
+});
+
+describe('English mode never mixes scripts inside one question', () => {
+  it('offers only English stems and English answers, with no Bengali leakage', () => {
+    setLanguage('en');
+    try {
+      const bengali = /[\u0980-\u09FF]/;
+      const questions = CHAPTERS.flatMap(chapter => generateQuestions(chapter.id, { variant: 'en' }));
+      expect(questions.length).toBeGreaterThan(0);
+      const leaking = questions.filter(question =>
+        bengali.test(question.question) || bengali.test(question.options[question.answer]));
+      expect(leaking.map(question => question.question).slice(0, 5)).toEqual([]);
+      expect(verifyGenerated(questions)).toEqual([]);
+    } finally {
+      setLanguage('bn');
+    }
+  });
+
+  it('skips a Bengali-only fact in English rather than showing it as the answer', () => {
+    // physics-1-2 has one bilingual fact and six Bengali-only ones.
+    const bilingual = generateQuestions('physics-1-2', { variant: 'mix' });
+    setLanguage('en');
+    try {
+      const english = generateQuestions('physics-1-2', { variant: 'mix' });
+      expect(english.length).toBeLessThan(bilingual.length);
+      // Whatever survives must be fully English, not just its stem. Symbols like
+      // "°" are fine; Bengali script and Bengali numerals are not.
+      for (const question of english) {
+        expect(question.question).not.toMatch(/[\u0980-\u09FF]/);
+        expect(question.options[question.answer]).not.toMatch(/[\u0980-\u09FF০-৯]/);
+      }
+    } finally {
+      setLanguage('bn');
     }
   });
 });

@@ -20,13 +20,14 @@ export interface FactPair {
   chapterId: string;
   /** A natural question stem, already bilingual. */
   prompt: string;
-  promptEn: string;
+  /** Absent when the source text is Bengali-only (a recovered bank row). */
+  promptEn?: string;
   /** Value that is the correct answer. */
   value: string;
-  valueEn: string;
+  valueEn?: string;
   /** Where the value comes from — printed in the explanation and in the UI. */
   origin: string;
-  originEn: string;
+  originEn?: string;
   /** A second fact that explains why the value is what it is (optional). */
   why?: string;
   whyEn?: string;
@@ -341,6 +342,18 @@ const D: Record<string, Distractor[]> = {
  */
 const D_MIN = 3; // a fact needs three distractors to become an MCQ
 
+const BANGLA = /[\u0980-\u09FF]/;
+
+const BN_DIGITS = '০১২৩৪৫৬৭৮৯';
+/** Fold Bengali numerals onto ASCII so "০°" and "0°" compare as the same value. */
+const toAsciiDigits = (text: string): string =>
+  [...text].map(ch => (BN_DIGITS.includes(ch) ? String(BN_DIGITS.indexOf(ch)) : ch)).join('');
+const hasBangla = (text: string): boolean => BANGLA.test(text);
+
+/** True when this fact can be shown in English without leaking Bengali. */
+const speaksEnglish = (fact: FactPair): boolean =>
+  !!fact.promptEn && !hasBangla(fact.promptEn) && !!fact.valueEn && !hasBangla(fact.valueEn);
+
 function recoverFacts(): FactPair[] {
   const manual = new Map<string, Set<string>>();
   for (const fact of P) {
@@ -365,16 +378,18 @@ function recoverFacts(): FactPair[] {
     const key = `${chapterId}|${answer}`;
     if (seen.has(key)) continue;
     seen.add(key);
+    // The bank is Bengali-first, so an English rendering only exists if the row
+    // itself is language-neutral. Claiming otherwise would put Bengali text in
+    // the English interface.
+    const english = !hasBangla(question.question) && !hasBangla(answer) && !hasBangla(reasoning);
     out.push({
       chapterId,
       prompt: question.question,
-      promptEn: question.question,
+      ...(english ? { promptEn: question.question, valueEn: answer, whyEn: reasoning } : {}),
       value: answer,
-      valueEn: answer,
       origin: 'শিপ করা ব্যাংকের ব্যাখ্যা',
-      originEn: 'the explanation shipped with this bank item',
+      ...(english ? { originEn: 'the explanation shipped with this bank item' } : {}),
       why: reasoning,
-      whyEn: reasoning,
     });
   }
   return out;
@@ -437,9 +452,18 @@ export function generativeGap(chapterId: string): 'ok' | 'no-fact' | 'no-distrac
 export function buildQuestion(fact: FactPair, seed: string): QuizQuestion | null {
   const distractors = D[fact.chapterId] ?? [];
   if (distractors.length < 3) return null;
+  const english = isEnglish();
+  // The answer and the wrong options must be in the same language, otherwise the
+  // right option stands out by script alone. A fact with no English wording is
+  // skipped in English mode rather than offered as a Bengali answer.
+  if (english && !speaksEnglish(fact)) return null;
+  const answerValue = english ? fact.valueEn! : fact.value;
   const rng = mulberry32(hash(seed));
-  const wrong = distractors.slice(0, 3);
-  const options = [fact.value, ...wrong.map(item => isEnglish() ? item.valueEn : item.value)]
+  const wrong = distractors.slice(0, 3)
+    .map(item => ({ text: english ? (item.valueEn ?? '') : item.value, value: item.value }))
+    .filter(item => item.text && item.text !== answerValue);
+  if (wrong.length < 3) return null;
+  const options = [answerValue, ...wrong.map(item => item.text)]
     // A distractor that repeats the answer (or another distractor) must never reach a paper:
     // the verifier would reject it, so drop it here and let the item be skipped instead.
     .filter((option, index, all) => all.indexOf(option) === index);
@@ -449,20 +473,23 @@ export function buildQuestion(fact: FactPair, seed: string): QuizQuestion | null
     const j = Math.floor(rng() * (i + 1));
     [options[i], options[j]] = [options[j], options[i]];
   }
-  const answer = options.indexOf(fact.value);
+  const answer = options.indexOf(answerValue);
   if (answer < 0) return null;
-  const why = isEnglish()
-    ? `${fact.whyEn ?? ''} Source: ${fact.originEn}.`
+  const why = english
+    ? `${fact.whyEn ?? ''} Source: ${fact.originEn}.`.replace(/^\s+/, '')
     : `${fact.why ?? ''} সূত্র: ${fact.origin}।`.replace(/^\s+/, '');
   return {
-    id: `${GENERATED_PREFIX}${fact.chapterId}|${hash(seed).toString(36)}`,
+    // The chapter and the Bengali bank answer are encoded in the id, so the
+    // verifier can follow an English option back to the exact shipped answer it
+    // translates without ever accepting a value the bank does not contain.
+    id: `${GENERATED_PREFIX}${fact.chapterId}|${hash(seed).toString(36)}|${encodeURIComponent(fact.value).replace(/\|/g, '%7C')}`,
     subject: chapterById[fact.chapterId].subject,
     chapterId: fact.chapterId,
-    question: isEnglish() ? fact.promptEn : fact.prompt,
+    question: english ? fact.promptEn! : fact.prompt,
     options,
     answer,
     explanation: why.trim(),
-    source: isEnglish() ? 'Auto-generated · verified textbook facts' : GENERATED_SOURCE,
+    source: english ? 'Auto-generated · verified textbook facts' : GENERATED_SOURCE,
     createdAt: '2026-01-01T00:00:00.000Z',
   };
 }
@@ -519,6 +546,48 @@ export interface VerificationIssue {
  * The last check is the important one: it means every generated answer can be found,
  * word for word, in the textbook-fact bank the app already ships.
  */
+/**
+ * Follows a generated question back to the exact shipped fact it renders.
+ *
+ * The id carries the Bengali answer, but an id is just text — anyone could type a
+ * different one. So the id is *re-derived* from the fact that the correct option
+ * actually belongs to (same chapter, same seed, same Bengali answer) and must match
+ * byte for byte. A tampered answer therefore finds no fact, and a tampered id fails
+ * to reproduce itself.
+ */
+function tracesToShippedFact(question: QuizQuestion): boolean {
+  if (!question.id.startsWith(GENERATED_PREFIX)) return false;
+  const parts = question.id.split('|');
+  if (parts.length !== 4) return false;
+  const chapterId = question.chapterId ?? parts[1];
+  const hashPart = parts[2];
+  const source = sourceAnswerOf(question.id);
+  if (!source) return false;
+  const fact = factsFor(chapterId).find(item => item.value === source);
+  if (!fact) return false;
+  // The displayed answer must be this fact's own Bengali or English value. Without
+  // this, pointing at a real fact while showing some other packed string would pass.
+  const correct = question.options[question.answer];
+  if (correct !== fact.value && (!fact.valueEn || fact.valueEn !== correct)) return false;
+  return generatedIdFor(fact, hashPart) === question.id;
+}
+
+/** Rebuilds the id from a fact and a hash, so a hand-edited id cannot match. */
+function generatedIdFor(fact: FactPair, hashPart: string): string {
+  return `${GENERATED_PREFIX}${fact.chapterId}|${hashPart}|${encodeURIComponent(fact.value).replace(/\|/g, '%7C')}`;
+}
+
+/** `gen|<chapter>|<hash>|<encoded bank answer>` → the shipped Bengali answer. */
+export function sourceAnswerOf(questionId: string): string | null {
+  const parts = questionId.split('|');
+  if (parts.length < 4 || !parts[0].startsWith('gen')) return null;
+  try {
+    return decodeURIComponent(parts[parts.length - 1]);
+  } catch {
+    return null;
+  }
+}
+
 export function verifyGenerated(questions: QuizQuestion[]): VerificationIssue[] {
   const issues: VerificationIssue[] = [];
   const bankByChapter = new Map<string, Set<string>>();
@@ -527,6 +596,13 @@ export function verifyGenerated(questions: QuizQuestion[]): VerificationIssue[] 
     const set = bankByChapter.get(seed.chapterId) ?? new Set<string>();
     set.add(seed.options[seed.answer]);
     bankByChapter.set(seed.chapterId, set);
+  }
+  // A correct option generated in English reads "0°" while the bank stores "০°".
+  // Same fact, different script — so equivalence is judged on the digits, not the
+  // glyphs. This only normalises numerals; it never accepts a different value.
+  const bankInEnglish = new Map<string, Set<string>>();
+  for (const [chapterId, answers] of bankByChapter) {
+    bankInEnglish.set(chapterId, new Set([...answers].map(toAsciiDigits)));
   }
   for (const question of questions) {
     const chapterId = question.chapterId ?? '';
@@ -538,7 +614,16 @@ export function verifyGenerated(questions: QuizQuestion[]): VerificationIssue[] 
     if (!question.source?.trim()) push('missing-source');
     const shipped = bankByChapter.get(chapterId);
     const correct = question.options[question.answer];
-    if (!shipped || !shipped.has(correct)) push('fact-not-in-bank');
+    const shippedAnyScript = bankInEnglish.get(chapterId);
+    // A generated item names its own source answer, so an English option can still
+    // be traced to the shipped Bengali answer it renders. Both are accepted only
+    // when the bank really contains that answer — the gate itself is unchanged.
+    // A generated item must trace through its own fact; only hand-built questions
+    // (not produced by this engine) fall back to the plain bank membership check.
+    const inBank = question.id.startsWith(GENERATED_PREFIX)
+      ? tracesToShippedFact(question)
+      : !!shipped && (shipped.has(correct) || !!shippedAnyScript?.has(toAsciiDigits(correct)));
+    if (!inBank) push('fact-not-in-bank');
   }
   return issues;
 }

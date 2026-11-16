@@ -1,8 +1,9 @@
 import { useMemo } from 'react';
-import { AlertTriangle, CheckCircle2, FileCheck2, ShieldAlert } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileCheck2, FileWarning, Link2, ShieldAlert } from 'lucide-react';
 import { usePlanner } from '../context';
 import { PageHeading } from '../components';
 import { auditHeadline, bnNum, selfAudit } from '../selfAudit';
+import { weakestSourcedChapters } from '../sources';
 import { t } from '../i18n';
 
 const TONE: Record<'ok' | 'warn' | 'fail', string> = { ok: 'ok', warn: 'warn', fail: 'fail' };
@@ -12,6 +13,7 @@ export default function AuditView() {
   const { data, today, navigate } = usePlanner();
   const report = useMemo(() => selfAudit(data, today), [data, today]);
   const headline = auditHeadline(report);
+  const thinSources = useMemo(() => weakestSourcedChapters(report.sources, 12), [report.sources]);
 
   return <div className="view audit-view">
     <PageHeading
@@ -59,6 +61,24 @@ export default function AuditView() {
       </div>)}</div>
     </section>}
 
+
+    <section className="card audit-sources">
+      <div className="card-heading"><div><h2><Link2 size={19} />{t('প্রশ্ন কোথা থেকে আসছে', 'Where the questions come from')}</h2><p>{t('ভিডিও, ব্যাংক আর জেনারেটর—তিনটে আলাদা করে গোনা। একটাকে দিয়ে অন্যটার দাবি মেটানো হয় না।', 'Videos, the bank and the generator are counted separately; one never stands in for another.')}</p></div><span className="tiny-muted">{t('বোর্ড ভিডিও', 'board videos')} {bnNum(report.sources.totals.chaptersWithBoardVideo)}/{bnNum(report.counts.chapters)}</span></div>
+      <p className="audit-source-verdict">{t(report.sources.verdictBn, report.sources.verdictEn)}</p>
+      <div className="audit-count-grid">
+        <div><span>{t('যাচাই করা ক্লাস লিংক', 'Verified class links')}</span><strong>{bnNum(report.sources.totals.verifiedLinks)}</strong></div>
+        <div><span>{t('সার্চ-লিংক (শুধু সার্চ)', 'Search-only links')}</span><strong>{bnNum(report.sources.totals.searchLinks)}</strong></div>
+        <div><span>{t('প্রতি অধ্যায়ে প্রশ্ন', 'Questions per chapter')}</span><strong>{bnNum(report.sources.totals.averageBank)}</strong></div>
+        <div className="warn"><span>{t('বোর্ড প্লেলিস্ট নেই', 'No board playlist')}</span><strong>{bnNum(report.counts.chapters - report.sources.totals.chaptersWithBoardVideo)}</strong></div>
+      </div>
+      <div className="audit-thin-list">{thinSources.map(entry => <div key={entry.chapterId} className="audit-source-row">
+        <span><strong>{entry.title}</strong><small>{t(entry.subject, entry.subjectEn)} · {t('ভিডিও', 'videos')} {bnNum(entry.verifiedLinks)} · {t('প্রশ্ন', 'MCQs')} {bnNum(entry.bank)}</small></span>
+        <span className="audit-source-gaps">{entry.gaps.map(gap => <small key={gap} className="warn"><FileWarning size={12} />{t(
+          gap === 'no-board-video' ? 'বোর্ড প্লেলিস্ট নেই' : gap === 'no-direct-class' ? 'সরাসরি ক্লাস নেই' : 'প্রশ্ন কম',
+          gap === 'no-board-video' ? 'no board playlist' : gap === 'no-direct-class' ? 'no direct class' : 'few MCQs',
+        )}</small>)}</span>
+      </div>)}</div>
+    </section>
     <section className="card audit-limits">
       <div className="card-heading"><div><h2><ShieldAlert size={19} />{t('যা এই অ্যাপ ইচ্ছে করে করে না', 'What this app deliberately does not do')}</h2><p>{t('সীমা লুকালে ভরসা কমে; তাই এখানেই লেখা।', 'Hiding a limit costs trust, so the limits live here.')}</p></div></div>
       <ul>{report.limits.map(limit => <li key={limit.en}>{t(limit.bn, limit.en)}</li>)}</ul>

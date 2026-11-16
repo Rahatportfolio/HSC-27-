@@ -12,6 +12,9 @@ import { INTERVAL_LABEL } from './revision';
 import { dueFlashcards } from './flashcards';
 import { usePlanner } from './context';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, Modal, ProgressBar, SubjectBadge } from './components';
+import { STARTER_QUESTIONS } from './quiz-data';
+import { CLASS_CATALOG } from './videoCatalog';
+import { bnNum } from './selfAudit';
 import { t } from './i18n';
 import { chapterPriority, chapterStage, isLearningComplete, STAGES, STEPS } from './learning';
 import type { ChapterStage, MistakeCategory } from './types';
@@ -50,6 +53,24 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
       <button className={`button secondary ${meta.weak ? 'selected' : ''}`} aria-pressed={meta.weak} onClick={() => setData(d => updateChapterMeta(d, c.id, { weak: !meta.weak }))}><NotebookPen size={16} />{meta.weak ? 'দুর্বল তালিকা থেকে সরাও' : 'দুর্বল হিসেবে রাখো'}</button>
       {tasks[0] && <button className="button secondary" onClick={() => { navigate('today', tasks[0].date); onClose(); }}>{t("রুটিনে দেখো", "See it in the routine")}<ArrowRight size={16} /></button>}
     </div>
+    {(() => {
+      // The student asked whether these are real board questions. They are not,
+      // and this line says so per chapter, with the real counts behind it.
+      // The class block above reads the older per-chapter list, which has no board
+      // group; the verified catalog does, so the board count comes from there.
+      const boardLinks = CLASS_CATALOG.filter(item => item.chapterId === c.id && item.classType === 'board').length;
+      const bank = STARTER_QUESTIONS.filter(question => question.chapterId === c.id).length;
+      return <div className="chapter-source-note">
+        <p><strong>{t('প্রশ্নের উৎস', 'Where the questions come from')}</strong>{' '}
+          {t(
+            `এই অধ্যায়ের ${bnNum(bank)}টি MCQ অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে—বোর্ডের মূল প্রশ্নপত্র থেকে নয়।`,
+            `This chapter's ${bank} MCQs come from the app's own textbook-checked bank, not an original board paper.`,
+          )}</p>
+        <p className="tiny-muted">{boardLinks > 0
+          ? t(`এই অধ্যায়ে ${bnNum(boardLinks)}টি বোর্ড-প্রশ্নের ভিডিও লিংক যাচাই করা আছে।`, `${boardLinks} board-question video link(s) are verified for this chapter.`)
+          : t('এই অধ্যায়ে বোর্ড-প্রশ্নের যাচাই করা ভিডিও নেই—তাই অ্যাপ কোনো বোর্ড প্রশ্নের দাবি করে না।', 'No verified board-question video exists for this chapter, so the app makes no board-paper claim here.')}</p>
+      </div>;
+    })()}
     <div className="prep-grid">
       {(['mcq', 'cq'] as const).map(kind => <div className="prep-row" key={kind}><strong>{kind === 'mcq' ? 'MCQ প্রস্তুতি' : 'CQ প্রস্তুতি'}</strong><div className="segmented small">{(['none', 'practicing', 'ready'] as const).map(level => <button key={level} className={meta[kind] === level ? 'active' : ''} aria-pressed={meta[kind] === level} onClick={() => setData(d => updateChapterMeta(d, c.id, { [kind]: level }))}>{PREP_LABEL[level]}</button>)}</div></div>)}
     </div>
