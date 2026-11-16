@@ -120,6 +120,20 @@ try {
   assert.ok(await page.locator('.heat-cell').count() >= 0);
   console.log('PASS syllabus heatmap', await page.locator('.heat-cell').count(), 'cells');
 
+  // Backlog manager: every day must stay inside its own ceiling, and a full day must
+  // say so instead of pretending room exists.
+  await nav('ব্যাকলগ');
+  await page.locator('.backlog-view').waitFor();
+  assert.equal(await page.locator('.backlog-summary-grid > div').count(), 4);
+  const backlogDays = await page.locator('.backlog-day').count();
+  assert.ok(backlogDays >= 3);
+  for (let i = 0; i < backlogDays; i++) {
+    const label = await page.locator('.backlog-day small').nth(i).innerText();
+    const [used, cap] = label.replace(/[^\d/]/g, '').split('/').map(Number);
+    assert.ok(used <= cap, `day ${i} over cap: ${label}`);
+  }
+  console.log('PASS backlog manager', backlogDays, 'days, cap respected');
+
   // Rule-based question generation: pick a chapter with verified facts, generate, and
   // confirm the paper carries the generator's own source label.
   await nav('অনুশীলন');

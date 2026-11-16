@@ -3,7 +3,7 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { CHAPTERS } from './data';
-import { buildPlan, chapterTasks, freshData, STORAGE_KEY } from './planner';
+import { addDays, buildPlan, chapterTasks, freshData, STORAGE_KEY, todayKey } from './planner';
 
 beforeAll(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -80,7 +80,10 @@ describe('application shell', () => {
   it('creates revision cards for a completed chapter and shows them', async () => {
     const data = freshData();
     const plan = buildPlan();
-    for (const task of chapterTasks(plan, CHAPTERS[0].id)) data.completed[task.id] = '2026-11-14T08:00:00.000Z';
+    // Completing yesterday keeps the 1-day card due today, so this test does not
+    // depend on the day it happens to run.
+    const finishedAt = `${addDays(todayKey(), -1)}T08:00:00.000Z`;
+    for (const task of chapterTasks(plan, CHAPTERS[0].id)) data.completed[task.id] = finishedAt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
     render(<App />);
     go('revision');

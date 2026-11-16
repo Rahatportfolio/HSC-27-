@@ -7,7 +7,7 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   ArrowRight, ArrowUpRight, Bell, BellRing, BookOpen, CalendarDays, Check, CheckCheck, ChevronDown,
-  ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, FolderOpen, HeartPulse, ListChecks, Minus,
+  ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, FolderOpen, HeartPulse, Layers, ListChecks, Minus,
   NotebookPen, Pause, Play, Plus, RotateCcw, ShieldAlert, Sparkles, Timer, Trash2, Zap,
 } from 'lucide-react';
 import { usePlanner } from '../context';
@@ -26,6 +26,7 @@ import { revisionBuckets, INTERVAL_LABEL } from '../revision';
 import { t } from '../i18n';
 import { newId } from '../storage';
 import { motivationFor } from '../motivation';
+import { planBacklog } from '../backlog';
 import { dueCount as flashcardDueCount } from '../flashcards';
 import { unresolvedMistakeCount } from '../study';
 import { testPrepStats } from '../testPrep';
@@ -136,6 +137,9 @@ export default function TodayView() {
   const buckets = revisionBuckets(data.revisions, today);
   const due = [...buckets.overdue, ...buckets.today];
   const carryovers = carryoversOn(data, selectedDate);
+  const backlog = planBacklog(plan, data, today);
+  const backlogCount = backlog.items.length;
+  const backlogHours = Math.round(backlog.totalMinutes / 6) / 10;
   const motivation = motivationFor(today);
 
   const filteredTasks = day?.tasks.filter(task => (taskSubject === 'all' || task.subject === taskSubject) && (taskStatus === 'all' || (taskStatus === 'done') === !!data.completed[task.id])) || [];
@@ -688,6 +692,7 @@ export default function TodayView() {
       <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> ঘণ্টা {bn(weekMinutes % 60)} মি.</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => navigate('analytics')}><span className="stat-icon lavender"><Flame size={19} /></span><div><span>{t('টানা পড়ার ধারা', 'Active streak')}</span><strong>{bn(stats.streak)}<small> {t('দিন', 'days')}</small></strong><p>{stats.streak ? t('ধারাবাহিকতা বজায় রাখো', 'Keep this streak going') : t('আজ থেকেই শুরু হোক', 'Start your streak today')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => { setSelectedDate(today); scrollToSection('today-pending'); }}><span className="stat-icon blue"><ListChecks size={19} /></span><div><span>{t('বাকি কাজ ও রিভিশন', 'Pending & revision')}</span><strong>{bn(pending)}<small> {t('টি কাজ', ' tasks')}</small></strong><p>{due.length ? `${bn(due.length)} ${t('টি রিভিশন বাকি', 'revisions due')}` : t('আজ কোনো রিভিশন বাকি নেই', 'No revision due')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
+      <button className="stat-card stat-link" onClick={() => navigate('backlog')}><span className="stat-icon lavender"><Layers size={19} /></span><div><span>{t('জমে থাকা কাজ', 'Backlog')}</span><strong>{bn(backlogHours)}<small>{t(' ঘণ্টা', ' h')}</small></strong><p>{backlogCount ? t(`${bn(backlogCount)}টি সেশন · ৮ ঘণ্টার সীমায় ভাগ হবে`, `${backlogCount} sessions · spread under the 8-hour cap`) : t('কিছু জমে নেই', 'Nothing pending')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
     </div>
 
     {due.length > 0 && <div className="recall-banner"><span><RotateCcw size={17} /><strong>{bn(due.length)} {t('টি অধ্যায়ের রিভিশন বাকি আছে।', 'chapter revisions are due.')}</strong> {t('অল্প সময় নিয়ে একবার দেখে নাও।', 'Take a few minutes to review them.')}</span><button className="text-button" onClick={() => navigate('revision')}>{t('রিভিশনে যাও', 'Open revision')} <ArrowRight size={15} /></button></div>}
