@@ -406,3 +406,67 @@ describe('exam simulator screen', () => {
     expect(stored().examSessions).toHaveLength(1);
   });
 });
+
+describe('wrong-question retry queue', () => {
+  it('queues exam mistakes, shows them in the revision centre and runs a due retry paper', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /পরীক্ষা শুরু করো/ })); });
+    await screen.findByText('চলমান পরীক্ষা');
+    // Answer everything with option 3 so at least some answers are wrong, then submit.
+    for (let index = 0; index < 10; index++) {
+      const options = document.querySelectorAll('.quiz-option');
+      await act(async () => { fireEvent.click(options[3]); });
+      const next = screen.queryByRole('button', { name: /পরের প্রশ্ন/ });
+      if (next) await act(async () => { fireEvent.click(next); });
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+    await screen.findByText('ফলাফল');
+    const saved = stored();
+    const wrongCount = saved.examSessions[0].total - saved.examSessions[0].score;
+    if (!wrongCount) return; // every answer happened to be right; nothing to queue.
+    expect(saved.retries).toHaveLength(wrongCount);
+    expect(saved.retries.every((item: { date: string; schedule: string }) => item.schedule === '1,3,7,14,30')).toBe(true);
+    // Back on the setup screen the retry rail counts the same queue.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /নতুন পরীক্ষা/ })); });
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    const rail = document.querySelector('.exam-retry-card')?.textContent || '';
+    expect(rail).toContain('পুনরায় পরীক্ষার তালিকা');
+
+    // The revision centre carries the same queue.
+    go('revision');
+    expect(await screen.findByText('ভুল প্রশ্নের পুনরায় তালিকা')).toBeTruthy();
+    const retryStats = document.querySelector('.revision-retry-stats')?.textContent || '';
+    expect(retryStats).not.toContain('০০');
+  });
+
+  it('settles a due retry and clears a question answered correctly', async () => {
+    const { freshData, todayKey } = await import('./planner');
+    const { nowIso } = await import('./storage');
+    const data = freshData();
+    const seed = data.questions[0] ?? { id: 'seed-001', subject: 'physics', chapterId: CHAPTERS[0].id, question: 'প্রশ্ন', options: ['ক', 'খ', 'গ', 'ঘ'], answer: 0 };
+    data.retries.push({
+      id: seed.id, questionId: seed.id, subject: seed.subject, chapterId: seed.chapterId,
+      source: 'আগের পরীক্ষা', schedule: '1,3,7,14,30', replayed: 0, cleared: false,
+      date: todayKey(), at: nowIso(), lastAt: nowIso(),
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('examsim');
+    // The rail offers the due paper.
+    const start = await screen.findByRole('button', { name: /ফেরত পাওয়া প্রশ্ন দাও/ });
+    await act(async () => { fireEvent.click(start); });
+    await screen.findByText('চলমান পরীক্ষা');
+    expect(document.querySelectorAll('.exam-palette-cell')).toHaveLength(1);
+    const correct = (seed as { answer?: number }).answer ?? 0;
+    await act(async () => { fireEvent.click(document.querySelectorAll('.quiz-option')[correct]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+    await screen.findByText('ফলাফল');
+    const after = stored();
+    const item = after.retries.find((row: { questionId: string }) => row.questionId === seed.id);
+    // One rung cleared: it moves to day three rather than disappearing.
+    expect(item).toMatchObject({ replayed: 1, cleared: false, schedule: '3,7,14,30' });
+    expect(item.date > todayKey()).toBe(true);
+  });
+});

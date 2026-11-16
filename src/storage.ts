@@ -23,7 +23,7 @@ const studyModes = new Set<StudyMode>(['stopwatch', 'countdown', 'pomodoro']);
 const intervals = new Set<RevisionInterval>([1, 3, 7, 14, 30]);
 const recalls = new Set<string>(['weak', 'okay', 'good']);
 const testKinds = new Set<TestKind>(['chapter', 'subject', 'model']);
-const examModes = new Set<ExamMode>(['chapter', 'subject', 'full', 'mistakes']);
+const examModes = new Set<ExamMode>(['chapter', 'subject', 'full', 'mistakes', 'retry']);
 const isSubject = (v: unknown): v is AppData['mistakes'][number]['subject'] => typeof v === 'string' && subjectIds.has(v);
 const optionalChapter = (v: unknown): v is string | undefined => v === undefined || (typeof v === 'string' && chapterIds.has(v));
 /** Own-property assignment: backup keys such as "__proto__" must never mutate prototypes. */
@@ -34,7 +34,7 @@ export const RECOVERY_KEY = `${STORAGE_KEY}-recovery`;
 export const SAVED_AT_KEY = `${STORAGE_KEY}-saved-at`;
 export const MISTAKE_LIMIT = 1000;
 export const LIMITS = {
-  sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000, examSessions: 500,
+  sessions: 6000, revisions: 2500, questions: 2000, attempts: 10000, cq: 2000, tests: 1000, examSessions: 500, retries: 2000,
   libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 500, importantDates: 200,
   classWatched: 1000,
   classBookmarks: 2000,
@@ -229,6 +229,12 @@ export function parseBackup(rawText: string): AppData {
   result.tests = listOf(raw.tests, LIMITS.tests, 'পরীক্ষা', item => {
     if (!object(item) || !nonEmpty(item.id, 180) || !testKinds.has(item.kind as TestKind) || !nonEmpty(item.title, 200) || (item.subject !== undefined && !isSubject(item.subject)) || !Array.isArray(item.chapterIds) || item.chapterIds.length > 40 || item.chapterIds.some(c => typeof c !== 'string' || !chapterIds.has(c)) || !num(item.score, 0, Number.MAX_VALUE) || !num(item.total, Number.MIN_VALUE, Number.MAX_VALUE) || Number(item.score) > Number(item.total) || !num(item.durationMin, 0, 1440) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at) || !text(item.notes, 5000)) throw new Error('পরীক্ষার তথ্য সঠিক নয়।');
     return { id: item.id, kind: item.kind as TestKind, title: item.title, subject: item.subject, chapterIds: item.chapterIds as string[], score: Number(item.score), total: Number(item.total), durationMin: Number(item.durationMin), date: item.date, at: item.at, notes: item.notes };
+  });
+
+  result.retries = listOf(raw.retries, LIMITS.retries, 'পুনরায় পরীক্ষার তালিকা', item => {
+    if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.questionId, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !text(item.source, 200) || !nonEmpty(item.schedule, 40) || !/^(\d{1,3})(,\d{1,3}){0,4}$/.test(item.schedule) || item.schedule.split(',').some(step => [1, 3, 7, 14, 30].includes(Number(step)) === false) || !int(item.replayed, 0, 5) || !bool(item.cleared) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at) || !validAt(item.lastAt)) throw new Error('পুনরায় পরীক্ষার তথ্য সঠিক নয়।');
+    if (item.chapterId && chapterById[item.chapterId].subject !== item.subject) throw new Error('পুনরায় পরীক্ষার অধ্যায় ও বিষয় মিলছে না।');
+    return { ...item, id: item.id, questionId: item.questionId, subject: item.subject, chapterId: item.chapterId, source: item.source, schedule: item.schedule, replayed: Number(item.replayed), cleared: item.cleared, date: item.date, at: item.at, lastAt: item.lastAt };
   });
 
   result.examSessions = listOf(raw.examSessions, LIMITS.examSessions, 'সিমুলেটেড পরীক্ষা', item => {

@@ -8,7 +8,26 @@ export type PrepStatus = 'none' | 'practicing' | 'ready';
 export type RevisionInterval = 1 | 3 | 7 | 14 | 30;
 export type TestKind = 'chapter' | 'subject' | 'model';
 /** Which pool the exam simulator draws its questions from. */
-export type ExamMode = 'chapter' | 'subject' | 'full' | 'mistakes';
+export type ExamMode = 'chapter' | 'subject' | 'full' | 'mistakes' | 'retry';
+/** One question the student still owes: a wrong answer or a timed-out paper. */
+export interface RetryItem {
+  /** equals the questionId, so a question can only be queued once. */
+  id: string;
+  questionId: string;
+  subject: SubjectId;
+  chapterId?: string;
+  /** paper title that raised it, e.g. "পদার্থ · বিষয় পরীক্ষা". */
+  source: string;
+  /** space-separated spaced-repetition ladder, e.g. "1,3,7,14". */
+  schedule: string;
+  /** how many rungs of the ladder have been cleared. */
+  replayed: number;
+  /** the question was answered correctly on a retry. */
+  cleared: boolean;
+  date: string;
+  at: string;
+  lastAt: string;
+}
 /** One chapter's share of a simulated paper, stored so analysis survives question edits. */
 export interface ExamBreakdownRow { chapterId?: string; subject: SubjectId; correct: number; total: number }
 /** A completed, auto-marked MCQ exam. `score`/`total` are correct answers over asked questions. */

@@ -4618,3 +4618,20 @@ body {
   .exam-mode-tabs button { font-size: .78rem; padding: 6px 11px; }
   .exam-result-actions .button { width: 100%; }
 }
+
+/* ---------- Spaced retry queue (wrong questions coming back) ---------- */
+.exam-retry-card .exam-retry-stats, .revision-retry-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 10px 0; }
+.exam-retry-stats > div, .revision-retry-stats > div { padding: 8px 10px; border-radius: 10px; background: var(--soft, #f4f6f3); display: grid; gap: 2px; }
+.exam-retry-stats span, .revision-retry-stats span { font-size: .72rem; color: var(--muted); }
+.exam-retry-stats strong, .revision-retry-stats strong { font-size: 1.1rem; }
+.exam-retry-chapters, .revision-retry-chapters { display: grid; gap: 6px; margin: 8px 0 10px; }
+.exam-retry-chapters > div, .revision-retry-chapters > span { display: flex; justify-content: space-between; gap: 8px; font-size: .8rem; padding: 5px 0; border-bottom: 1px dashed var(--border); }
+.exam-retry-chapters small, .revision-retry-chapters small { color: var(--muted); }
+.exam-pool-count { display: inline-flex; align-items: center; padding: 9px 12px; border-radius: 10px; background: var(--soft, #f4f6f3); font-size: .82rem; }
+.retry-pill { font-size: .74rem; padding: 4px 10px; border-radius: 999px; background: var(--soft, #f4f6f3); color: var(--muted); white-space: nowrap; }
+.retry-pill.due { background: #fbe9de; color: #a95a2c; font-weight: 700; }
+.revision-retry-card .button { justify-self: start; }
+@media (max-width: 650px) {
+  .exam-retry-stats, .revision-retry-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .exam-retry-stats strong, .revision-retry-stats strong { font-size: .98rem; }
+}

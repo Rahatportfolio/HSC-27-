@@ -11,6 +11,7 @@ import {
   EXAM_COUNTS, EXAM_MODE_INFO, buildExamQuestions, examChapterAccuracy, examDurationMin,
   examGradeLetter, examHistoryStats, gradeExam, saveExamSession,
 } from '../examSim';
+import { retryBuckets, retryChapterRows } from '../retryLoop';
 import type { ExamGrade } from '../examSim';
 import { allQuestions } from '../analytics';
 import type { ExamMode, ExamSession, QuizQuestion } from '../types';
@@ -39,11 +40,12 @@ function paperTitle(mode: ExamMode, subject: SubjectId, chapterId: string): stri
   if (mode === 'chapter') return `${chapterById[chapterId]?.title || t('অধ্যায়', 'Chapter')} · ${t('অধ্যায় পরীক্ষা', 'Chapter test')}`;
   if (mode === 'subject') return `${subjectById[subject].name} · ${t('বিষয় পরীক্ষা', 'Subject test')}`;
   if (mode === 'mistakes') return t('ভুলের পরীক্ষা', 'Mistake test');
+  if (mode === 'retry') return t('আজকের পুনরায় পরীক্ষা', 'Today’s retry test');
   return t('পূর্ণ মক টেস্ট', 'Full mock test');
 }
 
 export default function ExamSimView() {
-  const { data, setData, notify, confirm, openChapter } = usePlanner();
+  const { data, setData, today, notify, confirm, openChapter } = usePlanner();
   const [stage, setStage] = useState<Stage>('setup');
   const [mode, setMode] = useState<ExamMode>('subject');
   const [subject, setSubject] = useState<SubjectId>('physics');
@@ -61,6 +63,9 @@ export default function ExamSimView() {
   const sessions = useMemo(() => [...data.examSessions].sort((a, b) => b.at.localeCompare(a.at)), [data.examSessions]);
   const stats = useMemo(() => examHistoryStats(data.examSessions), [data.examSessions]);
   const weak = useMemo(() => examChapterAccuracy(data.examSessions).slice(0, 5), [data.examSessions]);
+  const retries = useMemo(() => retryBuckets(data, today), [data, today]);
+  const retryRows = useMemo(() => retryChapterRows(data, today).slice(0, 5), [data, today]);
+  const dueRetryCount = retries.due.length + retries.upcoming.length;
   const subjectChapters = useMemo(() => sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject)), [subject]);
   const remaining = stage === 'running' ? Math.max(0, Math.ceil((deadline - tick) / 1000)) : 0;
   const active = paper[index];
@@ -93,7 +98,7 @@ export default function ExamSimView() {
   };
 
   const startConfigured = () => {
-    const questions = buildExamQuestions(data, { mode, subject, chapterId: chapterId || undefined, count });
+    const questions = buildExamQuestions(data, { mode, subject, chapterId: chapterId || undefined, count, today });
     start(questions, mode);
   };
 
@@ -177,6 +182,7 @@ export default function ExamSimView() {
               <label>{t('অধ্যায়', 'Chapter')}<select value={chapterId} onChange={event => setChapterId(event.target.value)}><option value="">{t('বাছো', 'Choose')}</option>{subjectChapters.map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label>
             </>}
             <label>{t('প্রশ্ন সংখ্যা', 'Question count')}<select value={count} onChange={event => setCount(Number(event.target.value))}>{EXAM_COUNTS.map(value => <option key={value} value={value}>{bn(value)} {t('টি', '')}</option>)}</select></label>
+            {(mode === 'retry' || mode === 'mistakes') && <label>{t('পুল', 'Pool')}<span className="exam-pool-count">{bn(dueRetryCount)} {t('টি প্রশ্ন অপেক্ষায়', 'questions waiting')}</span></label>}
           </div>
           <div className="exam-paper-preview">
             <Clock3 size={17} />
@@ -186,6 +192,21 @@ export default function ExamSimView() {
         </section>
 
         <aside className="exam-setup-rail">
+          <section className="card exam-retry-card">
+            <div className="card-heading"><div><h3><RotateCcw size={18} />{t('পুনরায় পরীক্ষার তালিকা', 'Retry queue')}</h3><p>{t('ভুল প্রশ্ন ১ → ৩ → ৭ → ১৪ → ৩০ দিনের ল্যাডারে ফিরে আসে।', 'Wrong questions return on a 1 → 3 → 7 → 14 → 30 day ladder.')}</p></div><span className="tiny-muted">{bn(retries.pending.length)}</span></div>
+            <div className="exam-retry-stats">
+              <div><span>{t('আজ দরকার', 'Due today')}</span><strong>{bn(retries.due.length)}</strong></div>
+              <div><span>{t('সামনে', 'Upcoming')}</span><strong>{bn(retries.upcoming.length)}</strong></div>
+              <div><span>{t('ঝালাই হয়েছে', 'Cleared')}</span><strong>{bn(retries.cleared.length)}</strong></div>
+            </div>
+            {retries.due.length > 0
+              ? <button className="button primary wide-button" onClick={() => start(buildExamQuestions(data, { mode: 'retry', count: Math.min(EXAM_COUNTS[EXAM_COUNTS.length - 1], Math.max(10, retries.due.length)), today }), 'retry')}><Play size={16} />{t(`${bn(Math.min(retries.due.length, 50))}টি ফেরত পাওয়া প্রশ্ন দাও`, `Answer ${Math.min(retries.due.length, 50)} due question(s)`)}</button>
+              : <p className="tiny-muted padded">{t('এখন কোনো প্রশ্ন ফেরত পাওয়ার কথা নয় — নতুন পরীক্ষা দিলে ভুলগুলো এখানে জমা হবে।', 'Nothing is due right now — take a paper and the mistakes will queue here.')}</p>}
+            {retryRows.length > 0 && <div className="exam-retry-chapters">{retryRows.map(row => <div key={row.chapterId || row.subject}>
+              <span>{row.chapterId ? (chapterById[row.chapterId]?.title || row.subject) : subjectById[row.subject]?.short}</span>
+              <small>{bn(row.due)} {t('আজ', 'due')} · {bn(row.total)} {t('মোট', 'total')}</small>
+            </div>)}</div>}
+          </section>
           <section className="card exam-weak-card">
             <div className="card-heading"><div><h3><Target size={18} />{t('পরীক্ষার ফল থেকে দুর্বলতা', 'Weakness from exams')}</h3><p>{t('সব সিমুলেটেড পরীক্ষার অধ্যায়ভিত্তিক নির্ভুলতা।', 'Chapter accuracy across every simulated paper.')}</p></div></div>
             {weak.length ? <div className="accuracy-subjects">{weak.map(row => <div key={row.chapterId || row.subject}>
@@ -279,6 +300,7 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
   const rows = [...grade.breakdown].sort((a, b) => (a.correct / a.total) - (b.correct / b.total));
   const letter = examGradeLetter(grade.percent);
   const worst = rows[0];
+  const dueAfter = grade.wrong.length + grade.unanswered.length;
   return <div className="exam-result">
     <section className="card exam-result-hero">
       <ProgressRing value={grade.percent} size={132}><strong>{bn(grade.percent)}%</strong><span>{bn(grade.score)}/{bn(grade.total)}</span></ProgressRing>
@@ -293,6 +315,7 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
         </div>
       </div>
       <div className="exam-result-actions">
+        {dueAfter ? <p className="tiny-muted">{t(`ভুল ${bn(dueAfter)}টি প্রশ্ন আগামীকাল থেকে পুনরায় তালিকায় ঢুকবে।`, `${dueAfter} wrong question(s) join the retry queue from tomorrow.`)}</p> : null}
         <button className="button primary" onClick={onRetryWrong}><RotateCcw size={16} />{t('ভুল প্রশ্নগুলো আবার', 'Retry the mistakes')}</button>
         <button className="button secondary" onClick={onNew}><Play size={16} />{t('নতুন পরীক্ষা', 'New paper')}</button>
       </div>

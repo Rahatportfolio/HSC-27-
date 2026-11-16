@@ -4,6 +4,7 @@ import { recordMcqAnswer } from './mistakeRevision';
 import { addDays } from './planner';
 import type { AppData } from './planner';
 import { STARTER_QUESTIONS } from './quiz-data';
+import { applyRetryResults, dueRetryIds, enqueueRetries, retryBuckets } from './retryLoop';
 import { LIMITS, newId, nowIso } from './storage';
 import type { ExamBreakdownRow, ExamMode, ExamSession, QuizQuestion, TestKind } from './types';
 
@@ -14,7 +15,8 @@ import type { ExamBreakdownRow, ExamMode, ExamSession, QuizQuestion, TestKind } 
  *
  * Two deliberate choices:
  *  - A third of the paper is filled with questions the student previously got wrong
- *    (or ran out of time on), so mistakes keep coming back.
+ *    (or ran out of time on), so mistakes keep coming back. Questions that are due on
+ *    the spaced retry ladder are picked first.
  *  - Every answer is fed through `recordMcqAnswer`, which already updates the mistake
  *    book, the weak-chapter flags and tomorrow's revision card.
  */
@@ -27,6 +29,7 @@ export const EXAM_MODE_INFO: Record<ExamMode, { label: string; labelEn: string; 
   subject: { label: 'বিষয় পরীক্ষা', labelEn: 'Subject test', hint: 'পত্রের সব অধ্যায় মিশিয়ে।', hintEn: 'All chapters of one paper.' },
   full: { label: 'পূর্ণ মক টেস্ট', labelEn: 'Full mock test', hint: 'সব বিষয় মিশিয়ে, বোর্ডের মতো।', hintEn: 'Mixed subjects, like the board paper.' },
   mistakes: { label: 'ভুলের পরীক্ষা', labelEn: 'Mistake test', hint: 'শুধু যেগুলো আগে ভুল করেছ।', hintEn: 'Only the questions you got wrong before.' },
+  retry: { label: 'আজকের পুনরায়', labelEn: 'Today’s retries', hint: 'স্পেসড ল্যাডারে যেগুলো আজ ফেরত পাওয়ার কথা।', hintEn: 'Questions the spaced ladder says are due today.' },
 };
 
 export interface ExamOptions {
@@ -35,6 +38,10 @@ export interface ExamOptions {
   chapterId?: string;
   /** Desired number of questions; clamped to the pool size. */
   count: number;
+  /** Today, needed by the retry mode to know which questions are due. */
+  today?: string;
+  /** Kept for callers that only know the storage date. */
+  date?: string;
 }
 
 export type Rng = () => number;
@@ -72,6 +79,12 @@ export function examPool(data: AppData, options: ExamOptions): QuizQuestion[] {
     case 'mistakes': {
       const wrong = latestAnswers(data);
       return all.filter(question => wrong.get(question.id) === false);
+    }
+    case 'retry': {
+      // Only questions the ladder says are due today — that is what makes this a "today" paper.
+      const today = options.today || options.date || '';
+      const due = new Set(retryBuckets(data, today).due.map(item => item.questionId));
+      return all.filter(question => due.has(question.id));
     }
     default:
       return all;
@@ -112,9 +125,13 @@ export function buildExamQuestions(data: AppData, options: ExamOptions, rng: Rng
   if (!pool.length) return [];
   const count = Math.max(1, Math.min(Math.round(options.count) || 1, Math.min(pool.length, 200)));
   const wrong = wrongQuestionIds(data);
-  const retryPool = options.mode === 'mistakes' ? pool : pool.filter(question => wrong.has(question.id));
-  const retryQuota = options.mode === 'mistakes' ? count : Math.min(Math.floor(count / 3), retryPool.length);
-  const picked = shuffle(retryPool, rng).slice(0, retryQuota);
+  // Due questions (spaced ladder) come first; the rest of the quota is filled by any old mistake.
+  const due = new Set(options.mode === 'retry' ? [] : dueRetryIds(data, options.today || options.date || ''));
+  const previous = pool.filter(question => wrong.has(question.id));
+  const retryQuota = options.mode === 'mistakes' || options.mode === 'retry' ? count : Math.min(Math.floor(count / 3), previous.length);
+  const dueFirst = shuffle(previous.filter(question => due.has(question.id)), rng);
+  const olderFirst = shuffle(previous.filter(question => !due.has(question.id)), rng);
+  const picked = [...dueFirst, ...olderFirst].slice(0, retryQuota);
   const taken = new Set(picked.map(question => question.id));
   const remaining = count - picked.length;
   if (remaining <= 0) return picked;
@@ -191,7 +208,7 @@ export interface SaveExamInput {
   date: string;
 }
 
-const TEST_KIND: Record<ExamMode, TestKind> = { chapter: 'chapter', subject: 'subject', full: 'model', mistakes: 'model' };
+const TEST_KIND: Record<ExamMode, TestKind> = { chapter: 'chapter', subject: 'subject', full: 'model', mistakes: 'model', retry: 'chapter' };
 
 /**
  * Stores the result and folds every answered question into the existing study loop
@@ -202,13 +219,24 @@ export function saveExamSession(data: AppData, input: SaveExamInput): AppData {
   if (!input.questions.length) return data;
   const grade = gradeExam(input.questions, input.answers);
   const at = nowIso();
-  let next = data;
+  let afterAnswers = data;
+  const paperAnswers: { questionId: string; correct: boolean }[] = [];
   for (const question of input.questions) {
     const chosen = input.answers[question.id];
     if (!Number.isInteger(chosen) || chosen < 0 || chosen > 3) continue;
-    next = recordMcqAnswer(next, question, chosen, input.date);
+    afterAnswers = recordMcqAnswer(afterAnswers, question, chosen, input.date);
+    paperAnswers.push({ questionId: question.id, correct: chosen === question.answer });
   }
   const chapterIds = [...new Set(input.questions.map(question => question.chapterId).filter((id): id is string => !!id))].slice(0, 40);
+  // Settle questions that were already owed BEFORE queueing this paper's fresh mistakes,
+  // otherwise a new wrong answer would be settled twice and lose its ladder.
+  const settledRetries = applyRetryResults(afterAnswers, paperAnswers, input.date);
+  const settled = enqueueRetries(settledRetries, {
+    source: input.title,
+    date: input.date,
+    wrong: grade.wrong.map(question => ({ id: question.id, subject: question.subject, ...(question.chapterId ? { chapterId: question.chapterId } : {}) })),
+    unanswered: grade.unanswered.map(question => ({ id: question.id, subject: question.subject, ...(question.chapterId ? { chapterId: question.chapterId } : {}) })),
+  });
   const session: ExamSession = {
     id: newId(),
     mode: input.mode,
@@ -250,9 +278,9 @@ export function saveExamSession(data: AppData, input: SaveExamInput): AppData {
     notes,
   };
   return {
-    ...next,
-    examSessions: [...next.examSessions, session].slice(-LIMITS.examSessions),
-    tests: [...next.tests, record].slice(-LIMITS.tests),
+    ...settled,
+    examSessions: [...settled.examSessions, session].slice(-LIMITS.examSessions),
+    tests: [...settled.tests, record].slice(-LIMITS.tests),
   };
 }
 

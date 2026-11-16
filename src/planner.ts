@@ -5,7 +5,7 @@ import type {
   BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
   ImportantDate, PersonalNote, PdfResource, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
   SettingsExtras, StudySession, SubjectMarks, TaskEdit, TestRecord, VideoLink, Flashcard,
-  ScannedNoteMeta, ExamSession,
+  ScannedNoteMeta, ExamSession, RetryItem,
 } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
@@ -113,6 +113,8 @@ export interface AppData {
   tests: TestRecord[];
   /** Auto-marked MCQ exams from the exam simulator (newest last). */
   examSessions: ExamSession[];
+  /** Questions that are owed another attempt, on a spaced ladder. */
+  retries: RetryItem[];
   libraryNotes: PersonalNote[];
   videos: VideoLink[];
   boardQuestions: BoardQuestion[];
@@ -163,6 +165,7 @@ export const freshData = (): AppData => ({
   cq: [],
   tests: [],
   examSessions: [],
+  retries: [],
   libraryNotes: [],
   videos: [],
   boardQuestions: [],

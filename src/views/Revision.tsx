@@ -8,6 +8,7 @@ import type { RecallRating, RevisionItem } from '../types';
 import { EmptyState, PageHeading, ProgressBar, SubjectBadge, ClassLinkRow } from '../components';
 import { CHAPTER_CLASSES } from '../classLinks';
 import { LIMITS } from '../storage';
+import { retryBuckets, retryChapterRows } from '../retryLoop';
 import { t } from '../i18n';
 
 type Tab = 'due' | 'upcoming' | 'history' | 'all';
@@ -22,6 +23,10 @@ export default function RevisionView() {
   const doneCount = data.revisions.filter(item => !!item.completedAt).length;
   const completion = data.revisions.length ? Math.round(doneCount / data.revisions.length * 100) : 0;
   const recall = recallSummary(data.revisions, today);
+  const retries = retryBuckets(data, today);
+  const retryRows = retryChapterRows(data, today).slice(0, 4);
+  const retryDue = retries.due.length;
+  const openRetry = () => navigate('examsim');
   /** Rating the recall is what moves the next card: weak → tomorrow, okay → 3 days. */
   const rate = (item: RevisionItem, rating: RecallRating) => {
     const outcome = completeRevisionWithRecall(data, item.id, rating, today);
@@ -40,6 +45,16 @@ export default function RevisionView() {
       <div className="revision-stat"><span className="stat-icon green"><CalendarClock size={19} /></span><div><span>{t("আগামী ৭ দিন", "Next 7 days")}</span><strong>{bn(buckets.upcoming.length)}</strong><p>{t("পরিকল্পিত", "Planned")}</p></div></div>
       <div className="revision-stat"><span className="stat-icon lavender"><Check size={19} /></span><div><span>{t("সম্পন্ন", "Done")}</span><strong>{bn(doneCount)}</strong><p>{t("সর্বকালীন", "All time")}</p></div></div>
     </div>
+    {(retries.pending.length > 0 || retries.cleared.length > 0) && <section className="card revision-retry-card">
+      <div className="card-heading"><div><h2><RotateCcw size={18} />{t('ভুল প্রশ্নের পুনরায় তালিকা', 'Wrong-question retry queue')}</h2><p>পরীক্ষায় ভুল হওয়া প্রশ্ন ১ → ৩ → ৭ → ১৪ → ৩০ দিনের ব্যবধানে ফিরে আসে; ঠিক হলে তালিকা থেকে বাদ যায়।</p></div><span className={`retry-pill ${retryDue ? 'due' : ''}`}>{retryDue ? `${bn(retryDue)}টি আজ দরকার` : 'আজ কিছু নেই'}</span></div>
+      <div className="revision-retry-stats">
+        <div><span>{t('আজ দরকার', 'Due now')}</span><strong>{bn(retryDue)}</strong></div>
+        <div><span>{t('সামনের দিনে', 'Upcoming')}</span><strong>{bn(retries.upcoming.length)}</strong></div>
+        <div><span>{t('ঝালাই হয়েছে', 'Cleared')}</span><strong>{bn(retries.cleared.length)}</strong></div>
+      </div>
+      {retryRows.length > 0 && <div className="revision-retry-chapters">{retryRows.map(row => <span key={row.chapterId || row.subject}>{row.chapterId ? (chapterById[row.chapterId]?.title || row.subject) : row.subject}<small>{bn(row.due)}/{bn(row.total)}</small></span>)}</div>}
+      <button className="button secondary" onClick={openRetry}><ChevronRight size={16} />{retryDue ? t('পুনরায় পরীক্ষা দাও', 'Take the retry test') : t('সিমুলেটরে যাও', 'Open the simulator')}</button>
+    </section>}
     <div className="revision-how card"><Clock3 size={19} /><div><strong>{t("কীভাবে কাজ করে", "How it works")}</strong><p>অধ্যায়ের সব ধাপ শেষ হলে সেই দিন থেকে ১, ৩, ৭, ১৪ ও ৩০ দিন পরের তারিখে রিভিশন কার্ড তৈরি হয়। এখন প্রতিটি কার্ডে “ভুলে গেছি / মোটামুটি / মনে ছিল” বেছে নাও—ভুলে গেলে পরের কার্ড কালই, মোটামুটি হলে তিন দিন পর, মনে থাকলে নিজের সময়েই। অধ্যায় আবার অসম্পূর্ণ করলে শুধু বাকি কার্ডগুলো সরে যায়; সম্পন্ন ইতিহাস থাকে।</p></div>{recall.rated > 0 && <div className="recall-summary"><strong>{bn(recall.good)}</strong><span>{t("মনে ছিল", "Remembered")}</span><strong>{bn(recall.okay)}</strong><span>{t("মোটামুটি", "Okay")}</span><strong>{bn(recall.weak)}</strong><span>{t("ভুলে গেছি", "Forgot")}</span><small>৪৫ দিনে {bn(recall.rated)}টি রেটিং · স্মৃতি স্কোর {bn(recall.score)}%</small></div>}</div>
     <div className="filter-bar revision-tabs"><div className="segmented">{(['due', 'upcoming', 'all', 'history'] as const).map(item => <button key={item} className={tab === item ? 'active' : ''} onClick={() => setTab(item)}>{item === 'due' ? `আজ দরকার (${bn(due.length)})` : item === 'upcoming' ? `আগামী ৭ দিন (${bn(buckets.upcoming.length)})` : item === 'all' ? `সব বাকি (${bn(allPending.length)})` : `ইতিহাস (${bn(doneCount)})`}</button>)}</div></div>
     {tab === 'due' && due.length > 0 && <div className="revision-list">{due.map(item => <RevisionCard key={item.id} item={item} today={today} onRate={rate} onSnooze={() => { setData(d => snoozeRevision(d, item.id, today, 1)); notify('আগামীকালের জন্য সরানো হয়েছে।', 'info'); }} onOpen={() => open(item.chapterId)} onTimer={() => startTimer(item.subject, item.chapterId)} />)}</div>}
