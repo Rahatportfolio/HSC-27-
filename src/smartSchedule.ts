@@ -192,6 +192,38 @@ export function integrateStudyPlan(
       cursor += minutes;
       budget -= minutes;
     };
+    const consume = (i: number): boolean => {
+      const q = queue[i];
+      const minutes = Math.min(budget, q.to - q.from);
+      const end = q.from + minutes;
+      const entire =
+        q.from === 0 && end === q.task.endMinute - q.task.startMinute;
+      append(
+        {
+          ...q.task,
+          id: entire
+            ? q.task.id
+            : `${PREFIX}${encodeURIComponent(q.task.id)}|${q.from}|${end}`,
+          originalTaskId: q.task.id,
+        },
+        minutes,
+      );
+      q.from = end;
+      if (q.from >= q.to - 0.001) {
+        queue.splice(i, 1);
+        return true;
+      }
+      return false;
+    };
+    // An exam or due revision must not be displaced by a newly added lecture.
+    for (let i = 0; i < queue.length && budget > 0.01;) {
+      const q = queue[i];
+      if (q.task.date > date || !["exam", "revision"].includes(q.task.kind)) {
+        i++;
+        continue;
+      }
+      if (!consume(i)) i++;
+    }
     // Keep at least half of the day for textbook, revision and ordinary scheduled work.
     let mediaBudget = Math.min(
       budget * 0.5,
@@ -246,28 +278,11 @@ export function integrateStudyPlan(
       }
     }
     for (let i = 0; i < queue.length && budget > 0.01;) {
-      const q = queue[i];
-      if (q.task.date > date) {
+      if (queue[i].task.date > date) {
         i++;
         continue;
       }
-      const minutes = Math.min(budget, q.to - q.from);
-      const end = q.from + minutes;
-      const entire =
-        q.from === 0 && end === q.task.endMinute - q.task.startMinute;
-      append(
-        {
-          ...q.task,
-          id: entire
-            ? q.task.id
-            : `${PREFIX}${encodeURIComponent(q.task.id)}|${q.from}|${end}`,
-          originalTaskId: q.task.id,
-        },
-        minutes,
-      );
-      q.from = end;
-      if (q.from >= q.to - 0.001) queue.splice(i, 1);
-      else i++;
+      if (!consume(i)) i++;
     }
     result.push({ ...shell, tasks });
     date = addDays(date, 1);

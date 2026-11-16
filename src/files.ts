@@ -72,7 +72,7 @@ export async function putFile(file: StoredFile): Promise<boolean> {
 
 export async function getFile(id: string): Promise<StoredFile | null> {
   if(hasNativeFiles()){
-    try{const f=await NativeFiles.info({id});const response=await fetch(nativeFileUrl(f.uri));if(!response.ok)return null;return {...f,blob:await response.blob()};}catch{/* legacy IndexedDB files remain readable below */}
+    try{const f=await NativeFiles.info({id});const response=await fetch(nativeFileUrl(f.uri));if(!response.ok)return null;return {...f,blob:new Blob([await response.blob()],{type:f.type||'application/octet-stream'})};}catch{/* legacy IndexedDB files remain readable below */}
   }
   const result = await tx<StoredFile>('readonly', store => store.get(id));
   return result.ok ? result.value ?? null : null;

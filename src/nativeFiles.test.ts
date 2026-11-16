@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mock = vi.hoisted(() => ({
   native: true,
   begin: vi.fn(),
@@ -18,6 +18,7 @@ vi.mock("./nativeFiles", () => ({
 }));
 import {
   downloadToFile,
+  getFile,
   playableFile,
   putFile,
   storageEstimate,
@@ -31,7 +32,29 @@ beforeEach(() => {
   mock.info.mockResolvedValue({ uri: "file:///private/video", size: 50 });
   mock.addListener.mockResolvedValue({ remove: vi.fn() });
 });
+afterEach(() => vi.unstubAllGlobals());
 describe("Android device storage adapter", () => {
+  it("keeps native PDF MIME for preview even when the local file server returns octet-stream", async () => {
+    mock.info.mockResolvedValueOnce({
+      id: "p",
+      name: "P",
+      createdAt: "2026-11-15T00:00:00Z",
+      uri: "file:///p",
+      size: 8,
+      type: "application/pdf",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response("%PDF-1.7", {
+            headers: { "content-type": "application/octet-stream" },
+          }),
+        ),
+    );
+    expect((await getFile("p"))?.blob.type).toBe("application/pdf");
+  });
   it("writes small chunks, commits atomically, and does not base64 an entire video at once", async () => {
     const blob = new Blob([new Uint8Array(600000)], { type: "video/mp4" });
     expect(

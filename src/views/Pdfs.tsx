@@ -191,7 +191,7 @@ export default function PdfsView() {
     } catch { setImporting(false); notify('PDF যাচাই করা যায়নি', 'error'); return; }
     if(data.pdfs.some(p=>p.fingerprint===fingerprint)){setImporting(false);notify('একই PDF আগেই আছে','info');return;}
     const id = newId();
-    const ok = await putFile({ id, blob: file, name: file.name, size: file.size, createdAt: nowIso() });
+    const ok = await putFile({ id, blob: new Blob([file],{type:'application/pdf'}), name: file.name, size: file.size, createdAt: nowIso() });
     setImporting(false);
     if (!ok) { notify(t('ফাইল সেভ হয়নি — ডিভাইসের স্টোরেজ খালি করে আবার চেষ্টা করো।', 'File not saved — free device storage and try again.'), 'error'); return; }
     const entry: PdfResource = {

@@ -46,6 +46,17 @@ const setup = () => {
   return d;
 };
 describe("integrated duration-aware routine", () => {
+  it("protects scheduled exams before allocating new lecture sessions", () => {
+    const d = setup();
+    const exam = { ...task("exam", 180), kind: "exam" as const };
+    const plan = integrateStudyPlan(base([task("a", 240), exam]), d, today);
+    expect(plan[0].tasks[0].id).toBe("exam");
+    expect(plan[0].tasks[0].endMinute - plan[0].tasks[0].startMinute).toBe(180);
+    expect(
+      plan[0].tasks.reduce((s, t) => s + t.endMinute - t.startMinute, 0),
+    ).toBeLessThanOrEqual(240.001);
+  });
+
   it("places classes in a full routine and carries ordinary tasks without losing minutes", () => {
     const d = setup();
     const original = base([task("a", 240), task("b", 240)]);

@@ -364,7 +364,12 @@ public class StudyFilesPlugin extends Plugin {
         if (
           total > max || total > root().getUsableSpace() - 5 * 1024 * 1024
         ) throw new IOException("Not enough device storage / file too large");
-        beginFile(id, c.getString("name", "File"), type, timestamp());
+        beginFile(
+          id,
+          c.getString("name", "File"),
+          kind.equals("pdf") ? "application/pdf" : type,
+          timestamp()
+        );
         begun = true;
         long loaded = 0,
           last = 0;
