@@ -111,6 +111,20 @@ try {
       assert.ok((await page.locator('.adaptive-load').nth(i).innerText()).includes('→'));
     }
   }
+  // Rule-based question generation: pick a chapter with verified facts, generate, and
+  // confirm the paper carries the generator's own source label.
+  await nav('অনুশীলন');
+  await page.locator('.generator-box').waitFor();
+  const quizSelects = page.locator('.quiz-setup-grid select');
+  await quizSelects.nth(1).selectOption('physics-1-7');
+  const generateButton = page.locator('.generator-actions button');
+  await generateButton.waitFor();
+  assert.equal(await generateButton.isDisabled(), false);
+  await generateButton.click();
+  await page.locator('.quiz-question').waitFor();
+  assert.ok(await page.locator('.quiz-question-meta').innerText().then(text => text.includes('স্বয়ংক্রিয়')));
+  console.log('PASS generated question paper');
+
   await nav('সেটিংস');
   const bufferOptions = await page.locator('.settings-view select').evaluateAll(selects =>
     selects.map(select => Array.from(select.options).map(option => option.value)).find(values => values.includes('30') && values.includes('60')),

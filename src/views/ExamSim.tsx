@@ -110,7 +110,7 @@ export default function ExamSimView() {
   /** Starts the routine slot: daily = today's weakest chapter, weekly = a subject, monthly = all. */
   const startSlot = (slot: CadenceSlot) => {
     if (slot.cadence === 'monthly') {
-      const questions = buildExamQuestions(data, { mode: 'full', count: slot.questions, today });
+      const questions = buildExamQuestions(data, { mode: 'full', count: slot.questions, today, generate: true, variant: Date.now() });
       start(questions, 'full', 'monthly');
       return;
     }
@@ -118,18 +118,18 @@ export default function ExamSimView() {
       // The weekly paper follows the weakest subject the report knows; otherwise the chosen one.
       const weakestSubject = weak[0]?.subject ?? subject;
       setSubject(weakestSubject);
-      const questions = buildExamQuestions(data, { mode: 'subject', subject: weakestSubject, count: slot.questions, today });
+      const questions = buildExamQuestions(data, { mode: 'subject', subject: weakestSubject, count: slot.questions, today, generate: true, variant: Date.now() });
       start(questions, 'subject', 'weekly');
       return;
     }
     // A daily short test stays on one chapter: the weakest one that still has questions.
     const target = chapterId || dailyTestChapter(data, weak.map(row => row.chapterId).filter((id): id is string => !!id));
-    const questions = buildExamQuestions(data, { mode: 'chapter', chapterId: target, count: slot.questions, today });
+    const questions = buildExamQuestions(data, { mode: 'chapter', chapterId: target, count: slot.questions, today, generate: true, variant: Date.now() });
     start(questions, 'chapter', 'daily');
   };
 
   const startConfigured = () => {
-    const questions = buildExamQuestions(data, { mode, subject, chapterId: chapterId || undefined, count, today });
+    const questions = buildExamQuestions(data, { mode, subject, chapterId: chapterId || undefined, count, today, generate: mode === 'chapter' || mode === 'subject', variant: Date.now() });
     start(questions, mode);
   };
 

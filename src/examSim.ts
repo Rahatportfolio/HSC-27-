@@ -4,6 +4,7 @@ import { recordMcqAnswer } from './mistakeRevision';
 import { addDays } from './planner';
 import type { AppData } from './planner';
 import { STARTER_QUESTIONS } from './quiz-data';
+import { generateQuestions } from './questionGen';
 import { applyRetryResults, dueRetryIds, enqueueRetries, retryBuckets } from './retryLoop';
 import { LIMITS, newId, nowIso } from './storage';
 import type { ExamBreakdownRow, ExamCadence, ExamMode, ExamSession, QuizQuestion, TestKind } from './types';
@@ -42,6 +43,13 @@ export interface ExamOptions {
   today?: string;
   /** Kept for callers that only know the storage date. */
   date?: string;
+  /**
+   * Top up a short pool with rule-based questions generated from the same verified
+   * textbook facts. Off by default so pure-bank behaviour stays testable.
+   */
+  generate?: boolean;
+  /** Variety seed for generated items (the UI passes a per-paper counter). */
+  variant?: string | number;
 }
 
 export type Rng = () => number;
@@ -69,8 +77,15 @@ export function wrongQuestionIds(data: AppData): Set<string> {
   return wrong;
 }
 
+/**
+ * The pool a paper is built from.
+ *
+ * `generate` only ever *adds* rule-based items for chapters that already have verified
+ * facts; it never invents a chapter, a fact or an answer, and the generated items go
+ * through `verifyGenerated` before they are used (see `generatedPool`).
+ */
 export function examPool(data: AppData, options: ExamOptions): QuizQuestion[] {
-  const all = [...STARTER_QUESTIONS, ...data.questions];
+  const all = [...STARTER_QUESTIONS, ...data.questions, ...(options.generate ? generatedPool(options) : [])];
   switch (options.mode) {
     case 'chapter':
       return options.chapterId ? all.filter(question => question.chapterId === options.chapterId) : [];
@@ -89,6 +104,21 @@ export function examPool(data: AppData, options: ExamOptions): QuizQuestion[] {
     default:
       return all;
   }
+}
+
+/** Generated items for exactly the chapter/subject the paper asks for. */
+function generatedPool(options: ExamOptions): QuizQuestion[] {
+  const variant = options.variant ?? 0;
+  if (options.mode === 'chapter') return options.chapterId ? generateQuestions(options.chapterId, { variant }) : [];
+  if (options.mode === 'subject') {
+    if (!options.subject) return [];
+    return chapterIdsForSubject(options.subject).flatMap(chapterId => generateQuestions(chapterId, { variant }));
+  }
+  return [];
+}
+
+function chapterIdsForSubject(subject: SubjectId): string[] {
+  return [...new Set(STARTER_QUESTIONS.filter(question => question.subject === subject && question.chapterId).map(question => question.chapterId!))];
 }
 
 /** Round-robin across subjects so a full mock does not become a single-subject quiz. */

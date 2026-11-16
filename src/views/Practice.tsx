@@ -1,7 +1,7 @@
 import { recordMcqAnswer, recordCqEntry } from '../mistakeRevision';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { ArrowRight, BookOpen, Brain, Check, ChevronRight, CircleHelp, ListChecks, NotebookPen, Plus, RotateCcw, Search, Target, Trash2, X } from 'lucide-react';
+import { ArrowRight, BookOpen, Brain, Check, ChevronRight, CircleHelp, ListChecks, NotebookPen, Plus, RotateCcw, Search, Sparkles, Target, Trash2, X } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
@@ -10,6 +10,9 @@ import { allQuestions, attemptStats, subjectAccuracy } from '../analytics';
 import { newId, nowIso } from '../storage';
 import { chapterMeta, updateChapterMeta } from '../study';
 import { STARTER_QUESTIONS } from '../quiz-data';
+import {
+  ENGINE_LABEL, GENERATIVE_CHAPTER_COUNT, generativeChapters, generativeGap, generateQuestions, verifyGenerated,
+} from '../questionGen';
 import { CHAPTER_CLASSES } from '../classLinks';
 import type { CqEntry, CqParts, QuizQuestion } from '../types';
 import { ClassLinkRow, EmptyState, Modal, PageHeading, ProgressBar, SubjectBadge } from '../components';
@@ -55,6 +58,26 @@ function McqPractice({ stats, weekStats }: { stats: { total: number; correct: nu
   const chapters = sortChapters(CHAPTERS.filter(chapter => subject === 'all' || chapter.subject === subject));
   const pool = questions.filter(question => (subject === 'all' || question.subject === subject) && (!chapterId || question.chapterId === chapterId) && (!onlyMine || !question.id.startsWith('seed-')) && (!reviewOnly || latestAttempt.get(question.id) === false));
   const active = quiz ? questions.find(question => question.id === quiz.ids[quiz.index]) : null;
+  /**
+   * Rule-based generation: every item comes from `questionGen`, is verified before it is
+   * shown, and joins the normal quiz runner below — so answers still feed the mistake book,
+   * the weak-chapter flags and the spaced retry ladder exactly like bank questions.
+   */
+  const startGenerated = () => {
+    if (!chapterId) { notify('আগে একটি অধ্যায় বাছো—জেনারেটর অধ্যায়ভিত্তিক তথ্য থেকে প্রশ্ন বানায়।', 'info'); return; }
+    const gap = generativeGap(chapterId);
+    if (gap !== 'ok') { notify(gap === 'no-fact' ? 'এই অধ্যায়ের যাচাই করা তথ্য এখনো যোগ হয়নি, তাই প্রশ্ন বানানো হবে না।' : 'এই অধ্যায়ের জন্য এখনো যথেষ্ট যাচাই করা তথ্য নেই।', 'info'); return; }
+    const generated = generateQuestions(chapterId, { variant: Date.now(), count });
+    const issues = verifyGenerated(generated);
+    if (issues.length || !generated.length) { notify('জেনারেট করা প্রশ্ন যাচাইয়ে উত্তীর্ণ হয়নি—কিছুই যোগ করা হয়নি।', 'error'); return; }
+    const known = new Set(questions.map(question => question.id));
+    const fresh = generated.filter(question => !known.has(question.id));
+    if (!fresh.length) return;
+    setData(d => ({ ...d, questions: [...d.questions, ...fresh].slice(0, 2000) }));
+    setQuiz({ ids: fresh.map(question => question.id), index: 0, chosen: null, correct: 0, wrong: [] });
+    setAddOpen(false);
+    notify(`${bn(fresh.length)}টি প্রশ্ন পাঠ্যবই-যাচাইকৃত তথ্য থেকে তৈরি হয়েছে।`, 'success');
+  };
   const start = () => {
     if (!pool.length) { notify('এই ফিল্টারে কোনো প্রশ্ন নেই। বিষয় বা অধ্যায় বদলাও।', 'info'); return; }
     const ids = [...pool].sort(() => Math.random() - 0.5).slice(0, Math.min(count, 20)).map(question => question.id);
@@ -93,6 +116,15 @@ function McqPractice({ stats, weekStats }: { stats: { total: number; correct: nu
         <div className="quiz-filters"><label className="check-line"><input type="checkbox" checked={reviewOnly} onChange={e => setReviewOnly(e.target.checked)} />{t("শুধু আগে ভুল করা প্রশ্ন", "Only questions I got wrong")}</label><label className="check-line"><input type="checkbox" checked={onlyMine} onChange={e => setOnlyMine(e.target.checked)} />{t("শুধু আমার যোগ করা প্রশ্ন", "Only questions I added")}</label></div>
         <div className="pool-line"><span>{bn(pool.length)}টি প্রশ্ন পাওয়া গেছে</span><span>{bn(data.questions.length)}টি নিজের · {bn(questions.length - data.questions.length)}টি নমুনা</span></div>
         {chapterId && CHAPTER_CLASSES[chapterId] && <div className="practice-chapter-classes"><span>{t('কুইজের আগে ক্লাস ঝালাই:', 'Quick class review before quiz:')}</span><ClassLinkRow classes={CHAPTER_CLASSES[chapterId]} /></div>}
+        <div className="generator-box">
+          <div className="generator-head"><span className="stat-icon green"><Sparkles size={18} /></span><div><strong>{t("স্বয়ংক্রিয় প্রশ্ন তৈরি", "Generate questions")}</strong><small>{ENGINE_LABEL} · {bn(GENERATIVE_CHAPTER_COUNT)}টি অধ্যায়ের যাচাই করা তথ্য থেকে</small></div></div>
+          <p className="tiny-muted">{t("নিয়মভিত্তিক ইঞ্জিন পাঠ্যবইয়ের যাচাই করা তথ্য থেকেই প্রশ্ন বানায়—প্রতিটি উত্তরের সূত্র ব্যাখ্যায় লেখা থাকে, আর জেনারেটর একটি অধ্যায়ের তথ্য না থাকলে কিছুই বানায় না।", "The rule-based engine builds questions only from verified textbook facts. Every explanation cites its source, and a chapter without facts produces nothing at all.")}</p>
+          <div className="generator-actions">
+            <button className="button secondary small" onClick={startGenerated} disabled={!chapterId || generativeGap(chapterId) !== 'ok'}><Sparkles size={15} />{t("এই অধ্যায় থেকে প্রশ্ন বানাও", "Generate for this chapter")}</button>
+            <span className="tiny-muted">{!chapterId ? t("অধ্যায় বাছো", "Pick a chapter") : generativeGap(chapterId) === 'ok' ? t(`${bn(generateQuestions(chapterId).length)}টি প্রশ্ন তৈরি হবে`, `${generateQuestions(chapterId).length} question(s) available`) : t("যাচাই করা তথ্য নেই", "No verified facts yet")}</span>
+          </div>
+          <p className="tiny-muted">{t(`মোট ${bn(generativeChapters().length)}টি অধ্যায়ে জেনারেশন চালু—বাকিগুলোতে ব্যাংকের প্রশ্নই যথেষ্ট।`, `Generation is available for ${generativeChapters().length} chapters; the rest rely on the bank.`)}</p>
+        </div>
         <button className="button primary wide-button" onClick={start}><Brain size={17} />{t("কুইজ শুরু করো", "Start quiz")}</button>
         <p className="tiny-muted center">নমুনা ব্যাংকে {bn(bankCount)}টি প্রশ্ন, {bn(bankChapterCount)}টি অধ্যায়/ইউনিট ঘেঁষে সাজানো—বোর্ড প্রশ্নের দাবি নয়, কিন্তু প্রতিটি বিষয়ে অনুশীলন শুরু করার জন্য যথেষ্ট।</p>
       </div>}
