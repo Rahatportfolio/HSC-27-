@@ -4926,3 +4926,37 @@ body {
   .exam-postmortem-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .exam-trend-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ---------- Self audit ---------- */
+.audit-headline { display: flex; align-items: center; gap: 12px; border-inline-start: 4px solid #8fb573; }
+.audit-headline.warn { border-inline-start-color: #d8895f; background: #fdf7f2; }
+.audit-headline.fail { border-inline-start-color: #b54238; background: #fdf2f1; }
+.audit-headline strong { display: block; font-size: .92rem; line-height: 1.6; }
+.audit-headline span { font-size: .72rem; color: var(--muted); }
+.audit-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.audit-check { display: grid; gap: 4px; border-top: 3px solid #8fb573; }
+.audit-check.warn { border-top-color: #d8895f; }
+.audit-check.fail { border-top-color: #b54238; }
+.audit-check-top { display: flex; align-items: center; justify-content: space-between; color: #4c7a3f; }
+.audit-check.warn .audit-check-top { color: #b4532a; }
+.audit-check.fail .audit-check-top { color: #b54238; }
+.audit-check-label { font-size: .74rem; color: var(--muted); }
+.audit-check-value { font-size: 1.35rem; line-height: 1.25; }
+.audit-check p { font-size: .74rem; color: var(--muted); line-height: 1.65; }
+.audit-count-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.audit-count-grid > div { display: grid; gap: 2px; padding: 10px; border-radius: 10px; background: var(--soft, #f4f6f3); }
+.audit-count-grid span { font-size: .72rem; color: var(--muted); }
+.audit-count-grid strong { font-size: 1.05rem; }
+.audit-count-grid .warn strong { color: #b4532a; }
+.audit-thin-list { display: grid; gap: 6px; }
+.audit-thin-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 9px; flex-wrap: wrap; }
+.audit-thin-row span { display: grid; gap: 1px; min-width: 0; }
+.audit-thin-row strong { font-size: .82rem; }
+.audit-thin-row small { font-size: .7rem; color: var(--muted); }
+.audit-thin-numbers { display: flex; gap: 8px; }
+.audit-thin-numbers small.warn { color: #b4532a; }
+.audit-limits ul { display: grid; gap: 8px; padding-inline-start: 18px; }
+.audit-limits li { font-size: .78rem; color: var(--muted); line-height: 1.7; }
+@media (max-width: 760px) {
+  .audit-count-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}

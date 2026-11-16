@@ -1,7 +1,7 @@
 import { integrateStudyPlan } from './smartSchedule';
 import StudySystem from './views/StudySystem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, Grid3x3, HardDrive, Layers, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, Grid3x3, HardDrive, Layers, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
@@ -39,6 +39,7 @@ import ExamSimView from './views/ExamSim';
 import WeaknessView from './views/Weakness';
 import HeatmapView from './views/Heatmap';
 import BacklogView from './views/Backlog';
+import AuditView from './views/Audit';
 import AnalyticsView from './views/Analytics';
 import LibraryView from './views/Library';
 import RemindersView from './views/Reminders';
@@ -74,6 +75,7 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
   { label: 'সহায়তা', labelEn: 'Support', items: [
     { id: 'library' as const, label: 'লাইব্রেরি', labelEn: 'Library', short: 'লাইব্রেরি', shortEn: 'Library', icon: FolderOpen },
     { id: 'reminders' as const, label: 'রিমাইন্ডার', labelEn: 'Reminders', short: 'রিমাইন্ডার', shortEn: 'Reminders', icon: Bell },
+    { id: 'audit' as const, label: 'অ্যাপ অডিট', labelEn: 'App audit', short: 'অডিট', shortEn: 'Audit', icon: BadgeCheck },
     { id: 'storage' as const, label: 'স্টোরেজ', labelEn: 'Storage', short: 'স্টোরেজ', shortEn: 'Storage', icon: HardDrive },
   ] },
 ];
@@ -553,7 +555,7 @@ export default function App() {
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, heatmap: HeatmapView, backlog: BacklogView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
+  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, heatmap: HeatmapView, backlog: BacklogView, audit: AuditView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');

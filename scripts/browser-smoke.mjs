@@ -134,6 +134,14 @@ try {
   }
   console.log('PASS backlog manager', backlogDays, 'days, cap respected');
 
+  // Self audit: the page must re-count the bank and state its own limits.
+  await nav('অডিট');
+  await page.locator('.audit-view').waitFor();
+  assert.ok(await page.locator('.audit-check').count() >= 8);
+  assert.ok(await page.locator('.audit-limits li').count() >= 3);
+  assert.ok((await page.locator('.audit-headline').innerText()).length > 10);
+  console.log('PASS self audit', await page.locator('.audit-check').count(), 'checks,', await page.locator('.audit-thin-row').count(), 'thin chapters');
+
   // Exam postmortem: after a real paper the result page must explain where the marks
   // went, counted from banked questions only.
   await nav('সিমুলেটর');
