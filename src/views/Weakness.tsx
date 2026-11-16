@@ -5,6 +5,7 @@ import { chapterById, subjectById } from '../data';
 import { bn, formatDate, percent } from '../planner';
 import { EmptyState, PageHeading, ProgressBar, SubjectBadge } from '../components';
 import { weaknessReport, weaknessSummary, weaknessWeekPlan, markWeaknessPracticed, pullRevisionForward } from '../weakness';
+import { applyAdaptivePlan, adaptiveCap, crowdedDays, daysToExam, HARD_DAILY_CAP_MINUTES, plannedMinutes } from '../adaptive';
 import type { WeaknessRow } from '../weakness';
 import { retryBuckets } from '../retryLoop';
 import { chapterStage } from '../learning';
@@ -19,6 +20,12 @@ export default function WeaknessView() {
   const summary = useMemo(() => weaknessSummary(plan, data, today), [plan, data, today]);
   const week = useMemo(() => weaknessWeekPlan(plan, data, today), [plan, data, today]);
   const retries = useMemo(() => retryBuckets(data, today), [data, today]);
+  const adaptive = useMemo(() => applyAdaptivePlan(plan, rows, data, today, {
+    horizonDays: 3, minBlockMinutes: 45, bufferMinutes: data.settings.adaptiveBuffer,
+  }), [plan, rows, data, today]);
+  const capToday = adaptiveCap(data, today, data.settings.adaptiveBuffer);
+  const crowded = crowdedDays(plan, data, today, data.settings.adaptiveBuffer);
+  const examDays = daysToExam(data, today);
   const shown = filter === 'critical' ? rows.filter(row => row.score >= 8) : filter === 'retry' ? rows.filter(row => row.dueRetries > 0) : rows;
 
   const open = (chapterId: string) => { const chapter = chapterById[chapterId]; if (chapter) openChapter(chapter); };
@@ -50,6 +57,33 @@ export default function WeaknessView() {
       <div className="card weakness-stat"><span className="stat-icon lavender"><RotateCcw size={20} /></span><div><span>{t('ভুল প্রশ্ন বাকি', 'Retries due')}</span><strong>{bn(retries.due.length)}</strong><p>{t('ল্যাডারে', 'on the ladder')}</p></div></div>
       <div className="card weakness-stat"><span className="stat-icon blue"><TrendingDown size={20} /></span><div><span>{t('সবচেয়ে ঝুঁকিপূর্ণ', 'Biggest risk')}</span><strong>{summary.focus[0] ? subjectById[summary.focus[0].subject].short : '—'}</strong><p>{summary.focus[0] ? chapterById[summary.focus[0].chapterId]?.title.slice(0, 18) : t('কিছু নেই', 'nothing yet')}</p></div></div>
     </div>
+
+    <section className="card adaptive-card">
+      <div className="card-heading"><div><h2><Zap size={19} />{t('অ্যাডাপ্টিভ রুটিন', 'Adaptive routine')}</h2><p>{t('দুর্বল অধ্যায়ের জন্য পরের ৩ দিনের রুটিন নিজে থেকে সাজানো—কিন্তু দিনের সীমা কখনোই ভাঙে না।', 'The next three days reshuffle towards weak chapters — the daily ceiling never breaks.')}</p></div><span className={`retry-pill ${data.settings.adaptiveEnabled ? 'due' : ''}`}>{data.settings.adaptiveEnabled ? t('চালু', 'On') : t('বন্ধ', 'Off')}</span></div>
+      <div className="adaptive-budget">
+        <div><span>{t('আজকের সীমা', 'Today’s ceiling')}</span><strong>{bn(Math.round(capToday / 60))}<small>{t('ঘ', 'h')}</small> {bn(capToday % 60)}<small>{t('মি', 'm')}</small></strong><small>{t(`সর্বোচ্চ ${bn(HARD_DAILY_CAP_MINUTES / 60)} ঘণ্টা`, `Hard ceiling ${HARD_DAILY_CAP_MINUTES / 60}h`)}</small></div>
+        <div><span>{t('আজ পরিকল্পিত', 'Planned today')}</span><strong>{bn(plannedMinutes(plan.find(day => day.date === today)))}<small>{t(' মি', 'm')}</small></strong><small>{t(`বাফার ${bn(data.settings.adaptiveBuffer)} মি.`, `Buffer ${data.settings.adaptiveBuffer} min`)}</small></div>
+        <div><span>{t('পরের ৭ দিনে জায়গা নেই', 'No room in 7 days')}</span><strong>{bn(crowded)}<small>{t('/৭', '/7')}</small></strong><small>{t('দিন পূর্ণ', 'days at the cap')}</small></div>
+        <div><span>{t('পরীক্ষা বাকি', 'Exam in')}</span><strong>{bn(examDays)}<small>{t(' দিন', ' days')}</small></strong><small>{t('HSC ২০২৭', 'HSC 2027')}</small></div>
+      </div>
+      {!data.settings.adaptiveEnabled
+        ? <p className="tiny-muted padded">{t('সেটিংসে চালু করলে দুর্বল অধ্যায় আগে বসবে; বন্ধ থাকলে নির্ধারিত রুটিনই অটুট থাকবে।', 'Turn it on in Settings to give weak chapters priority; while off, the generated routine stays untouched.')}</p>
+        : adaptive.swaps.length === 0 && adaptive.moved.length === 0
+          ? <p className="tiny-muted padded">{t('এই মুহূর্তে বদলানোর দরকার নেই—হয় দুর্বলতা নেই, নয়তো দিন আগেই পূর্ণ।', 'Nothing to reshuffle right now — either no weakness, or the days are already full.')}</p>
+          : <div className="adaptive-changes">
+            {adaptive.loads.map(load => <div className="adaptive-change" key={load.date}>
+              <span className="adaptive-date">{load.date === today ? t('আজ', 'Today') : formatDate(load.date)}</span>
+              <div className="adaptive-swap-list">{adaptive.swaps.filter(swap => swap.date === load.date).map(swap => <div key={swap.taskId} className="adaptive-swap">
+                <span className="adaptive-in"><strong>{swap.title}</strong><small>{bn(swap.minutes)} {t('মি.', 'min')} · {swap.filledGap ? t('ফাঁকা জায়গায়', 'free room') : t('নিচের অগ্রাধিকারের জায়গায়', 'replaces lower priority')}</small></span>
+                {swap.replacedTitle && <span className="adaptive-out"><ArrowRight size={13} />{swap.replacedTitle}</span>}
+              </div>)}</div>
+              <span className="adaptive-load">{bn(load.before)} → {bn(load.after)} {t('মি.', 'min')}</span>
+            </div>)}
+            {adaptive.moved.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.moved.length)}টি ব্লক হালকা দিনে সরানো হয়েছে—কোনো পড়া বাদ যায়নি।`, `${adaptive.moved.length} block(s) moved to lighter days — nothing was dropped.`)}</p>}
+            {adaptive.dropped.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.dropped.length)}টি ব্লক জায়গা না পেয়ে বাদ গেছে; টেস্ট প্রস্তুতি স্ক্রিন থেকে নিজে সাজাতে পারো।`, `${adaptive.dropped.length} block(s) found no room; use the test-prep screen to place them yourself.`)}</p>}
+            {adaptive.unfitted.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.unfitted.length)}টি দুর্বল অধ্যায়ের জন্য জায়গা নেই—রুটিন ইতিমধ্যে পূর্ণ।`, `${adaptive.unfitted.length} weak chapter(s) have no room — the routine is already full.`)}</p>}
+          </div>}
+    </section>
 
     {!rows.length ? <EmptyState title={t('এখনো কোনো দুর্বলতা ধরা পড়েনি', 'Nothing flagged yet')} description={t('MCQ অনুশীলন ও পরীক্ষা দিলে এখানে কারণসহ তালিকা তৈরি হবে।', 'Practise MCQ and take a paper — this list builds itself from real answers.')} action={<button className="button primary" onClick={() => navigate('examsim')}>{t('পরীক্ষা শুরু করো', 'Start a paper')}</button>} /> : <>
       {summary.focus.length > 0 && <section className="card weakness-focus">

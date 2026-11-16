@@ -98,6 +98,25 @@ try {
   await page.locator('.weakness-view').waitFor();
   await page.locator('.weakness-stat-row').waitFor();
   console.log('PASS weakness detector', await page.locator('.weakness-row').count(), 'flagged chapters');
+  // Adaptive planner: the card must stay honest — either real swap rows or the "nothing to do" line.
+  await page.locator('.adaptive-card').waitFor();
+  const adaptiveBudget = await page.locator('.adaptive-budget > div').count();
+  assert.equal(adaptiveBudget, 4);
+  assert.ok(await page.locator('.adaptive-card').innerText().then(text => text.includes('সর্বোচ্চ ৮ ঘণ্টা')));
+  const adaptiveRows = await page.locator('.adaptive-change').count();
+  if (adaptiveRows === 0) {
+    assert.ok(await page.locator('.adaptive-card').innerText().then(text => text.includes('বদলানোর দরকার নেই')));
+  } else {
+    for (let i = 0; i < adaptiveRows; i++) {
+      assert.ok((await page.locator('.adaptive-load').nth(i).innerText()).includes('→'));
+    }
+  }
+  await nav('সেটিংস');
+  const bufferOptions = await page.locator('.settings-view select').evaluateAll(selects =>
+    selects.map(select => Array.from(select.options).map(option => option.value)).find(values => values.includes('30') && values.includes('60')),
+  );
+  assert.deepEqual(bufferOptions, ['0', '30', '60']);
+  console.log('PASS adaptive routine card and buffer options');
 
   // Exam routine: the daily slot must build a real 10-question paper.
   await nav('সিমুলেটর');

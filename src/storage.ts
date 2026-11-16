@@ -105,11 +105,14 @@ export function sanitizeSettings(raw: unknown): Settings {
   const pomodoroBreak = raw.pomodoroBreak === undefined ? d.pomodoroBreak : Number(raw.pomodoroBreak);
   const pomodoroLongBreak = raw.pomodoroLongBreak === undefined ? d.pomodoroLongBreak : Number(raw.pomodoroLongBreak);
   if (!int(pomodoroFocus, 5, 120) || !int(pomodoroBreak, 1, 60) || !int(pomodoroLongBreak, 5, 120)) throw new Error('পোমোডোরোর সময় সঠিক নয়।');
+  const adaptiveEnabled = raw.adaptiveEnabled === undefined ? d.adaptiveEnabled : raw.adaptiveEnabled === true;
+  const adaptiveBuffer = raw.adaptiveBuffer === undefined ? d.adaptiveBuffer : Number(raw.adaptiveBuffer);
+  if (![0, 30, 60].includes(adaptiveBuffer)) throw new Error('অ্যাডাপ্টিভ প্ল্যানারের বাফার সঠিক নয়।');
   const fontScale = raw.fontScale === undefined ? d.fontScale : raw.fontScale;
   if (!['sm', 'md', 'lg'].includes(String(fontScale))) throw new Error('লেখার আকারের সেটিংস সঠিক নয়।');
   return {
     startDate: raw.startDate, startTime: raw.startTime, dailyHours: Number(raw.dailyHours),
-    boostEnabled, boostStartDate, boostDailyHours,
+    boostEnabled, boostStartDate, boostDailyHours, adaptiveEnabled, adaptiveBuffer,
     board: raw.board, name: raw.name,
     reminderEnabled: raw.reminderEnabled === true, reminderLead: Number(raw.reminderLead), syllabusChecked: raw.syllabusChecked === true,
     calendarRevision: int(raw.calendarRevision, 0, 999999) ? Number(raw.calendarRevision) : 0,

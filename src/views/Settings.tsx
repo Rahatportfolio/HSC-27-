@@ -28,7 +28,7 @@ export default function SettingsView() {
     e.preventDefault();
     let settings: Settings;
     try { settings = sanitizeSettings(draft); } catch (err) { notify((err as Error).message, 'error'); return; }
-    const scheduleChanged = (['startDate', 'startTime', 'dailyHours', 'boostEnabled', 'boostStartDate', 'boostDailyHours'] as const).some(key => settings[key] !== data.settings[key]);
+    const scheduleChanged = (['startDate', 'startTime', 'dailyHours', 'boostEnabled', 'boostStartDate', 'boostDailyHours', 'adaptiveEnabled', 'adaptiveBuffer'] as const).some(key => settings[key] !== data.settings[key]);
     const apply = () => {
       setData(d => ({ ...d, settings: { ...settings, calendarRevision: d.settings.calendarRevision + (scheduleChanged ? 1 : 0) } }));
       setDirty(false);
@@ -95,6 +95,8 @@ export default function SettingsView() {
       </div>
       <div className="settings-subsection"><h3><Timer size={18} />{t("পড়ার অভ্যাস", "Study habits")}</h3><div className="form-grid">
         <label>{t("রিভিশন কার্ড", "Revision cards")}<select value={draft.revisionEnabled ? 'on' : 'off'} onChange={e => update('revisionEnabled', e.target.value === 'on')}><option value="on">{t("অটো তৈরি হবে", "generated automatically")}</option><option value="off">{t("বন্ধ", "Off")}</option></select><small>{t("অধ্যায় শেষ হলে ১/৩/৭/১৪/৩০ দিনের কার্ড", "Cards at 1/3/7/14/30 days after a chapter")}</small></label>
+        <label>{t("অ্যাডাপ্টিভ প্ল্যানার", "Adaptive planner")}<select value={draft.adaptiveEnabled ? 'on' : 'off'} onChange={e => update('adaptiveEnabled', e.target.value === 'on')}><option value="on">{t("চালু (দুর্বল অধ্যায় আগে)", "Enabled (weak chapters first)")}</option><option value="off">{t("বন্ধ (নির্ধারিত রুটিন অটুট)", "Disabled (routine untouched)")}</option></select><small>{t("দুর্বল অধ্যায়ের জন্য পরের ৩ দিনের রুটিন নিজে থেকে সাজানো হবে; কখনোই ৮ ঘণ্টার বেশি নয়।", "Reshuffles the next three days towards weak chapters, never above eight hours a day.")}</small></label>
+        <label>{t("অ্যাডাপ্টিভ বাফার", "Adaptive buffer")}<select value={String(draft.adaptiveBuffer)} onChange={e => update('adaptiveBuffer', Number(e.target.value))}><option value="0">{t("কোনো বাড়তি সময় নয়", "No extra time")}</option><option value="30">{t("সর্বোচ্চ ৩০ মিনিট বাড়তি", "Up to 30 extra minutes")}</option><option value="60">{t("সর্বোচ্চ ৬০ মিনিট বাড়তি", "Up to 60 extra minutes")}</option></select><small>{t("আগে থেকেই ৮ ঘণ্টা থাকলে বাফার কাজ করবে না; সীমা কখনোই ভাঙবে না।", "A buffer cannot exceed the eight-hour ceiling; the cap always wins.")}</small></label>
         <label>{t("ব্যাকলগ ক্যারিওভার", "Backlog carry-over")}<select value={draft.carryoverMode} onChange={e => update('carryoverMode', e.target.value as Settings['carryoverMode'])}><option value="manual">{t("নিজে বেছে নেব", "I'll pick")}</option><option value="auto">{t("প্রতিদিন অটো (সর্বোচ্চ ৬টি)", "Automatic daily (max 6)")}</option></select><small>{t("মিস হওয়া সাম্প্রতিক সেশন আজকের তালিকায়", "Missed recent sessions in today's list")}</small></label>
         <label>{t("পোমোডোরো ফোকাস (মিনিট)", "Pomodoro focus (min)")}<input type="number" min={5} max={120} value={draft.pomodoroFocus} onChange={e => update('pomodoroFocus', Number(e.target.value))} /></label>
         <label>{t("ছোট বিরতি (মিনিট)", "Short break (min)")}<input type="number" min={1} max={60} value={draft.pomodoroBreak} onChange={e => update('pomodoroBreak', Number(e.target.value))} /></label>

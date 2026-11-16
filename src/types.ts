@@ -370,4 +370,8 @@ export interface SettingsExtras {
   boostEnabled: boolean;
   boostStartDate: string;
   boostDailyHours: number;
+  /** Adaptive planner: may weak chapters reshuffle future routine blocks? */
+  adaptiveEnabled: boolean;
+  /** Minutes that may be added above the base target by the adaptive planner (0 | 30 | 60). */
+  adaptiveBuffer: number;
 }

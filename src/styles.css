@@ -4733,3 +4733,27 @@ body {
 .slot-state { font-size: .68rem; padding: 3px 8px; border-radius: 999px; background: var(--soft, #f4f6f3); color: var(--muted); white-space: nowrap; }
 .slot-state.due { background: #fbe9de; color: #a95a2c; font-weight: 700; }
 @media (max-width: 900px) { .exams-routine-row { grid-template-columns: minmax(0, 1fr); } }
+
+/* ---------- Adaptive routine card ---------- */
+.adaptive-card { margin-top: 14px; }
+.adaptive-budget { display: grid; gap: 10px; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 10px 0; }
+.adaptive-budget > div { display: grid; gap: 2px; padding: 10px; border-radius: 10px; background: var(--soft, #f4f6f3); }
+.adaptive-budget span { font-size: .74rem; color: var(--muted); }
+.adaptive-budget strong { font-size: 1.15rem; }
+.adaptive-budget strong small { font-size: .72rem; font-weight: 500; color: var(--muted); }
+.adaptive-budget > div > small { font-size: .68rem; color: var(--muted); }
+.adaptive-changes { display: grid; gap: 10px; }
+.adaptive-change { display: grid; grid-template-columns: 78px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.adaptive-date { font-size: .78rem; font-weight: 600; }
+.adaptive-swap-list { display: grid; gap: 6px; }
+.adaptive-swap { display: grid; gap: 2px; }
+.adaptive-in { display: grid; }
+.adaptive-in strong { font-size: .84rem; }
+.adaptive-in small { font-size: .7rem; color: #2f6b46; }
+.adaptive-out { display: inline-flex; align-items: center; gap: 5px; font-size: .72rem; color: var(--muted); text-decoration: line-through; }
+.adaptive-load { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+@media (max-width: 980px) { .adaptive-budget { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) {
+  .adaptive-budget { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .adaptive-change { grid-template-columns: minmax(0, 1fr); }
+}

@@ -34,6 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   boostEnabled: true,
   boostStartDate: '2026-12-01',
   boostDailyHours: 16,
+  adaptiveEnabled: true,
+  adaptiveBuffer: 30,
   board: 'সিলেট',
   name: '',
   reminderEnabled: false,

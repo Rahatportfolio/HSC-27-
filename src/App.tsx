@@ -16,6 +16,8 @@ import { canNotify, clearLiveTimerNotification, notifySessionDone, showNotificat
 import type { PresetTimerInput } from './hooks';
 import { cancelTimerAlarm, isNativeApp, nativeNotify, openNativeTimerPictureInPicture, prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
 import { buildDailyNotificationDigest, buildDailyStatusNotification, buildExamRoutineLine } from './notifications';
+import { applyAdaptivePlan } from './adaptive';
+import { weaknessReport } from './weakness';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover, setTaskCompletion } from './study';
 import { PlannerContext } from './context';
@@ -105,7 +107,21 @@ export default function App() {
   // settings-driven regeneration never silently drops the student's own schedule changes.
   const planEdited = useMemo(() => applyManualSchedule(planWithRoutine, data), [planWithRoutine, data]);
   const ordinaryPlan = useMemo(() => applyDayOverrides(planEdited, data.dayOverrides, data.settings), [planEdited, data.dayOverrides, data.settings]);
-  const plan = useMemo(() => integrateStudyPlan(ordinaryPlan, data, today), [ordinaryPlan, data, today]);
+  const planIntegrated = useMemo(() => integrateStudyPlan(ordinaryPlan, data, today), [ordinaryPlan, data, today]);
+  /**
+   * The adaptive planner is a presentation layer, exactly like the manual edits above:
+   * the stored routine is never rewritten, so switching it off restores the original plan.
+   */
+  const plan = useMemo(() => {
+    if (!data.settings.adaptiveEnabled) return planIntegrated;
+    const rows = weaknessReport(planIntegrated, data, today);
+    if (!rows.length) return planIntegrated;
+    return applyAdaptivePlan(planIntegrated, rows, data, today, {
+      horizonDays: 3,
+      minBlockMinutes: 45,
+      bufferMinutes: data.settings.adaptiveBuffer,
+    }).plan;
+  }, [planIntegrated, data, today]);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
