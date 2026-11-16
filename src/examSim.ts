@@ -6,7 +6,7 @@ import type { AppData } from './planner';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { applyRetryResults, dueRetryIds, enqueueRetries, retryBuckets } from './retryLoop';
 import { LIMITS, newId, nowIso } from './storage';
-import type { ExamBreakdownRow, ExamMode, ExamSession, QuizQuestion, TestKind } from './types';
+import type { ExamBreakdownRow, ExamCadence, ExamMode, ExamSession, QuizQuestion, TestKind } from './types';
 
 /**
  * The exam simulator: a real timed paper built from the local question bank,
@@ -206,6 +206,8 @@ export interface SaveExamInput {
   durationMin: number;
   timeTakenSec: number;
   date: string;
+  /** set when the paper was started from the daily/weekly/monthly routine. */
+  cadence?: ExamCadence;
 }
 
 const TEST_KIND: Record<ExamMode, TestKind> = { chapter: 'chapter', subject: 'subject', full: 'model', mistakes: 'model', retry: 'chapter' };
@@ -254,6 +256,7 @@ export function saveExamSession(data: AppData, input: SaveExamInput): AppData {
     date: input.date,
     at,
     breakdown: grade.breakdown,
+    ...(input.cadence ? { cadence: input.cadence } : {}),
   };
   const weakest = [...grade.breakdown]
     .filter(row => row.total > 0)

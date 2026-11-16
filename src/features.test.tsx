@@ -495,3 +495,59 @@ describe('weakness detector screen', () => {
     expect(await screen.findByText(/অধ্যায়ে দুর্বলতা ধরা পড়েছে/)).toBeTruthy();
   });
 });
+
+describe('exam routine cadence', () => {
+  it('shows the three slots and runs the daily test from its card', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('পরীক্ষার রুটিন');
+    const slots = document.querySelectorAll('.exam-routine-slot');
+    expect(slots).toHaveLength(3);
+    expect(document.querySelectorAll('.exam-cadence-dot.daily').length).toBeGreaterThan(0);
+    // A brand-new profile has every slot due.
+    expect(document.querySelectorAll('.exam-routine-slot.due')).toHaveLength(3);
+    // Run the daily short test (10 MCQs).
+    await act(async () => { fireEvent.click(within(slots[0] as HTMLElement).getByRole('button', { name: /এখনই দাও/ })); });
+    await screen.findByText('চলমান পরীক্ষা');
+    expect(document.querySelectorAll('.exam-palette-cell')).toHaveLength(10);
+    for (let index = 0; index < 10; index++) {
+      await act(async () => { fireEvent.click(document.querySelectorAll('.quiz-option')[0]); });
+      const next = screen.queryByRole('button', { name: /পরের প্রশ্ন/ });
+      if (next) await act(async () => { fireEvent.click(next); });
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+    await screen.findByText('ফলাফল');
+    expect(stored().examSessions[0].cadence).toBe('daily');
+    // The result screen confirms the routine slot was closed.
+    expect(document.body.textContent).toContain('রুটিন স্লট সম্পন্ন');
+    // Back on setup, the daily slot is no longer due.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /নতুন পরীক্ষা/ })); });
+    await screen.findByText('পরীক্ষার রুটিন');
+    expect(document.querySelectorAll('.exam-routine-slot.due')).toHaveLength(2);
+  });
+
+  it('mirrors the routine on the Exams screen and links into it', async () => {
+    render(<App />);
+    go('exams');
+    expect(await screen.findByText('পরীক্ষার রুটিন')).toBeTruthy();
+    expect(document.querySelectorAll('.exams-routine-item')).toHaveLength(3);
+    expect(document.querySelectorAll('.exams-routine-item.due')).toHaveLength(3);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /এখনই দাও/ })); });
+    expect(await screen.findByText('নতুন পরীক্ষা তৈরি করো')).toBeTruthy();
+  });
+
+  it('nudges when two clear days passed without a paper', async () => {
+    const { freshData, addDays, todayKey } = await import('./planner');
+    const data = freshData();
+    const today = todayKey();
+    data.examSessions.push({
+      id: 'old', mode: 'chapter', title: 'পুরোনো দৈনিক', chapterIds: [], questionIds: ['seed-001'], answers: {}, score: 5, total: 10,
+      durationMin: 10, timeTakenSec: 200, date: addDays(today, -3), at: `${addDays(today, -3)}T10:00:00.000Z`, breakdown: [], cadence: 'daily',
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('examsim');
+    await screen.findByText('পরীক্ষার রুটিন');
+    expect(document.querySelector('.exam-missed')?.textContent).toContain('দিনে কোনো পরীক্ষা দেওয়া হয়নি');
+  });
+});

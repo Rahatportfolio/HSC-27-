@@ -11,6 +11,7 @@ import type { TestKind, TestRecord } from '../types';
 import { EmptyState, Modal, PageHeading, ProgressBar, SubjectIcon } from '../components';
 import { t } from '../i18n';
 import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
+import { cadenceSlots, cadenceStats, nextCadenceSlot } from '../cadence';
 
 const TEST_KIND_LABEL: Record<TestKind, string> = { chapter: 'অধ্যায় টেস্ট', subject: 'বিষয় টেস্ট', model: 'মডেল টেস্ট' };
 function examClock(seconds: number): string {
@@ -21,6 +22,9 @@ export default function ExamsView() {
   const { data, setData, plan, today, openExam, navigate, confirm, notify } = usePlanner();
   const [testOpen, setTestOpen] = useState(false);
   const allTasks = plan.flatMap(day => day.tasks);
+  const slots = cadenceSlots(data, today);
+  const routine = cadenceStats(data, today);
+  const nextSlot = nextCadenceSlot(data, today);
   const mocks = allTasks.filter(task => task.kind === 'exam');
   const results = Object.values(data.exams);
   const average = results.length ? Math.round(results.reduce((sum, exam) => sum + exam.score / exam.total * 100, 0) / results.length) : 0;
@@ -38,6 +42,11 @@ export default function ExamsView() {
     <div className="notice-box"><Info size={19} /><p><strong>{t("এগুলো তোমার ব্যক্তিগত টেস্ট ও লক্ষ্য ট্র্যাকার।", "Personal test & target tracker.")}</strong> চূড়ান্ত পরীক্ষার রুটিন তোমার কলেজ ও শিক্ষা বোর্ডের নোটিশ থেকে মিলিয়ে নাও।</p></div>
     <div className="exam-stats"><div className="card"><span className="stat-icon green"><ClipboardCheck size={21} /></span><div><span>{t("মডেল টেস্ট রেকর্ড", "Model test record")}</span><strong>{bn(results.length)} <small>{t("/ ১৩টি পত্র", "/ 13 papers")}</small></strong></div></div><div className="card"><span className="stat-icon lavender"><Target size={21} /></span><div><span>{t("মডেল টেস্টের গড়", "Model test average")}</span><strong>{results.length ? `${bn(average)}%` : '—'}</strong></div><small>{t("পূর্ণমান অনুযায়ী শতাংশ", "Percentage of total marks")}</small></div><div className="card"><span className="stat-icon peach"><TrendingUp size={21} /></span><div><span>{t("সব টেস্টের গড়", "Average of all tests")}</span><strong>{customTests.length ? `${bn(testAverage)}%` : '—'}</strong></div><small>{bn(customTests.length)}টি টেস্ট · সেরা {customTests.length ? `${bn(Math.round(bestTest))}%` : '—'}</small></div><div className="card next-exam-card"><span className="stat-icon blue"><Award size={21} /></span><div><span>{t("পরের মডেল টেস্ট", "Next model test")}</span><strong>{next ? subjectById[next.subject].short : 'সব রেকর্ড আছে'}</strong><p>{next ? `${formatDate(next.date)} · ${next.paperId?.endsWith('-2') ? 'দ্বিতীয় পত্র' : 'প্রথম পত্র'}` : 'ভুলের খাতা ঝালাই করতে থাকো'}</p></div>{next && <button className="icon-button" aria-label={t("পরের টেস্টের রুটিন", "Next test routine")} onClick={() => navigate('today', next.date)}><CalendarDays size={18} /></button>}</div></div>
 
+    <section className="card exams-routine-card">
+      <div className="card-heading"><div><h2><Target size={19} />{t('পরীক্ষার রুটিন', 'Exam routine')}</h2><p>{t('দৈনিক · সাপ্তাহিক · মাসিক—তিনটি স্লট, সিমুলেটরেই সময় ধরে।', 'Daily · weekly · monthly — all three run timed in the simulator.')}</p></div>{nextSlot ? <button className="button primary small" onClick={() => navigate('examsim')}>{t('এখনই দাও', 'Take it now')}<ClipboardCheck size={15} /></button> : <span className="retry-pill">{t('সব স্লট শেষ', 'All slots done')}</span>}</div>
+      <div className="exams-routine-row">{slots.map(slot => <div className={`exams-routine-item ${slot.due ? 'due' : ''}`} key={slot.cadence}><span className={`exam-cadence-dot ${slot.cadence}`} /><div><strong>{t(slot.label, slot.labelEn)}</strong><small>{slot.lastDate ? t(`শেষ: ${bn(slot.daysSince ?? 0)} দিন আগে${slot.lastScore !== null ? ` · ${bn(slot.lastScore)}%` : ''}`, `Last: ${slot.daysSince ?? 0} day(s) ago${slot.lastScore !== null ? ` · ${slot.lastScore}%` : ''}`) : t('এখনো দেওয়া হয়নি', 'Never taken')}</small></div><span className={`slot-state ${slot.due ? 'due' : ''}`}>{slot.due ? (slot.lateDays ? t(`${bn(slot.lateDays)} দিন দেরি`, `${slot.lateDays}d late`) : t('আজ', 'Today')) : t('ঠিক আছে', 'On track')}</span></div>)}</div>
+      <p className="tiny-muted">{t(`শেষ ৭ দিনে ${bn(routine.taken7)}টি · ৩০ দিনে ${bn(routine.taken30)}টি · গড় ${bn(routine.average30)}% · ধারাবাহিকতা ${bn(routine.consistency)}%`, `${routine.taken7} in 7 days · ${routine.taken30} in 30 · average ${routine.average30}% · consistency ${routine.consistency}%`)}</p>
+    </section>
     <section className="card test-exam-readiness-card">
       <div className="card-heading">
         <div>

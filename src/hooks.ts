@@ -3,6 +3,7 @@ import { CHAPTERS, SUBJECTS } from './data';
 import type { SubjectId } from './data';
 import {
   buildDailyStatusNotification,
+  buildExamRoutineLine,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
 } from './notifications';
@@ -333,7 +334,9 @@ export async function showNotification(
 export async function syncDailyProgressNotification(plan: Day[], data: AppData, date: string, silent = true): Promise<boolean> {
   if (!canNotify()) return false;
   try {
-    const payload = buildDailyStatusNotification(plan, data, date);
+    const base = buildDailyStatusNotification(plan, data, date);
+    const examLine = buildExamRoutineLine(data, date);
+    const payload = examLine ? { title: base.title, body: `${base.body}\n${examLine}` } : base;
     await showNotification(payload.title, payload.body, { tag: 'prostuti-daily-progress', silent });
     return true;
   } catch {

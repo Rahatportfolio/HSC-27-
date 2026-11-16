@@ -3,7 +3,7 @@ import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
-import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta, ExamMode } from './types';
+import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta, ExamMode, ExamCadence } from './types';
 import { PDF_MATERIAL_IDS } from './pdfCatalog';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -24,6 +24,7 @@ const intervals = new Set<RevisionInterval>([1, 3, 7, 14, 30]);
 const recalls = new Set<string>(['weak', 'okay', 'good']);
 const testKinds = new Set<TestKind>(['chapter', 'subject', 'model']);
 const examModes = new Set<ExamMode>(['chapter', 'subject', 'full', 'mistakes', 'retry']);
+const examCadences = new Set<ExamCadence>(['daily', 'weekly', 'monthly']);
 const isSubject = (v: unknown): v is AppData['mistakes'][number]['subject'] => typeof v === 'string' && subjectIds.has(v);
 const optionalChapter = (v: unknown): v is string | undefined => v === undefined || (typeof v === 'string' && chapterIds.has(v));
 /** Own-property assignment: backup keys such as "__proto__" must never mutate prototypes. */
@@ -249,7 +250,8 @@ export function parseBackup(rawText: string): AppData {
       if (row.chapterId && chapterById[row.chapterId].subject !== row.subject) throw new Error('সিমুলেটেড পরীক্ষার অধ্যায় ও বিষয় মিলছে না।');
       return { ...(row.chapterId ? { chapterId: row.chapterId } : {}), subject: row.subject, correct: Number(row.correct), total: Number(row.total) };
     });
-    return { id: item.id, mode: item.mode as ExamMode, title: item.title, subject: item.subject as AppData['mistakes'][number]['subject'] | undefined, chapterIds: item.chapterIds as string[], questionIds: item.questionIds as string[], answers, score: Number(item.score), total: Number(item.total), durationMin: Number(item.durationMin), timeTakenSec: Number(item.timeTakenSec), date: item.date, at: item.at, breakdown };
+    if (item.cadence !== undefined && !examCadences.has(item.cadence as ExamCadence)) throw new Error('সিমুলেটেড পরীক্ষার ধরন সঠিক নয়।');
+    return { id: item.id, mode: item.mode as ExamMode, title: item.title, ...(item.cadence !== undefined ? { cadence: item.cadence as ExamCadence } : {}), subject: item.subject as AppData['mistakes'][number]['subject'] | undefined, chapterIds: item.chapterIds as string[], questionIds: item.questionIds as string[], answers, score: Number(item.score), total: Number(item.total), durationMin: Number(item.durationMin), timeTakenSec: Number(item.timeTakenSec), date: item.date, at: item.at, breakdown };
   });
 
   result.libraryNotes = listOf(raw.libraryNotes, LIMITS.libraryNotes, 'নোট লাইব্রেরি', item => {

@@ -9,6 +9,8 @@ export type RevisionInterval = 1 | 3 | 7 | 14 | 30;
 export type TestKind = 'chapter' | 'subject' | 'model';
 /** Which pool the exam simulator draws its questions from. */
 export type ExamMode = 'chapter' | 'subject' | 'full' | 'mistakes' | 'retry';
+/** Daily short test, weekly paper or monthly full mock. */
+export type ExamCadence = 'daily' | 'weekly' | 'monthly';
 /** One question the student still owes: a wrong answer or a timed-out paper. */
 export interface RetryItem {
   /** equals the questionId, so a question can only be queued once. */
@@ -47,6 +49,8 @@ export interface ExamSession {
   date: string;
   at: string;
   breakdown: ExamBreakdownRow[];
+  /** Set when the paper was started from the daily/weekly/monthly routine. */
+  cadence?: ExamCadence;
 }
 /** Reading size for the whole interface: small, comfortable (default) or large. */
 export type FontScale = 'sm' | 'md' | 'lg';

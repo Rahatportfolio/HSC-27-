@@ -99,6 +99,23 @@ try {
   await page.locator('.weakness-stat-row').waitFor();
   console.log('PASS weakness detector', await page.locator('.weakness-row').count(), 'flagged chapters');
 
+  // Exam routine: the daily slot must build a real 10-question paper.
+  await nav('সিমুলেটর');
+  await page.locator('.exam-routine-card').waitFor();
+  const dailySlot = page.locator('.exam-routine-slot').first();
+  await dailySlot.locator('button').click();
+  await page.waitForSelector('.exam-palette-cell');
+  assert.equal(await page.locator('.exam-palette-cell').count(), 10);
+  for (let i = 0; i < 10; i++) {
+    await page.locator('.quiz-option').first().click();
+    const next = page.locator('button').filter({ hasText: 'পরের প্রশ্ন' });
+    if (await next.count()) await next.click();
+  }
+  await page.locator('.exam-run-actions button').filter({ hasText: 'জমা দাও' }).click();
+  await page.waitForSelector('.exam-result-hero');
+  assert.equal((await stored()).examSessions.at(-1).cadence, 'daily');
+  console.log('PASS exam routine daily slot');
+
   await nav('রিমাইন্ডার');
   await page.getByRole('switch').click();
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).settings.reminderEnabled === true, null, { timeout: 5000 });

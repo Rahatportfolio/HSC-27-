@@ -15,7 +15,7 @@ import { exportCalendar } from './exports';
 import { canNotify, clearLiveTimerNotification, notifySessionDone, showNotification, syncDailyProgressNotification, syncLiveTimerNotification, useFontScale, useNow, useReminders, useRevisionReminder, useStudyTimer, useTheme, useWakeLock } from './hooks';
 import type { PresetTimerInput } from './hooks';
 import { cancelTimerAlarm, isNativeApp, nativeNotify, openNativeTimerPictureInPicture, prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
-import { buildDailyNotificationDigest, buildDailyStatusNotification } from './notifications';
+import { buildDailyNotificationDigest, buildDailyStatusNotification, buildExamRoutineLine } from './notifications';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover, setTaskCompletion } from './study';
 import { PlannerContext } from './context';
@@ -479,7 +479,9 @@ export default function App() {
     const nextData: AppData = data.settings.reminderEnabled
       ? data
       : { ...data, settings: { ...data.settings, reminderEnabled: true } };
-    const payload = buildDailyStatusNotification(plan, nextData, dateKey);
+    const base = buildDailyStatusNotification(plan, nextData, dateKey);
+    const examLine = buildExamRoutineLine(nextData, dateKey);
+    const payload = examLine ? { title: base.title, body: `${base.body}\n${examLine}` } : base;
 
     if (isNativeApp()) {
       const perm = await requestNativeNotifications();

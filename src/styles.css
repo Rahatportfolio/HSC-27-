@@ -4698,3 +4698,38 @@ body {
   .weakness-row { grid-template-columns: auto minmax(0, 1fr); }
   .weakness-row-actions { grid-column: 1 / -1; justify-content: flex-end; }
 }
+
+/* ---------- Exam routine (daily / weekly / monthly cadence) ---------- */
+.exam-routine-card { margin-top: 16px; }
+.exam-routine-grid { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 10px; }
+.exam-routine-slot { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; align-content: start; }
+.exam-routine-slot.due { border-color: #e6c8a4; background: #fffaf3; }
+.exam-routine-head { display: flex; align-items: center; gap: 7px; }
+.exam-routine-head strong { font-size: .88rem; }
+.exam-cadence-dot { width: 9px; height: 9px; border-radius: 50%; flex: none; }
+.exam-cadence-dot.daily { background: #4a8f5f; }
+.exam-cadence-dot.weekly { background: #5c6fc4; }
+.exam-cadence-dot.monthly { background: #c1732f; }
+.exam-routine-slot p { margin: 0; font-size: .76rem; color: var(--muted); min-height: 2.2em; }
+.exam-routine-meta { display: flex; flex-wrap: wrap; gap: 4px 10px; font-size: .7rem; color: var(--muted); }
+.exam-routine-slot .button { justify-self: start; margin-top: 2px; }
+.exam-week-strip { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.exam-week-day { display: grid; justify-items: center; gap: 1px; padding: 5px 8px; border-radius: 8px; background: var(--soft, #f4f6f3); font-size: .7rem; min-width: 42px; }
+.exam-week-day strong { font-size: .72rem; }
+.exam-week-day.done { background: #e4f3e8; color: #2f6b46; }
+.exam-week-day.today { outline: 2px solid var(--text); outline-offset: -1px; }
+.exam-week-day.weekly { border-bottom: 2px solid #5c6fc4; }
+.exam-missed { display: flex; align-items: center; gap: 8px; padding: 8px 10px; margin-top: 8px; border-radius: 10px; background: #fdf1e3; color: #a95a2c; font-size: .8rem; }
+@media (max-width: 980px) { .exam-routine-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 650px) { .exam-week-day { min-width: 36px; padding: 4px 6px; } }
+
+/* ---------- Exam routine strip on the Exams screen ---------- */
+.exams-routine-card { margin: 14px 0; }
+.exams-routine-row { display: grid; gap: 8px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.exams-routine-item { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.exams-routine-item.due { border-color: #e6c8a4; background: #fffaf3; }
+.exams-routine-item strong { display: block; font-size: .82rem; }
+.exams-routine-item small { font-size: .7rem; color: var(--muted); }
+.slot-state { font-size: .68rem; padding: 3px 8px; border-radius: 999px; background: var(--soft, #f4f6f3); color: var(--muted); white-space: nowrap; }
+.slot-state.due { background: #fbe9de; color: #a95a2c; font-weight: 700; }
+@media (max-width: 900px) { .exams-routine-row { grid-template-columns: minmax(0, 1fr); } }

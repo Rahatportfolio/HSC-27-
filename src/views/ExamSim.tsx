@@ -12,9 +12,11 @@ import {
   examGradeLetter, examHistoryStats, gradeExam, saveExamSession,
 } from '../examSim';
 import { retryBuckets, retryChapterRows } from '../retryLoop';
+import { CADENCE_SPECS, cadenceSlots, cadenceStats, cadenceWeek, dailyTestChapter, missedDaily, nextCadenceSlot } from '../cadence';
+import type { CadenceSlot } from '../cadence';
 import type { ExamGrade } from '../examSim';
 import { allQuestions } from '../analytics';
-import type { ExamMode, ExamSession, QuizQuestion } from '../types';
+import type { ExamCadence, ExamMode, ExamSession, QuizQuestion } from '../types';
 import { EmptyState, PageHeading, ProgressBar, ProgressRing, SubjectBadge } from '../components';
 import { t } from '../i18n';
 
@@ -27,6 +29,7 @@ interface ResultState {
   timeTakenSec: number;
   questions: QuizQuestion[];
   answers: Record<string, number>;
+  cadence?: ExamCadence;
 }
 const LETTER_OPTION = ['ক', 'খ', 'গ', 'ঘ'];
 const clock = (seconds: number): string => {
@@ -58,12 +61,18 @@ export default function ExamSimView() {
   const [startedAt, setStartedAt] = useState(0);
   const [tick, setTick] = useState(Date.now());
   const [result, setResult] = useState<ResultState | null>(null);
+  const [cadence, setCadence] = useState<ExamCadence | undefined>(undefined);
   const submitted = useRef(false);
 
   const sessions = useMemo(() => [...data.examSessions].sort((a, b) => b.at.localeCompare(a.at)), [data.examSessions]);
   const stats = useMemo(() => examHistoryStats(data.examSessions), [data.examSessions]);
   const weak = useMemo(() => examChapterAccuracy(data.examSessions).slice(0, 5), [data.examSessions]);
   const retries = useMemo(() => retryBuckets(data, today), [data, today]);
+  const slots = useMemo(() => cadenceSlots(data, today), [data, today]);
+  const routine = useMemo(() => cadenceStats(data, today), [data, today]);
+  const week = useMemo(() => cadenceWeek(data, today), [data, today]);
+  const missed = useMemo(() => missedDaily(data, today), [data, today]);
+  const nextSlot = useMemo(() => nextCadenceSlot(data, today), [data, today]);
   const retryRows = useMemo(() => retryChapterRows(data, today).slice(0, 5), [data, today]);
   const dueRetryCount = retries.due.length + retries.upcoming.length;
   const subjectChapters = useMemo(() => sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject)), [subject]);
@@ -77,7 +86,7 @@ export default function ExamSimView() {
     return () => clearInterval(id);
   }, [stage]);
 
-  const start = (questions: QuizQuestion[], nextMode: ExamMode) => {
+  const start = (questions: QuizQuestion[], nextMode: ExamMode, cadence?: ExamCadence) => {
     if (!questions.length) {
       notify(t('এই বাছাইয়ে কোনো প্রশ্ন নেই। বিষয়, অধ্যায় বা সংখ্যা বদলাও।', 'No questions in this selection. Change the subject, chapter or count.'), 'info');
       return;
@@ -93,8 +102,30 @@ export default function ExamSimView() {
     setDeadline(now + minutes * 60 * 1000);
     setTick(now);
     setResult(null);
+    setCadence(cadence);
     setStage('running');
     notify(t(`${bn(questions.length)}টি প্রশ্ন · ${bn(minutes)} মিনিটের পরীক্ষা শুরু হলো।`, `${questions.length} questions · ${minutes}-minute exam started.`), 'success');
+  };
+
+  /** Starts the routine slot: daily = today's weakest chapter, weekly = a subject, monthly = all. */
+  const startSlot = (slot: CadenceSlot) => {
+    if (slot.cadence === 'monthly') {
+      const questions = buildExamQuestions(data, { mode: 'full', count: slot.questions, today });
+      start(questions, 'full', 'monthly');
+      return;
+    }
+    if (slot.cadence === 'weekly') {
+      // The weekly paper follows the weakest subject the report knows; otherwise the chosen one.
+      const weakestSubject = weak[0]?.subject ?? subject;
+      setSubject(weakestSubject);
+      const questions = buildExamQuestions(data, { mode: 'subject', subject: weakestSubject, count: slot.questions, today });
+      start(questions, 'subject', 'weekly');
+      return;
+    }
+    // A daily short test stays on one chapter: the weakest one that still has questions.
+    const target = chapterId || dailyTestChapter(data, weak.map(row => row.chapterId).filter((id): id is string => !!id));
+    const questions = buildExamQuestions(data, { mode: 'chapter', chapterId: target, count: slot.questions, today });
+    start(questions, 'chapter', 'daily');
   };
 
   const startConfigured = () => {
@@ -110,9 +141,9 @@ export default function ExamSimView() {
     const timeTakenSec = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
     setData(current => saveExamSession(current, {
       mode, title, ...(mode === 'subject' ? { subject } : {}), questions: paper, answers,
-      durationMin: examDurationMin(paper.length), timeTakenSec, date: todayKey(),
+      durationMin: examDurationMin(paper.length), timeTakenSec, date: todayKey(), ...(cadence ? { cadence } : {}),
     }));
-    setResult({ grade, title, mode, durationMin: examDurationMin(paper.length), timeTakenSec, questions: paper, answers });
+    setResult({ grade, title, mode, durationMin: examDurationMin(paper.length), timeTakenSec, questions: paper, answers, ...(cadence ? { cadence } : {}) });
     setStage('result');
     notify(grade.percent >= 50
       ? t(`পরীক্ষা সেভ হয়েছে · ${bn(grade.score)}/${bn(grade.total)} সঠিক।`, `Exam saved · ${grade.score}/${grade.total} correct.`)
@@ -168,6 +199,29 @@ export default function ExamSimView() {
         <div className="card exam-stat"><span className="stat-icon blue"><TrendingUp size={20} /></span><div><span>{t('এখন কী দাঁড়ায়', 'Recent trend')}</span><strong className={stats.trend !== null && stats.trend < 0 ? 'down' : ''}>{stats.trend === null ? '—' : `${stats.trend > 0 ? '+' : ''}${bn(stats.trend)}%`}</strong><p>{t('শেষ ৩ বনাম আগের ৩', 'Last 3 vs previous 3')}</p></div></div>
       </div>
 
+      <section className="card exam-routine-card">
+        <div className="card-heading"><div><h2><AlarmClock size={19} />{t('পরীক্ষার রুটিন', 'Exam routine')}</h2><p>{t('প্রতিদিন ১০টি MCQ, প্রতি শুক্রবার ২৫টি, মাসে একবার ৫০টির পূর্ণ মক। মিস হলে সিস্টেম মনে করিয়ে দেয়।', 'Ten MCQs daily, twenty-five every Friday, a fifty-question mock once a month. Missed slots stay visible.')}</p></div>
+          <span className={`retry-pill ${nextSlot ? 'due' : ''}`}>{nextSlot ? `${t('এখনই দরকার', 'Due now')}: ${t(CADENCE_SPECS.find(spec => spec.cadence === nextSlot.cadence)!.label, CADENCE_SPECS.find(spec => spec.cadence === nextSlot.cadence)!.labelEn)}` : t('সব শেষ', 'All done')}</span>
+        </div>
+        {missed && <div className="exam-missed"><Flag size={16} /><span>{t(`গত ${bn(missed.days)} দিনে কোনো পরীক্ষা দেওয়া হয়নি। আজকের ছোট পরীক্ষাটা দিয়ে শুরু করো।`, `No paper in the last ${missed.days} day(s). Start with today’s short test.`)}</span></div>}
+        <div className="exam-routine-grid">{slots.map(slot => <article className={`exam-routine-slot ${slot.due ? 'due' : ''}`} key={slot.cadence}>
+          <div className="exam-routine-head"><span className={`exam-cadence-dot ${slot.cadence}`} /><strong>{t(slot.label, slot.labelEn)}</strong></div>
+          <p>{t(slot.hint, slot.hintEn)}</p>
+          <div className="exam-routine-meta">
+            <span>{slot.lastDate ? t(`${bn(slot.daysSince ?? 0)} দিন আগে`, `${slot.daysSince ?? 0} day(s) ago`) : t('এখনো দেওয়া হয়নি', 'never taken')}</span>
+            <span>{bn(slot.takenLast30)} {t('টি / ৩০ দিন', 'in 30 days')}</span>
+            {slot.lastScore !== null && <span>{t('শেষ ফল', 'Last')}: {bn(slot.lastScore)}%</span>}
+          </div>
+          <button className={`button small ${slot.due ? 'primary' : 'secondary'}`} onClick={() => startSlot(slot)}><Play size={14} />{slot.due ? t('এখনই দাও', 'Take it now') : t('আবার দাও', 'Take again')}</button>
+        </article>)}</div>
+        <div className="exam-week-strip">
+          <span className="tiny-muted">{t('এই সপ্তাহ', 'This week')}</span>
+          {week.map(day => <div key={day.date} className={`exam-week-day ${day.done ? 'done' : ''} ${day.date === today ? 'today' : ''} ${day.cadence === 'weekly' ? 'weekly' : ''}`}>
+            <strong>{day.weekday}</strong><small>{day.weekday === 'শুক্র' ? t('সাপ্তাহিক', 'weekly') : day.done ? <Check size={12} /> : '·'}</small>
+          </div>)}
+          <span className="tiny-muted">{t(`${bn(routine.taken7)}টি / ৭ দিন · ধারাবাহিকতা ${bn(routine.consistency)}%`, `${routine.taken7} in 7 days · consistency ${routine.consistency}%`)}</span>
+        </div>
+      </section>
       <div className="exam-setup-grid">
         <section className="card exam-setup-card">
           <div className="card-heading"><div><h2><Play size={19} />{t('নতুন পরীক্ষা তৈরি করো', 'Build a new paper')}</h2><p>{t('প্রশ্ন, সময় ও পূর্ণমান নিজে থেকেই ঠিক হয়ে যাবে।', 'Questions, time and marks are set automatically.')}</p></div></div>
@@ -309,6 +363,7 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
         <h2>{result.title}</h2>
         <p>{t(`সময় লেগেছে ${clock(result.timeTakenSec)} · নির্ধারিত ছিল ${bn(result.durationMin)} মিনিট · ${bn(grade.wrong.length)}টি ভুল · ${bn(grade.unanswered.length)}টি উত্তর দেওয়া হয়নি।`, `Took ${clock(result.timeTakenSec)} of ${result.durationMin} minutes · ${grade.wrong.length} wrong · ${grade.unanswered.length} unanswered.`)}</p>
         <div className="exam-result-chips">
+          {result.cadence && <span><AlarmClock size={14} />{t('রুটিন স্লট সম্পন্ন', 'Routine slot closed')}</span>}
           <span className={`exam-grade grade-${letter.replace('+', 'plus').replace('-', 'minus')}`}>{t('আনুমানিক গ্রেড', 'Approx. grade')} <strong>{letter}</strong></span>
           <span><Target size={14} />{grade.total ? `${bn(Math.round(grade.score / grade.total * 100))}% ${t('নির্ভুলতা', 'accuracy')}` : '—'}</span>
           {worst && <span><Flag size={14} />{t('সবচেয়ে দুর্বল', 'Weakest')}: {worst.chapterId ? (chapterById[worst.chapterId]?.title || '—') : subjectById[worst.subject]?.name}</span>}
