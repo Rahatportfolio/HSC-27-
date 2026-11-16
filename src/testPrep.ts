@@ -1,3 +1,4 @@
+import { isSuperChapter } from './superCategory';
 import { CHAPTERS } from './data';
 import type { Priority } from './data';
 import { chapterPriority, chapterStage, isLearningComplete } from './learning';
@@ -33,10 +34,10 @@ export interface TestPrepStats {
 
 const PACE_WINDOW = 14;
 
-export function testPrepStats(data: AppData, plan: Day[], today: string): TestPrepStats {
+export function testPrepStats(data: AppData, plan: Day[], today: string, category: 'A' | 'S' = 'A'): TestPrepStats {
   const testDate = data.settings.testExamDate;
   const daysLeft = Math.max(0, diffDays(today, testDate));
-  const aChapters = CHAPTERS.filter(chapter => chapterPriority(chapter, data) === 'A');
+  const aChapters = CHAPTERS.filter(chapter => category === 'S' ? isSuperChapter(chapter) : chapterPriority(chapter, data) === 'A');
   const doneA = aChapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
   const remainingA = aChapters.length - doneA;
 
@@ -44,16 +45,17 @@ export function testPrepStats(data: AppData, plan: Day[], today: string): TestPr
   const aTaskIds = new Set<string>();
   for (const day of plan) {
     for (const task of day.tasks) {
-      if (task.chapterIds.some(id => aIds.has(id))) aTaskIds.add(task.id);
+      if ((category !== 'S' || day.date < testDate || task.id.includes(':part-')) && task.chapterIds.some(id => aIds.has(id))) aTaskIds.add(task.id);
     }
   }
-  let remainingATasks = 0;
+  const remainingIds = new Set<string>();
   for (const day of plan) {
     for (const task of day.tasks) {
-      if (aTaskIds.has(task.id) && !data.completed[task.id] && !data.removedTasks.includes(task.id)) remainingATasks++;
+      if (aTaskIds.has(task.id) && !data.completed[task.id] && !data.removedTasks.includes(task.id)) remainingIds.add(task.id);
     }
   }
 
+  const remainingATasks = remainingIds.size;
   const windowFrom = addDays(today, -(PACE_WINDOW - 1));
   let paceDone = 0;
   for (const id of aTaskIds) {
@@ -70,7 +72,7 @@ export function testPrepStats(data: AppData, plan: Day[], today: string): TestPr
   const dailyTarget = Math.max(remainingA > 0 ? 1 : 0, Math.ceil(requiredTasksPerDay));
   // A small daily requirement is reachable even after a slow fortnight; otherwise the
   // recent 14-day pace must at least cover what the calendar demands.
-  const onPace = remainingA === 0 || requiredTasksPerDay <= 0.25 || paceTasksPerDay >= requiredTasksPerDay;
+  const onPace = remainingA === 0 || (remainingATasks > 0 && (requiredTasksPerDay <= 0.25 || paceTasksPerDay >= requiredTasksPerDay));
   const warning: TestPrepStats['warning'] = remainingA === 0 ? null
     : daysLeft === 0 ? 'overdue'
       : onPace ? null
@@ -87,7 +89,7 @@ export function testPrepStats(data: AppData, plan: Day[], today: string): TestPr
 }
 
 /** A-category chapters ordered by plan date, with completion state, for the prep checklist. */
-export function aCategoryChecklist(data: AppData, plan: Day[]): { id: string; title: string; subject: string; done: boolean; date?: string; priority: Priority }[] {
+export function aCategoryChecklist(data: AppData, plan: Day[], category: 'A' | 'S' = 'A'): { id: string; title: string; subject: string; done: boolean; date?: string; priority: Priority }[] {
   const dateById = new Map<string, string>();
   for (const day of plan) {
     for (const task of day.tasks) {
@@ -98,7 +100,7 @@ export function aCategoryChecklist(data: AppData, plan: Day[]): { id: string; ti
     }
   }
   return CHAPTERS
-    .filter(chapter => chapterPriority(chapter, data) === 'A')
+    .filter(chapter => category === 'S' ? isSuperChapter(chapter) : chapterPriority(chapter, data) === 'A')
     .map(chapter => ({
       id: chapter.id,
       title: chapter.title,

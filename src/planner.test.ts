@@ -21,7 +21,7 @@ describe('Bangladesh date helpers', () => {
 });
 
 describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
-  const plan = buildPlan();
+  const plan = buildPlan({ ...DEFAULT_SETTINGS, sCategoryMode: false, testExamDate: '2027-02-01' });
   const tasks = plan.flatMap(d => d.tasks);
 
   it('has a 2-subject routine for every date and unique task IDs', () => {
@@ -49,7 +49,7 @@ describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
   });
 
   it('finishes every part of all 114 chapters BEFORE the February 2027 Test Exam, A before B', () => {
-    expect(DEFAULT_SETTINGS.testExamDate).toBe('2027-02-01');
+    expect(DEFAULT_SETTINGS.testExamDate).toBe('2027-01-01');
     for (const c of CHAPTERS) {
       const sessions = chapterTasks(plan, c.id);
       expect(sessions, c.title).toHaveLength(c.effort);

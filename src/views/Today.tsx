@@ -379,7 +379,7 @@ export default function TodayView() {
 
   const learning = learningDashboard(data, plan);
   const watchedClasses = classProgress(data);
-  const prep = testPrepStats(data, plan, today);
+  const prep = testPrepStats(data, plan, today, 'S');
   const dueCount = flashcardDueCount(data, today);
   const unresolvedMistakes = unresolvedMistakeCount(data);
   /** Exam readiness is a separate metric from syllabus completion: syllabus × mock performance × MCQ accuracy. Never a guarantee of GPA. */
@@ -401,23 +401,23 @@ export default function TodayView() {
     <section className="card testprep-quick" aria-label={t('টেস্ট প্রস্তুতি সংক্ষিপ্ত', 'Test prep snapshot')}>
       <div className="testprep-quick-top">
         <div>
-          <span className="eyebrow">{t('ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা', 'Feb 2027 Test Exam')}</span>
+          <span className="eyebrow">{t('টেস্ট পরীক্ষা · S লক্ষ্য', 'Test Exam · S target')}</span>
           <h2>{t('টেস্ট প্রস্তুতি', 'Test prep')} · {t(`${bn(prep.daysLeft)} দিন বাকি`, `${prep.daysLeft} days left`)}</h2>
         </div>
         <button type="button" className="button secondary small" onClick={() => navigate('testprep')}>{t('টেস্ট মোডে যাও', 'Open test mode')}<ArrowRight size={13} /></button>
       </div>
       <div className="testprep-quick-stats">
-        <div><strong>{bn(prep.percentA)}%</strong><span>{t('A ক্যাটাগরি শেষ', 'Category A done')}</span></div>
-        <div><strong>{bn(prep.doneA)}/{bn(prep.totalA)}</strong><span>{t('A-অধ্যায়', 'A chapters')}</span></div>
-        <div><strong>{bn(prep.requiredTasksPerDay)}</strong><span>{t('A-কাজ/দিন লাগবে', 'A-tasks/day needed')}</span></div>
+        <div><strong>{bn(prep.percentA)}%</strong><span>{t('S ক্যাটাগরি শেষ', 'Category S done')}</span></div>
+        <div><strong>{bn(prep.doneA)}/{bn(prep.totalA)}</strong><span>{t('S-অধ্যায়', 'S chapters')}</span></div>
+        <div><strong>{bn(prep.requiredTasksPerDay)}</strong><span>{t('S-কাজ/দিন লাগবে', 'S-tasks/day needed')}</span></div>
         <div><strong>{bn(examReadiness)}%</strong><span>{t('পরীক্ষা প্রস্তুতি', 'Exam readiness')}</span></div>
       </div>
       <ProgressBar value={prep.percentA} />
-      {prep.warning && <p className="testprep-quick-warning">{t('পেছিয়ে আছো — আজ অন্তত একটি A-কাজ করে ফেলো।', 'You are behind — do at least one A-task today.')}</p>}
+      {prep.warning && <p className="testprep-quick-warning">{t('পেছিয়ে আছো — আজ অন্তত একটি S-কাজ করে ফেলো।', 'You are behind — do at least one A-task today.')}</p>}
     </section>
     <section className="welcome-hero">
       <div className="hero-copy">
-        <div className="hero-eyebrow"><span className="live-dot" />{t('লক্ষ্য: ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা · দিনে ২টি বিষয়', 'Target: Feb 2027 Test Exam · 2 Subjects Daily')}</div>
+        <div className="hero-eyebrow"><span className="live-dot" />{t('লক্ষ্য: টেস্ট পরীক্ষা · S লক্ষ্য · দিনে ২টি বিষয়', 'Target: Test Exam · S target · 2 Subjects Daily')}</div>
         <h1>{isToday ? t('প্রতিদিন ২টি বিষয়,', '2 subjects a day,') : t('তোমার গোছানো রুটিন,', 'Your focused routine,')}<br /><span>{t('ধাপে ধাপে এগিয়ে যাই।', 'moves us forward.')}</span></h1>
         <p>{formatDate(selectedDate, 'long')}, {formatDate(selectedDate, 'weekday')} <span className="hero-separator">·</span> {day ? `${t('দিন', 'Day')} ${bn(dayNumber)} / ${bn(plan.length)}` : t('পরিকল্পনার বাইরে', 'outside plan range')}</p>
         <div className="hero-chips">

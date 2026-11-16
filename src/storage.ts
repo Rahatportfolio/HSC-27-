@@ -89,6 +89,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (!int(boostDailyHours, 4, 18)) throw new Error('পরবর্তী ধাপের পড়ার সময় ৪ থেকে ১৮ ঘণ্টার মধ্যে হতে হবে।');
   if (![0, 5, 10, 15, 30].includes(Number(raw.reminderLead))) throw new Error('রিমাইন্ডারের সময় সঠিক নয়।');
   if (!text(raw.board, 60) || !text(raw.name, 60)) throw new Error('নাম বা বোর্ডের লেখা সঠিক নয়।');
+  if (raw.sCategoryMode !== undefined && typeof raw.sCategoryMode !== 'boolean') throw new Error('S পরিকল্পনার সেটিং সঠিক নয়।');
   const testExamDate = raw.testExamDate === undefined ? d.testExamDate : raw.testExamDate;
   if (!text(testExamDate, 10) || !isValidDate(testExamDate)) throw new Error('টেস্ট পরীক্ষার তারিখ সঠিক নয়।');
   const examDate = raw.examDate === undefined ? d.examDate : raw.examDate;
@@ -112,6 +113,8 @@ export function sanitizeSettings(raw: unknown): Settings {
     reminderEnabled: raw.reminderEnabled === true, reminderLead: Number(raw.reminderLead), syllabusChecked: raw.syllabusChecked === true,
     calendarRevision: int(raw.calendarRevision, 0, 999999) ? Number(raw.calendarRevision) : 0,
     testExamDate,
+    // Do not silently regenerate a returning student's routine. The prep screen offers activation.
+    sCategoryMode: raw.sCategoryMode === true,
     examDate,
     theme: theme as Settings['theme'],
     language: language as Settings['language'],

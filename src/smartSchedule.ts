@@ -1,3 +1,4 @@
+import { isSuperChapter } from './superCategory';
 import { chapterById } from "./data";
 import type { SubjectId } from "./data";
 import { addDays, effectiveDailyHours, toMinutes, todayKey } from "./planner";
@@ -240,6 +241,7 @@ export function integrateStudyPlan(
     if (!queue.some((q) => q.task.date <= date)) mediaBudget = budget;
     const used: Partial<Record<SubjectId, number>> = {};
     for (const m of media) {
+      if (data.settings.sCategoryMode && date < data.settings.testExamDate && !isSuperChapter(m.c.chapterId)) continue;
       const subject = chapterById[m.c.chapterId].subject;
       while (
         m.ranges.length &&

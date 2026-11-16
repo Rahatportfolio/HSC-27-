@@ -49,7 +49,7 @@ function addDaysLocal(date: string, days: number): string { return new Date(Date
 const mdCell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 export function makeMarkdown(plan: Day[], data: AppData): string {
   const { settings } = data;
-  const phases = getPhases(settings.startDate);
+  const phases = getPhases(settings.startDate, settings.sCategoryMode);
   const stats = getStats(plan, data, todayKey());
   const lines = [
     '# প্রস্তুতি — HSC 2027 বিজ্ঞান', '',

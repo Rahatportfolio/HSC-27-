@@ -1,3 +1,4 @@
+import { isSuperChapter } from './superCategory';
 import { CHAPTERS, CORE, PAPERS, chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import type { Chapter, SubjectId } from './data';
@@ -21,8 +22,10 @@ export interface Settings extends SettingsExtras {
   reminderLead: number;
   syllabusChecked: boolean;
   calendarRevision: number;
-  /** Personal target for the college Test Exam (ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা). */
+  /** Personal test-preparation deadline; January is tentative, not a confirmed college date. */
   testExamDate: string;
+  /** Separate S shortlist before the tentative test date; existing A/B priorities remain intact. */
+  sCategoryMode?: boolean;
   /** Personal target for the HSC 2027 Board Exam (জুন ২০২৭ · ঈদুল আজহার পর সম্ভাব্য তারিখ). */
   examDate: string;
 }
@@ -44,7 +47,8 @@ export const DEFAULT_SETTINGS: Settings = {
   language: 'bn',
   revisionEnabled: true,
   carryoverMode: 'manual',
-  testExamDate: '2027-02-01',
+  testExamDate: '2027-01-01',
+  sCategoryMode: true,
   examDate: '2027-06-06',
   pomodoroFocus: 25,
   pomodoroBreak: 5,
@@ -362,10 +366,10 @@ export function isTaskCurrent(task: Pick<Task, 'date' | 'startMinute' | 'endMinu
 export const toMinutes = (time: string): number => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
 export const percent = (done: number, total: number): number => total ? Math.round(done / total * 100) : 0;
 
-export function getPhases(start: string): Phase[] {
+export function getPhases(start: string, sCategoryMode = false): Phase[] {
   const a = addMonths(start, 3), b = addMonths(start, 5), c = addMonths(start, 6);
   return [
-    { id: 'learn', name: 'পূর্ণ সিলেবাস (ফেব্রুয়ারি টেস্ট লক্ষ্য)', subtitle: 'দিনে ২টি বিষয় · ধাপে ধাপে সমাপ্তি', start, end: addDays(a, -1), days: diffDays(start, a), color: '#236149' },
+    { id: 'learn', name: sCategoryMode ? 'সিলেবাস · S → A → B' : 'পূর্ণ সিলেবাস', subtitle: 'দিনে ২টি বিষয় · ধাপে ধাপে সমাপ্তি', start, end: addDays(a, -1), days: diffDays(start, a), color: '#236149' },
     { id: 'revise', name: 'পূর্ণাঙ্গ রিভিশন ও প্রশ্ন সমাধান', subtitle: 'দুই রাউন্ড রিভিশন · দিনে ২টি বিষয়', start: a, end: addDays(b, -1), days: diffDays(a, b), color: '#9a6722' },
     { id: 'exam', name: '১৩টি পূর্ণাঙ্গ মডেল টেস্ট', subtitle: 'জুন HSC ’২৭ চূড়ান্ত প্রস্তুতি', start: b, end: addDays(c, -1), days: diffDays(b, c), color: '#5a4b82' },
   ];
@@ -468,35 +472,39 @@ function timedTwoSubjectDay(day: Omit<Day, 'tasks'>, entries: RawEntry[], settin
 }
 
 export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
-  const phases = getPhases(settings.startDate);
+  const phases = getPhases(settings.startDate, settings.sCategoryMode);
   const total = phases.reduce((n, p) => n + p.days, 0);
 
   // Per-subject chapter queues ordered Priority A -> Priority B -> textbook order
   const chapterQueues: Record<SubjectId, Chapter[]> = Object.fromEntries(
     ALL_SUBJECTS.map(s => [
       s,
-      CHAPTERS.filter(c => c.subject === s).sort((a, b) => a.priority.localeCompare(b.priority) || a.paper - b.paper),
+      CHAPTERS.filter(c => c.subject === s).sort((a, b) => (settings.sCategoryMode ? Number(isSuperChapter(b)) - Number(isSuperChapter(a)) : 0) || a.priority.localeCompare(b.priority) || a.paper - b.paper),
     ]),
   ) as Record<SubjectId, Chapter[]>;
   const chapterPtr: Record<SubjectId, { chIdx: number; partIdx: number }> = Object.fromEntries(
     ALL_SUBJECTS.map(s => [s, { chIdx: 0, partIdx: 0 }]),
   ) as Record<SubjectId, { chIdx: number; partIdx: number }>;
 
-  const hasRemaining = (s: SubjectId) => chapterPtr[s].chIdx < chapterQueues[s].length;
+  let schedulingDate = settings.startDate;
+  const hasRemaining = (s: SubjectId) => {
+    const next = chapterQueues[s][chapterPtr[s].chIdx];
+    return !!next && (!settings.sCategoryMode || schedulingDate >= settings.testExamDate || isSuperChapter(next));
+  };
   const remainingCount = (s: SubjectId) => chapterQueues[s].length - chapterPtr[s].chIdx;
 
   // Build 1-chapter-per-subject entries for a chosen subject on a learn day
   const takeSubjectChapterEntries = (s: SubjectId, dayKey: string): RawEntry[] => {
     const ptr = chapterPtr[s];
     const ch = chapterQueues[s][ptr.chIdx];
-    if (!ch) {
+    if (!ch || !hasRemaining(s)) {
       return [
         {
           id: `testprep-theory-${s}-${dayKey}`,
           subject: s,
           kind: kindFor(s),
           title: `${subjectById[s].name}: টেস্ট পরীক্ষা রিভিশন`,
-          detail: 'ফেব্রুয়ারির টেস্ট পরীক্ষার জন্য গুরুত্বপূর্ণ অধ্যায়ের সূত্র, নোট ও সংজ্ঞা দ্রুত ঝালাই করো।',
+          detail: 'টেস্ট পরীক্ষার জন্য গুরুত্বপূর্ণ অধ্যায়ের সূত্র, নোট ও সংজ্ঞা দ্রুত ঝালাই করো।',
           chapterIds: [],
         },
         {
@@ -590,8 +598,9 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
     const date = addDays(settings.startDate, i);
     const phase = phases.find(p => date >= p.start && date <= p.end)!;
     const localDay = diffDays(phase.start, date) + 1;
+    schedulingDate = date;
     const anyChaptersLeft = ALL_SUBJECTS.some(hasRemaining);
-    const isCatchup = phase.id === 'learn' && localDay % 7 === 0;
+    const isCatchup = phase.id === 'learn' && localDay % 7 === 0 && (!settings.sCategoryMode || date < settings.testExamDate);
     const day: Day = { date, index: i + 1, phase: phase.id, tasks: [], isCatchup };
     const entries: RawEntry[] = [];
 
@@ -625,9 +634,15 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
         });
         prevDaySubjects = [s1, s2];
       } else if (anyChaptersLeft) {
-        const active = ALL_SUBJECTS.filter(hasRemaining);
+        const available = ALL_SUBJECTS.filter(hasRemaining);
+        const tier = (subject: SubjectId) => {
+          const c = chapterQueues[subject][chapterPtr[subject].chIdx];
+          return isSuperChapter(c) ? 0 : { A: 1, B: 2, C: 3 }[c.priority];
+        };
+        const firstTier = settings.sCategoryMode ? Math.min(...available.map(tier)) : -1;
+        const active = settings.sCategoryMode ? available.filter(s => tier(s) === firstTier) : available;
         const ranked = [...active].sort((a, b) => {
-          // Slight penalty if studied yesterday so consecutive days feel fresh while finishing all 114 chapters before Feb Test Exam
+          // Slight penalty if studied yesterday so consecutive days feel fresh
           const scoreA = remainingCount(a) - (prevDaySubjects.includes(a) && active.length > 2 ? 1.5 : 0);
           const scoreB = remainingCount(b) - (prevDaySubjects.includes(b) && active.length > 2 ? 1.5 : 0);
           if (scoreB !== scoreA) return scoreB - scoreA;
@@ -639,7 +654,7 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
         }
         prevDaySubjects = chosen;
       } else {
-        // All 114 chapters finished before February Test Exam! Run 2-subjects/day Test Exam Final Prep
+        // All eligible chapters finished: keep two subjects in revision rather than pulling deferred A/B work before the test.
         const s1 = ALL_SUBJECTS[testPrepSlot++ % ALL_SUBJECTS.length];
         const s2 = ALL_SUBJECTS[testPrepSlot++ % ALL_SUBJECTS.length];
         for (const sub of [s1, s2]) {

@@ -1,3 +1,5 @@
+import { S_CHAPTERS, S_REASONS, S_REFERENCE, isSuperChapter } from '../superCategory';
+import { CHAPTERS } from '../data';
 import { useMemo, useState } from 'react';
 import {
   AlertTriangle, CalendarDays, Check, ChevronRight, CircleCheck, Flag, RefreshCw, Target, TrendingUp,
@@ -14,8 +16,8 @@ import { t } from '../i18n';
 
 export default function TestPrepView() {
   const { plan, data, setData, today, navigate, openChapter, notify, confirm } = usePlanner();
-  const stats = useMemo(() => testPrepStats(data, plan, today), [data, plan, today]);
-  const checklist = useMemo(() => aCategoryChecklist(data, plan), [data, plan]);
+  const stats = useMemo(() => testPrepStats(data, plan, today, 'S'), [data, plan, today]);
+  const checklist = useMemo(() => aCategoryChecklist(data, plan, 'S'), [data, plan]);
   const learning = useMemo(() => learningDashboard(data, plan), [data, plan]);
   const status = useMemo(() => scheduleStatus(plan, data, today), [plan, data, today]);
   const [showAll, setShowAll] = useState(false);
@@ -48,10 +50,10 @@ export default function TestPrepView() {
     <div className="view testprep-view">
       <PageHeading
         eyebrow="TEST EXAMINATION MODE"
-        title="টেস্ট পরীক্ষার আগে A ক্যাটাগরি শেষ করো।"
-        titleEn="Finish category A before the Test Exam."
-        description="মূল লক্ষ্য: টেস্ট পরীক্ষার তারিখের আগে সব A-ক্যাটাগরি অধ্যায় শেষ। সংখ্যাগুলো তোমার নিজের অগ্রগতি থেকে — কোনো নিশ্চয়তা নয়।"
-        descriptionEn="The goal: complete every A-category chapter before the Test Exam. These numbers come from your own progress — nothing is guaranteed."
+        title="টেস্ট পরীক্ষার আগে S ক্যাটাগরি শেষ করো।"
+        titleEn="Finish category S before the Test Exam."
+        description="মূল লক্ষ্য: টেস্ট পরীক্ষার তারিখের আগে সব S-ক্যাটাগরি অধ্যায় শেষ। সংখ্যাগুলো তোমার নিজের অগ্রগতি থেকে — কোনো নিশ্চয়তা নয়।"
+        descriptionEn="The goal: complete every S-category chapter before the Test Exam. These numbers come from your own progress — nothing is guaranteed."
         action={
           <div className="testprep-countdown">
             <Flag size={17} />
@@ -61,13 +63,22 @@ export default function TestPrepView() {
         }
       />
 
+      <section className="study-panel" aria-label="S Super category">
+        <h2>{t('S · Super — জানুয়ারির সংক্ষিপ্ত লক্ষ্য', 'S · Super — compact January target')}</h2>
+        <p>{t('জানুয়ারি ২০২৭ সম্ভাব্য টেস্ট মাস। নিশ্চিত তারিখ জানা নেই বলে নিরাপদ প্রস্তুতি-সীমা ১ জানুয়ারি; সেটিংসে কলেজের তারিখ বদলাতে পারবে। A/B/C ও আগের progress অপরিবর্তিত। টেস্টের আগে S, পরে বাকি A → B → C।', 'January 2027 is tentative. January 1 is a conservative preparation deadline, not a confirmed exam date. Adjust it in Settings. A/B/C and saved progress remain unchanged: S before the test, remaining A → B → C afterwards.')}</p>
+        <p>{t('সৎ সীমাবদ্ধতা: পূর্ণ ও যাচাইকৃত বহু বছরের বোর্ড প্রশ্নের corpus নেই, তাই এটি বিষয়বস্তু ও ভিত্তিগত দক্ষতা ধরে প্রাথমিক shortlist—পরিসংখ্যানভিত্তিক “সবচেয়ে বেশি আসা” তালিকা বা কমনের নিশ্চয়তা নয়। কলেজের সিলেবাসে বাদ থাকা অধ্যায় পড়তে হবে না, আর S-এর বাইরেও প্রশ্ন হতে পারে।', 'Evidence limit: a complete verified multi-year board-question corpus is unavailable. This is a provisional coverage/foundation shortlist, not a statistical frequency ranking or a prediction. Match it to your college syllabus; questions may come from outside S.')}</p>
+        <a href={S_REFERENCE.url} target="_blank" rel="noreferrer">{t('দেখা প্রশ্নব্যাংক: ভেক্টর (তৃতীয় পক্ষ)', 'Inspected question bank: vectors (third party)')}</a>
+        {!data.settings.sCategoryMode && <button className="button primary" onClick={() => confirm({title: t('S-first জানুয়ারি পরিকল্পনা চালু করবে?', 'Enable S-first January planning?'), message: t('টার্গেট ১ জানুয়ারি হবে। সম্পন্ন কাজ, নোট, লক ও নিজের edits মুছবে না; পুরোনো টার্গেট বদলাবে।', 'Sets the target to January 1. Completed work, notes, locks and manual edits are preserved; the old target changes.'), action: () => setData(d => ({...d, settings: {...d.settings, sCategoryMode: true, testExamDate: '2027-01-01'}}))})}>{t('জানুয়ারির S পরিকল্পনা চালু করো', 'Enable January S plan')}</button>}
+        {SUBJECTS.map(subject => <details key={subject.id} className="study-class"><summary>{subject.name} · S {bn(S_CHAPTERS.filter(c => c.subject === subject.id).length)} · {t('টেস্টের পরে বাকি A', 'remaining A after test')} {bn(CHAPTERS.filter(c => c.subject === subject.id && c.priority === 'A' && !isSuperChapter(c)).length)}</summary><p>{t(S_REASONS[subject.id].bn, S_REASONS[subject.id].en)}</p><div className="study-actions">{S_CHAPTERS.filter(c => c.subject === subject.id).map(c => <button key={c.id} className="button secondary small" onClick={() => openChapter(c)}>{t('পত্র', 'Paper')} {bn(c.paper)} · {c.title}</button>)}</div></details>)}
+      </section>
+
       {(behind || overdue) && (
         <div className={`testprep-warning ${overdue ? 'critical' : ''}`} role="alert">
           <AlertTriangle size={20} />
           <div>
             <strong>{overdue
-              ? t('টেস্ট পরীক্ষার তারিখ শেষ হয়ে গেছে এবং A ক্যাটাগরি বাকি আছে।', 'The Test Exam date has passed and A-category work remains.')
-              : t('বর্তমান গতিতে টেস্ট পরীক্ষার আগে A শেষ করা সম্ভব নয়।', 'At your current pace, category A will not finish before the Test Exam.')}</strong>
+              ? t('টেস্ট পরীক্ষার তারিখ শেষ হয়ে গেছে এবং S ক্যাটাগরি বাকি আছে।', 'The Test Exam date has passed and S-category work remains.')
+              : t('বর্তমান গতিতে টেস্ট পরীক্ষার আগে S শেষ করা সম্ভব নয়।', 'At your current pace, category S will not finish before the Test Exam.')}</strong>
             {overdue
               ? t(' নতুন তারিখ সেটিংসে ঠিক করো, অথবা বাকি অধ্যায়গুলো প্রাধান্য দিয়ে পড়ো।', ' Set a new date in Settings, or study the remaining chapters by priority.')
               : t(` গত ১৪ দিনে গড়ে দৈনিক ${bn(stats.paceTasksPerDay)} ধাপ শেষ হয়েছে, কিন্তু ${bn(stats.daysLeft)} দিনে ${bn(stats.remainingATasks)} ধাপ দরকার — মানে দৈনিক ${bn(stats.requiredTasksPerDay)} ধাপ।`, ` You completed ${stats.paceTasksPerDay} tasks/day over the last 14 days, but ${stats.remainingATasks} tasks remain in ${stats.daysLeft} days — about ${stats.requiredTasksPerDay} per day.`)}
@@ -79,17 +90,17 @@ export default function TestPrepView() {
       <div className="testprep-hero card">
         <ProgressRing value={stats.percentA} size={132} stroke={10} color={stats.onPace ? 'var(--green)' : '#c98a3b'}>
           <strong>{bn(stats.percentA)}%</strong>
-          <span>{t('A সম্পন্ন', 'A done')}</span>
+          <span>{t('S সম্পন্ন', 'S done')}</span>
         </ProgressRing>
         <div className="testprep-hero-copy">
-          <span className="eyebrow">{t('A ক্যাটাগরি — সর্বোচ্চ অগ্রাধিকার', 'Category A — highest priority')}</span>
+          <span className="eyebrow">{t('S ক্যাটাগরি — সর্বোচ্চ অগ্রাধিকার', 'Category S — highest priority')}</span>
           <h2>{bn(stats.doneA)} / {bn(stats.totalA)} {t('অধ্যায় সম্পন্ন', 'chapters completed')}</h2>
           <p>{stats.remainingA === 0
-            ? t('🎉 সব A অধ্যায় শেষ! এখন B ও C ক্যাটাগরির পালা — সিলেবাস ড্যাশবোর্ড দেখে পরের ধাপ নাও।', '🎉 All A chapters done! Move on to B and C — check the syllabus dashboard for the next step.')
-            : t(`বাকি ${bn(stats.remainingA)} টি A অধ্যায় · প্রস্তুতির ধাপ: ক্লাস → পড়া → CQ → MCQ → বোর্ড প্রশ্ন → রিভিশন।`, `${stats.remainingA} A chapters left · the loop: class → reading → CQ → MCQ → board questions → revision.`)}</p>
+            ? t('🎉 সব S অধ্যায় শেষ! টেস্টের পর বাকি A, তারপর B ও C ক্যাটাগরির পালা — সিলেবাস ড্যাশবোর্ড দেখে পরের ধাপ নাও।', '🎉 All S chapters done! After the test, continue remaining A, then B and C — check the syllabus dashboard for the next step.')
+            : t(`বাকি ${bn(stats.remainingA)} টি S অধ্যায় · প্রস্তুতির ধাপ: ক্লাস → পড়া → CQ → MCQ → বোর্ড প্রশ্ন → রিভিশন।`, `${stats.remainingA} S chapters left · the loop: class → reading → CQ → MCQ → board questions → revision.`)}</p>
           <div className="testprep-hero-actions">
             <button className="button secondary" onClick={() => navigate('calendar')}><CalendarDays size={15} />{t('স্টাডি প্ল্যান দেখো', 'Open study plan')}</button>
-            <button className="button secondary" onClick={() => navigate('syllabus')}><Target size={15} />{t('সিলেবাসে A ফিল্টার', 'Filter syllabus to A')}</button>
+            <button className="button secondary" onClick={() => navigate('syllabus')}><Target size={15} />{t('পুরো সিলেবাস দেখো', 'View full syllabus')}</button>
             {stats.remainingA > 0 && <button className="button primary" onClick={rebalance}><RefreshCw size={15} />{t('প্ল্যান রিব্যালেন্স', 'Rebalance plan')}</button>}
           </div>
         </div>
@@ -97,7 +108,7 @@ export default function TestPrepView() {
 
       <div className="testprep-stats">
         <div className="card stat-tile">
-          <span>{t('মোট A অধ্যায়', 'Total A chapters')}</span>
+          <span>{t('মোট S অধ্যায়', 'Total S chapters')}</span>
           <strong>{bn(stats.totalA)}</strong>
           <small>{t('সব বিষয় মিলিয়ে', 'across all subjects')}</small>
         </div>
@@ -129,7 +140,7 @@ export default function TestPrepView() {
         <div className="card stat-tile">
           <span>{t('আজকের টার্গেট', "Today's target")}</span>
           <strong>{bn(stats.dailyTarget)}</strong>
-          <small>{t('টি A-ধাপ অন্তত', 'A-tasks at least')}</small>
+          <small>{t('টি S-ধাপ অন্তত', 'S-tasks at least')}</small>
         </div>
         <div className="card stat-tile">
           <span>{t('পুরো পরিকল্পনা', 'Whole plan')}</span>
@@ -141,7 +152,7 @@ export default function TestPrepView() {
       <section className="card testprep-checklist">
         <div className="card-heading">
           <div>
-            <h2><CircleCheck size={18} />{t('A ক্যাটাগরি চেকলিস্ট', 'Category A checklist')}</h2>
+            <h2><CircleCheck size={18} />{t('S ক্যাটাগরি চেকলিস্ট', 'Category S checklist')}</h2>
             <p>{t('প্ল্যানের তারিখ অনুযায়ী সাজানো; অসম্পন্নগুলো আগে। কোনো অধ্যায়ে ক্লিক করলে পুরো লার্নিং পেজ খুলবে।', 'Ordered by plan date, unfinished first. Open any chapter for its full learning page.')}</p>
           </div>
           <button className="button ghost small" onClick={() => setShowAll(v => !v)}>
@@ -165,7 +176,7 @@ export default function TestPrepView() {
             );
           })}
         </div>
-        {!checklist.length && <EmptyState title={t('কোনো A অধ্যায় নেই', 'No A chapters')} description={t('অগ্রাধিকার বদলালে তালিকা বদলাবে।', 'Changing priorities updates this list.')} />}
+        {!checklist.length && <EmptyState title={t('কোনো S অধ্যায় নেই', 'No S chapters')} description={t('অগ্রাধিকার বদলালে তালিকা বদলাবে।', 'Changing priorities updates this list.')} />}
       </section>
 
       <div className="testprep-subjects">
@@ -184,7 +195,7 @@ export default function TestPrepView() {
 
       <div className="info-panel">
         <TrendingUp size={18} />
-        <p>{t('A শেষ হলে স্বয়ংক্রিয়ভাবে B ও C লুকানো হবে না — সিলেবাস ও প্ল্যানে সব থাকবে। অগ্রাধিকার কখনোই পরীক্ষার পূর্বাভাস নয়; কোনো অধ্যায় বাদ দেওয়া হয় না।', 'Finishing A never hides B or C — everything stays in the syllabus and plan. Priority is a study order, never an exam prediction; no chapter is dropped.')}</p>
+        <p>{t('S শেষ হলে স্বয়ংক্রিয়ভাবে B ও C লুকানো হবে না — সিলেবাস ও প্ল্যানে সব থাকবে। অগ্রাধিকার কখনোই পরীক্ষার পূর্বাভাস নয়; কোনো অধ্যায় বাদ দেওয়া হয় না।', 'Finishing A never hides B or C — everything stays in the syllabus and plan. Priority is a study order, never an exam prediction; no chapter is dropped.')}</p>
       </div>
     </div>
   );

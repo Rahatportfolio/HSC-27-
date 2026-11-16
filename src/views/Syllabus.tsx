@@ -1,3 +1,4 @@
+import { isSuperChapter } from '../superCategory';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, FileText, LayoutGrid, List, Play, Search, ShieldAlert } from 'lucide-react';
@@ -13,13 +14,13 @@ import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
 import { chapterClassProgress } from '../classes';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, PageHeading, ProgressBar, SubjectIcon } from '../components';
 
-const PRIORITY_LABEL: Record<string, string> = { A: 'টেস্ট অগ্রাধিকার', B: '২য় ধাপ', C: 'পরের ধাপ' };
+const PRIORITY_LABEL: Record<string, string> = { A: 'উচ্চ অগ্রাধিকার', B: '২য় ধাপ', C: 'পরের ধাপ' };
 
 export default function SyllabusView() {
   const { plan, data, openChapter } = usePlanner();
   const [subject, setSubject] = useState<SubjectId>('physics');
   const [status, setStatus] = useState<'all' | 'pending' | 'done'>('all');
-  const [priority, setPriority] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [priority, setPriority] = useState<'all' | 'S' | 'A' | 'B' | 'C'>('all');
   const [query, setQuery] = useState('');
   const [weakOnly, setWeakOnly] = useState(false);
   const [star, setStar] = useState<'all' | 5 | 3 | 1>('all');
@@ -35,7 +36,7 @@ export default function SyllabusView() {
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
 
   const visible = chapters.filter(chapter => (status === 'all' || (status === 'done') === isLearningComplete(chapterStage(chapter, data, plan)))
-    && (priority === 'all' || chapterPriority(chapter, data) === priority)
+    && (priority === 'all' || (priority === 'S' ? isSuperChapter(chapter) : chapterPriority(chapter, data) === priority))
     && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && (!unwatchedOnly || (() => { const progress = chapterClassProgress(data, chapter.id); return progress.total > 0 && progress.watched < progress.total; })())
@@ -75,7 +76,7 @@ export default function SyllabusView() {
         </div>
       </div>
 
-      <div className="syllabus-summary">
+      <div className="syllabus-summary"><button type="button" className={`filter-pill ${priority === 'S' ? 'active' : ''}`} onClick={() => setPriority(p => p === 'S' ? 'all' : 'S')}>S · Super ({bn(chapters.filter(isSuperChapter).length)})</button>
         <span><Check size={15} /><strong>{bn(done)}</strong>{t('সম্পন্ন', 'Done')}</span>
         <span><ShieldAlert size={15} /><strong>{bn(weak)}</strong>{t('দুর্বল', 'Weak')}</span>
         <span><FileText size={15} /><strong>{bn(noted)}</strong>{t('নোটযুক্ত', 'With notes')}</span>

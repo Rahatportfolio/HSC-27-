@@ -1,3 +1,4 @@
+import { isSuperChapter } from '../superCategory';
 import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowRight, BellRing, CalendarDays, CalendarRange, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock3, Flag, GripVertical, ListChecks, Lock, Plus, RefreshCw, Trash2, Unlock } from 'lucide-react';
@@ -35,7 +36,7 @@ export default function CalendarView() {
   const [importantDate, setImportantDate] = useState(addDays(today, 7));
   const [importantNote, setImportantNote] = useState('');
   const [importantNotify, setImportantNotify] = useState(true);
-  const phases = getPhases(data.settings.startDate);
+  const phases = getPhases(data.settings.startDate, data.settings.sCategoryMode);
   const byDate = useMemo(() => new Map(plan.map(day => [day.date, day])), [plan]);
   const first = `${month}-01`;
   const offset = (new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7;
@@ -158,6 +159,7 @@ export default function CalendarView() {
       </div>
       <div className="plan-timeline">
         {([
+          { key: 'S', label: t('S ক্যাটাগরি শেষ', 'Category S done'), date: plan.filter(d => d.tasks.some(task => task.id.includes(':part-') && task.chapterIds.some(isSuperChapter))).at(-1)?.date, color: '#8a5a14' },
           { key: 'A', label: t('A ক্যাটাগরি শেষ', 'Category A done'), date: categoryDates.A, color: '#236149' },
           { key: 'B', label: t('B ক্যাটাগরি শেষ', 'Category B done'), date: categoryDates.B, color: '#9a6722' },
           { key: 'C', label: t('C ক্যাটাগরি শেষ', 'Category C done'), date: categoryDates.C, color: '#5a4b82' },

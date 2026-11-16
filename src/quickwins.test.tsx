@@ -34,11 +34,11 @@ describe('home test-prep snapshot', () => {
     const strip = await screen.findByLabelText('টেস্ট প্রস্তুতি সংক্ষিপ্ত');
     expect(within(strip).getByRole('heading', { name: /টেস্ট প্রস্তুতি/ })).toBeTruthy();
     expect(within(strip).getByText(/দিন বাকি/)).toBeTruthy();
-    expect(within(strip).getByText(/A ক্যাটাগরি শেষ/)).toBeTruthy();
+    expect(within(strip).getByText(/S ক্যাটাগরি শেষ/)).toBeTruthy();
     expect(within(strip).getByRole('button', { name: /টেস্ট মোডে যাও/ })).toBeTruthy();
 
     fireEvent.click(within(strip).getByRole('button', { name: /টেস্ট মোডে যাও/ }));
-    expect(await screen.findByRole('heading', { name: /A ক্যাটাগরি চেকলিস্ট/ })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: /S ক্যাটাগরি চেকলিস্ট/ })).toBeTruthy();
   });
 });
 

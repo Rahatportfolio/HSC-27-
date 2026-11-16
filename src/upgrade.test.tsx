@@ -356,9 +356,9 @@ describe('new screens', () => {
   it('renders Test Preparation with countdown, warning area and A checklist', async () => {
     render(<App />);
     go('testprep');
-    expect(await screen.findByText('টেস্ট পরীক্ষার আগে A ক্যাটাগরি শেষ করো।')).toBeTruthy();
+    expect(await screen.findByText('টেস্ট পরীক্ষার আগে S ক্যাটাগরি শেষ করো।')).toBeTruthy();
     expect(screen.getByText(/দিন বাকি/)).toBeTruthy();
-    expect(screen.getByText(/A ক্যাটাগরি চেকলিস্ট/)).toBeTruthy();
+    expect(screen.getByText(/S ক্যাটাগরি চেকলিস্ট/)).toBeTruthy();
     // The checklist shows real chapter titles from the dataset.
     const rows = document.querySelectorAll('.testprep-row');
     expect(rows.length).toBeGreaterThan(0);
@@ -391,7 +391,7 @@ describe('new screens', () => {
     render(<App />);
     go('calendar');
     expect(await screen.findByText('সম্পূর্ণ পরিকল্পনার টাইমলাইন')).toBeTruthy();
-    expect(screen.getAllByText(/A ক্যাটাগরি শেষ/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/S ক্যাটাগরি শেষ/).length).toBeGreaterThan(0);
     expect(screen.getByText(/টেস্ট তারিখে প্রত্যাশিত অগ্রগতি/)).toBeTruthy();
 
     // Lock the selected date.
