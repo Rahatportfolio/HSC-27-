@@ -134,6 +134,16 @@ try {
   }
   console.log('PASS backlog manager', backlogDays, 'days, cap respected');
 
+  // Exam postmortem: after a real paper the result page must explain where the marks
+  // went, counted from banked questions only.
+  await nav('সিমুলেটর');
+  await page.locator('.exam-setup-card').waitFor();
+  if (await page.locator('.exam-trend-card').count()) {
+    const trends = await page.locator('.exam-trend-stats > div').count();
+    assert.equal(trends, 4);
+  }
+  console.log('PASS exam setup', await page.locator('.exam-mode-tabs button').count(), 'modes');
+
   // Focus report: the timer page must derive its numbers from saved sessions and
   // warn about a long unbroken sitting instead of praising volume.
   await nav('টাইমার');

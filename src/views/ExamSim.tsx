@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlarmClock, ArrowLeft, ArrowRight, Award, Brain, Check, CheckCheck, ChevronRight, ClipboardList,
-  Clock3, Flag, ListChecks, Play, RotateCcw, Target, Timer, TrendingUp, X,
+  Clock3, Flag, ListChecks, Play, RotateCcw, Stethoscope, Target, Timer, TrendingUp, X,
 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../data';
@@ -9,9 +9,10 @@ import type { SubjectId } from '../data';
 import { bn, formatDate, percent, todayKey } from '../planner';
 import {
   EXAM_COUNTS, EXAM_MODE_INFO, buildExamQuestions, examChapterAccuracy, examDurationMin,
-  examGradeLetter, examHistoryStats, gradeExam, saveExamSession,
+  examGradeLetter, examHistoryStats, gradeExam, paperCapacity, saveExamSession,
 } from '../examSim';
 import { retryBuckets, retryChapterRows } from '../retryLoop';
+import { examPostmortem } from '../examAnalysis';
 import { CADENCE_SPECS, cadenceSlots, cadenceStats, cadenceWeek, dailyTestChapter, missedDaily, nextCadenceSlot } from '../cadence';
 import type { CadenceSlot } from '../cadence';
 import type { ExamGrade } from '../examSim';
@@ -129,7 +130,11 @@ export default function ExamSimView() {
   };
 
   const startConfigured = () => {
-    const questions = buildExamQuestions(data, { mode, subject, chapterId: chapterId || undefined, count, today, generate: mode === 'chapter' || mode === 'subject', variant: Date.now() });
+    const options = { mode, subject, chapterId: chapterId || undefined, count, today, generate: mode === 'chapter' || mode === 'subject', variant: Date.now() };
+    const questions = buildExamQuestions(data, options);
+    // Say the honest number instead of letting a thin pool shorten the paper silently.
+    const capacity = paperCapacity(data, options);
+    if (capacity.short) notify(t(`এই বাছাইয়ে ${bn(capacity.available)}টি প্রশ্ন আছে—${bn(capacity.actual)}টির পরীক্ষা তৈরি হবে।`, `This selection has ${capacity.available} question(s) — the paper will have ${capacity.actual}.`), 'info');
     start(questions, mode);
   };
 
@@ -222,6 +227,21 @@ export default function ExamSimView() {
           <span className="tiny-muted">{t(`${bn(routine.taken7)}টি / ৭ দিন · ধারাবাহিকতা ${bn(routine.consistency)}%`, `${routine.taken7} in 7 days · consistency ${routine.consistency}%`)}</span>
         </div>
       </section>
+      {(() => {
+        const post = examPostmortem(data.examSessions);
+        if (!post.papers) return null;
+        return <section className="card exam-trend-card">
+          <div className="card-heading"><div><h2><TrendingUp size={19} />{t('গত পরীক্ষাগুলোর ছবি', 'Across your papers')}</h2><p>{t(`${bn(post.papers)}টি পরীক্ষা · ${bn(post.questions)}টি ব্যাংক-প্রশ্ন · ${t('প্রবণতা', 'trend')} ${post.trend.enough ? t('যথেষ্ট তথ্যে', 'on enough data') : t('এখনো অপর্যাপ্ত', 'still too little')}`, `${post.papers} papers · ${post.questions} banked questions · ${post.trend.enough ? 'enough data for a trend' : 'too little for a trend'}`)}</p></div></div>
+          <div className="exam-trend-stats">
+            <div><span>{t('গড় ফল', 'Average')}</span><strong>{bn(post.trend.average)}%</strong></div>
+            <div><span>{t('সেরা', 'Best')}</span><strong>{bn(post.trend.best)}%</strong></div>
+            <div><span>{t('উত্তরহীন', 'Unanswered')}</span><strong className={post.blankRate >= 15 ? 'warn' : ''}>{bn(post.blankRate)}%</strong></div>
+            <div><span>{t('প্রবণতা', 'Trend')}</span><strong className={post.trend.enough ? (post.trend.change >= 0 ? 'good' : 'warn') : ''}>{post.trend.enough ? `${post.trend.change >= 0 ? '+' : ''}${bn(post.trend.change)}` : '—'}</strong></div>
+          </div>
+          <div className="exam-postmortem-patterns">{post.patterns.slice(0, 2).map(pattern => <div key={pattern.key + pattern.titleEn} className={`focus-insight ${pattern.tone}`}><strong>{t(pattern.titleBn, pattern.titleEn)}</strong><span>{t(pattern.detailBn, pattern.detailEn)}</span></div>)}</div>
+          <p className="exam-postmortem-next"><strong>{t('পরের ধাপ:', 'Next:')}</strong> {t(post.nextBn, post.nextEn)}</p>
+        </section>;
+      })()}
       <div className="exam-setup-grid">
         <section className="card exam-setup-card">
           <div className="card-heading"><div><h2><Play size={19} />{t('নতুন পরীক্ষা তৈরি করো', 'Build a new paper')}</h2><p>{t('প্রশ্ন, সময় ও পূর্ণমান নিজে থেকেই ঠিক হয়ে যাবে।', 'Questions, time and marks are set automatically.')}</p></div></div>
@@ -375,6 +395,22 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
         <button className="button secondary" onClick={onNew}><Play size={16} />{t('নতুন পরীক্ষা', 'New paper')}</button>
       </div>
     </section>
+
+    {(() => {
+      // Why the marks were lost, counted from this very paper's question ids.
+      const post = examPostmortem([], [{ questionIds: result.questions.map(question => question.id), answers: result.answers }]);
+      if (!post.questions) return null;
+      return <section className="card exam-postmortem">
+        <div className="card-heading"><div><h2><Stethoscope size={19} />{t('নম্বর কোথায় গেল', 'Where the marks went')}</h2><p>{t(`এই পরীক্ষার ${bn(post.questions)}টি ব্যাংক-প্রশ্নের হিসাব—অনুমান নয়, গোনা।`, `Counted from the ${post.questions} banked questions in this paper — not estimated.`)}</p></div></div>
+        <div className="exam-postmortem-stats">
+          <div><span>{t('উত্তরহীন', 'Unanswered')}</span><strong>{bn(post.blank)}</strong></div>
+          <div><span>{t('ভুল', 'Wrong')}</span><strong>{bn(post.wrong)}</strong></div>
+          <div><span>{t('প্রতি প্রশ্নে সময়', 'Time per question')}</span><strong>{bn(post.secondsPerQuestion)}<small>s</small></strong></div>
+        </div>
+        <div className="exam-postmortem-patterns">{post.patterns.map(pattern => <div key={pattern.key + pattern.titleEn} className={`focus-insight ${pattern.tone}`}><strong>{t(pattern.titleBn, pattern.titleEn)}</strong><span>{t(pattern.detailBn, pattern.detailEn)}</span></div>)}</div>
+        <p className="exam-postmortem-next"><strong>{t('পরের ধাপ:', 'Next:')}</strong> {t(post.nextBn, post.nextEn)}</p>
+      </section>;
+    })()}
 
     <div className="exam-result-grid">
       <section className="card exam-breakdown-card">

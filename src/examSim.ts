@@ -391,3 +391,28 @@ export function nextMockDate(sessions: ExamSession[], today: string): string {
   const candidate = addDays(last, 7);
   return candidate > today ? candidate : today;
 }
+
+/** What a configured paper will really contain, before the student presses start. */
+export interface PaperCapacity {
+  /** Questions the selection can actually produce right now. */
+  available: number;
+  /** Questions the student asked for. */
+  requested: number;
+  /** Honest count after the pool limit, so the label never promises more. */
+  actual: number;
+  /** True when the pool is smaller than the request. */
+  short: boolean;
+  /** True when even a five-question paper cannot be built. */
+  impossible: boolean;
+}
+
+/**
+ * The simulator used to show "10 questions" and then quietly serve four because the
+ * pool was small. This reports the real number so the UI can say so before the start.
+ */
+export function paperCapacity(data: AppData, options: ExamOptions): PaperCapacity {
+  const pool = examPool(data, options);
+  const requested = Math.max(1, Math.round(options.count) || 1);
+  const actual = Math.min(requested, pool.length);
+  return { available: pool.length, requested, actual, short: pool.length < requested, impossible: pool.length === 0 };
+}

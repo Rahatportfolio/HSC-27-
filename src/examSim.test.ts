@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   EXAM_SECONDS_PER_QUESTION, buildExamQuestions, examChapterAccuracy, examDurationMin, examGradeLetter,
-  examHistoryStats, gradeExam, nextMockDate, retryQuestionIds, saveExamSession, wrongQuestionIds,
+  examHistoryStats, gradeExam, nextMockDate, paperCapacity, retryQuestionIds, saveExamSession, wrongQuestionIds,
 } from './examSim';
+import { CHAPTERS } from './data';
 import { freshData } from './planner';
 import type { AppData } from './planner';
 import { STARTER_QUESTIONS } from './quiz-data';
@@ -241,5 +242,33 @@ describe('history statistics', () => {
     expect(nextMockDate([], '2026-03-10')).toBe('2026-03-10');
     expect(nextMockDate([session(1, 2, '2026-03-01')], '2026-03-03')).toBe('2026-03-08');
     expect(nextMockDate([session(1, 2, '2026-03-01')], '2026-03-20')).toBe('2026-03-20');
+  });
+});
+
+describe('paper capacity is reported before the start', () => {
+  it('says a thin chapter cannot fill a ten-question paper', () => {
+    const data = freshData();
+    // Pick a chapter that really is thin, rather than assuming one is.
+    const thin = CHAPTERS.map(chapter => ({ chapter, capacity: paperCapacity(data, { mode: 'chapter', chapterId: chapter.id, count: 10 }) }))
+      .filter(entry => entry.capacity.available > 0 && entry.capacity.available < 5)[0];
+    expect(thin).toBeDefined();
+    const capacity = paperCapacity(data, { mode: 'chapter', chapterId: thin.chapter.id, count: 10 });
+    expect(capacity.requested).toBe(10);
+    expect(capacity.actual).toBe(capacity.available);
+    expect(capacity.short).toBe(capacity.available < 10);
+  });
+
+  it('never promises more questions than the pool holds', () => {
+    const data = freshData();
+    const capacity = paperCapacity(data, { mode: 'full', count: 200 });
+    expect(capacity.actual).toBeLessThanOrEqual(capacity.available);
+    expect(capacity.impossible).toBe(false);
+  });
+
+  it('flags an empty selection instead of starting an empty paper', () => {
+    const data = freshData();
+    const capacity = paperCapacity(data, { mode: 'chapter', chapterId: 'does-not-exist', count: 10 });
+    expect(capacity.available).toBe(0);
+    expect(capacity.impossible).toBe(true);
   });
 });

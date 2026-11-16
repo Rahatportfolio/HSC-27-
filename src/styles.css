@@ -4909,3 +4909,20 @@ body {
   .focus-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .focus-grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* ---------- Exam postmortem + trend ---------- */
+.exam-postmortem, .exam-trend-card { margin-bottom: 14px; }
+.exam-postmortem-stats, .exam-trend-stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.exam-trend-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.exam-postmortem-stats > div, .exam-trend-stats > div { display: grid; gap: 2px; padding: 10px; border-radius: 10px; background: var(--soft, #f4f6f3); }
+.exam-postmortem-stats span, .exam-trend-stats span { font-size: .72rem; color: var(--muted); }
+.exam-postmortem-stats strong, .exam-trend-stats strong { font-size: 1.1rem; }
+.exam-postmortem-stats small { font-size: .7rem; font-weight: 500; color: var(--muted); }
+.exam-trend-stats strong.warn, .exam-trend-stats strong.down { color: #b4532a; }
+.exam-trend-stats strong.good { color: #236149; }
+.exam-postmortem-patterns { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; margin-top: 12px; }
+.exam-postmortem-next { margin-top: 10px; padding: 10px 12px; border-radius: 10px; background: #f6faf4; border: 1px solid #d8e6d0; font-size: .8rem; line-height: 1.6; }
+@media (max-width: 760px) {
+  .exam-postmortem-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .exam-trend-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
