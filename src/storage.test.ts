@@ -89,7 +89,7 @@ describe('validated local backups', () => {
     expect(migrated.settings.examDate).toBe('2027-06-06');
     expect(migrated.settings.boostEnabled).toBe(true);
     expect(migrated.settings.boostStartDate).toBe('2026-12-01');
-    expect(migrated.settings.boostDailyHours).toBe(16);
+    expect(migrated.settings.boostDailyHours).toBe(12);
     expect(migrated.settings.pomodoroFocus).toBe(25);
     expect(migrated.studySessions).toEqual([]);
     expect(migrated.revisions).toEqual([]);

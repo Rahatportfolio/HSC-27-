@@ -1,3 +1,4 @@
+import { superUnit } from './chapterCategories';
 import { CHAPTERS } from './data';
 import type { Chapter } from './data';
 
@@ -5,17 +6,7 @@ import type { Chapter } from './data';
  * This is a provisional, coverage-oriented shortlist, NOT a measured board-frequency ranking.
  * No complete, verified multi-year board corpus is bundled with the app.
  */
-const selected: Record<string, string[]> = {
-  physics: ['1:2', '1:4', '1:5', '1:8', '1:10'],
-  biology: ['1:1', '1:2', '1:9', '2:4', '2:8', '2:11'],
-  math: ['1:1', '1:3', '1:9', '1:10', '2:3'],
-  bangla: ['1:গদ্য ১', '1:পদ্য ১', '1:সহপাঠ ১', '2:ব্যাকরণ ৩', '2:নির্মিতি ৩'],
-  english: ['1:Reading 1', '1:Writing 2', '2:Grammar 1', '2:Writing 1'],
-  ict: ['1:3', '1:4', '1:5', '1:6'],
-};
-export const S_CHAPTERS = CHAPTERS.filter(c => c.subject === 'chemistry'
-  ? c.priority === 'A'
-  : selected[c.subject]?.includes(`${c.paper}:${c.number}`));
+export const S_CHAPTERS = CHAPTERS.filter(superUnit);
 const ids = new Set(S_CHAPTERS.map(c => c.id));
 export const isSuperChapter = (chapter: Chapter | string): boolean => ids.has(typeof chapter === 'string' ? chapter : chapter.id);
 export const S_REASONS: Record<string, { bn: string; en: string }> = {

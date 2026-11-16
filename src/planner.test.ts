@@ -38,12 +38,12 @@ describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
     }
   });
 
-  it('allocates 8h/day in Nov 2026 and boosts to 16h/day from Dec 2026, with non-overlapping sessions', () => {
+  it('allocates 8h/day in Nov 2026 and boosts to 12h/day from Dec 2026, with non-overlapping sessions', () => {
     for (const day of plan) {
       const expectedMin = effectiveDailyHours(DEFAULT_SETTINGS, day.date) * 60;
       expect(day.tasks.reduce((n, t) => n + t.endMinute - t.startMinute, 0)).toBe(expectedMin);
       if (day.date < '2026-12-01') expect(expectedMin).toBe(8 * 60);
-      else expect(expectedMin).toBe(16 * 60);
+      else expect(expectedMin).toBe(12 * 60);
       for (let i = 1; i < day.tasks.length; i++) expect(day.tasks[i].startMinute).toBeGreaterThanOrEqual(day.tasks[i - 1].endMinute);
     }
   });

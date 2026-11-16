@@ -2,6 +2,18 @@
 
 A Bengali-first, offline study companion for an HSC 2027 science student (Sylhet board), with Higher Mathematics as the fourth subject. Built with React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API is required.
 
+## Current version: 2.16.0 — Phase 1 fixes
+
+Phase 1 validation: **276 tests in 42 files passed**, plus `npm run typecheck` and `npm run build`. See [PHASE-1-REPORT.md](PHASE-1-REPORT.md) for scope and known limits.
+
+- Default boost: **12 net hours/day**; quick hour pills: **6 / 8 / 10 / 12**. Existing saved personal hours are retained.
+- Test-prep task counts include only scheduled dates **on or before** the selected test target. Pace uses observed days (up to 14), not an unconditional 14-day denominator.
+- An optional/fourth-subject F gives **zero bonus**, not an overall failure; compulsory-subject F still fails the GPA estimate.
+- **38 base A chapters/skill units**, including the independent **35-unit S shortlist** and three second-paper physics foundations. No chapters, IDs or saved personal priority overrides are deleted. This is editorial study order, **not a verified board-frequency ranking** or official syllabus. Language units can contain multiple lessons.
+- Static explanations in all view JSX text nodes now go through bilingual `t()` calls; original chapter titles, question content, personal notes and some legacy messages remain in their original language.
+
+### Earlier version history
+
 **Version 2.9** fills the practice side: the sample MCQ bank grew from 60 to 427 questions spread over 68 chapters of all seven subjects (every item checked by a test for a real chapter, four distinct options and an in-range answer), and CQ practice now shows a model-answer structure for science and Bangla next to the ক/খ/গ/ঘ rubric.
 
 **Version 2.8** makes revision adaptive and reporting real: every completed card is rated “ভুলে গেছি / মোটামুটি / মনে ছিল”, and that rating moves the next card (tomorrow, three days, or the normal ladder) — the 45-day recall score is shown on the Revision page. Analytics gained a seven-day report with share, copy and a print-to-PDF view. The Android build can now be signed for release: add the four keystore secrets and CI also produces a signed release APK and an `.aab` for the Play Store; without them the same installable debug APK is still built.
@@ -73,7 +85,7 @@ npm run dev
 Open http://localhost:3000. The dev server binds to `0.0.0.0` and accepts the Arena preview host.
 
 ```bash
-npm test          # 76 tests: plan, dates, i18n, study sessions, backup v1/v2, timer parsing, revision, GPA, analytics, CSV/ICS, UI smoke
+npm test          # Phase 1: 276 tests / 42 files; see PHASE-1-REPORT.md
 npm run typecheck
 npm run build     # production PWA build in dist/
 npm run preview   # serve the production build on port 3000
@@ -106,7 +118,7 @@ The generated APK is at `android/app/build/outputs/apk/debug/app-debug.apk`.
 
 ### Why a debug APK?
 
-A debug APK is self-signed and installable without Play Store or signing secrets. For a Play Store release, create a signing keystore and add a release build type; the CI workflow deliberately does not require signing secrets so that anyone can build the app.
+A debug APK is self-signed and installable without Play Store or signing secrets. The Android workflow already supports optional release signing through repository keystore secrets and produces a release APK/AAB when configured. Without those secrets it produces a debug-signed installable APK; signing compatibility with an older installation is not guaranteed. Export a full backup before updating or uninstalling.
 
 ## Reminders on Android
 
@@ -135,7 +147,7 @@ Default start: **14 November 2026**. Change it in Settings without deleting chap
 | Revision | 14 Feb – 13 Apr 2027 | 59 | Two revision rounds, language/ICT practice |
 | Model tests | 14 Apr – 13 May 2027 | 30 | 13 full-paper personal model tests, correction days, final review |
 
-That is **181 dates**. The daily target is **8 net study hours**; breaks are additional. Start time, target (6/8/10 hours), name, board and personal exam date are editable.
+That is **181 dates**. The initial daily target is **8 net study hours**, boosted to **12** from the configured boost date by default; breaks are additional. Start time, quick targets (6/8/10/12 hours), name, board and personal exam date are editable.
 
 The default plan is also checked in as **[HSC-27-STUDY-PLAN.md](HSC-27-STUDY-PLAN.md)**. The app can export an updated Markdown copy with your progress and scores.
 
@@ -152,7 +164,7 @@ This is a **textbook-based planning aid**, not an officially approved syllabus, 
 
 ## GitHub Pages (PWA)
 
-`.github/workflows/deploy-pages.yml` tests and builds the app on every push and deploys `dist/` when Pages is enabled.
+`.github/workflows/static.yml` tests/builds on pushes to `main` or manual dispatch and deploys `dist/` when Pages is enabled. `.github/workflows/android-apk.yml` builds APK artifacts on `main` and `arena/**` pushes or manual dispatch, runs offline Android WebView checks, and can publish a direct-download test APK after successful checks using the `publish_install` dispatch input.
 
 1. Repository **Settings → Pages → Build and deployment → GitHub Actions**.
 2. Run **Build and deploy Prostuti** (or push to the configured branch).

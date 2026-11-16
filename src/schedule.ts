@@ -1,4 +1,4 @@
-// HSC 2027 chapter schedule — synced with 2-subjects/day buildPlan() (February 2027 Test Exam + June 2027 HSC Board Exam).
+// HSC 2027 chapter schedule — synced with 2-subjects/day buildPlan() (personal test/exam targets from Settings).
 // star: board-importance (5 high, 3 medium, 1 low). hours: planned study time. start/end: ISO dates.
 export type Star = 1 | 3 | 5;
 export interface ChapterSchedule { star: Star; hours: number; start: string; end: string }

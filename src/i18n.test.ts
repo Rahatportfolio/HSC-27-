@@ -61,7 +61,6 @@ describe('language setting persistence', () => {
 
 // --- every interface shell string should follow the selected language ---------
 
-const BANGLA = /[\u0980-\u09FF]/;
 const views = readdirSync('src/views')
   .filter(name => name.endsWith('.tsx'))
   .map(name => 'src/views/' + name);
@@ -99,9 +98,13 @@ describe('bilingual interface coverage', () => {
     expect(left).toEqual([]);
   });
 
-  it('keeps the long-form study copy in Bangla', () => {
-    const paragraphs = bareTextNodes(readFileSync('src/views/Revision.tsx', 'utf8')).filter(text => text.length > 40);
-    expect(paragraphs.length).toBeGreaterThan(0);
-    expect(BANGLA.test(paragraphs[0])).toBe(true);
+  it('makes static view explanations translatable while keeping Bengali as the default', () => {
+    for (const file of views) expect(bareTextNodes(readFileSync(file, 'utf8')), file).toEqual([]);
+    const source = readFileSync('src/views/Revision.tsx', 'utf8');
+    expect(source).toContain('তিন দিন পর');
+    expect(source).toContain('partial recall in three days');
+    expect(t('দিনের পরিকল্পনা', 'Day plan')).toBe('দিনের পরিকল্পনা');
+    setLanguage('en');
+    expect(t('দিনের পরিকল্পনা', 'Day plan')).toBe('Day plan');
   });
 });

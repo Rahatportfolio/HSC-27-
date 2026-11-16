@@ -176,8 +176,7 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
           }
         />
       ) : (
-        <p>
-          এই প্ল্যাটফর্মে স্বয়ংক্রিয় watch tracking নেই।{" "}
+        <p> {t("এই প্ল্যাটফর্মে স্বয়ংক্রিয় watch tracking নেই।", "Automatic watch tracking is unavailable for this platform.")}{" "}
           <a href={item.url} target="_blank" rel="noreferrer">
             {t("মূল ক্লাস খোলো", "Open original class")}
           </a>{" "}
@@ -298,10 +297,7 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
           }}
         />
       </label>
-      <p className="tiny-muted">
-        ভিডিও progress সংরক্ষিত হয়। Study hours-এর জন্য Focus timer ব্যবহার করো;
-        একই সময় দুইবার যোগ হয় না।
-      </p>
+      <p className="tiny-muted"> {t("ভিডিও progress সংরক্ষিত হয়। Study hours-এর জন্য Focus timer ব্যবহার করো; একই সময় দুইবার যোগ হয় না।", "Video progress is saved. Use the Focus timer for study hours; time is not counted twice.")} </p>
     </Modal>
   );
 }
@@ -608,11 +604,7 @@ export default function StudySystem() {
               {estimate &&
                 ` · Device: ${formatBytes(estimate.usage)} / ${formatBytes(estimate.quota)}`}
             </p>
-            <p className="tiny-muted">
-              Android-এ private device files এবং web/PWA-তে IndexedDB ব্যবহৃত হয়।
-              Settings-এর full backup-এ media-সহ রপ্তানি করা যায়। App data
-              clear/uninstall-এর আগে backup রাখো।
-            </p>
+            <p className="tiny-muted"> {t("Android-এ private device files এবং web/PWA-তে IndexedDB ব্যবহৃত হয়। Settings-এর full backup-এ media-সহ রপ্তানি করা যায়। App data clear/uninstall-এর আগে backup রাখো।", "Android uses private files; web/PWA uses IndexedDB. Full backup in Settings includes media. Back up before clearing app data or uninstalling.")} </p>
             {a.classes
               .filter(
                 (c) =>
@@ -674,9 +666,7 @@ export default function StudySystem() {
                       </button>
                     )}
                     {!c.permitted && (
-                      <span className="tiny-muted">
-                        Bookmark only · restricted platform download করা হয় না
-                      </span>
+                      <span className="tiny-muted"> {t("Bookmark only · restricted platform download করা হয় না", "Bookmark only · restricted platforms are not downloaded")} </span>
                     )}
                     <button
                       className="button ghost"
@@ -727,9 +717,7 @@ export default function StudySystem() {
                 </article>
               ))}
             {!a.classes.some((c) => tab !== "offline" || c.local) && (
-              <p>
-                এখনো কোনো ক্লাস নেই। অনুমোদিত direct file অথবা bookmark যোগ করো।
-              </p>
+              <p> {t("এখনো কোনো ক্লাস নেই। অনুমোদিত direct file অথবা bookmark যোগ করো।", "No classes yet. Add an authorized direct file or a bookmark.")} </p>
             )}
           </section>
           {tab === "classes" && (
@@ -775,9 +763,7 @@ export default function StudySystem() {
                 />
               </label>
               <label className="check-line">
-                <input name="permission" type="checkbox" /> মালিক এই direct
-                video file download করার অনুমতি দিয়েছেন
-              </label>
+                <input name="permission" type="checkbox" /> {t("মালিক এই direct video file download করার অনুমতি দিয়েছেন", "The owner has authorized downloading this direct video file")} </label>
               <button className="button primary">Add class / bookmark</button>
             </form>
           )}
@@ -788,16 +774,13 @@ export default function StudySystem() {
           <DailyGoals key={today} />
           <section className="study-panel">
             <h2>Daily target</h2>
-            <p>
-              আজ {todayMinutes.toFixed(0)} / {week[0].capacity} min · বাকি{" "}
+            <p> {t("আজ", "Today")} {todayMinutes.toFixed(0)} / {week[0].capacity} {t("min · বাকি", "min · remaining")}{" "}
               {Math.max(0, week[0].capacity - todayMinutes).toFixed(0)} min
             </p>
             {a.targets[today] !== undefined && (
               <p>{t("আজকের target locked ✓", "Today’s target locked ✓")}</p>
             )}
-            <label>
-              প্রতি subject-এ daily video workload limit (min)
-              <input
+            <label> {t("প্রতি subject-এ daily video workload limit (min)", "Daily video workload limit per subject (min)")} <input
                 type="number"
                 min="1"
                 max="1440"
@@ -809,13 +792,7 @@ export default function StudySystem() {
                 }}
               />
             </label>
-            <p>
-              ভিডিও session মূল routine-এই বসে। দিনের সর্বোচ্চ অর্ধেক video
-              workload; প্রতি subject-এর limit মানা হয়। বাকি textbook/practice
-              কাজ পরের খালি slot-এ থাকে—মুছে যায় না। Video workload-এ ⅔ video + ⅓
-              breaks/notes/practice/revision। অসমাপ্ত ক্লাস actual progress থেকে
-              আবার ভাগ হয়।
-            </p>
+            <p> {t("ভিডিও session মূল routine-এই বসে। দিনের সর্বোচ্চ অর্ধেক video workload; প্রতি subject-এর limit মানা হয়। বাকি textbook/practice কাজ পরের খালি slot-এ থাকে—মুছে যায় না। Video workload-এ ⅔ video + ⅓ breaks/notes/practice/revision। অসমাপ্ত ক্লাস actual progress থেকে আবার ভাগ হয়।", "Video sessions share the main routine and respect subject limits. Normally up to half the day is video workload; displaced work is retained. Workload includes video plus breaks, notes, practice and revision. Remaining lectures are split using actual progress.")} </p>
           </section>
           {week.map((d) => (
             <section className="study-panel" key={d.date}>
@@ -935,10 +912,7 @@ export default function StudySystem() {
               </label>
             ))}
           </div>
-          <p className="tiny-muted">
-            যুক্ত ক্লাস না দেখে Lecture completed হবে না। Exam-ready কার্যকর হতে
-            আগের সব ধাপ সম্পন্ন হওয়া দরকার। পুরোনো task progress অপরিবর্তিত থাকে।
-          </p>
+          <p className="tiny-muted"> {t("যুক্ত ক্লাস না দেখে Lecture completed হবে না। Exam-ready কার্যকর হতে আগের সব ধাপ সম্পন্ন হওয়া দরকার। পুরোনো task progress অপরিবর্তিত থাকে।", "Linked lectures must be watched before lectures count as complete. Exam-ready requires all previous steps. Existing task progress is preserved.")} </p>
           <h3>Subject readiness</h3>
           {subjectReadiness(data).map((s) => (
             <div className="study-session" key={s.id}>

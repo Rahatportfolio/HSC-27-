@@ -74,7 +74,7 @@ export default function StorageView() {
         <div className="usage-detail">
           <p><HardDrive size={16} /> {t('লোকাল স্টোরেজে অ্যাপ ডাটা', 'App data in local storage')}: {bytesLabel(usage.localStorageBytes)}</p>
           {usage.indexedDBAvailable ? <p><BarChart3 size={16} /> {t('ইনডেক্সডডিবিতে ক্যাশে', 'Cache in IndexedDB')}: {bytesLabel(usage.indexedDBBytes)}</p> : <p><AlertCircle size={16} /> {t('এই ব্রাউজারে ইনডেক্সডডিবি উপলব্ধ নয়।', 'IndexedDB unavailable in this browser.')}</p>}
-          {usage.estimate && <p>{t('ব্রাউজার স্টোরেজ ব্যবহার: ', 'Browser storage usage: ')}{bn(usage.estimate.usage)} বাইট / {bytesLabel(usage.estimate.quota)} ({bn(usage.estimate.usagePercent)}%)</p>}
+          {usage.estimate && <p>{t('ব্রাউজার স্টোরেজ ব্যবহার: ', 'Browser storage usage: ')}{bn(usage.estimate.usage)} {t("বাইট /", "bytes /")} {bytesLabel(usage.estimate.quota)} ({bn(usage.estimate.usagePercent)}%)</p>}
           <p>{needsBackup(data, todayKey()) ? t('এক সপ্তাহ ধরে ব্যাকআপ নেওয়া হয়নি।', 'No backup for a week.') : t('নিরাপদ ব্যাকআপ আছে।', 'A safe backup exists.')}</p>
         </div>
       )}

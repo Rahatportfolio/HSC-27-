@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { FOURTH_SUBJECT, SUBJECTS, SUBJECT_FULL_MARKS, subjectById } from './data';
 import type { SubjectId } from './data';
 import type { SubjectMarks } from './types';
@@ -43,7 +44,7 @@ export interface GpaResult {
 /**
  * HSC GPA: six compulsory subjects + 4th subject bonus.
  * GPA = (sum of six grade points + max(0, optional point - 2)) / 6, capped at 5.00.
- * Any F makes the GPA 0.00. Golden A+ means A+ in every subject.
+ * A compulsory-subject F makes the GPA 0.00; an optional F contributes zero bonus. Golden A+ means A+ in every subject.
  */
 export function calculateGpa(marks: SubjectMarks): GpaResult {
   const compulsory = SUBJECTS.filter(subject => !subject.optional);
@@ -62,7 +63,7 @@ export function calculateGpa(marks: SubjectMarks): GpaResult {
   const complete = missing.length === 0;
   const mainPoints = mainRows.reduce((sum, row) => sum + (row.point ?? 0), 0);
   const bonus = optionalRow.point !== null ? Math.max(0, optionalRow.point - 2) : 0;
-  const failed = rows.some(row => row.point === 0);
+  const failed = mainRows.some(row => row.point === 0);
   const gpa = complete ? Math.min(5, Math.max(0, Number(((mainPoints + bonus) / 6).toFixed(2)))) : null;
   const golden = complete && rows.every(row => row.point === 5);
   const totalObtained = rows.reduce((sum, row) => sum + (row.obtained ?? 0), 0);
@@ -70,9 +71,9 @@ export function calculateGpa(marks: SubjectMarks): GpaResult {
   return { rows, gpa: failed ? 0 : gpa, complete, golden: golden && !failed, failed, missing, bonus, totalObtained, totalFull };
 }
 export function gpaTargetLabel(gpa: number | null, golden: boolean): string {
-  if (gpa === null) return 'নম্বর যোগ করলে GPA দেখা যাবে';
-  if (golden) return 'Golden A+ এর পথে';
-  if (gpa >= 5) return 'GPA 5.00 — চমৎকার';
-  if (gpa >= 4.5) return 'GPA ৫-এর খুব কাছে';
-  return 'যেখানে ঘাটতি, সেটাই পরের লক্ষ্য';
+  if (gpa === null) return t('নম্বর যোগ করলে GPA দেখা যাবে', 'Add marks to see GPA');
+  if (golden) return t('Golden A+ এর পথে', 'On the way to Golden A+');
+  if (gpa >= 5) return t('GPA 5.00 — চমৎকার', 'GPA 5.00 — excellent');
+  if (gpa >= 4.5) return t('GPA ৫-এর খুব কাছে', 'Very close to GPA 5');
+  return t('যেখানে ঘাটতি, সেটাই পরের লক্ষ্য', 'Focus next on the gaps');
 }

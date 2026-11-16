@@ -28,11 +28,20 @@ describe('HSC GPA and Golden A+ helper', () => {
     expect(calculateGpa({ physics: 140 }).gpa).toBeNull();
     expect(calculateGpa({ physics: 140 }).complete).toBe(false);
   });
-  it('makes the GPA 0.00 when any subject is failed', () => {
+  it('makes the GPA 0.00 when a compulsory subject is failed', () => {
     const result = calculateGpa({ ...excellent, biology: 60 });
     expect(result.failed).toBe(true);
     expect(result.gpa).toBe(0);
     expect(result.golden).toBe(false);
+  });
+  it('does not fail the result for an optional F and gives no bonus', () => {
+    const result = calculateGpa({ ...excellent, math: 0 });
+    expect(result.failed).toBe(false);
+    expect(result.bonus).toBe(0);
+    expect(result.gpa).toBe(5);
+    expect(result.golden).toBe(false);
+    expect(calculateGpa({ ...excellent, biology: 0, math: 0 }).failed).toBe(true);
+    expect(calculateGpa({ math: 0 }).gpa).toBeNull();
   });
   it('uses the standard HSC percentage grade boundaries', () => {
     expect(gradeFor(80).grade).toBe('A+');

@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: Settings = {
   dailyHours: 8,
   boostEnabled: true,
   boostStartDate: '2026-12-01',
-  boostDailyHours: 16,
+  boostDailyHours: 12,
   board: 'সিলেট',
   name: '',
   reminderEnabled: false,

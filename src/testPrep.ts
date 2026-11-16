@@ -45,26 +45,28 @@ export function testPrepStats(data: AppData, plan: Day[], today: string, categor
   const aTaskIds = new Set<string>();
   for (const day of plan) {
     for (const task of day.tasks) {
-      if ((category !== 'S' || day.date < testDate || task.id.includes(':part-')) && task.chapterIds.some(id => aIds.has(id))) aTaskIds.add(task.id);
+      if (day.date <= testDate && task.chapterIds.some(id => aIds.has(id))) aTaskIds.add(task.id);
     }
   }
   const remainingIds = new Set<string>();
   for (const day of plan) {
     for (const task of day.tasks) {
-      if (aTaskIds.has(task.id) && !data.completed[task.id] && !data.removedTasks.includes(task.id)) remainingIds.add(task.id);
+      if (day.date <= testDate && aTaskIds.has(task.id) && !data.completed[task.id] && !data.removedTasks.includes(task.id)) remainingIds.add(task.id);
     }
   }
 
   const remainingATasks = remainingIds.size;
-  const windowFrom = addDays(today, -(PACE_WINDOW - 1));
+  const elapsedDays = Math.max(0, diffDays(data.settings.startDate, today) + 1);
+  const paceWindow = Math.min(PACE_WINDOW, elapsedDays);
+  const windowFrom = addDays(today, -(Math.max(1, paceWindow) - 1));
   let paceDone = 0;
   for (const id of aTaskIds) {
     const at = data.completed[id];
     if (!at) continue;
     const day = at.slice(0, 10);
-    if (day >= windowFrom && day <= today) paceDone++;
+    if (paceWindow > 0 && day >= windowFrom && day <= today && day <= testDate) paceDone++;
   }
-  const paceTasksPerDay = paceDone / PACE_WINDOW;
+  const paceTasksPerDay = paceWindow ? paceDone / paceWindow : 0;
 
   const divisor = Math.max(1, daysLeft);
   const requiredTasksPerDay = remainingATasks / divisor;

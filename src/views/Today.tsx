@@ -401,7 +401,7 @@ export default function TodayView() {
     <section className="card testprep-quick" aria-label={t('টেস্ট প্রস্তুতি সংক্ষিপ্ত', 'Test prep snapshot')}>
       <div className="testprep-quick-top">
         <div>
-          <span className="eyebrow">{t('টেস্ট পরীক্ষা · S লক্ষ্য', 'Test Exam · S target')}</span>
+          <span className="eyebrow">{t('টেস্ট লক্ষ্য', 'Test target')} · {formatDate(data.settings.testExamDate, 'long')}</span>
           <h2>{t('টেস্ট প্রস্তুতি', 'Test prep')} · {t(`${bn(prep.daysLeft)} দিন বাকি`, `${prep.daysLeft} days left`)}</h2>
         </div>
         <button type="button" className="button secondary small" onClick={() => navigate('testprep')}>{t('টেস্ট মোডে যাও', 'Open test mode')}<ArrowRight size={13} /></button>
@@ -417,7 +417,7 @@ export default function TodayView() {
     </section>
     <section className="welcome-hero">
       <div className="hero-copy">
-        <div className="hero-eyebrow"><span className="live-dot" />{t('লক্ষ্য: টেস্ট পরীক্ষা · S লক্ষ্য · দিনে ২টি বিষয়', 'Target: Test Exam · S target · 2 Subjects Daily')}</div>
+        <div className="hero-eyebrow"><span className="live-dot" />{t('টেস্ট লক্ষ্য', 'Test target')} · {formatDate(data.settings.testExamDate, 'long')} · {t('দিনে ২টি বিষয়', '2 subjects daily')}</div>
         <h1>{isToday ? t('প্রতিদিন ২টি বিষয়,', '2 subjects a day,') : t('তোমার গোছানো রুটিন,', 'Your focused routine,')}<br /><span>{t('ধাপে ধাপে এগিয়ে যাই।', 'moves us forward.')}</span></h1>
         <p>{formatDate(selectedDate, 'long')}, {formatDate(selectedDate, 'weekday')} <span className="hero-separator">·</span> {day ? `${t('দিন', 'Day')} ${bn(dayNumber)} / ${bn(plan.length)}` : t('পরিকল্পনার বাইরে', 'outside plan range')}</p>
         <div className="hero-chips">
@@ -617,7 +617,7 @@ export default function TodayView() {
               <button type="button" className="icon-step-btn" aria-label={t('১ ঘণ্টা বাড়াও', 'Increase 1 hour')} onClick={() => setDayHours(activeHours + 1)} disabled={activeHours >= 18}><Plus size={13} /></button>
             </div>
             <div className="hours-quick-pills">
-              {[8, 12, 16, 18].map(h => (
+              {[6, 8, 10, 12].map(h => (
                 <button key={h} type="button" className={`hour-pill ${activeHours === h ? 'active' : ''}`} onClick={() => setDayHours(h)}>
                   {bn(h)}{t('ঘ.', 'h')}
                 </button>
@@ -671,7 +671,7 @@ export default function TodayView() {
 
     <div className="stats-grid">
       <button className="stat-card stat-link" onClick={() => navigate('syllabus')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস সম্পন্ন', 'Syllabus progress')}</span><strong>{bn(learning.overall.percent)}<small>%</small></strong><p>{bn(learning.overall.completed)} / {bn(learning.overall.total)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={learning.overall.percent} className="stat-progress" /></button>
-      <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> ঘণ্টা {bn(weekMinutes % 60)} মি.</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
+      <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> {t('ঘণ্টা', 'h')} {bn(weekMinutes % 60)} {t('মি.', 'm')}</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => navigate('analytics')}><span className="stat-icon lavender"><Flame size={19} /></span><div><span>{t('টানা পড়ার ধারা', 'Active streak')}</span><strong>{bn(stats.streak)}<small> {t('দিন', 'days')}</small></strong><p>{stats.streak ? t('ধারাবাহিকতা বজায় রাখো', 'Keep this streak going') : t('আজ থেকেই শুরু হোক', 'Start your streak today')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => { setSelectedDate(today); scrollToSection('today-pending'); }}><span className="stat-icon blue"><ListChecks size={19} /></span><div><span>{t('বাকি কাজ ও রিভিশন', 'Pending & revision')}</span><strong>{bn(pending)}<small> {t('টি কাজ', ' tasks')}</small></strong><p>{due.length ? `${bn(due.length)} ${t('টি রিভিশন বাকি', 'revisions due')}` : t('আজ কোনো রিভিশন বাকি নেই', 'No revision due')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
     </div>

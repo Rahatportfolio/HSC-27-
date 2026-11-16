@@ -1,3 +1,4 @@
+import { aUnit } from './chapterCategories';
 export type SubjectId = 'physics' | 'chemistry' | 'biology' | 'math' | 'bangla' | 'english' | 'ict';
 export type Priority = 'A' | 'B' | 'C';
 export interface Chapter {
@@ -46,7 +47,7 @@ const unitOrder = (number: string) => {
   return digits ? Number([...digits].map(ch => (BN_DIGITS.includes(ch) ? String(BN_DIGITS.indexOf(ch)) : ch)).join('')) : Number.MAX_SAFE_INTEGER;
 };
 
-export const CHAPTERS: Chapter[] = [
+const TEXTBOOK_CHAPTERS: Chapter[] = [
   chapter('physics', 1, '2', 'ভেক্টর', 'A', 3, 'ডট–ক্রস গুণন, লব্ধি ও ভেক্টর সংক্রান্ত সমস্যা'),
   chapter('physics', 1, '3', 'গতিবিদ্যা', 'A', 3, 'প্রাসের গতি, লেখচিত্র ও আপেক্ষিক বেগ'),
   chapter('physics', 1, '4', 'নিউটনিয়ান বলবিদ্যা', 'A', 3, 'মুক্ত বস্তুচিত্র, ঘর্ষণ, ভরবেগ ও বৃত্তাকার গতি'),
@@ -168,6 +169,8 @@ export const CHAPTERS: Chapter[] = [
   chapter('ict', 1, '2', 'কমিউনিকেশন সিস্টেমস ও নেটওয়ার্কিং', 'B', 2, 'Transmission, topology, device ও network security'),
   chapter('ict', 1, '1', 'তথ্য ও যোগাযোগ প্রযুক্তি: বিশ্ব ও বাংলাদেশ', 'B', 1, 'প্রয়োগ, ভার্চুয়াল রিয়ালিটি, ethics ও safety'),
 ];
+// Keep IDs, effort, content and saved personal overrides intact. Only the base study order changes.
+export const CHAPTERS: Chapter[] = TEXTBOOK_CHAPTERS.map(c => ({ ...c, priority: aUnit(c) ? 'A' : c.priority === 'C' ? 'C' : 'B' }));
 export const PAPER_NAMES: Record<SubjectId, string[]> = {
   physics: ['প্রথম পত্র', 'দ্বিতীয় পত্র'], chemistry: ['প্রথম পত্র', 'দ্বিতীয় পত্র'],
   biology: ['উদ্ভিদবিজ্ঞান · প্রথম পত্র', 'প্রাণিবিজ্ঞান · দ্বিতীয় পত্র'],

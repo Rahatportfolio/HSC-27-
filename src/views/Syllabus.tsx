@@ -68,7 +68,7 @@ export default function SyllabusView() {
       <div className="syllabus-subject-heading">
         <div>
           <h2>{s.name} {s.optional && <span className="optional-badge">{t('চতুর্থ বিষয়', 'Fourth subject')}</span>}</h2>
-          <p>বিষয় কোড {s.code} · {bn(done)} / {bn(chapters.length)} সম্পন্ন</p>
+          <p>{t("বিষয় কোড", "Subject code")} {s.code} · {bn(done)} / {bn(chapters.length)} {t("সম্পন্ন", "completed")}</p>
         </div>
         <div className="syllabus-subject-progress">
           <strong>{bn(percent(done, chapters.length))}%</strong>
@@ -124,7 +124,7 @@ export default function SyllabusView() {
         const rows = visible.filter(chapter => chapter.paper === paper);
         if (!rows.length) return null;
         return <div className="paper-section" key={paper}>
-          <div className="paper-heading"><h3>{PAPER_NAMES[subject][paper - 1]}</h3><span>{bn(rows.length)}টি অধ্যায়/ইউনিট</span></div>
+          <div className="paper-heading"><h3>{PAPER_NAMES[subject][paper - 1]}</h3><span>{bn(rows.length)}{t("টি অধ্যায়/ইউনিট", "chapters/units")}</span></div>
           <div className="chapter-list">
             {rows.map(chapter => {
               const tasks = chapterStudyTasks(plan, chapter.id);
@@ -158,11 +158,11 @@ export default function SyllabusView() {
                   </span>
                   {slot && <span className="chapter-plan-cell">
                     <span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span>
-                    <small>{bn(slot.hours)} ঘণ্টা · {endDate ? `শেষ ${formatDate(endDate)}` : formatDate(slot.end)}</small>
+                    <small>{bn(slot.hours)} {t("ঘণ্টা ·", "hours ·")} {endDate ? `শেষ ${formatDate(endDate)}` : formatDate(slot.end)}</small>
                     <small className="plan-links">{progress.watched ? `${bn(progress.watched)}/${bn(progress.total)} ক্লাস দেখা` : `${bn(progress.total)}টি সরাসরি ক্লাস`}</small>
                   </span>}
                   <span className={`priority-badge ${chapterPriority(chapter, data).toLowerCase()}`}>{chapterPriority(chapter, data)}</span>
-                  <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} ধাপ</small></span>
+                  <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} {t("ধাপ", "steps")}</small></span>
                   <ChevronRight size={17} />
                 </button>
 

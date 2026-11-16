@@ -18,7 +18,9 @@ describe('S is an independent, conservative pre-test shortlist', () => {
     expect(S_CHAPTERS.every(c => c.priority === 'A')).toBe(true);
     expect(new Set(S_CHAPTERS.map(c => c.id)).size).toBe(S_CHAPTERS.length);
   });
-  it('does not reclassify A/B/C or replace personal priority', () => {
+  it('has 38 editorial A units without dropping chapters or personal priority', () => {
+    expect(CHAPTERS.filter(c => c.priority === 'A')).toHaveLength(38);
+    expect(CHAPTERS).toHaveLength(114);
     const data = freshData();
     const c = S_CHAPTERS[0];
     data.chapterMeta[c.id] = { priority: 'B' } as typeof data.chapterMeta[string];
