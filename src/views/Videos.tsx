@@ -1,3 +1,5 @@
+import { emptyAdvanced, canonicalUrl } from '../advanced';
+import { newId } from '../storage';
 import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
@@ -41,7 +43,8 @@ function sizeLabel(bytes?: number): string {
 }
 
 function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: () => void }) {
-  const { data, setData, notify, openChapter } = usePlanner();
+  const { data, setData, notify, openChapter, navigate } = usePlanner();
+  const [durationMinutes, setDurationMinutes] = useState('');
   const [embedFailed, setEmbedFailed] = useState(false);
   const watched = !!data.classWatched[resource.id];
   const bookmarked = !!data.classBookmarks[resource.id];
@@ -96,7 +99,7 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
         </div>
       )}
 
-      <div className="video-player-actions">
+      <div className="video-player-actions"><button className="button secondary" onClick={() => { navigate('studySystem'); onClose(); }}>Offline / duration planner</button>
         <button className="button primary" onClick={() => window.open(resource.url, '_blank', 'noopener,noreferrer')}>
           <Youtube size={16} />
           {resource.kind === 'playlist' ? t('YouTube-এ প্লেলিস্ট খোলো', 'Open playlist on YouTube')
@@ -125,6 +128,14 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
           </button>
         )}
       </div>
+      <form className="study-panel study-form" onSubmit={e=>{
+        e.preventDefault();
+        const duration=Number(durationMinutes)*60;
+        if(!Number.isFinite(duration)||duration<=0||duration>604800)return;
+        if(data.advanced?.classes.some(c=>canonicalUrl(c.url)===canonicalUrl(resource.url))){navigate('studySystem');onClose();return;}
+        setData(d=>{const a=d.advanced || emptyAdvanced();return {...d,advanced:{...a,classes:[...a.classes,{id:newId(),title:resource.title,url:resource.url,chapterId:resource.chapterId,teacher:resource.channel,duration,watched:0,position:0,speed:1,permitted:false,note:''}]}};});
+        notify(t('Duration planner-এ ক্লাস যোগ হয়েছে।','Class added to duration planner.'));navigate('studySystem');onClose();
+      }}><label>{t('প্রকৃত class duration (minutes)','Actual class duration (minutes)')}<input type="number" required min="1" max="10080" step="0.1" value={durationMinutes} onChange={e=>setDurationMinutes(e.target.value)}/></label><button className="button secondary">{t('দিনে ভাগ করে পড়ার প্ল্যানে যোগ করো','Split into daily study sessions')}</button><p className="tiny-muted">{t('YouTube থেকে duration বা watch time অনুমান করা হয় না। ভিডিওতে দেখানো প্রকৃত duration লেখো; progress নিজে log করো।','YouTube duration and watch time are not guessed. Enter the real duration displayed by the video and log progress manually.')}</p></form>
       <p className="tiny-muted video-player-note">
         {t('ডাউনলোড নয়: YouTube ভিডিও অফলাইন সেভ করা হয় না — অফিসিয়াল অফলাইন ফিচার ব্যবহার করো। পারমিশন থাকা পিডিএফ ও ফাইল পিডিএফ লাইব্রেরিতে ডাউনলোড করা যায়।', 'Not downloadable: videos are never saved offline inside the app — use YouTube’s official offline features. Permitted PDFs can be downloaded in the PDF library.')}
       </p>

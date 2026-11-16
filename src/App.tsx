@@ -1,3 +1,5 @@
+import { integrateStudyPlan } from './smartSchedule';
+import StudySystem from './views/StudySystem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, Download, FileText, FolderOpen, HardDrive, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -46,6 +48,7 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
     { id: 'calendar' as const, label: 'আমার স্টাডি প্ল্যান', labelEn: 'My study plan', short: 'প্ল্যান', shortEn: 'Plan', icon: CalendarDays },
     { id: 'syllabus' as const, label: 'সিলেবাস', labelEn: 'Syllabus', short: 'সিলেবাস', shortEn: 'Syllabus', icon: LibraryBig },
     { id: 'videos' as const, label: 'ভিডিও ক্লাস', labelEn: 'Video classes', short: 'ক্লাস', shortEn: 'Classes', icon: Play },
+    { id: 'studySystem' as const, label: 'স্টাডি ও অফলাইন', labelEn: 'Study & offline', short: 'স্টাডি', shortEn: 'Study', icon: Download },
     { id: 'scanner' as const, label: 'নোট স্ক্যানার', labelEn: 'Note scanner', short: 'স্ক্যান', shortEn: 'Scan', icon: Scan },
     { id: 'pdfs' as const, label: 'পিডিএফ লাইব্রেরি', labelEn: 'PDF library', short: 'পিডিএফ', shortEn: 'PDFs', icon: FileText },
   ] },
@@ -65,7 +68,7 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
   ] },
 ];
 const NAV: NavItem[] = NAV_GROUPS.flatMap(group => group.items);
-const viewFromHash = (): View => { const h = window.location.hash.slice(1); return [...NAV.map(n => n.id), 'settings'].includes(h) ? h as View : 'today'; };
+const viewFromHash = (): View => { if(new URLSearchParams(window.location.search).get('collect')==='1'&&!window.location.hash)return 'pdfs'; const h = window.location.hash.slice(1).split('?')[0]; return [...NAV.map(n => n.id), 'settings'].includes(h) ? h as View : 'today'; };
 type OpenModal = { type: 'chapter'; chapter: Chapter } | { type: 'exam'; paperId: string } | { type: 'mistake'; subject: SubjectId; text: string } | { type: 'search' } | null;
 
 // Minimal shape of the Chromium `beforeinstallprompt` event (not in lib.dom).
@@ -97,7 +100,8 @@ export default function App() {
   // Manual edits (moves, deletions, subject/title changes) are re-applied on every build, so a
   // settings-driven regeneration never silently drops the student's own schedule changes.
   const planEdited = useMemo(() => applyManualSchedule(planWithRoutine, data), [planWithRoutine, data]);
-  const plan = useMemo(() => applyDayOverrides(planEdited, data.dayOverrides, data.settings), [planEdited, data.dayOverrides, data.settings]);
+  const ordinaryPlan = useMemo(() => applyDayOverrides(planEdited, data.dayOverrides, data.settings), [planEdited, data.dayOverrides, data.settings]);
+  const plan = useMemo(() => integrateStudyPlan(ordinaryPlan, data, today), [ordinaryPlan, data, today]);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
@@ -333,7 +337,7 @@ export default function App() {
     const handle = window.setTimeout(() => { void persistToDatabase(payload, updatedAt); }, 900);
     return () => window.clearTimeout(handle);
   }, [data, dbReady, dbMirrorSafe]);
-  useEffect(() => { if (dbReady) setData(current => ensureRevisions(plan, current)); }, [dbReady, plan, data.completed, data.settings.revisionEnabled]);
+  useEffect(() => { if (dbReady) setData(current => ensureRevisions(plan, current)); }, [dbReady, plan, data.completed, data.advanced, data.settings.revisionEnabled]);
   useEffect(() => { if (dbReady) setData(current => autoCarryover(plan, current, today)); }, [dbReady, plan, data.settings.carryoverMode, today]);
   // Android drops a notification whose channel does not exist, so the channels are
   // created at start-up; the permission dialog only appears when reminders are on.
@@ -523,7 +527,7 @@ export default function App() {
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
+  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');

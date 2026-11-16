@@ -43,7 +43,7 @@ export function completedTasksBetween(plan: Day[], data: AppData, from: string, 
   });
 }
 export function studyDates(data: AppData): Set<string> {
-  const dates = new Set(data.studySessions.map(session => session.date));
+  const dates = new Set([...data.studySessions.map(session => session.date),...data.attempts.map(a=>a.date),...(data.advanced?.activityDates||[])]);
   for (const at of Object.values(data.completed)) dates.add(dateOfIso(at));
   for (const entry of data.cq) dates.add(entry.date);
   for (const test of data.tests) dates.add(test.date);

@@ -53,6 +53,8 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export interface Task {
+  video?: { classId: string; from: number; to: number };
+  originalTaskId?: string;
   id: string;
   date: string;
   dayIndex: number;
@@ -68,6 +70,7 @@ export interface Task {
 }
 
 export interface Day {
+  deferredMinutes?: number;
   date: string;
   index: number;
   phase: PhaseId;
@@ -91,6 +94,7 @@ export type MistakeRetry = 'pending' | 'retried' | 'mastered';
 export interface Mistake { id: string; subject: SubjectId; chapterId?: string; text: string; correctAnswer?: string; userAnswer?: string; date: string; category: MistakeCategory; retryStatus: MistakeRetry; resolved: boolean }
 
 export interface AppData {
+  advanced?: import('./advanced').AdvancedData;
   version: 2;
   settings: Settings;
   completed: Record<string, string>;
@@ -179,6 +183,10 @@ export const freshData = (): AppData => ({
 });
 
 /** Effective net daily study hours for a date, accounting for next-month boost and per-day custom override. */
+export function dailyTargetMinutes(data: Pick<AppData,'settings'|'dayOverrides'|'advanced'>,date:string):number {
+  return data.advanced?.targets[date] ?? effectiveDailyHours(data.settings,date,data.dayOverrides?.[date])*60;
+}
+
 export function effectiveDailyHours(settings: Settings, date: string, override?: DayScheduleOverride): number {
   if (override?.dailyHours !== undefined && Number.isFinite(override.dailyHours)) {
     return Math.max(4, Math.min(18, Math.round(override.dailyHours)));
@@ -812,8 +820,8 @@ export function chapterTasks(plan: Day[], chapterId: string): Task[] {
 /** Initial learning and its accompanying chapter practice form one completion unit. */
 export function chapterStudyTasks(plan: Day[], chapterId: string): Task[] {
   return plan.flatMap(d => d.tasks).filter(task => task.chapterIds.includes(chapterId) &&
-    (((task.kind === 'learn' || task.kind === 'language' || task.kind === 'ict') && task.id.includes(':part-')) ||
-     (task.kind === 'practice' && task.id.startsWith(`chap-practice-${chapterId}-`))));
+    (((task.kind === 'learn' || task.kind === 'language' || task.kind === 'ict') && (task.originalTaskId || task.id).includes(':part-')) ||
+     (task.kind === 'practice' && (task.originalTaskId || task.id).startsWith(`chap-practice-${chapterId}-`))));
 }
 export function isChapterDone(plan: Day[], id: string, completed: Record<string, string>): boolean {
   const tasks = chapterStudyTasks(plan, id);
@@ -845,7 +853,7 @@ export function getStats(plan: Day[], data: AppData, today: string) {
   const all = plan.flatMap(d => d.tasks);
   const done = all.filter(t => data.completed[t.id]);
   const chapters = CHAPTERS.filter(c => isChapterDone(plan, c.id, data.completed));
-  const activeDates = new Set(Object.values(data.completed).map(at => todayKey(new Date(at))));
+  const activeDates = new Set([...Object.values(data.completed).map(at => todayKey(new Date(at))),...data.studySessions.map(s=>s.date),...data.attempts.map(a=>a.date),...data.cq.map(c=>c.date),...(data.advanced?.activityDates||[])]);
   let streak = 0, cursor = activeDates.has(today) ? today : addDays(today, -1);
   while (activeDates.has(cursor)) { streak++; cursor = addDays(cursor, -1); }
   const backlog = all.filter(t => taskStart(t).date < today && !data.completed[t.id]);

@@ -1,3 +1,4 @@
+import { parseAdvanced } from './advanced';
 import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
@@ -132,7 +133,7 @@ export function parseBackup(rawText: string): AppData {
 
   if (!object(raw.completed) || Object.keys(raw.completed).length > 10000) throw new Error('অগ্রগতির তথ্য সঠিক নয়।');
   for (const [id, at] of Object.entries(raw.completed)) {
-    if (!text(id, 180) || !validAt(at)) throw new Error('অগ্রগতির তারিখ সঠিক নয়।');
+    if (!text(id, 2048) || !validAt(at)) throw new Error('অগ্রগতির তারিখ সঠিক নয়।');
     put(result.completed, id, at);
   }
   if (raw.confidence !== undefined) {
@@ -378,6 +379,12 @@ export function parseBackup(rawText: string): AppData {
         || (item.lastOpenedAt !== undefined && item.lastOpenedAt !== null && !validAt(item.lastOpenedAt))) throw new Error('পিডিএফের তথ্য সঠিক নয়।');
       if (item.local !== true && !item.url) throw new Error('পিডিএফের লিংক বা লোকাল ফাইল নেই।');
       return {
+        ...Object.fromEntries(['teacher', 'className', 'classId', 'sourceUrl', 'fingerprint', 'linkStatus'].flatMap(key => {
+          const value = item[key];
+          if (value === undefined) return [];
+          if (typeof value !== 'string' || value.length > 2000 || (key === 'linkStatus' && !['available','broken','unverified'].includes(value)) || (key === 'sourceUrl' && value && !/^https?:\/\//i.test(value))) throw new Error('Resource metadata invalid');
+          return [[key, value]];
+        })),
         id: item.id, title: item.title, ...(item.url ? { url: item.url as string } : {}),
         ...(item.local === true ? { local: true } : {}), ...(item.subject !== undefined ? { subject: item.subject as import('./types').PdfResource['subject'] } : {}),
         ...(item.chapterId !== undefined ? { chapterId: item.chapterId as string } : {}),
@@ -444,6 +451,7 @@ export function parseBackup(rawText: string): AppData {
     if (new Set(result.scannedNotes.map(n => n.id)).size !== result.scannedNotes.length) throw new Error('স্ক্যান করা নোট তালিকায় একই ID দুইবার আছে।');
   }
 
+  if (raw.advanced !== undefined) result.advanced = parseAdvanced(raw.advanced);
   return result;
 }
 

@@ -282,6 +282,12 @@ export type PdfMaterialType =
  * marked "not added yet" in the catalog instead of becoming fake entries here.
  */
 export interface PdfResource {
+  teacher?: string;
+  className?: string;
+  classId?: string;
+  sourceUrl?: string;
+  fingerprint?: string;
+  linkStatus?: 'available' | 'broken' | 'unverified';
   id: string;
   title: string;
   /** Direct http(s) link to a permitted PDF. Absent for locally stored files. */

@@ -1,3 +1,4 @@
+import { readiness } from './advanced';
 import { CHAPTERS, chapterById } from './data';
 import type { AppData, Day } from './planner';
 import { addDays, chapterStudyTasks, todayKey } from './planner';
@@ -30,11 +31,19 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
   let items = data.revisions.slice();
   let changed = false;
   const stamp = nowIso();
+  let advanced = data.advanced;
   for (const chapter of CHAPTERS) {
-    const completedOn = chapterCompletionDate(plan, chapter.id, data.completed);
+    const tracked = advanced?.classes.some(c=>c.chapterId===chapter.id) || !!advanced?.preparation[chapter.id];
+    let completedOn = chapterCompletionDate(plan, chapter.id, data.completed);
+    if(tracked && advanced){
+      if(readiness(data,chapter.id).coverage===100){
+        completedOn=advanced.coverageDates?.[chapter.id] || todayKey(new Date(stamp));
+        if(!advanced.coverageDates?.[chapter.id]){advanced={...advanced,coverageDates:{...advanced.coverageDates,[chapter.id]:completedOn}};changed=true;}
+      }else completedOn=null;
+    }
     const existing = byChapter.get(chapter.id) || [];
     if (!completedOn) {
-      const pending = existing.filter(item => !item.completedAt);
+      const pending = existing.filter(item => !item.completedAt && !item.sourceTaskId?.startsWith('auto-'));
       if (pending.length) {
         const pendingIds = new Set(pending.map(item => item.id));
         items = items.filter(item => !pendingIds.has(item.id));
@@ -44,7 +53,7 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
     }
     for (const interval of REVISION_INTERVALS) {
       const dueDate = addDays(completedOn, interval);
-      const found = items.find(item => item.chapterId === chapter.id && item.interval === interval);
+      const found = items.find(item => item.chapterId === chapter.id && item.interval === interval && !item.sourceTaskId?.startsWith('auto-'));
       if (!found && items.length < LIMITS.revisions) {
         items.push({ id: newId(), chapterId: chapter.id, subject: chapter.subject, dueDate, interval, createdAt: stamp });
         changed = true;
@@ -59,7 +68,7 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
     items = items.filter(item => !!chapterById[item.chapterId]);
     changed = true;
   }
-  return changed ? { ...data, revisions: items } : data;
+  return changed ? { ...data, ...(advanced ? {advanced} : {}), revisions: items } : data;
 }
 
 export interface RevisionBuckets {

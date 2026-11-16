@@ -1,3 +1,4 @@
+import { remainingMedia } from './smartSchedule';
 import type { SubjectId } from './data';
 import type { AppData, Day, Mistake, Task } from './planner';
 import { addDays, taskStart, todayKey } from './planner';
@@ -53,7 +54,12 @@ export function addCarryover(data: AppData, task: Pick<Task, 'id' | 'title' | 's
 }
 /** One completion state for an original task and all of its carried copies. */
 export function setTaskCompletion(data: AppData, ids: string[], done: boolean): AppData {
-  const selected = new Set(ids);
+  const selected = new Set(ids.filter(id=>{
+    if(!done || !id.startsWith('smart-video|'))return true;
+    const [,encoded,start,end]=id.split('|');
+    const c=data.advanced?.classes.find(c=>c.id===decodeURIComponent(encoded));
+    return !!c && !remainingMedia(c).some(([s,e])=>s<Number(end)/1000-.01 && e>Number(start)/1000+.01);
+  }));
   const completed = { ...data.completed };
   const stamp = nowIso();
   for (const id of selected) {
@@ -72,7 +78,7 @@ export function removeCarryover(data: AppData, id: string): AppData {
 }
 /** Optional automatic carryover: recent missed sessions, capped so the list cannot explode. */
 export function autoCarryover(plan: Day[], data: AppData, today: string): AppData {
-  if (data.settings.carryoverMode !== 'auto') return data;
+  if (data.settings.carryoverMode !== 'auto' || data.advanced?.classes.length) return data;
   const pending = pendingCarryovers(data);
   if (pending.filter(item => item.date === today).length >= 6) return data;
   const carried = new Set(data.carryovers.filter(item => !item.completedAt).map(item => item.taskId));
