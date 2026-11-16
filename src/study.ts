@@ -1,7 +1,7 @@
 import type { SubjectId } from './data';
-import type { AppData, Day, Task } from './planner';
+import type { AppData, Day, Mistake, Task } from './planner';
 import { addDays, taskStart, todayKey } from './planner';
-import type { Carryover, ChapterMeta, StudyMode, StudySession } from './types';
+import type { Carryover, ChapterMeta, MistakeCategory, StudyMode, StudySession } from './types';
 import { newId, nowIso } from './storage';
 
 export const EMPTY_META: ChapterMeta = { note: '', weak: false, cq: 'none', mcq: 'none', updatedAt: '' };
@@ -85,6 +85,20 @@ export function autoCarryover(plan: Day[], data: AppData, today: string): AppDat
   }
   return next;
 }
+/** Group unresolved mistakes by category so the student can practise the weakest kind first. */
+export function mistakesByCategory(data: AppData): Record<MistakeCategory, Mistake[]> {
+  const result = Object.fromEntries(['conceptual', 'calculation', 'memory', 'misunderstood', 'careless'].map(category => [category, [] as Mistake[]])) as Record<MistakeCategory, Mistake[]>;
+  for (const mistake of data.mistakes) {
+    if (!mistake.resolved) result[mistake.category].push(mistake);
+  }
+  return result;
+}
+
+/** Count of unresolved mistakes, optionally filtered by category. */
+export function unresolvedMistakeCount(data: AppData, category?: MistakeCategory): number {
+  return data.mistakes.filter(m => !m.resolved && (category === undefined || m.category === category)).length;
+}
+
 /** One-click manual plan: up to five most recent missed non-exam sessions. */
 export function addBacklogToToday(plan: Day[], data: AppData, today: string, limit = 5): { data: AppData; added: number } {
   const carried = new Set(data.carryovers.filter(item => !item.completedAt).map(item => item.taskId));

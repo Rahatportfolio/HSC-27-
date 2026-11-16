@@ -218,7 +218,7 @@ function VideoModal({ onClose }: { onClose: () => void }) {
     event.preventDefault();
     if (!title.trim() || !/^https?:\/\//i.test(url.trim())) { setError('শিরোনাম আর http(s) লিংক দাও।'); return; }
     if (data.videos.length >= 1000) { setError('সর্বোচ্চ ১০০০টি ভিডিও রাখা যায়।'); return; }
-    const entry: VideoLink = { id: newId(), title: title.trim(), url: url.trim(), subject, chapterId: chapterId || undefined, channel: channel.trim() || undefined, watched: false, favorite: false, createdAt: nowIso() };
+    const entry: VideoLink = { id: newId(), title: title.trim(), url: url.trim(), subject, chapterId: chapterId || undefined, channel: channel.trim() || undefined, watched: false, favorite: false, downloaded: false, watchedPositionSec: 0, watchedPercent: 0, playbackSpeed: 1, completed: false, createdAt: nowIso() };
     setData(d => ({ ...d, videos: [...d.videos, entry] }));
     notify('ভিডিও লাইব্রেরিতে যোগ হয়েছে।', 'success'); onClose();
   };

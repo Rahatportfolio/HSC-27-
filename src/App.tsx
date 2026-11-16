@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, Download, FileText, FolderOpen, LayoutDashboard, LibraryBig, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
+import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, Download, FileText, FolderOpen, HardDrive, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
@@ -35,6 +35,9 @@ import AnalyticsView from './views/Analytics';
 import LibraryView from './views/Library';
 import RemindersView from './views/Reminders';
 import SettingsView from './views/Settings';
+import FlashcardsView from './views/Flashcards';
+import StorageView from './views/Storage';
+import NotesScannerView from './views/NotesScanner';
 
 type NavItem = { id: View; label: string; labelEn: string; short: string; shortEn: string; icon: LucideIcon };
 const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
@@ -43,11 +46,13 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
     { id: 'calendar' as const, label: 'আমার স্টাডি প্ল্যান', labelEn: 'My study plan', short: 'প্ল্যান', shortEn: 'Plan', icon: CalendarDays },
     { id: 'syllabus' as const, label: 'সিলেবাস', labelEn: 'Syllabus', short: 'সিলেবাস', shortEn: 'Syllabus', icon: LibraryBig },
     { id: 'videos' as const, label: 'ভিডিও ক্লাস', labelEn: 'Video classes', short: 'ক্লাস', shortEn: 'Classes', icon: Play },
+    { id: 'scanner' as const, label: 'নোট স্ক্যানার', labelEn: 'Note scanner', short: 'স্ক্যান', shortEn: 'Scan', icon: Scan },
     { id: 'pdfs' as const, label: 'পিডিএফ লাইব্রেরি', labelEn: 'PDF library', short: 'পিডিএফ', shortEn: 'PDFs', icon: FileText },
   ] },
   { label: 'প্রস্তুতি ও অনুশীলন', labelEn: 'Prep & practice', items: [
     { id: 'testprep' as const, label: 'টেস্ট প্রস্তুতি', labelEn: 'Test preparation', short: 'টেস্ট', shortEn: 'Test', icon: Target },
     { id: 'practice' as const, label: 'অনুশীলন', labelEn: 'Practice', short: 'অনুশীলন', shortEn: 'Practice', icon: PenLine },
+    { id: 'flashcards' as const, label: 'ফ্ল্যাশকার্ড', labelEn: 'Flashcards', short: 'ফ্ল্যাশ', shortEn: 'Cards', icon: List },
     { id: 'revision' as const, label: 'স্মার্ট রিভিশন', labelEn: 'Smart revision', short: 'রিভিশন', shortEn: 'Revision', icon: RotateCcw },
     { id: 'exams' as const, label: 'পরীক্ষা ও GPA', labelEn: 'Exams & GPA', short: 'পরীক্ষা', shortEn: 'Exams', icon: ClipboardCheck },
     { id: 'timer' as const, label: 'স্টাডি টাইমার', labelEn: 'Study timer', short: 'টাইমার', shortEn: 'Timer', icon: Timer },
@@ -56,6 +61,7 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
   { label: 'সহায়তা', labelEn: 'Support', items: [
     { id: 'library' as const, label: 'লাইব্রেরি', labelEn: 'Library', short: 'লাইব্রেরি', shortEn: 'Library', icon: FolderOpen },
     { id: 'reminders' as const, label: 'রিমাইন্ডার', labelEn: 'Reminders', short: 'রিমাইন্ডার', shortEn: 'Reminders', icon: Bell },
+    { id: 'storage' as const, label: 'স্টোরেজ', labelEn: 'Storage', short: 'স্টোরেজ', shortEn: 'Storage', icon: HardDrive },
   ] },
 ];
 const NAV: NavItem[] = NAV_GROUPS.flatMap(group => group.items);
@@ -517,7 +523,7 @@ export default function App() {
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView }[view];
+  const ViewComponent = { today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');

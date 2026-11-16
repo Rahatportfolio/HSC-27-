@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
-import { ArrowRight, ArrowUpRight, BellRing, BookOpen, CalendarDays, Check, ChevronRight, Clock3, FolderOpen, NotebookPen, Play, Search, Timer } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, BellRing, BookOpen, CalendarDays, Check, ChevronRight, Clock3, FolderOpen, List, NotebookPen, Play, Search, Timer } from 'lucide-react';
 import { CHAPTERS, PAPERS, SUBJECTS, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
 import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, percent, phaseName } from './planner';
@@ -9,11 +9,12 @@ import { chapterMeta, setTaskCompletion, updateChapterMeta } from './study';
 import { scheduleFor } from './schedule';
 import { BANGLA_LESSONS, CHAPTER_CLASSES, classLinksFor } from './classLinks';
 import { INTERVAL_LABEL } from './revision';
+import { dueFlashcards } from './flashcards';
 import { usePlanner } from './context';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, Modal, ProgressBar, SubjectBadge } from './components';
 import { t } from './i18n';
 import { chapterPriority, chapterStage, isLearningComplete, STAGES, STEPS } from './learning';
-import type { ChapterStage } from './types';
+import type { ChapterStage, MistakeCategory } from './types';
 
 const PRIORITY_LABEL: Record<string, string> = { A: 'আগে পড়ো', B: 'এরপর পড়ো', C: 'পরে পড়ো' };
 const PREP_LABEL = { none: 'শুরু হয়নি', practicing: 'অনুশীলনে', ready: 'প্রস্তুত' } as const;
@@ -76,17 +77,25 @@ export function ExamModal({ paperId, onClose }: { paperId: string; onClose: () =
   return <Modal title={`${paper.name} · নম্বর`} onClose={onClose}><div className="chapter-modal-meta"><SubjectBadge subject={paper.subject} /><span>{task && formatDate(task.date, 'long')}</span></div><p className="modal-description">নিজে মূল্যায়ন করা তত্ত্বীয় নম্বর লেখো। এটি বোর্ডের ফল বা GPA হিসাব নয়।</p><form onSubmit={submit}><div className="score-input-row"><label>{t("তোমার নম্বর", "Your marks")}<input data-autofocus type="number" min={0} max={paper.maxScore} step="0.5" required value={score} onChange={e => { setScore(e.target.value); setError(''); }} placeholder={t("যেমন ৭২", "e.g. 72")} /></label><span>/ {bn(paper.maxScore)}</span></div>{error && <p className="field-error" role="alert">{error}</p>}<label className="form-label">{t("কোথায় নম্বর হারালে?", "Where did you lose marks?")}<textarea value={mistakes} maxLength={5000} rows={5} onChange={e => setMistakes(e.target.value)} placeholder={t("অধ্যায়/টপিক, ভুলের কারণ, পরেরবার কী করবে…", "Chapter/topic, why it went wrong, what to do next…")} /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button type="submit" className="button primary"><Check size={16} />{t("নম্বর সেভ করো", "Save marks")}</button></div></form></Modal>;
 }
 
+const MISTAKE_CATEGORY_LABEL: Record<MistakeCategory, string> = {
+  conceptual: 'ধারণা-ভিত্তিক',
+  calculation: 'হিসাব-ভুল',
+  memory: 'স্মৃতি-ভুল',
+  misunderstood: 'প্রশ্ন বুঝতে ভুল',
+  careless: 'অবহেলা',
+};
+
 export function MistakeModal({ subject, initialText, onClose }: { subject: SubjectId; initialText: string; onClose: () => void }) {
   const { data, setData, today, notify } = usePlanner();
-  const [s, setS] = useState(subject), [textValue, setTextValue] = useState(initialText), [error, setError] = useState('');
+  const [s, setS] = useState(subject), [textValue, setTextValue] = useState(initialText), [category, setCategory] = useState<MistakeCategory>('careless'), [error, setError] = useState('');
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!textValue.trim()) { setError('কী ভুল হয়েছে, ছোট করে লেখো।'); return; }
     if (data.mistakes.length >= MISTAKE_LIMIT) { setError(`ভুলের খাতায় সর্বোচ্চ ${MISTAKE_LIMIT}টি নোট রাখা যায়। আগে কিছু নোট মুছে নাও।`); return; }
-    setData(d => ({ ...d, mistakes: [...d.mistakes, { id: newId(), subject: s, text: textValue.trim(), date: today, resolved: false }] }));
+    setData(d => ({ ...d, mistakes: [...d.mistakes, { id: newId(), subject: s, text: textValue.trim(), date: today, category, retryStatus: 'pending', resolved: false }] }));
     notify('ভুলের খাতায় যোগ হয়েছে। পরে শুধরে নিও।'); onClose();
   };
-  return <Modal title={t("ভুল থেকেই শেখা", "Learning from mistakes")} onClose={onClose}><p className="modal-description">একটি ভুল, তার কারণ, আর পরেরবার কী করবে—লিখে রাখো।</p><form onSubmit={submit}><label className="form-label">{t("বিষয়", "Subject")}<select value={s} onChange={e => setS(e.target.value as SubjectId)}>{SUBJECTS.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}</select></label><label className="form-label">{t("আমার নোট", "My notes")}<textarea data-autofocus rows={5} maxLength={5000} value={textValue} onChange={e => { setTextValue(e.target.value); setError(''); }} placeholder={t("যেমন: ভেক্টরের ক্রস গুণে দিক ভুল করেছি। ডান হাতের নিয়ম আবার অনুশীলন করব।", "e.g. I got the cross-product direction wrong. Practise the right-hand rule again.")} /></label>{error && <p className="field-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button className="button primary" type="submit"><NotebookPen size={16} />{t("যোগ করো", "Add")}</button></div></form></Modal>;
+  return <Modal title={t("ভুল থেকেই শেখা", "Learning from mistakes")} onClose={onClose}><p className="modal-description">একটি ভুল, তার কারণ, বিভাগ আর পরেরবার কী করবে—লিখে রাখো। পরীক্ষার আগে এটি পুনরায় সমাধান করো।</p><form onSubmit={submit}><label className="form-label">{t("বিষয়", "Subject")}<select value={s} onChange={e => setS(e.target.value as SubjectId)}>{SUBJECTS.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}</select></label><label className="form-label">{t("ভুলের বিভাগ", "Mistake category")}<select value={category} onChange={e => setCategory(e.target.value as MistakeCategory)}>{(['conceptual', 'calculation', 'memory', 'misunderstood', 'careless'] as const).map(cat => <option key={cat} value={cat}>{MISTAKE_CATEGORY_LABEL[cat]}</option>)}</select></label><label className="form-label">{t("আমার নোট", "My notes")}<textarea data-autofocus rows={5} maxLength={5000} value={textValue} onChange={e => { setTextValue(e.target.value); setError(''); }} placeholder={t("যেমন: ভেক্টরের ক্রস গুণে দিক ভুল করেছি। ডান হাতের নিয়ম আবার অনুশীলন করব।", "e.g. I got the cross-product direction wrong. Practise the right-hand rule again.")} /></label>{error && <p className="field-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button className="button primary" type="submit"><NotebookPen size={16} />{t("যোগ করো", "Add")}</button></div></form></Modal>;
 }
 
 export function SearchModal({ onClose, onChapter }: { onClose: () => void; onChapter: (c: Chapter) => void }) {
@@ -106,7 +115,8 @@ export function SearchModal({ onClose, onChapter }: { onClose: () => void; onCha
   const videos = (q ? data.videos.filter(video => `${video.title} ${video.channel || ''}`.toLowerCase().includes(q)) : []).slice(0, 4);
   const questions = (q ? data.questions.filter(question => question.question.toLowerCase().includes(q)) : []).slice(0, 4);
   const formulas = (q ? data.formulas.filter(formula => `${formula.title} ${formula.body}`.toLowerCase().includes(q)) : []).slice(0, 4);
-  const nothing = !chapters.length && !tasks.length && !notes.length && !videos.length && !questions.length && !formulas.length;
+  const flashcardsResult = (q ? dueFlashcards(data, today).filter(card => `${card.front} ${card.back} ${subjectById[card.subject].name}`.toLowerCase().includes(q)) : []).slice(0, 4);
+  const nothing = !chapters.length && !tasks.length && !notes.length && !videos.length && !questions.length && !formulas.length && !flashcardsResult.length;
 
   const launchChapterQuickTimer = (c: Chapter) => {
     if (startPresetTimer) {
@@ -170,6 +180,7 @@ export function SearchModal({ onClose, onChapter }: { onClose: () => void; onCha
       {questions.length > 0 && <><div className="search-group-label">{t("প্রশ্নব্যাংক", "Question bank")}</div>{questions.map(question => <button className="search-result" key={question.id} onClick={() => { navigate('practice'); onClose(); }}><span className="search-result-icon"><BookOpen size={18} /></span><span><strong>{question.question}</strong><small>{subjectById[question.subject].name}</small></span><ChevronRight size={17} /></button>)}</>}
       {videos.length > 0 && <><div className="search-group-label">{t("ভিডিও", "Video")}</div>{videos.map(video => <a className="search-result" key={video.id} href={video.url} target="_blank" rel="noreferrer"><span className="search-result-icon"><Clock3 size={18} /></span><span><strong>{video.title}</strong><small>{video.channel || 'YouTube'} · {subjectById[video.subject].name}</small></span><ArrowUpRight size={17} /></a>)}</>}
       {formulas.length > 0 && <><div className="search-group-label">{t("সূত্র", "Formulas")}</div>{formulas.map(formula => <button className="search-result" key={formula.id} onClick={() => { navigate('library'); onClose(); }}><span className="search-result-icon"><BookOpen size={18} /></span><span><strong>{formula.title}</strong><small>{subjectById[formula.subject].name}</small></span><ChevronRight size={17} /></button>)}</>}
+      {flashcardsResult.length > 0 && <><div className="search-group-label">{t("ফ্ল্যাশকার্ড", "Flashcards")}</div>{flashcardsResult.map(card => <button className="search-result" key={card.id} onClick={() => { navigate('flashcards'); onClose(); }}><span className="search-result-icon"><List size={18} /></span><span><strong>{card.front}</strong><small>{subjectById[card.subject].name}</small></span><ChevronRight size={17} /></button>)}</>}
       {nothing && <EmptyState title={t("কিছু পাওয়া যায়নি", "Nothing found")} description="বিষয়ের নাম, শিক্ষকের নাম, অধ্যায়ের শব্দ বা তারিখ দিয়ে আবার খুঁজো।" />}
     </div>
     <div className="search-footer"><span>{bn(CHAPTERS.length)} {t('অধ্যায়/ইউনিট', 'chapters')} · {bn(plan.length)} {t('দিন', 'days')} · <kbd>/</kbd> {t('বা', 'or')} <kbd>Ctrl+K</kbd></span><button className="text-button" onClick={() => { navigate('calendar', today); onClose(); }}>{t("ক্যালেন্ডার দেখো", "Open the calendar")}<ArrowRight size={14} /></button></div>

@@ -8,7 +8,7 @@ describe('validated local backups', () => {
     data.completed['physics-1-2:part-1'] = '2026-11-14T08:00:00Z';
     data.notes['2026-11-14'] = '<script>alert(1)</script>';
     data.exams['physics-1'] = { score: 72, total: 100, at: '2027-04-16T08:00:00Z', mistakes: 'একক ভুল' };
-    data.mistakes.push({ id: 'm1', subject: 'physics', text: 'দিক ভুল', date: '2026-11-14', resolved: false });
+    data.mistakes.push({ id: 'm1', subject: 'physics', text: 'দিক ভুল', date: '2026-11-14', category: 'careless', retryStatus: 'pending', resolved: false });
     data.routineBlocks.push({ id: 'r1', weekday: 6, startMinute: 1200, minutes: 60, subject: 'math', title: 'কাস্টম গণিত', createdAt: '2026-11-01T00:00:00Z' });
     data.importantDates.push({ id: 'i1', date: '2027-01-15', title: 'মডেল টেস্ট', note: 'সকাল ১০টা', notify: true, createdAt: '2026-11-14T08:00:00Z' });
     expect(parseBackup(JSON.stringify(data))).toEqual(data);

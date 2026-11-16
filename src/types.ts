@@ -122,12 +122,79 @@ export interface VideoLink {
   id: string;
   title: string;
   url: string;
+  /** Direct http(s) link to a permitted downloadable or user-imported video. */
+  sourceUrl?: string;
   subject: SubjectId;
   chapterId?: string;
   channel?: string;
   watched: boolean;
   favorite: boolean;
   createdAt: string;
+  /** Video length in seconds (unknown until inspected). */
+  durationSec?: number;
+  /** File size in bytes for downloaded/imported local copies. */
+  fileSizeBytes?: number;
+  /** True when a playable copy is stored on the device (Capacitor Filesystem / IndexedDB). */
+  downloaded: boolean;
+  /** Local file path for native copies. */
+  localPath?: string;
+  /** Last watched position in seconds for resume. */
+  watchedPositionSec: number;
+  /** Watched percentage 0..100 derived from position and duration. */
+  watchedPercent: number;
+  /** Preferred playback speed: 0.5, 0.75, 1, 1.25, 1.5, 2. */
+  playbackSpeed: 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
+  /** Marked fully watched / completed by the student. */
+  completed: boolean;
+  /** PDFs and notes attached to this class. */
+  attachments?: { pdfIds: string[]; noteIds: string[] };
+}
+
+/** Spaced-repetition flashcard. One card = one question/answer pair for a chapter. */
+export type MistakeCategory = 'conceptual' | 'calculation' | 'memory' | 'misunderstood' | 'careless';
+export type MistakeRetry = 'pending' | 'retried' | 'mastered';
+export type FlashcardRating = 'again' | 'hard' | 'good' | 'easy';
+export type FlashcardCategory =
+  | 'formula' | 'definition' | 'reaction' | 'terminology' | 'identity' | 'vocabulary' | 'other';
+
+export interface Flashcard {
+  id: string;
+  subject: SubjectId;
+  chapterId?: string;
+  front: string;
+  back: string;
+  category: FlashcardCategory;
+  /** Days to wait before the next due date (1, 3, 7, 14, 30 ladder with adaptation). */
+  interval: number;
+  dueDate: string;
+  lastReviewed?: string;
+  /** Consecutive successful reviews. */
+  repetitions: number;
+  /** SM-2 ease factor, floor 1.3. */
+  easeFactor: number;
+  createdAt: string;
+}
+
+export interface FlashcardReview {
+  id: string;
+  flashcardId: string;
+  rating: FlashcardRating;
+  date: string;
+  at: string;
+  responseTimeSec?: number;
+}
+
+/** Metadata for a handwritten-note scan saved offline. Page images live in IndexedDB. */
+export interface ScannedNoteMeta {
+  id: string;
+  title: string;
+  subject: SubjectId;
+  chapterId?: string;
+  createdAt: string;
+  pageCount: number;
+  sizeBytes: number;
+  pdfExported: boolean;
+  pageKeys: string[];
 }
 
 export interface BoardQuestion {
