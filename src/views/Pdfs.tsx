@@ -1,3 +1,4 @@
+import { canonicalUrl, collectLinks, resourceKey } from '../advanced';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CSSProperties, FormEvent } from 'react';
 import {
@@ -5,7 +6,7 @@ import {
   Search, ShieldCheck, Trash2, Upload, Clock3, HardDrive,
 } from 'lucide-react';
 import { usePlanner } from '../context';
-import { SUBJECTS, chapterById, subjectById } from '../data';
+import { CHAPTERS, SUBJECTS, chapterById, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { bn, formatDate } from '../planner';
 import { newId, nowIso } from '../storage';
@@ -115,17 +116,25 @@ export default function PdfsView() {
   const [materialFilter, setMaterialFilter] = useState<PdfMaterialType | 'all'>('all');
   const [bookmarkedOnly, setBookmarkedOnly] = useState(false);
   const [openPdf, setOpenPdf] = useState<PdfResource | null>(null);
-  const [showAdd, setShowAdd] = useState(false);
+  const [showAdd, setShowAdd] = useState(()=>new URLSearchParams(window.location.search).get('collect')==='1');
   const [filesReady, setFilesReady] = useState<boolean | null>(null);
   const [estimate, setEstimate] = useState<{ usage: number; quota: number } | null>(null);
   const [downloading, setDownloading] = useState<Record<string, number>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Add-form state
-  const [title, setTitle] = useState('');
-  const [url, setUrl] = useState('');
+  const [copiedText, setCopiedText] = useState(()=>{const q=new URLSearchParams(window.location.search);return q.get('collect')==='1'?[q.get('text'),q.get('url')].filter(Boolean).join('\n').slice(0,20000):'';});
+  const [title, setTitle] = useState(()=>new URLSearchParams(window.location.search).get('collect')==='1'?(new URLSearchParams(window.location.search).get('title')||'').slice(0,200):'');
+  const [url, setUrl] = useState(()=>collectLinks(copiedText)[0]||'');
   const [pdfSubject, setPdfSubject] = useState<SubjectId>('physics');
   const [material, setMaterial] = useState<PdfMaterialType>('notes');
+  const [pdfChapter, setPdfChapter] = useState('');
+  const [chapterFilter, setChapterFilter] = useState('');
+  const [teacher, setTeacher] = useState('');
+  const [className, setClassName] = useState('');
+  const [sourceUrl, setSourceUrl] = useState('');
+  const [checking, setChecking] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [prefillSlot, setPrefillSlot] = useState<string | null>(null);
 
   useEffect(() => {
@@ -139,23 +148,26 @@ export default function PdfsView() {
     return data.pdfs
       .filter(pdf => subjectFilter === 'all' || pdf.subject === subjectFilter)
       .filter(pdf => materialFilter === 'all' || pdf.material === materialFilter)
+      .filter(pdf => !chapterFilter || pdf.chapterId === chapterFilter)
       .filter(pdf => !bookmarkedOnly || data.pdfBookmarks.includes(pdf.id))
-      .filter(pdf => !q || `${pdf.title} ${PDF_MATERIAL_LABEL(pdf.material)}`.toLowerCase().includes(q))
+      .filter(pdf => !q || `${pdf.title} ${pdf.teacher || ''} ${pdf.className || ''} ${pdf.chapterId ? chapterById[pdf.chapterId]?.title : ''} ${PDF_MATERIAL_LABEL(pdf.material)}`.toLowerCase().includes(q))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [data.pdfs, data.pdfBookmarks, query, subjectFilter, materialFilter, bookmarkedOnly]);
+  }, [data.pdfs, data.pdfBookmarks, query, subjectFilter, materialFilter, bookmarkedOnly, chapterFilter]);
 
   const visibleSlots = slots.filter(slot => subjectFilter === 'all' || slot.subject === subjectFilter);
 
   const addPdf = (event: FormEvent) => {
     event.preventDefault();
-    const cleanUrl = url.trim();
+    let cleanUrl: string;
+    try { cleanUrl = canonicalUrl(url); if(sourceUrl) canonicalUrl(sourceUrl); } catch { notify('সঠিক public HTTP/HTTPS লিংক দাও', 'error'); return; }
+    if(data.pdfs.some(p => p.url && resourceKey(p.url) === resourceKey(cleanUrl))) { notify('এই resource আগেই যোগ করা আছে', 'info'); return; }
     if (!title.trim()) { notify(t('ফাইলের নাম লেখো।', 'Give the file a title.'), 'error'); return; }
     if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) { notify(t('লিংক http/https দিয়ে শুরু হতে হবে।', 'The link must start with http/https.'), 'error'); return; }
     if (!cleanUrl) { notify(t('একটি পিডিএফ লিংক দাও অথবা নিচ থেকে ফাইল বাছো।', 'Paste a PDF link or pick a file below.'), 'error'); return; }
     if (data.pdfs.length >= 500) { notify(t('সর্বোচ্চ ৫০০টি পিডিএফ রাখা যায়।', 'Up to 500 PDFs can be stored.'), 'error'); return; }
     const entry: PdfResource = {
       id: newId(), title: title.trim(), url: cleanUrl, subject: pdfSubject, material,
-      createdAt: nowIso(),
+      createdAt: nowIso(), classId: data.advanced?.classes.find(c=>c.title===className)?.id, chapterId: pdfChapter || undefined, teacher, className, sourceUrl: sourceUrl || undefined, linkStatus: 'unverified',
     };
     setData(d => ({ ...d, pdfs: [...d.pdfs, entry] }));
     setTitle(''); setUrl(''); setPrefillSlot(null); setShowAdd(false);
@@ -163,18 +175,28 @@ export default function PdfsView() {
   };
 
   const importFile = async (file: File) => {
+    try{if(sourceUrl)canonicalUrl(sourceUrl);}catch{notify('সঠিক source HTTP/HTTPS link দাও','error');return;}
     if (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       notify(t('শুধু PDF ফাইল বাছো।', 'Choose a PDF file only.'), 'error');
       return;
     }
     if (file.size > 100 * 1024 * 1024) { notify(t('সর্বোচ্চ ১০০ MB ফাইল রাখা যায়।', 'Files up to 100 MB are allowed.'), 'error'); return; }
     if (filesReady === false) { notify(t('এই ব্রাউজারে লোকাল ফাইল স্টোর নেই — লিংক দিয়ে যোগ করো।', 'No local file store in this browser — add a link instead.'), 'error'); return; }
+    if(importing) return;
+    setImporting(true);
+    let fingerprint: string;
+    try {
+      if(!(await file.slice(0,5).text()).startsWith('%PDF-')) throw new Error('Not a PDF');
+      fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))).map(b=>b.toString(16).padStart(2,'0')).join('');
+    } catch { setImporting(false); notify('PDF যাচাই করা যায়নি', 'error'); return; }
+    if(data.pdfs.some(p=>p.fingerprint===fingerprint)){setImporting(false);notify('একই PDF আগেই আছে','info');return;}
     const id = newId();
     const ok = await putFile({ id, blob: file, name: file.name, size: file.size, createdAt: nowIso() });
+    setImporting(false);
     if (!ok) { notify(t('ফাইল সেভ হয়নি — ডিভাইসের স্টোরেজ খালি করে আবার চেষ্টা করো।', 'File not saved — free device storage and try again.'), 'error'); return; }
     const entry: PdfResource = {
       id, title: title.trim() || file.name.replace(/\.pdf$/i, ''), local: true, sizeBytes: file.size,
-      subject: pdfSubject, material, createdAt: nowIso(),
+      subject: pdfSubject, material, createdAt: nowIso(), fingerprint, chapterId: pdfChapter || undefined, teacher, className, sourceUrl: sourceUrl || undefined,
     };
     setData(d => ({ ...d, pdfs: [...d.pdfs, entry] }));
     setTitle(''); setPrefillSlot(null); setShowAdd(false);
@@ -185,7 +207,7 @@ export default function PdfsView() {
     if (!pdf.url) return;
     setDownloading(prev => ({ ...prev, [pdf.id]: 0 }));
     const result = await downloadToFile(pdf.url, pdf.id, pdf.title, (loaded, total) => {
-      setDownloading(prev => ({ ...prev, [pdf.id]: total ? Math.round((loaded / total) * 100) : 0 }));
+      setDownloading(prev => ({ ...prev, [pdf.id]: total ? Math.round((loaded / total) * 100) : -1 }));
     });
     setDownloading(prev => { const next = { ...prev }; delete next[pdf.id]; return next; });
     if (result.ok) {
@@ -202,11 +224,11 @@ export default function PdfsView() {
       message: t(`"${pdf.title}" লাইব্রেরি থেকে সরানো হবে। লোকাল ফাইলও মুছে যাবে।`, `"${pdf.title}" will be removed from the library. A stored local file is deleted too.`),
       danger: true,
       label: t('মুছে ফেলো', 'Remove'),
-      action: () => {
+      action: () => {void(async()=>{
+        if(pdf.local&&!await deleteFile(pdf.id)){notify(t('ফাইল মুছতে ব্যর্থ; entry রাখা হয়েছে।','Could not delete file; entry retained.'),'error');return;}
         setData(d => ({ ...d, pdfs: d.pdfs.filter(item => item.id !== pdf.id), pdfBookmarks: d.pdfBookmarks.filter(id => id !== pdf.id), pdfRecent: d.pdfRecent.filter(item => item.id !== pdf.id) }));
-        if (pdf.local) void deleteFile(pdf.id);
         notify(t('পিডিএফ সরানো হয়েছে।', 'PDF removed.'));
-      },
+      })();},
     });
   };
 
@@ -245,6 +267,8 @@ export default function PdfsView() {
         </div>
         {showAdd && (
           <form className="pdf-add-form" onSubmit={addPdf}>
+            <label>{t('কপি করা description / comment','Copied description / comment')}<textarea maxLength={20000} value={copiedText} onChange={e=>setCopiedText(e.target.value)} placeholder={t('বৈধভাবে পাওয়া লেখা paste করো; কোনো scraping হয় না','Paste publicly shared text; nothing is scraped')}/></label>
+            {collectLinks(copiedText).map(link=><button type="button" className="button secondary small collector-link" key={link} onClick={()=>{setUrl(link);if(!title)setTitle('Study material');}}>{link}</button>)}
             <label>{t('নাম', 'Title')}
               <input value={title} onChange={e => setTitle(e.target.value)} maxLength={200} placeholder={t('যেমন: ভেক্টর অধ্যায় নোট', 'e.g. Vector chapter notes')} required />
             </label>
@@ -252,10 +276,14 @@ export default function PdfsView() {
               <input value={url} onChange={e => setUrl(e.target.value)} maxLength={2000} placeholder="https://…/file.pdf" inputMode="url" />
             </label>
             <label>{t('বিষয়', 'Subject')}
-              <select value={pdfSubject} onChange={e => setPdfSubject(e.target.value as SubjectId)}>
+              <select value={pdfSubject} onChange={e => {setPdfSubject(e.target.value as SubjectId);setPdfChapter('');}}>
                 {SUBJECTS.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </label>
+            <label>Chapter<select value={pdfChapter} onChange={e=>setPdfChapter(e.target.value)}><option value="">General</option>{CHAPTERS.filter(c=>c.subject===pdfSubject).map(c=><option key={c.id} value={c.id}>Paper {c.paper} · {c.title}</option>)}</select></label>
+            <label>Teacher<input value={teacher} maxLength={200} onChange={e=>setTeacher(e.target.value)}/></label>
+            <label>Class name<select value={className} onChange={e=>{const name=e.target.value;setClassName(name);const c=data.advanced?.classes.find(c=>c.title===name);if(c){setTeacher(c.teacher);setPdfChapter(c.chapterId);setPdfSubject(chapterById[c.chapterId].subject);}}}><option value="">None / general</option>{data.advanced?.classes.map(c=><option key={c.id}>{c.title}</option>)}</select><input aria-label="Custom class name" value={className} maxLength={300} onChange={e=>setClassName(e.target.value)}/></label>
+            <label>Source link<input type="url" value={sourceUrl} maxLength={2000} onChange={e=>setSourceUrl(e.target.value)}/></label>
             <label>{t('ধরন', 'Type')}
               <select value={material} onChange={e => setMaterial(e.target.value as PdfMaterialType)}>
                 {PDF_MATERIALS.map(item => <option key={item.id} value={item.id}>{item.bn}</option>)}
@@ -263,7 +291,7 @@ export default function PdfsView() {
             </label>
             <div className="pdf-add-actions">
               <button className="button primary" type="submit"><Link2 size={15} />{t('লিংক যোগ করো', 'Add link')}</button>
-              <button className="button secondary" type="button" onClick={() => fileInputRef.current?.click()}><Upload size={15} />{t('ফাইল বাছো', 'Pick file')}</button>
+              <button className="button secondary" type="button" disabled={importing} onClick={() => fileInputRef.current?.click()}><Upload size={15} />{t('ফাইল বাছো', 'Pick file')}</button>
               <input
                 ref={fileInputRef}
                 type="file"
@@ -277,7 +305,7 @@ export default function PdfsView() {
         )}
       </section>
 
-      <div className="filter-bar pdf-filter-bar">
+      <div className="filter-bar pdf-filter-bar"><select aria-label="Chapter filter" value={chapterFilter} onChange={e=>setChapterFilter(e.target.value)}><option value="">All chapters</option>{CHAPTERS.filter(c=>subjectFilter==='all'||c.subject===subjectFilter).map(c=><option key={c.id} value={c.id}>{subjectById[c.subject].short} {c.paper} · {c.title}</option>)}</select>
         <label className="search-field">
           <Search size={17} />
           <input value={query} onChange={e => setQuery(e.target.value)} placeholder={t('পিডিএফ খুঁজো…', 'Search PDFs…')} aria-label={t('পিডিএফ খুঁজো', 'Search PDFs')} />
@@ -309,7 +337,7 @@ export default function PdfsView() {
                 <article className="pdf-row" key={pdf.id}>
                   <span className="pdf-row-icon"><FileText size={19} /></span>
                   <div className="pdf-row-main">
-                    <strong>{pdf.title}</strong>
+                    <strong>{pdf.title}</strong><span>{pdf.teacher} · {pdf.className} · {pdf.linkStatus || 'unverified'}</span>
                     <span>
                       {pdf.subject ? subjectById[pdf.subject]?.short : t('সাধারণ', 'General')} · {PDF_MATERIAL_LABEL(pdf.material)}
                       {pdf.chapterId && chapterById[pdf.chapterId] ? ` · ${chapterById[pdf.chapterId].title}` : ''}
@@ -319,13 +347,19 @@ export default function PdfsView() {
                       {pdf.sizeBytes ? ` · ${formatBytes(pdf.sizeBytes)}` : ''}
                       {pdf.lastOpenedAt ? ` · ${t('শেষ খোলা', 'Last opened')} ${formatDate(pdf.lastOpenedAt.slice(0, 10))}` : ''}
                     </small>
-                    {progress !== undefined && <span className="pdf-download-progress">{t('ডাউনলোড', 'Download')} {bn(progress)}%</span>}
+                    {progress !== undefined && <span className="pdf-download-progress">{t('ডাউনলোড', 'Download')} {progress < 0 ? t('সাইজ অজানা…','size unknown…') : `${bn(progress)}%`}</span>}
                   </div>
                   <div className="pdf-row-actions">
+                    {pdf.url && <button className="button secondary small" disabled={checking===pdf.id} onClick={()=>void (async()=>{
+                      setChecking(pdf.id);let linkStatus: 'available'|'broken'|'unverified'='unverified';
+                      try{const r=await fetch(pdf.url!,{method:'HEAD',credentials:'omit',signal:AbortSignal.timeout(12000)});linkStatus=r.ok?'available':r.status===404||r.status===410?'broken':'unverified';}catch{ /* CORS/offline is not proof of a broken link */ }
+                      setData(d=>({...d,pdfs:d.pdfs.map(p=>p.id===pdf.id?{...p,linkStatus}:p)}));setChecking(null);
+                      notify(linkStatus==='unverified'?'যাচাই সম্ভব হয়নি (CORS/offline)। মূল source খোলো।':linkStatus==='broken'?'Broken link':'Link available',linkStatus==='broken'?'error':'info');
+                    })()}>{checking===pdf.id?'Checking…':'Check link'}</button>}
                     <button className="button primary small" onClick={() => setOpenPdf(pdf)}><FileText size={14} />{t('খোলো', 'Open')}</button>
                     {pdf.url && !pdf.local && (
                       <button className="button secondary small" onClick={() => void startDownload(pdf)} disabled={progress !== undefined}>
-                        <Download size={14} />{progress !== undefined ? `${bn(progress)}%` : t('ডাউনলোড', 'Download')}
+                        <Download size={14} />{progress !== undefined ? (progress < 0 ? '…' : `${bn(progress)}%`) : t('ডাউনলোড', 'Download')}
                       </button>
                     )}
                     <button className={`icon-button ${isBookmarked ? 'selected' : ''}`} aria-label={t('বুকমার্ক', 'Bookmark')} aria-pressed={isBookmarked} onClick={() => setData(d => ({ ...d, pdfBookmarks: isBookmarked ? d.pdfBookmarks.filter(id => id !== pdf.id) : [...d.pdfBookmarks, pdf.id] }))}>

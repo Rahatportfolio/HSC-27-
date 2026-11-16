@@ -1,3 +1,4 @@
+import { recordMcqAnswer, recordCqEntry } from '../mistakeRevision';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowRight, BookOpen, Brain, Check, ChevronRight, CircleHelp, ListChecks, NotebookPen, Plus, RotateCcw, Search, Target, Trash2, X } from 'lucide-react';
@@ -62,7 +63,7 @@ function McqPractice({ stats, weekStats }: { stats: { total: number; correct: nu
   const answer = (index: number) => {
     if (!active || quiz?.chosen !== null) return;
     const correct = index === active.answer;
-    setData(d => ({ ...d, attempts: [...d.attempts, { id: newId(), questionId: active.id, subject: active.subject, chosen: index, correct, date: today, at: nowIso() }].slice(-10000) }));
+    setData(d => recordMcqAnswer(d, active, index, today));
     setQuiz(current => current ? { ...current, chosen: index, correct: current.correct + (correct ? 1 : 0), wrong: correct ? current.wrong : [...current.wrong, active.id] } : current);
   };
   const next = () => {
@@ -174,7 +175,7 @@ function CqModal({ onClose }: { onClose: () => void }) {
     if (byParts && CQ_PARTS.some(part => parts[part.key] > part.max || parts[part.key] < 0)) { setError('ক অংশে সর্বোচ্চ ১, খ-এ ২, গ-এ ৩, ঘ-এ ৪ নম্বর দেওয়া যায়।'); return; }
     if (data.cq.length >= 2000) { setError('সর্বোচ্চ ২০০০টি CQ রেকর্ড রাখা যায়।'); return; }
     const entry: CqEntry = { id: newId(), subject, chapterId: chapterId || undefined, question: question.trim(), marks: obtained, total: full, note: note.trim(), date: today, at: nowIso(), parts: byParts ? parts : undefined };
-    setData(d => ({ ...d, cq: [...d.cq, entry] }));
+    setData(d => recordCqEntry(d,entry));
     notify('CQ অনুশীলন সেভ হয়েছে।', 'success'); onClose();
   };
   return <Modal title={t("CQ অনুশীলন যোগ করো", "Add CQ practice")} onClose={onClose}><form onSubmit={submit}><div className="form-grid"><label>{t("বিষয়", "Subject")}<select value={subject} onChange={e => { setSubject(e.target.value as SubjectId); setChapterId(''); }}>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label><label>{t("অধ্যায়", "Chapter")}<select value={chapterId} onChange={e => setChapterId(e.target.value)}><option value="">{t("ঐচ্ছিক", "Optional")}</option>{CHAPTERS.filter(chapter => chapter.subject === subject).map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.number}. {chapter.title}</option>)}</select></label></div><label className="form-label">{t("প্রশ্ন/উদ্দীপক", "Question / stem")}<textarea rows={3} maxLength={5000} value={question} onChange={e => setQuestion(e.target.value)} placeholder={t("প্রশ্নটি সংক্ষেপে লেখো…", "Write the question briefly…")} /></label>

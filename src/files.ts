@@ -1,3 +1,4 @@
+import { hasNativeFiles, NativeFiles, nativeFileUrl } from './nativeFiles';
 /**
  * Device-local file store for permitted PDFs the student downloads or imports.
  * Uses IndexedDB directly (no dependency), with graceful degradation: when IndexedDB
@@ -8,6 +9,7 @@
 const DB_NAME = 'prostuti-files';
 const STORE = 'blobs';
 const DB_VERSION = 1;
+const activeDownloads = new Set<string>();
 
 export interface StoredFile { id: string; blob: Blob; name: string; size: number; createdAt: string }
 
@@ -32,6 +34,7 @@ function openDb(): Promise<IDBDatabase | null> {
 }
 
 export async function filesAvailable(): Promise<boolean> {
+  if(hasNativeFiles()){try{await NativeFiles.estimate();return true;}catch{return false;}}
   return (await openDb()) !== null;
 }
 
@@ -43,7 +46,8 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
     try {
       const transaction = db.transaction(STORE, mode);
       const request = run(transaction.objectStore(STORE));
-      request.onsuccess = () => resolve({ ok: true, value: request.result });
+      transaction.oncomplete = () => resolve({ ok: true, value: request.result });
+      transaction.onerror = () => resolve({ ok: false });
       request.onerror = () => resolve({ ok: false });
       transaction.onabort = () => resolve({ ok: false });
     } catch { resolve({ ok: false }); }
@@ -51,26 +55,45 @@ function tx<T>(mode: IDBTransactionMode, run: (store: IDBObjectStore) => IDBRequ
 }
 
 export async function putFile(file: StoredFile): Promise<boolean> {
+  if(hasNativeFiles()){
+    let begun=false;
+    try{
+      await NativeFiles.begin({id:file.id,name:file.name,type:file.blob.type,createdAt:file.createdAt});begun=true;
+      for(let offset=0;offset<file.blob.size;offset+=256*1024){
+        const bytes=new Uint8Array(await file.blob.slice(offset,offset+256*1024).arrayBuffer());
+        let binary='';for(const byte of bytes)binary+=String.fromCharCode(byte);
+        await NativeFiles.append({id:file.id,data:btoa(binary)});
+      }
+      await NativeFiles.commit({id:file.id});return true;
+    }catch{if(begun)await NativeFiles.abort({id:file.id}).catch(()=>{});return false;}
+  }
   return (await tx<IDBValidKey>('readwrite', store => store.put(file))).ok;
 }
 
 export async function getFile(id: string): Promise<StoredFile | null> {
+  if(hasNativeFiles()){
+    try{const f=await NativeFiles.info({id});const response=await fetch(nativeFileUrl(f.uri));if(!response.ok)return null;return {...f,blob:await response.blob()};}catch{/* legacy IndexedDB files remain readable below */}
+  }
   const result = await tx<StoredFile>('readonly', store => store.get(id));
   return result.ok ? result.value ?? null : null;
 }
 
 export async function deleteFile(id: string): Promise<boolean> {
+  if(hasNativeFiles())try{await NativeFiles.remove({id});await tx<undefined>('readwrite',store=>store.delete(id));return true;}catch{return false;}
   return (await tx<undefined>('readwrite', store => store.delete(id))).ok;
 }
 
 export async function allFileIds(): Promise<string[]> {
+  let native:string[]=[];
+  if(hasNativeFiles())native=(await NativeFiles.list()).files.map(f=>f.id);
   const result = await tx<IDBValidKey[]>('readonly', store => store.getAllKeys());
-  return result.ok && Array.isArray(result.value) ? result.value.map(String) : [];
+  return [...new Set([...native,...(result.ok && Array.isArray(result.value) ? result.value.map(String) : [])])];
 }
 
 /** Browser storage quota/usage when the API is available (used by the storage card). */
 export async function storageEstimate(): Promise<{ usage: number; quota: number } | null> {
   try {
+    if(hasNativeFiles())return await NativeFiles.estimate();
     if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return null;
     const estimate = await navigator.storage.estimate();
     if (estimate.usage === undefined || estimate.quota === undefined) return null;
@@ -84,11 +107,23 @@ export async function downloadToFile(
   id: string,
   name: string,
   onProgress?: (loaded: number, total: number) => void,
+  kind: 'pdf' | 'video' = 'pdf',
 ): Promise<{ ok: boolean; size?: number; error?: string }> {
+  if(activeDownloads.has(id))return {ok:false,error:'This file is already downloading'};
+  activeDownloads.add(id);
   try {
-    const response = await fetch(url);
+    if(hasNativeFiles()){
+      const listener=await NativeFiles.addListener('downloadProgress',e=>{if(e.id===id)onProgress?.(e.loaded,e.total);});
+      try{const result=await NativeFiles.download({id,url,name,kind});return {ok:true,size:result.size};}finally{await listener.remove();}
+    }
+    const quota = await storageEstimate();
+    const maxBytes = Math.min(kind === 'video' ? 1_000_000_000 : 100 * 1024 * 1024, quota ? Math.max(0, quota.quota - quota.usage - 5 * 1024 * 1024) : Infinity);
+    const response = await fetch(url, { signal: AbortSignal.timeout(60 * 60 * 1000), credentials: 'omit' });
     if (!response.ok) return { ok: false, error: `HTTP ${response.status}` };
     const total = Number(response.headers.get('content-length')) || 0;
+    if (total > maxBytes) { await response.body?.cancel(); return { ok: false, error: 'Storage limit: not enough free space / file too large' }; }
+    const mime = response.headers.get('content-type')?.split(';')[0] || '';
+    if (kind === 'video' && !mime.startsWith('video/') && mime !== 'application/octet-stream') { await response.body?.cancel(); return {ok:false,error:'Not a downloadable video file'}; }
     let blob: Blob;
     if (response.body && typeof response.body.getReader === 'function') {
       const reader = response.body.getReader();
@@ -98,21 +133,24 @@ export async function downloadToFile(
         const { done, value } = await reader.read();
         if (done) break;
         if (value) {
-          chunks.push(value);
           loaded += value.length;
-          onProgress?.(loaded, total || loaded);
+          if (loaded > maxBytes) { await reader.cancel(); return {ok:false,error:'Storage limit exceeded'}; }
+          chunks.push(value);
+          onProgress?.(loaded, total);
         }
       }
-      blob = new Blob(chunks as BlobPart[], { type: 'application/pdf' });
+      blob = new Blob(chunks as BlobPart[], { type: kind === 'pdf' ? 'application/pdf' : mime || 'video/mp4' });
     } else {
       blob = await response.blob();
     }
+    if (blob.size > maxBytes) return {ok:false,error:'Storage limit exceeded'};
+    if (kind === 'pdf' && !(await blob.slice(0, 5).text()).startsWith('%PDF-')) return {ok:false,error:'URL did not return a PDF file'};
     const stored = await putFile({ id, blob, name, size: blob.size, createdAt: new Date().toISOString() });
     if (!stored) return { ok: false, error: 'storage' };
     return { ok: true, size: blob.size };
   } catch (error) {
     return { ok: false, error: (error as Error)?.message || 'network' };
-  }
+  } finally { activeDownloads.delete(id); }
 }
 
 /** Clears the device file store (used by Settings → reset). Returns files removed. */
@@ -120,4 +158,11 @@ export async function clearFiles(): Promise<number> {
   const ids = await allFileIds();
   for (const id of ids) await deleteFile(id);
   return ids.length;
+}
+
+/** A native video URL is served by Capacitor without copying its bytes into JS memory. */
+export async function playableFile(id:string):Promise<{url:string;revoke:()=>void}|null>{
+  if(hasNativeFiles())try{const f=await NativeFiles.info({id});return {url:nativeFileUrl(f.uri),revoke:()=>{}};}catch{/* old IndexedDB fallback */}
+  const f=await getFile(id);if(!f)return null;
+  const url=URL.createObjectURL(f.blob);return {url,revoke:()=>URL.revokeObjectURL(url)};
 }

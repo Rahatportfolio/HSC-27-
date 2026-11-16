@@ -49,6 +49,13 @@ jobs:
       - name: Build web app
         run: npm run build
 
+      - name: Browser responsive and offline-media checks
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome
+        run: |
+          npm run test:responsive
+          npm run test:study-browser
+
       - name: Sync Capacitor
         run: npx cap sync android
 

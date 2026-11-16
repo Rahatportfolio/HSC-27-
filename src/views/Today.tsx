@@ -1,3 +1,5 @@
+import DailyGoals from '../components/DailyGoals';
+import { StudyOverview } from './StudySystem';
 import { learningDashboard } from '../learning';
 import { classProgress } from '../classes';
 import { useState } from 'react';
@@ -13,7 +15,7 @@ import type { Chapter, SubjectId } from '../data';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
 import { buildDailyNotificationDigest } from '../notifications';
 import {
-  addDays, bn, chapterStudyTasks, dhakaMinutes, diffDays, effectiveDailyHours, formatDate,
+  addDays, bn, chapterStudyTasks, dhakaMinutes, diffDays, dailyTargetMinutes, formatDate,
   formatDurationBn, formatTime, getNextUnfinishedDay, getStats, getUnfinishedPastTasks,
   isDayComplete, isValidDate, percent, phaseName, toMinutes, toTimeInput,
 } from '../planner';
@@ -121,7 +123,7 @@ export default function TodayView() {
   const isToday = selectedDate === today;
   const dayNumber = diffDays(data.settings.startDate, selectedDate) + 1;
   const dayOverride = data.dayOverrides?.[selectedDate];
-  const activeHours = effectiveDailyHours(data.settings, selectedDate, dayOverride);
+  const activeHours = dailyTargetMinutes(data,selectedDate)/60;
   const measured = minutesOn(data.studySessions, selectedDate);
   const target = activeHours * 60;
   const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), addDays(startOfWeek(today), 6));
@@ -186,6 +188,7 @@ export default function TodayView() {
   };
 
   const setDayHours = (hours: number) => {
+    if(data.advanced?.targets[selectedDate]!==undefined){notify(t('এই দিনের target locked।','This day’s target is locked.'),'info');return;}
     const clamped = Math.max(4, Math.min(18, Math.round(hours)));
     setData(d => ({
       ...d,
@@ -375,7 +378,7 @@ export default function TodayView() {
   const learning = learningDashboard(data, plan);
   const watchedClasses = classProgress(data);
   const prep = testPrepStats(data, plan, today);
-  return <div className="view today-view">
+  return <div className="view today-view"><StudyOverview /><DailyGoals key={today}/>
     <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
       <ProgressBar value={learning.overall.percent} />

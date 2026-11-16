@@ -41,7 +41,7 @@ export function isBackupSnoozed(today = todayKey()): boolean {
 }
 /** Anything worth losing: progress, measured sessions, questions, scores or written notes. */
 export function hasStudyData(data: AppData): boolean {
-  return Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
+  return !!data.advanced?.classes.length || !!Object.keys(data.advanced?.preparation || {}).length || data.pdfs.length > 0 || Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
     || data.cq.length > 0 || data.mistakes.length > 0 || data.libraryNotes.length > 0
     || Object.values(data.notes).some(note => note.trim()) || data.revisions.some(item => !!item.completedAt)
     || data.questions.length > 0 || data.attempts.length > 0 || data.videos.length > 0

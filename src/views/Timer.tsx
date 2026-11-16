@@ -9,7 +9,7 @@ import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
 import { deleteStudySession } from '../study';
 import { CHAPTER_CLASSES } from '../classLinks';
 import { ClassBlock, PageHeading, ProgressBar, ProgressRing } from '../components';
-import { effectiveDailyHours } from '../planner';
+import { dailyTargetMinutes } from '../planner';
 import { t } from '../i18n';
 
 const pad = (value: number): string => bn(String(value).padStart(2, '0'));
@@ -20,7 +20,7 @@ function clock(seconds: number): string {
 const PHASE_LABEL = { focus: 'ফোকাস সময়', short: 'ছোট বিরতি', long: 'লম্বা বিরতি', none: 'টাইমার' } as const;
 export default function TimerView() {
   const { data, setData, today, timer, logSession, notify, confirm, navigate, screenAwake, serviceRunning } = usePlanner();
-  const todayTargetHours = effectiveDailyHours(data.settings, today, data.dayOverrides?.[today]);
+  const todayTargetHours = dailyTargetMinutes(data,today)/60;
   const [manualMinutes, setManualMinutes] = useState('30');
   const [manualSubject, setManualSubject] = useState<SubjectId>('physics');
   const [manualChapter, setManualChapter] = useState('');

@@ -1,3 +1,4 @@
+import { readiness } from './advanced';
 import { CHAPTERS, SUBJECTS } from './data';
 import type { Chapter, Priority, SubjectId } from './data';
 import { chapterStudyTasks } from './planner';
@@ -22,6 +23,13 @@ export function chapterPriority(chapter: Chapter, data: AppData): Priority {
 /** Explicit personal status overrides the legacy task-derived status; watching a video alone never completes a chapter. */
 export function chapterStage(chapter: Chapter, data: AppData, plan: Day[]): ChapterStage {
   const meta = data.chapterMeta[chapter.id];
+  // New tracked chapters cannot be completed by a legacy task checkbox alone.
+  if (data.advanced?.classes.some(c => c.chapterId === chapter.id) || data.advanced?.preparation[chapter.id]) {
+    const progress = readiness(data, chapter.id);
+    if (!progress.lectures || progress.coverage < 100) return 'inProgress';
+    if (progress.readiness === 100) return 'fullyRevised';
+    return 'inProgress';
+  }
   if (meta?.stage) return meta.stage;
   const tasks = chapterStudyTasks(plan, chapter.id);
   if (tasks.length && tasks.every(task => !!data.completed[task.id])) return 'completed';

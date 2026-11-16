@@ -15,7 +15,8 @@
     "android:sync": "npm run build && cap sync android",
     "android:apk": "npm run android:assets && npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:open": "cap open android",
-    "test:responsive": "node scripts/check-responsive.mjs"
+    "test:responsive": "node scripts/check-responsive.mjs",
+    "test:study-browser": "tsx scripts/check-study-system.ts"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",

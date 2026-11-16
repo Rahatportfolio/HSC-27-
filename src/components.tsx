@@ -3,7 +3,7 @@ import type { CSSProperties, ReactNode } from 'react';
 import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, Minus, NotebookPen, Pause, Play, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react';
 import { CHAPTERS, chapterById, subjectById } from './data';
 import type { SubjectId } from './data';
-import { bn, dhakaMinutes, effectiveDailyHours, formatDate, formatDayOffset, formatDurationBn, formatTime, getPhases, isTaskCurrent, isValidDate, percent, todayKey, toMinutes, toTimeInput } from './planner';
+import { bn, dhakaMinutes, dailyTargetMinutes, formatDate, formatDayOffset, formatDurationBn, formatTime, getPhases, isTaskCurrent, isValidDate, percent, todayKey, toMinutes, toTimeInput } from './planner';
 import type { Day, Task } from './planner';
 import { editTask, moveTask, removeTask } from './scheduleEdit';
 import { useOptionalPlanner, usePlanner } from './context';
@@ -65,12 +65,14 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
   const done = !!data.completed[task.id];
   const minute = dhakaMinutes(now);
   const current = !done && isTaskCurrent(task, today, minute);
-  const durationMin = Math.max(15, task.endMinute - task.startMinute);
+  const generated = !!task.video || task.id.startsWith('smart-part|');
+  const durationMin = Math.max(1, task.endMinute - task.startMinute);
   const primaryChapterId = task.chapterIds[0];
   const primaryChapter = primaryChapterId ? chapterById[primaryChapterId] : undefined;
   const primaryClasses = primaryChapterId ? CHAPTER_CLASSES[primaryChapterId] : undefined;
   const isThisTimerActive = timer.taskId === task.id && (timer.running || timer.elapsedSec > 0);
 
+  const openVideo = () => { navigate('studySystem'); window.location.hash = `studySystem?class=${encodeURIComponent(task.video!.classId)}`; };
   const launchPreset = () => {
     if (isThisTimerActive) {
       if (timer.running) timer.pause();
@@ -158,10 +160,10 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
           </button>
         )}
       </div>
-      <button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
+      {task.video && <button className="button secondary small" onClick={openVideo}><Play size={14}/>{t('ক্লাস খোলো','Open class')}</button>}<button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
       {expanded && <div className="task-expanded-wrap">
-        <div className="task-move-editor">
+        {!generated && <><div className="task-move-editor">
           <label className="move-date-field">
             <span>{t('তারিখ:', 'Date:')}</span>
             <input
@@ -233,6 +235,7 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
             <button type="button" className="button ghost small" onClick={() => adjustTaskDuration(30)}><Plus size={12} />{t('৩০ মি.', '30m')}</button>
           </div>
         </div>
+        </>}{generated && <p className="tiny-muted">{t('এই duration-based session workload থেকে তৈরি। সময় বদলাতে Study & offline-এর daily limit ব্যবহার করো।','This duration-based session follows the workload. Change daily limits in Study & offline.')}</p>}
         {primaryClasses && <div className="task-inline-classes">
           {compact ? <ClassLinkRow classes={primaryClasses} /> : <ClassBlock classes={primaryClasses} compact />}
         </div>}
@@ -254,7 +257,7 @@ export function WeekChart({ large = false }: { large?: boolean }) {
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.parse(`${monday}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10); return { date: d, day: plan.find(x => x.date === d) }; });
   return <div className={`week-chart ${large ? 'large' : ''}`}>{days.map((d, i) => {
     const minutes = d.day?.tasks.filter(t => data.completed[t.id]).reduce((n, t) => n + t.endMinute - t.startMinute, 0) || 0;
-    const dayTargetMin = effectiveDailyHours(data.settings, d.date, data.dayOverrides?.[d.date]) * 60;
+    const dayTargetMin = dailyTargetMinutes(data,d.date);
     return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ${t('ঘণ্টার কাজ সম্পন্ন', 'hours of tasks done')}`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, minutes / dayTargetMin * 100))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{(isEnglish() ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'])[i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}{t('ঘ', 'h')}</small>}</button>;
   })}</div>;
 }

@@ -17,7 +17,7 @@ try {
   const base = `http://127.0.0.1:${address.port}`;
   browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 320, height: 800 }, reducedMotion: 'reduce' });
-  const views = ['today', 'calendar', 'syllabus', 'revision', 'timer', 'practice', 'exams', 'analytics', 'library', 'reminders', 'settings'];
+  const views = ['today', 'calendar', 'syllabus', 'videos', 'pdfs', 'studySystem', 'revision', 'timer', 'practice', 'exams', 'analytics', 'library', 'reminders', 'settings'];
   const assertFits = async label => {
     const size = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
     if (size.scrollWidth > size.width + 1) throw new Error(`${label}: page width ${size.width}, content width ${size.scrollWidth}`);
@@ -72,7 +72,7 @@ try {
     await page.evaluate(() => { document.documentElement.dataset.font = 'lg'; });
     await assertFits(`${view}, English/dark at 320px`);
   }
-  console.log('Responsive smoke test passed for 11 views, 320–768px, large text and English/dark mode.');
+  console.log(`Responsive smoke test passed for ${views.length} views, 320–768px, large text and English/dark mode.`);
 } finally {
   await browser?.close();
   await server.close();

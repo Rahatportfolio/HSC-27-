@@ -2,7 +2,7 @@ import { chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import {
   bn,
-  effectiveDailyHours,
+  dailyTargetMinutes,
   formatDurationBn,
   formatTime,
   getNextUnfinishedDay,
@@ -89,23 +89,23 @@ export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: s
   const day = plan.find(d => d.date === date);
   const tasks = day?.tasks ?? [];
   const totalTasks = tasks.length;
-  const fallbackTargetMin = effectiveDailyHours(data.settings, date, data.dayOverrides?.[date]) * 60;
+  const fallbackTargetMin = dailyTargetMinutes(data,date);
   const totalMinutes = totalTasks > 0
-    ? tasks.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0)
+    ? tasks.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0)
     : fallbackTargetMin;
 
   const doneList = tasks.filter(tk => Boolean(data.completed[tk.id]));
   const remainingList = tasks.filter(tk => !data.completed[tk.id]);
 
   const doneTasks = doneList.length;
-  const doneMinutes = doneList.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0);
+  const doneMinutes = doneList.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
   const remainingTasks = remainingList.length;
-  const remainingMinutes = remainingList.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0);
+  const remainingMinutes = remainingList.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
   const percentDone = totalMinutes > 0 ? Math.round((doneMinutes / totalMinutes) * 100) : 0;
 
   const pastUnfinished = getUnfinishedPastTasks(plan, date, data.completed);
   const pastUnfinishedCount = pastUnfinished.length;
-  const pastUnfinishedMinutes = pastUnfinished.reduce((sum, tk) => sum + Math.max(15, tk.endMinute - tk.startMinute), 0);
+  const pastUnfinishedMinutes = pastUnfinished.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
   const pastUnfinishedSummary = formatDurationBn(pastUnfinishedMinutes);
   const allDone = totalTasks > 0 && remainingTasks === 0;
   const nextDay = allDone ? getNextUnfinishedDay(plan, date, data.completed) : undefined;

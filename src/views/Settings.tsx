@@ -1,3 +1,4 @@
+import FullBackup from '../components/FullBackup';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, CalendarDays, CheckCircle2, Database, Download, ExternalLink, FileText, Info, Languages, Monitor, Moon, Palette, RotateCcw, Save, Share2, ShieldCheck, Sun, Timer, Play, ArrowUpRight, Type } from 'lucide-react';
 import { usePlanner } from '../context';
@@ -72,7 +73,7 @@ export default function SettingsView() {
     downloadCsv([['তারিখ', 'প্রশ্ন ID', 'বিষয়', 'সঠিক?', 'বাছা উত্তর'], ...data.attempts.map(attempt => [attempt.date, attempt.questionId, subjectById[attempt.subject].name, attempt.correct ? 'হ্যাঁ' : 'না', attempt.chosen + 1])], `prostuti-mcq-${todayKey()}.csv`);
     notify('MCQ রেকর্ডের CSV ডাউনলোড হয়েছে।', 'success');
   };
-  return <div className="view settings-view">
+  return <div className="view settings-view"><FullBackup/>
     <PageHeading eyebrow="MAKE IT YOURS" title="তোমার পড়া, তোমার ছন্দে।" titleEn="Your study, your rhythm." description="শুরুর তারিখ, লক্ষ্য, থিম, রিভিশন আর ডেটা—সব এক জায়গায়। সব পরিবর্তন এই ডিভাইসেই থাকে।" descriptionEn="Start date, targets, theme, revision and data — all local to this device." />
     <form className="card settings-form" onSubmit={save}>
       <div className="card-heading"><h2>{t("পরিকল্পনা ও পরিচয়", "Plan & identity")}</h2><span className="local-badge"><ShieldCheck size={14} />{t("শুধু এই ডিভাইসে", "This device only")}</span></div>
