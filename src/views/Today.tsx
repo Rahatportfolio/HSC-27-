@@ -25,6 +25,8 @@ import { revisionBuckets, INTERVAL_LABEL } from '../revision';
 import { t } from '../i18n';
 import { newId } from '../storage';
 import { motivationFor } from '../motivation';
+import { dueCount as flashcardDueCount } from '../flashcards';
+import { unresolvedMistakeCount } from '../study';
 import { testPrepStats } from '../testPrep';
 import { carryoversOn, pendingCarryovers, removeCarryover, setTaskCompletion, toggleCarryover } from '../study';
 import {
@@ -378,6 +380,17 @@ export default function TodayView() {
   const learning = learningDashboard(data, plan);
   const watchedClasses = classProgress(data);
   const prep = testPrepStats(data, plan, today);
+  const dueCount = flashcardDueCount(data, today);
+  const unresolvedMistakes = unresolvedMistakeCount(data);
+  /** Exam readiness is a separate metric from syllabus completion: syllabus × mock performance × MCQ accuracy. Never a guarantee of GPA. */
+  const mockScores = Object.values(data.exams).map(exam => exam.total ? Math.round((exam.score / exam.total) * 100) : 0);
+  const mockAvg = mockScores.length ? mockScores.reduce((a, b) => a + b, 0) / mockScores.length : 0;
+  const mcqAttempts = data.attempts.filter(a => a.date >= addDays(today, -45));
+  const mcqAcc = mcqAttempts.length ? Math.round((mcqAttempts.filter(a => a.correct).length / mcqAttempts.length) * 100) : 0;
+  const syllabusPart = learning.overall.percent * 0.5;
+  const mockPart = mockAvg * 0.3;
+  const mcqPart = mcqAcc * 0.2;
+  const examReadiness = Math.round(syllabusPart + mockPart + mcqPart);
   return <div className="view today-view"><StudyOverview /><DailyGoals key={today}/>
     <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
@@ -397,6 +410,7 @@ export default function TodayView() {
         <div><strong>{bn(prep.percentA)}%</strong><span>{t('A ক্যাটাগরি শেষ', 'Category A done')}</span></div>
         <div><strong>{bn(prep.doneA)}/{bn(prep.totalA)}</strong><span>{t('A-অধ্যায়', 'A chapters')}</span></div>
         <div><strong>{bn(prep.requiredTasksPerDay)}</strong><span>{t('A-কাজ/দিন লাগবে', 'A-tasks/day needed')}</span></div>
+        <div><strong>{bn(examReadiness)}%</strong><span>{t('পরীক্ষা প্রস্তুতি', 'Exam readiness')}</span></div>
       </div>
       <ProgressBar value={prep.percentA} />
       {prep.warning && <p className="testprep-quick-warning">{t('পেছিয়ে আছো — আজ অন্তত একটি A-কাজ করে ফেলো।', 'You are behind — do at least one A-task today.')}</p>}
@@ -414,6 +428,8 @@ export default function TodayView() {
           <span><Clock3 size={14} />{t('পড়া হয়েছে', 'Studied')} {bn(Math.floor(measured / 60))}{t('ঘ', 'h')} {bn(measured % 60)}{t('মি', 'm')}</span>
           <button type="button" className="hero-chip-link" onClick={() => { sessionStorage.setItem('prostuti.openClass', '1'); navigate('videos'); }}><Play size={14} />{t(`ক্লাস দেখা চালিয়ে যাও · ${bn(watchedClasses.watched)}/${bn(watchedClasses.total)}`, `Continue classes · ${watchedClasses.watched}/${watchedClasses.total}`)}</button>
           <span><HeartPulse size={14} />{day ? phaseName(day.phase) : t('তোমার পরিকল্পনা', 'your plan')}</span>
+          {dueCount > 0 && <span><ListChecks size={14} />{t('ফ্ল্যাশকার্ড রিভিশন', 'Flashcard revision')} <strong>{bn(dueCount)}</strong> {t('বাকি', 'due')}</span>}
+          {unresolvedMistakes > 0 && <span><NotebookPen size={14} fill="currentColor" />{t('অসমাধান ভুল', 'Mistakes pending')} <strong>{bn(unresolvedMistakes)}</strong> {t('বাকি', 'pending')}</span>}
         </div>
         <div className="hero-progress-wrap">
           <div className="hero-progress">

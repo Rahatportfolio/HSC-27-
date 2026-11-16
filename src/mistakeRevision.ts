@@ -1,6 +1,6 @@
 import { chapterById } from "./data";
 import type { CqEntry } from "./types";
-import type { AppData } from "./planner";
+import type { AppData, Mistake } from "./planner";
 import { addDays } from "./planner";
 import type { QuizQuestion } from "./types";
 import { LIMITS, newId, nowIso } from "./storage";
@@ -93,12 +93,16 @@ export function recordMcqAnswer(
       next = {
         ...next,
         mistakes: next.mistakes.map((m) =>
-          m.id === source ? { ...m, resolved: true } : m,
+          m.id === source ? { ...m, resolved: true, retryStatus: "mastered" } : m,
         ),
       };
     return next;
   }
-  const mistake = {
+  const mistake: Mistake = {
+    ...existing,
+    chapterId: question.chapterId,
+    category: existing?.category ?? "conceptual",
+    retryStatus: "pending",
     id: source,
     subject: question.subject,
     text: `${question.question} — সঠিক: ${question.options[question.answer]}${question.explanation ? ` · ${question.explanation}` : ""}`.slice(
@@ -135,6 +139,9 @@ export function recordCqEntry(data: AppData, entry: CqEntry): AppData {
         ...next.mistakes,
         {
           id: source,
+          chapterId: entry.chapterId,
+          category: "conceptual",
+          retryStatus: "pending",
           subject: entry.subject,
           text: `CQ: ${entry.question} — ${entry.marks}/${entry.total}. ${entry.note}`.slice(
             0,

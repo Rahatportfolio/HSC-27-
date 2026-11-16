@@ -25,6 +25,7 @@
     "@capacitor/local-notifications": "^8.3.1",
     "@fontsource/dm-sans": "^5.2.8",
     "@fontsource/hind-siliguri": "^5.2.8",
+    "jspdf": "^4.2.1",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"

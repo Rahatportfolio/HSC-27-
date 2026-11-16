@@ -21,7 +21,7 @@ describe('weekly backup nudge', () => {
 
   it('treats a note, a mistake or a finished revision as data too', () => {
     const withNote = freshData(); withNote.notes['2026-11-14'] = 'আজ ভেক্টর পড়লাম';
-    const withMistake = freshData(); withMistake.mistakes.push({ id: 'm1', subject: 'math', text: 'দিক ভুল', date: '2026-11-14', resolved: false });
+    const withMistake = freshData(); withMistake.mistakes.push({ id: 'm1', subject: 'math', text: 'দিক ভুল', date: '2026-11-14', category: 'careless', retryStatus: 'pending', resolved: false });
     const withRevision = freshData();
     withRevision.revisions.push({ id: 'r1', chapterId: 'physics-1-2', subject: 'physics', dueDate: '2026-11-15', interval: 1, createdAt: '2026-11-14T09:00:00Z', completedAt: '2026-11-15T09:00:00Z' });
     expect(hasStudyData(withNote)).toBe(true);
