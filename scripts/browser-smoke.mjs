@@ -93,6 +93,12 @@ try {
   await page.locator('.exam-history-row').first().waitFor();
   console.log('PASS exam simulator', simulated[0].score + '/' + simulated[0].total, 'saved and reloaded');
 
+  // Weakness detector reads the same stored answers.
+  await nav('দুর্বলতা');
+  await page.locator('.weakness-view').waitFor();
+  await page.locator('.weakness-stat-row').waitFor();
+  console.log('PASS weakness detector', await page.locator('.weakness-row').count(), 'flagged chapters');
+
   await nav('রিমাইন্ডার');
   await page.getByRole('switch').click();
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).settings.reminderEnabled === true, null, { timeout: 5000 });

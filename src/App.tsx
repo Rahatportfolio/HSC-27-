@@ -1,7 +1,7 @@
 import { integrateStudyPlan } from './smartSchedule';
 import StudySystem from './views/StudySystem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Download, FileText, FolderOpen, HardDrive, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
+import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, HardDrive, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
@@ -34,6 +34,7 @@ import TimerView from './views/Timer';
 import PracticeView from './views/Practice';
 import ExamsView from './views/Exams';
 import ExamSimView from './views/ExamSim';
+import WeaknessView from './views/Weakness';
 import AnalyticsView from './views/Analytics';
 import LibraryView from './views/Library';
 import RemindersView from './views/Reminders';
@@ -59,6 +60,7 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
     { id: 'flashcards' as const, label: 'ফ্ল্যাশকার্ড', labelEn: 'Flashcards', short: 'ফ্ল্যাশ', shortEn: 'Cards', icon: List },
     { id: 'revision' as const, label: 'স্মার্ট রিভিশন', labelEn: 'Smart revision', short: 'রিভিশন', shortEn: 'Revision', icon: RotateCcw },
     { id: 'examsim' as const, label: 'পরীক্ষা সিমুলেটর', labelEn: 'Exam simulator', short: 'সিমুলেটর', shortEn: 'Simulator', icon: ClipboardList },
+    { id: 'weakness' as const, label: 'দুর্বলতা ডিটেক্টর', labelEn: 'Weakness detector', short: 'দুর্বলতা', shortEn: 'Weak spots', icon: Crosshair },
     { id: 'exams' as const, label: 'পরীক্ষা ও GPA', labelEn: 'Exams & GPA', short: 'পরীক্ষা', shortEn: 'Exams', icon: ClipboardCheck },
     { id: 'timer' as const, label: 'স্টাডি টাইমার', labelEn: 'Study timer', short: 'টাইমার', shortEn: 'Timer', icon: Timer },
     { id: 'analytics' as const, label: 'অগ্রগতি ও বিশ্লেষণ', labelEn: 'Progress & analytics', short: 'প্রগতি', shortEn: 'Progress', icon: ChartNoAxesCombined },
@@ -529,7 +531,7 @@ export default function App() {
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
+  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');

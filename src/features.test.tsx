@@ -470,3 +470,28 @@ describe('wrong-question retry queue', () => {
     expect(item.date > todayKey()).toBe(true);
   });
 });
+
+describe('weakness detector screen', () => {
+  it('lists a chapter with low MCQ accuracy and explains the reason', async () => {
+    const { freshData, todayKey } = await import('./planner');
+    const data = freshData();
+    const chapter = CHAPTERS.find(item => item.priority === 'A')!;
+    const seedTheme = { id: 'weak-q', subject: chapter.subject, chapterId: chapter.id, question: 'দুর্বলতার প্রশ্ন', options: ['ক', 'খ', 'গ', 'ঘ'], answer: 0, explanation: 'ব্যাখ্যা', source: 'টেস্ট', createdAt: '2026-01-01T00:00:00.000Z' };
+    data.questions.push(seedTheme);
+    data.attempts.push(
+      { id: 'w1', questionId: 'weak-q', subject: chapter.subject, chosen: 3, correct: false, date: todayKey(), at: new Date().toISOString() },
+      { id: 'w2', questionId: 'weak-q', subject: chapter.subject, chosen: 3, correct: false, date: todayKey(), at: new Date().toISOString() },
+      { id: 'w3', questionId: 'weak-q', subject: chapter.subject, chosen: 3, correct: false, date: todayKey(), at: new Date().toISOString() },
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('weakness');
+    expect(await screen.findByText('সব দুর্বল অধ্যায়')).toBeTruthy();
+    const list = document.querySelector('.weakness-list')?.textContent || '';
+    expect(list).toContain(chapter.title);
+    expect(list).toContain('MCQ');
+    // The home dashboard nudges towards the same finding.
+    go('today');
+    expect(await screen.findByText(/অধ্যায়ে দুর্বলতা ধরা পড়েছে/)).toBeTruthy();
+  });
+});

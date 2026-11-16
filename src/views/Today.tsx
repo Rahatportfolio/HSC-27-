@@ -1,13 +1,14 @@
 import DailyGoals from '../components/DailyGoals';
 import { StudyOverview } from './StudySystem';
 import { learningDashboard } from '../learning';
+import { weaknessSummary } from '../weakness';
 import { classProgress } from '../classes';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   ArrowRight, ArrowUpRight, Bell, BellRing, BookOpen, CalendarDays, Check, CheckCheck, ChevronDown,
   ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, FolderOpen, HeartPulse, ListChecks, Minus,
-  NotebookPen, Pause, Play, Plus, RotateCcw, Sparkles, Timer, Trash2, Zap,
+  NotebookPen, Pause, Play, Plus, RotateCcw, ShieldAlert, Sparkles, Timer, Trash2, Zap,
 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { chapterById, subjectById, SUBJECTS } from '../data';
@@ -378,6 +379,7 @@ export default function TodayView() {
   );
 
   const learning = learningDashboard(data, plan);
+  const weakness = weaknessSummary(plan, data, today);
   const watchedClasses = classProgress(data);
   const prep = testPrepStats(data, plan, today);
   const dueCount = flashcardDueCount(data, today);
@@ -392,6 +394,18 @@ export default function TodayView() {
   const mcqPart = mcqAcc * 0.2;
   const examReadiness = Math.round(syllabusPart + mockPart + mcqPart);
   return <div className="view today-view"><StudyOverview /><DailyGoals key={today}/>
+    {weakness.total > 0 && <div className="home-weakness-alert" role="status">
+      <ShieldAlert size={20} />
+      <div>
+        <strong>{weakness.dueRetries > 0
+          ? t(`${bn(weakness.dueRetries)}টি ভুল প্রশ্ন ফেরত পাওয়ার অপেক্ষায়`, `${weakness.dueRetries} wrong question(s) waiting for a retry`)
+          : t(`${bn(weakness.total)}টি অধ্যায়ে দুর্বলতা ধরা পড়েছে`, `${weakness.total} chapter(s) flagged as weak`)}</strong>
+        <span>{weakness.focus[0]
+          ? t(`আজ আগে: ${chapterById[weakness.focus[0].chapterId]?.title || ''}`, `Start with: ${chapterById[weakness.focus[0].chapterId]?.title || ''}`)
+          : t('বিশ্লেষণে দেখো কোন অধ্যায়ে নম্বর কমছে।', 'See which chapters are losing marks.')}</span>
+      </div>
+      <button className="button secondary small" onClick={() => navigate('weakness')}>{t('দুর্বলতা দেখো', 'Open weak spots')}<ChevronRight size={15} /></button>
+    </div>}
     <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
       <ProgressBar value={learning.overall.percent} />
