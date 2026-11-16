@@ -204,7 +204,7 @@ export const DEPTH_QUESTIONS: QuizQuestion[] = [
   q('bangla', 'bangla-1-পদ-য-২', '“সোনার তরী” কাব্যগ্রন্থের কবি—', ['রবীন্দ্রনাথ ঠাকুর', 'জীবনানন্দ দাশ', 'সত্যেন্দ্রনাথ দত্ত', 'অমিয় চক্রবর্তী'], 0, 'রবীন্দ্রনাথ ঠাকুর—“সোনার তরী” তাঁর বিখ্যাত কাব্যগ্রন্থ।'),
   q('bangla', 'bangla-1-পদ-য-২', '“আমি কিংবদন্তির কথা বলছি”-এর কবি—', ['আবু জাফর ওবায়দুল্লাহ', 'শামসুর রাহমান', 'আল মাহমুদ', 'সুকান্ত ভট্টাচার্য'], 0, 'আবু জাফর ওবায়দুল্লাহ; কবিতাটি বাঙালির স্বকীয়তা নিয়ে।'),
   q('bangla', 'bangla-1-পদ-য-২', '“ফেব্রুয়ারি ১৯৬৯” কবিতার কবি—', ['শামসুর রাহমান', 'আল মাহমুদ', 'নিরেন্দ্রনাথ চক্রবর্তী', 'জীবনানন্দ দাশ'], 0, 'শামসুর রাহমান—ঊনসত্তরের গণআন্দোলনের শহিদদের নিয়ে লেখা।'),
-  q('bangla', 'bangla-1-পদ-য-২', '“লালসালু” উপন্যাসের রচয়িতা—', ['সৈয়দ ওয়ালীউল্লাহ', 'জহির রায়হান', 'শওকত ওসমান', 'আনোয়ার পাশা'], 0, 'সৈয়দ ওয়ালীউল্লাহ—ধর্মান্ধতা ও শোষণের চিত্র।'),
+  q('bangla', 'bangla-1-পদ-য-২', '“ফেব্রুয়ারি ১৯৬৯” কবিতার পটভূমি যে ঘটনা—', ['ভাষা আন্দোলন', 'পলাশীর যুদ্ধ', 'সিপাহি বিদ্রোহ', 'দেশভাগ'], 0, 'শামসুর রাহমানের এই কবিতা একুশে ফেব্রুয়ারির স্মৃতি ও ভাষার দাবিকে ধারণ করে।'),
   q('bangla', 'bangla-1-পদ-য-২', '“সর্জনী” কে?', ['রবীন্দ্রনাথ ঠাকুর', 'জীবনানন্দ', 'নজরুল', 'জসীম উদ্‌দীন'], 0, '“সর্জনী” রবীন্দ্রনাথ ঠাকুরের রচনা; নাট্যরূপেও বিখ্যাত।'),
   q('bangla', 'bangla-1-পদ-য-২', '“বাংলা ভাষার জন্ম” বিষয়ে ভাষা-আন্দোলনের প্রথম সফল ধাপ—', ['১৯৫২ সালের ২১শে ফেব্রুয়ারি', '১৯৪৮', '১৯৭১', '১৫৪০'], 0, '২১ ফেব্রুয়ারি ১৯৫২-র ভাষা শহিদদের আত্মদানে বাংলা রাষ্ট্রভাষার স্বীকৃতি আসে।'),
 
@@ -228,7 +228,7 @@ export const DEPTH_QUESTIONS: QuizQuestion[] = [
   q('bangla', 'bangla-2-ন-র-ম-ত-৩', 'প্রবন্ধের প্রধান গুণ—', ['ভাবের সংহতি ও সুসংগঠিত যুক্তি', 'শুধু দীর্ঘতা', 'শুধু কবিতার মতো', 'শুধু উদ্ধৃতি'], 0, 'প্রবন্ধে একটি কেন্দ্রীয় ভাব ধরে সুসংগঠিতভাবে যুক্তি সাজাতে হয়।'),
 
   // ---------------- English ----------------
-  q('english', 'english-1-Writing-1', 'The topic sentence of a paragraph—', ['states the main idea', 'gives the last example', 'lists references', 'is the longest sentence'], 0, 'It announces what the paragraph proves, usually first.'),
+  q('english', 'english-1-Writing-1', 'Supporting sentences in a paragraph should—', ['explain or prove the topic sentence', 'introduce a second topic', 'repeat the title word for word', 'be as long as possible'], 0, 'Everything after the topic sentence exists to back it up; a new topic needs a new paragraph.'),
   q('english', 'english-1-Writing-1', 'Coherence in a paragraph means—', ['ideas are linked logically', 'words are long', 'every sentence rhymes', 'each sentence is short'], 0, 'Coherence keeps the reader able to follow one point to the next.'),
   q('english', 'english-1-Writing-1', 'A description should mainly use—', ['sensory details', 'statistics only', 'long definitions', 'direct speech only'], 0, 'Describing a place or person works through what can be seen, heard and felt.'),
   q('english', 'english-1-Writing-1', 'Which sentence is a good opener?', ['Clean water is still out of reach for millions.', 'Because.', 'Water water water.', 'In conclusion, water.'], 0, 'A clear, specific statement sets up the paragraph; fragments do not.'),
@@ -238,7 +238,7 @@ export const DEPTH_QUESTIONS: QuizQuestion[] = [
   q('english', 'english-1-Writing-2', 'An email subject line should be—', ['short and specific', 'a full paragraph', 'blank', 'only punctuation'], 0, 'A specific subject tells the reader at once what the message needs.'),
   q('english', 'english-1-Writing-2', 'In a letter of complaint, the tone should be—', ['polite but firm', 'angry and abusive', 'joking', 'apologetic only'], 0, 'State the problem and the remedy clearly; politeness keeps the reader on your side.'),
   q('english', 'english-1-Writing-2', '“Dear Sir or Madam” is used when—', ['the name is unknown', 'writing to a friend', 'writing a diary', 'the letter is informal'], 0, 'Use it for unknown recipients, then close with "Yours faithfully".'),
-  q('english', 'english-1-Writing-2', 'An email to a teacher should open with—', ['a clear greeting and purpose', 'slang', 'no greeting', 'only emojis'], 0, 'Respectful greeting plus the reason for writing in the first line.'),
+  q('english', 'english-1-Writing-2', 'An application for leave must state—', ['the reason and the exact dates', 'only the sender’s name', 'the school’s history', 'the marks obtained'], 0, 'The authority needs both why and when, otherwise the leave cannot be granted.'),
 
   q('english', 'english-1-Writing-3', 'When describing a graph, you should—', ['describe the overall trend, then details', 'list every number', 'guess missing data', 'ignore the axes'], 0, 'Trend first, then specific examples that support it.'),
   q('english', 'english-1-Writing-3', '“The figure rose sharply” means—', ['a steep increase', 'a small fall', 'no change', 'a straight line'], 0, '"Sharply" signals a big, fast change; "gradually" would mean slow.'),

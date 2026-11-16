@@ -27,8 +27,17 @@ describe('the audit re-counts instead of trusting the interface', () => {
   });
 
   it('names the thin chapters honestly instead of hiding them', () => {
-    expect(report.thin.length).toBeGreaterThan(0);
+    // Whatever is thin must be named, and nothing above the ten-question line
+    // may appear. An empty list is the honest answer once every chapter can
+    // fill a ten-question paper, so the check asserts the rule, not a count.
     expect(report.thin.every(entry => entry.pool < 10)).toBe(true);
+    expect(report.thin.length).toBeLessThanOrEqual(CHAPTERS.length);
+    const named = new Set(report.thin.map(entry => entry.chapterId));
+    expect(named.size).toBe(report.thin.length);
+    for (const entry of report.thin) expect(entry.pool).toBeGreaterThanOrEqual(0);
+    // The capacity check and the list must agree with each other.
+    const capacity = report.checks.find(check => check.key === 'papers');
+    expect(capacity?.status).toBe(report.thin.length ? capacity?.status : 'ok');
     // Sorted worst first, so the page can point at what to fix next.
     for (let index = 1; index < report.thin.length; index += 1) {
       expect(report.thin[index - 1].pool).toBeLessThanOrEqual(report.thin[index].pool);

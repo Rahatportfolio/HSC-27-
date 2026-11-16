@@ -140,6 +140,17 @@ try {
   await page.locator('.exam-mode-tabs button').filter({ hasText: 'অধ্যায়' }).click();
   console.log('PASS depth pass: chapter mode ready for a full paper');
 
+  // Ten-question pass: every chapter must be able to fill a ten-question chapter
+  // paper, and the audit page must list no thin chapter at all.
+  const chapterOptions = await page.locator('.exam-chapter-list button, .exam-setup-card select option').count();
+  assert.ok(chapterOptions > 0, 'no chapter choice rendered');
+  await nav('অডিট');
+  await page.locator('.audit-view').waitFor();
+  assert.equal(await page.locator('.audit-thin-row').count(), 0, 'a chapter still cannot fill ten questions');
+  const paperCheck = await page.locator('.audit-check').filter({ hasText: '১০ প্রশ্নের কাগজ' }).innerText();
+  assert.ok(/১১৪\s*\/\s*১১৪/.test(paperCheck.replace(/\u09F7/g, '/')), `paper capacity not full: ${paperCheck}`);
+  console.log('PASS ten-question pass: all chapters fill a full paper');
+
   // Self audit: the page must re-count the bank and state its own limits.
   await nav('অডিট');
   await page.locator('.audit-view').waitFor();

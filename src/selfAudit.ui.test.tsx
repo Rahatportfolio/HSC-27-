@@ -50,13 +50,20 @@ it('states the limits instead of pretending there are none', async () => {
   expect(screen.getByText(/কোনো সার্ভার বা অ্যাকাউন্ট নেই/)).toBeTruthy();
 });
 
-it('lists the chapters that cannot fill a ten-question paper yet', async () => {
+it('shows the thin-chapter list only when some chapter really is thin', async () => {
   render(<App />);
   await screen.findByText(/এগিয়ে যাই/);
   await go('অডিট');
-  await screen.findByRole('heading', { name: /যেসব অধ্যায়ে এখনো ১০ প্রশ্ন হয় না/ });
+  await screen.findByRole('heading', { name: /প্রতিটি সংখ্যা আবার গোনা হয়েছে/ });
+  // The rule, not the old count: the section exists exactly when the audit
+  // names a chapter under the ten-question line, and never above 24 rows.
+  const thinHeading = screen.queryByRole('heading', { name: /যেসব অধ্যায়ে এখনো ১০ প্রশ্ন হয় না/ });
   const rows = document.querySelectorAll('.audit-thin-row').length;
-  expect(rows).toBeGreaterThan(0);
+  if (thinHeading) {
+    expect(rows).toBeGreaterThan(0);
+  } else {
+    expect(rows).toBe(0);
+  }
   expect(rows).toBeLessThanOrEqual(24);
 });
 

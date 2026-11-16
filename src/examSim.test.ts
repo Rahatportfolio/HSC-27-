@@ -246,16 +246,21 @@ describe('history statistics', () => {
 });
 
 describe('paper capacity is reported before the start', () => {
-  it('says a thin chapter cannot fill a ten-question paper', () => {
+  it('reports the real capacity instead of promising a full paper', () => {
     const data = freshData();
-    // Pick a chapter that really is thin, rather than assuming one is.
-    const thin = CHAPTERS.map(chapter => ({ chapter, capacity: paperCapacity(data, { mode: 'chapter', chapterId: chapter.id, count: 10 }) }))
-      .filter(entry => entry.capacity.available > 0 && entry.capacity.available < 5)[0];
-    expect(thin).toBeDefined();
-    const capacity = paperCapacity(data, { mode: 'chapter', chapterId: thin.chapter.id, count: 10 });
-    expect(capacity.requested).toBe(10);
-    expect(capacity.actual).toBe(capacity.available);
-    expect(capacity.short).toBe(capacity.available < 10);
+    // The rule under test, not a particular chapter: whatever the pool holds,
+    // the paper must never promise more than that and must flag the shortfall.
+    for (const chapter of CHAPTERS) {
+      const capacity = paperCapacity(data, { mode: 'chapter', chapterId: chapter.id, count: 10 });
+      expect(capacity.requested).toBe(10);
+      expect(capacity.actual).toBe(Math.min(capacity.available, 10));
+      expect(capacity.actual).toBeLessThanOrEqual(capacity.available);
+      expect(capacity.short).toBe(capacity.available < 10);
+    }
+    // And every chapter can now fill the ten questions it is asked for.
+    for (const chapter of CHAPTERS) {
+      expect(paperCapacity(data, { mode: 'chapter', chapterId: chapter.id, count: 10 }).available).toBeGreaterThanOrEqual(10);
+    }
   });
 
   it('never promises more questions than the pool holds', () => {

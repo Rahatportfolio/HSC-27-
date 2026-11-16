@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS, chapterById } from './data';
 import { DEPTH_QUESTIONS, DEPTH_QUESTIONS_2 } from './quiz-depth';
+import { DEPTH_QUESTIONS_3 } from './quiz-depth-2';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { examPool } from './examSim';
 import { freshData } from './planner';
 
-const depth = [...DEPTH_QUESTIONS, ...DEPTH_QUESTIONS_2];
+const depth = [...DEPTH_QUESTIONS, ...DEPTH_QUESTIONS_2, ...DEPTH_QUESTIONS_3];
 const chapterIds = new Set(CHAPTERS.map(chapter => chapter.id));
 
 describe('the depth pass adds questions, not padding', () => {
@@ -49,7 +50,9 @@ describe('the depth pass adds questions, not padding', () => {
   it('uses its own id range so stored attempts never collide', () => {
     const ids = depth.map(question => question.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.every(id => id.startsWith('deep-'))).toBe(true);
+    // Two append-only ranges: deep- from the first two passes, more- from the
+    // ten-question pass. Neither may reuse the seed- ids already in storage.
+    expect(ids.every(id => id.startsWith('deep-') || id.startsWith('more-'))).toBe(true);
     expect(new Set(STARTER_QUESTIONS.map(question => question.id)).size).toBe(STARTER_QUESTIONS.length);
   });
 
@@ -79,5 +82,40 @@ describe('what the depth pass actually changed', () => {
     const aChapters = CHAPTERS.filter(chapter => chapter.priority === 'A');
     const thinA = aChapters.filter(chapter => poolSize(chapter.id) < 5);
     expect(thinA).toEqual([]);
+  });
+});
+
+describe('the ten-question pass', () => {
+  const perChapter = new Map<string, number>();
+  for (const question of STARTER_QUESTIONS) {
+    if (!question.chapterId) continue;
+    perChapter.set(question.chapterId, (perChapter.get(question.chapterId) ?? 0) + 1);
+  }
+
+  it('leaves no chapter holding fewer than ten questions of its own', () => {
+    const short = CHAPTERS.filter(chapter => (perChapter.get(chapter.id) ?? 0) < 10)
+      .map(chapter => `${chapter.id} (${perChapter.get(chapter.id) ?? 0})`);
+    expect(short).toEqual([]);
+  });
+
+  it('keeps the A-priority chapters at the same ten-question floor', () => {
+    const shortA = CHAPTERS.filter(chapter => chapter.priority === 'A' && (perChapter.get(chapter.id) ?? 0) < 10);
+    expect(shortA.map(chapter => chapter.id)).toEqual([]);
+  });
+
+  it('adds the ten-question pass in its own append-only id range', () => {
+    const ids = DEPTH_QUESTIONS_3.map(question => question.id);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids.every(id => id.startsWith('more-'))).toBe(true);
+    expect(DEPTH_QUESTIONS_3.every(question => question.bank === true)).toBe(true);
+    expect(DEPTH_QUESTIONS_3.length).toBeGreaterThan(0);
+  });
+
+  it('never states a ten-question paper short of ten anywhere in the audit', () => {
+    const data = freshData();
+    for (const chapter of CHAPTERS) {
+      const available = examPool(data, { mode: 'chapter', chapterId: chapter.id, generate: true, count: 50 } as never).length;
+      expect(available, chapter.id).toBeGreaterThanOrEqual(10);
+    }
   });
 });

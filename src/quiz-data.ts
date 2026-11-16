@@ -2,6 +2,7 @@ import type { SubjectId } from './data';
 import type { QuizQuestion } from './types';
 import { BANK_QUESTIONS } from './quiz-bank';
 import { DEPTH_QUESTIONS, DEPTH_QUESTIONS_2 } from './quiz-depth';
+import { DEPTH_QUESTIONS_3 } from './quiz-depth-2';
 
 const SEED_AT = '2026-01-01T00:00:00.000Z';
 let seedIndex = 0;
@@ -82,7 +83,7 @@ const BASE_QUESTIONS: QuizQuestion[] = [
 ];
 
 /** The full starter bank: the original sample plus the chapter-by-chapter additions. */
-export const STARTER_QUESTIONS: QuizQuestion[] = [...BASE_QUESTIONS, ...BANK_QUESTIONS, ...DEPTH_QUESTIONS, ...DEPTH_QUESTIONS_2];
+export const STARTER_QUESTIONS: QuizQuestion[] = [...BASE_QUESTIONS, ...BANK_QUESTIONS, ...DEPTH_QUESTIONS, ...DEPTH_QUESTIONS_2, ...DEPTH_QUESTIONS_3];
 
 export interface BuiltinFormula {
   id: string;
