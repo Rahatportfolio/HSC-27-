@@ -2,19 +2,43 @@ import { useEffect, useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   Bookmark, Check, ChevronRight, ExternalLink, Filter, Play, Search, ShieldCheck,
-  Youtube, ListVideo, BarChart3,
+  Youtube, ListVideo, BarChart3, Clock3, HardDrive,
 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { bn, percent } from '../planner';
+import { bn, formatDurationBn, percent } from '../planner';
 import { toggleClassWatched } from '../classes';
-import { EmptyState, Modal, PageHeading } from '../components';
+import { EmptyState, Modal, PageHeading, ProgressBar } from '../components';
 import { t } from '../i18n';
 import {
   CLASS_CATALOG, CLASS_TYPES, TEACHERS, classTypeCounts, classTypeLabel, filterClasses,
 } from '../videoCatalog';
 import type { ClassFilters, ClassResource, ClassType } from '../videoCatalog';
+
+const SPEEDS: number[] = [0.5, 0.75, 1, 1.25, 1.5, 2];
+
+function speedKey(resource: ClassResource): string {
+  return `hsc27-player-speed-${resource.id}`;
+}
+
+function getSpeed(resource: ClassResource): number {
+  try {
+    const raw = localStorage.getItem(speedKey(resource));
+    const value = raw ? Number(raw) : 1;
+    return SPEEDS.includes(value) ? value : 1;
+  } catch { return 1; }
+}
+
+function setSpeed(resource: ClassResource, value: number): void {
+  try { localStorage.setItem(speedKey(resource), String(value)); } catch { /* storage may be full */ }
+}
+
+function sizeLabel(bytes?: number): string {
+  if (!bytes) return '';
+  if (bytes < 1024 * 1024) return bn(Math.round(bytes / 1024)) + ' KB';
+  return bn(Math.round(bytes / (1024 * 1024))) + ' MB';
+}
 
 function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: () => void }) {
   const { data, setData, notify, openChapter } = usePlanner();
@@ -41,7 +65,16 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
         <span>{subjectById[resource.subject].name} · {t('পত্র', 'Paper')} {bn(resource.paper)}</span>
         <span>{resource.channel}</span>
         {chapter && <span>{chapter.title}</span>}
+        {resource.durationSec && <span className="meta-chip"><Clock3 size={13} />{formatDurationBn(resource.durationSec)}</span>}
+        {resource.downloaded && resource.fileSizeBytes && <span className="meta-chip"><HardDrive size={13} />{sizeLabel(resource.fileSizeBytes)}</span>}
+        {resource.downloaded && <span className="meta-chip saved">{t('ডিভাইসে সেভ করা', 'Saved on device')}</span>}
       </div>
+      {resource.watchedPercent > 0 && (
+        <div className="video-progress-strip">
+          <span>{t('আগের অবস্থানে ফিরে যাও', 'Resume')} {bn(resource.watchedPercent)}%</span>
+          <ProgressBar value={resource.watchedPercent} />
+        </div>
+      )}
 
       {canEmbed && !embedFailed ? (
         <div className="video-embed-wrap">
@@ -78,6 +111,7 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
         <button className={`button secondary ${bookmarked ? 'selected' : ''}`} aria-pressed={bookmarked} onClick={toggleBookmark}>
           <Bookmark size={15} fill={bookmarked ? 'currentColor' : 'none'} />{bookmarked ? t('বুকমার্ক করা', 'Bookmarked') : t('বুকমার্ক', 'Bookmark')}
         </button>
+        <div className="speed-chip-group"><strong style={{ fontSize: 12 }}>{t('গতি', 'Speed')}</strong>{SPEEDS.map(speed => <button key={speed} type="button" className={`speed-chip ${getSpeed(resource) === speed ? 'active' : ''}`} onClick={() => { setSpeed(resource, speed); notify(`×${speed}`); }}>{bn(speed)}×</button>)}</div>
         <button
           className={`button secondary ${watched ? 'selected' : ''}`}
           aria-pressed={watched}
@@ -285,6 +319,12 @@ export default function VideosView() {
                         </div>
                         <h3>{item.title}</h3>
                         <p className="video-card-channel">{item.channel}</p>
+                        <div className="video-card-meta">
+                          {item.durationSec && <span className="meta-chip"><Clock3 size={13} />{formatDurationBn(item.durationSec)}</span>}
+                          {item.downloaded && item.fileSizeBytes && <span className="meta-chip"><HardDrive size={13} />{sizeLabel(item.fileSizeBytes)}</span>}
+                          {item.downloaded && <span className="meta-chip saved">{t('ডাউনলোড করা', 'Downloaded')}</span>}
+                          {item.watchedPercent && <span className="meta-chip"><span style={{ width: '34px', height: '8px', background: '#e5e7eb', borderRadius: '4px', display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} /><span style={{ width: `${Math.min(100, item.watchedPercent)}%`, height: '8px', background: '#15803d', borderRadius: '4px', display: 'inline-block', verticalAlign: 'middle' }} />{bn(item.watchedPercent)}%</span>}
+                        </div>
                         <div className="video-card-actions">
                           <button className="button primary small" onClick={() => setPlaying(item)}>
                             <Play size={14} fill="currentColor" />{item.kind === 'search' ? t('সার্চ খোলো', 'Open search') : t('চালাও', 'Play')}

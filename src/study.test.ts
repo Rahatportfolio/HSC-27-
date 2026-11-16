@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS } from './data';
 import { buildPlan, freshData } from './planner';
-import { addBacklogToToday, addCarryover, addStudySession, autoCarryover, chapterMeta, deleteStudySession, pendingCarryovers, toggleCarryover, updateChapterMeta } from './study';
+import { addBacklogToToday, addCarryover, addStudySession, autoCarryover, chapterMeta, deleteStudySession, mistakesByCategory, pendingCarryovers, toggleCarryover, unresolvedMistakeCount, updateChapterMeta } from './study';
 
 const plan = buildPlan();
 const firstTask = plan[0].tasks[0];
@@ -76,5 +76,29 @@ describe('completion synchronization', () => {
     data = setTaskCompletion(data, [firstTask.id], false);
     expect(data.carryovers.every(item => !item.completedAt)).toBe(true);
     expect(pendingCarryovers(data)).toHaveLength(1);
+  });
+});
+
+describe('mistake categories', () => {
+  const push = (data: ReturnType<typeof freshData>, category: string) => {
+    data.mistakes.push({ id: `m${data.mistakes.length}`, subject: 'physics', text: 'ভুল', date: '2026-11-14', category: category as any, retryStatus: 'pending', resolved: false });
+    return data;
+  };
+  it('groups unresolved mistakes by category', () => {
+    let data = freshData();
+    data = push(data, 'conceptual'); data = push(data, 'conceptual'); data = push(data, 'calculation');
+    data.mistakes[0].resolved = true;
+    const grouped = mistakesByCategory(data);
+    expect(grouped.conceptual).toHaveLength(1);
+    expect(grouped.calculation).toHaveLength(1);
+    expect(grouped.memory).toHaveLength(0);
+  });
+  it('counts unresolved mistakes overall and per category', () => {
+    let data = freshData();
+    data = push(data, 'careless'); data = push(data, 'careless');
+    data.mistakes[0].resolved = true;
+    expect(unresolvedMistakeCount(data)).toBe(1);
+    expect(unresolvedMistakeCount(data, 'careless')).toBe(1);
+    expect(unresolvedMistakeCount(data, 'conceptual')).toBe(0);
   });
 });

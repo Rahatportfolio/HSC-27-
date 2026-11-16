@@ -63,6 +63,15 @@ export interface ClassResource {
   lastVerified: string;
   /** In-app playback URL when the resource can be embedded; absent for channel searches. */
   embedUrl?: string;
+  /** Tracked locally for downloaded/imported class copies. */
+  durationSec?: number;
+  fileSizeBytes?: number;
+  downloaded: boolean;
+  localPath?: string;
+  watchedPositionSec: number;
+  watchedPercent: number;
+  playbackSpeed: 0.5 | 0.75 | 1 | 1.25 | 1.5 | 2;
+  completed: boolean;
 }
 
 /** Parses YouTube watch/playlist URLs into embeddable ids (null when unsupported). */
@@ -126,27 +135,37 @@ function buildCatalog(): ClassResource[] {
           language: 'bn',
           status: kind === 'search' ? 'search' : 'verified',
           lastVerified: CATALOG_LAST_VERIFIED,
+          downloaded: false,
+          watchedPositionSec: 0,
+          watchedPercent: 0,
+          playbackSpeed: 1,
+          completed: false,
           ...(embedUrl ? { embedUrl } : {}),
         });
       }
     }
     for (const lesson of BANGLA_LESSONS[chapterId] || []) {
       if (!lesson.url) continue;
-      out.push({
-        id: `lesson:${chapterId}:${lesson.title}`,
-        title: `${lesson.title} · ${classTypeLabel('full')}`,
-        channel: lesson.channel || 'সাকিব স্যার',
-        url: lesson.url,
-        kind: 'video',
-        classType: 'full',
-        chapterId,
-        subject: chapter.subject,
-        paper: chapter.paper,
-        language: 'bn',
-        status: 'verified',
-        lastVerified: CATALOG_LAST_VERIFIED,
-        ...(embedUrlFor(lesson.url) ? { embedUrl: embedUrlFor(lesson.url)! } : {}),
-      });
+        out.push({
+          id: `lesson:${chapterId}:${lesson.title}`,
+          title: `${lesson.title} · ${classTypeLabel('full')}`,
+          channel: lesson.channel || 'সাকিব স্যার',
+          url: lesson.url,
+          kind: 'video',
+          classType: 'full',
+          chapterId,
+          subject: chapter.subject,
+          paper: chapter.paper,
+          language: 'bn',
+          status: 'verified',
+          lastVerified: CATALOG_LAST_VERIFIED,
+          downloaded: false,
+          watchedPositionSec: 0,
+          watchedPercent: 0,
+          playbackSpeed: 1,
+          completed: false,
+          ...(embedUrlFor(lesson.url) ? { embedUrl: embedUrlFor(lesson.url)! } : {}),
+        });
     }
   }
   return out;

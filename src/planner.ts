@@ -4,7 +4,8 @@ import type { Chapter, SubjectId } from './data';
 import type {
   BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
   ImportantDate, PersonalNote, PdfResource, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
-  SettingsExtras, StudySession, SubjectMarks, TaskEdit, TestRecord, VideoLink,
+  SettingsExtras, StudySession, SubjectMarks, TaskEdit, TestRecord, VideoLink, Flashcard,
+  ScannedNoteMeta,
 } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
@@ -85,7 +86,9 @@ export interface Phase {
 }
 
 export interface ExamResult { score: number; total: number; at: string; mistakes: string }
-export interface Mistake { id: string; subject: SubjectId; text: string; date: string; resolved: boolean }
+export type MistakeCategory = 'conceptual' | 'calculation' | 'memory' | 'misunderstood' | 'careless';
+export type MistakeRetry = 'pending' | 'retried' | 'mastered';
+export interface Mistake { id: string; subject: SubjectId; chapterId?: string; text: string; correctAnswer?: string; userAnswer?: string; date: string; category: MistakeCategory; retryStatus: MistakeRetry; resolved: boolean }
 
 export interface AppData {
   version: 2;
@@ -95,6 +98,7 @@ export interface AppData {
   notes: Record<string, string>;
   exams: Record<string, ExamResult>;
   mistakes: Mistake[];
+  flashcards: Flashcard[];
   focus: { minutes: number; sessions: number };
   studySessions: StudySession[];
   revisions: RevisionItem[];
@@ -131,6 +135,8 @@ export interface AppData {
   taskEdits: Record<string, TaskEdit>;
   /** Task ids the student deleted from the schedule. */
   removedTasks: string[];
+  /** Scanned handwritten notes metadata (page images stored in IndexedDB). */
+  scannedNotes: ScannedNoteMeta[];
 }
 
 export const freshData = (): AppData => ({
@@ -141,6 +147,7 @@ export const freshData = (): AppData => ({
   notes: {},
   exams: {},
   mistakes: [],
+  flashcards: [],
   focus: { minutes: 0, sessions: 0 },
   studySessions: [],
   revisions: [],
@@ -168,6 +175,7 @@ export const freshData = (): AppData => ({
   lockedDates: [],
   taskEdits: {},
   removedTasks: [],
+  scannedNotes: [],
 });
 
 /** Effective net daily study hours for a date, accounting for next-month boost and per-day custom override. */

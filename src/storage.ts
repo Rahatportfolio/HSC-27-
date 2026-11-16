@@ -2,7 +2,7 @@ import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
-import type { CqParts, DayScheduleOverride, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind } from './types';
+import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta } from './types';
 import { PDF_MATERIAL_IDS } from './pdfCatalog';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -36,6 +36,9 @@ export const LIMITS = {
   libraryNotes: 1000, videos: 1000, boardQuestions: 2000, formulas: 1000, carryovers: 2000, badges: 100, routineBlocks: 500, importantDates: 200,
   classWatched: 1000,
   classBookmarks: 2000,
+  flashcards: 5000,
+  flashcardReviews: 20000,
+  scannedNotes: 200,
   pdfs: 500, pdfBookmarks: 500, pdfRecent: 30, lockedDates: 1500, taskEdits: 4000, removedTasks: 4000,
 };
 
@@ -155,9 +158,14 @@ export function parseBackup(rawText: string): AppData {
       put(result.exams, id, { score: exam.score, total: exam.total, at: exam.at, mistakes: exam.mistakes });
     }
   }
+  const mistakeCategories = new Set<MistakeCategory>(['conceptual', 'calculation', 'memory', 'misunderstood', 'careless']);
+  const mistakeRetries = new Set<MistakeRetry>(['pending', 'retried', 'mastered']);
   result.mistakes = listOf(raw.mistakes, MISTAKE_LIMIT, 'ভুলের খাতা', item => {
-    if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !nonEmpty(item.text, 5000) || !text(item.date, 10) || !isValidDate(item.date) || !bool(item.resolved)) throw new Error('ভুলের খাতার তথ্য সঠিক নয়।');
-    return { id: item.id, subject: item.subject, text: item.text, date: item.date, resolved: item.resolved };
+    if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !nonEmpty(item.text, 5000) || !optionalChapter(item.chapterId) || !text(item.date, 10) || !isValidDate(item.date) || !bool(item.resolved)) throw new Error('ভুলের খাতার তথ্য সঠিক নয়।');
+    if (item.chapterId && chapterById[item.chapterId].subject !== item.subject) throw new Error('ভুলের অধ্যায় ও বিষয় মিলছে না।');
+    const category = mistakeCategories.has(item.category as MistakeCategory) ? (item.category as MistakeCategory) : 'careless';
+    const retryStatus = mistakeRetries.has(item.retryStatus as MistakeRetry) ? (item.retryStatus as MistakeRetry) : 'pending';
+    return { id: item.id, subject: item.subject, chapterId: item.chapterId, text: item.text, correctAnswer: optionalText(item.correctAnswer, 5000, 'সঠিক উত্তর সঠিক নয়।'), userAnswer: optionalText(item.userAnswer, 5000, 'আপনার উত্তর সঠিক নয়।'), date: item.date, category, retryStatus, resolved: item.resolved };
   });
   if (new Set(result.mistakes.map(m => m.id)).size !== result.mistakes.length) throw new Error('ভুলের খাতায় একই ID দুইবার আছে।');
   if (raw.focus !== undefined) {
@@ -227,8 +235,24 @@ export function parseBackup(rawText: string): AppData {
   });
 
   result.videos = listOf(raw.videos, LIMITS.videos, 'ভিডিও লাইব্রেরি', item => {
-    if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.title, 300) || !nonEmpty(item.url, 2000) || !/^https?:\/\//i.test(item.url) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !bool(item.watched) || !bool(item.favorite) || !validAt(item.createdAt)) throw new Error('ভিডিও লাইব্রেরির তথ্য সঠিক নয়।');
-    return { id: item.id, title: item.title, url: item.url, subject: item.subject, chapterId: item.chapterId, channel: optionalText(item.channel, 120, 'চ্যানেলের নাম সঠিক নয়।'), watched: item.watched, favorite: item.favorite, createdAt: item.createdAt };
+    if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.title, 300) || !nonEmpty(item.url, 2000) || !/^https?:\/\//i.test(item.url) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !bool(item.watched) || !bool(item.favorite) || !bool(item.downloaded) || !bool(item.completed) || !validAt(item.createdAt)) throw new Error('ভিডিও লাইব্রেরির তথ্য সঠিক নয়।');
+    const playbackSpeeds = new Set([0.5, 0.75, 1, 1.25, 1.5, 2]);
+    if ((item.durationSec !== undefined && !int(Number(item.durationSec), 0, 86400)) || (item.fileSizeBytes !== undefined && !int(Number(item.fileSizeBytes), 0, 2_000_000_000)) || (item.watchedPositionSec !== undefined && !int(Number(item.watchedPositionSec), 0, 86400)) || (item.watchedPercent !== undefined && !num(item.watchedPercent, 0, 100)) || !playbackSpeeds.has((item.playbackSpeed ?? 1) as number)) throw new Error('ভিডিও ট্র্যাকিং তথ্য সঠিক নয়।');
+    if (item.sourceUrl !== undefined && (typeof item.sourceUrl !== 'string' || !/^https?:\/\//i.test(item.sourceUrl))) throw new Error('ভিডিও সোর্স লিংক সঠিক নয়।');
+    return {
+      id: item.id, title: item.title, url: item.url, subject: item.subject,
+      ...(item.sourceUrl ? { sourceUrl: item.sourceUrl } : {}),
+      ...(item.chapterId !== undefined ? { chapterId: item.chapterId } : {}),
+      ...(typeof item.channel === 'string' ? { channel: item.channel } : {}),
+      watched: item.watched, favorite: item.favorite, downloaded: item.downloaded,
+      ...(typeof item.localPath === 'string' ? { localPath: item.localPath } : {}),
+      watchedPositionSec: Number(item.watchedPositionSec ?? 0),
+      watchedPercent: Number(item.watchedPercent ?? 0),
+      playbackSpeed: item.playbackSpeed ?? 1,
+      completed: item.completed,
+      ...(item.attachments ? { attachments: item.attachments } : {}),
+      createdAt: item.createdAt,
+    } as VideoLink;
   });
 
   result.boardQuestions = listOf(raw.boardQuestions, LIMITS.boardQuestions, 'বোর্ড প্রশ্ন', item => {
@@ -245,6 +269,20 @@ export function parseBackup(rawText: string): AppData {
     if (!nonEmpty(value, 200)) throw new Error('সূত্রের প্রিয় তালিকা সঠিক নয়।');
     return value;
   });
+
+  const flashcardCategories = new Set<FlashcardCategory>(['formula', 'definition', 'reaction', 'terminology', 'identity', 'vocabulary', 'other']);
+  if (raw.flashcards !== undefined) {
+    result.flashcards = listOf(raw.flashcards, LIMITS.flashcards, 'ফ্ল্যাশকার্ড', item => {
+      if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.front, 2000) || !nonEmpty(item.back, 5000) || !flashcardCategories.has(item.category as FlashcardCategory) || !int(Number(item.interval), 0, 365) || !text(item.dueDate, 10) || !isValidDate(item.dueDate) || (item.lastReviewed !== undefined && !validAt(item.lastReviewed)) || !int(Number(item.repetitions), 0, 100000) || !num(item.easeFactor, 1.3, 10) || !validAt(item.createdAt)) throw new Error('ফ্ল্যাশকার্ডের তথ্য সঠিক নয়।');
+      if (item.chapterId && chapterById[item.chapterId].subject !== item.subject) throw new Error('ফ্ল্যাশকার্ডের অধ্যায় ও বিষয় মিলছে না।');
+      return { id: item.id, subject: item.subject, chapterId: item.chapterId, front: item.front, back: item.back, category: item.category as Flashcard['category'], interval: Number(item.interval), dueDate: item.dueDate, ...(item.lastReviewed ? { lastReviewed: item.lastReviewed } : {}), repetitions: Number(item.repetitions), easeFactor: Number(item.easeFactor), createdAt: item.createdAt };
+    });
+    if (new Set(result.flashcards.map(card => card.id)).size !== result.flashcards.length) throw new Error('ফ্ল্যাশকার্ড তালিকায় একই ID দুইবার আছে।');
+  }
+  if (raw.flashcardReviews !== undefined) {
+    result.flashcards = result.flashcards; // reviews are summarized into the card state; the list is accepted for compatibility
+    if (!Array.isArray(raw.flashcardReviews) || raw.flashcardReviews.length > LIMITS.flashcardReviews) throw new Error('ফ্ল্যাশকার্ড রিভিউর তথ্য সঠিক নয়।');
+  }
 
   if (raw.gpaMarks !== undefined) {
     if (!object(raw.gpaMarks) || Object.keys(raw.gpaMarks).length > 7) throw new Error('GPA নম্বরের তথ্য সঠিক নয়।');
@@ -397,6 +435,13 @@ export function parseBackup(rawText: string): AppData {
       if (!nonEmpty(value, 180)) throw new Error('মুছে ফেলা সেশনের তালিকা সঠিক নয়।');
       return value;
     });
+  }
+  if (raw.scannedNotes !== undefined) {
+    result.scannedNotes = listOf(raw.scannedNotes, LIMITS.scannedNotes, 'স্ক্যান করা নোট', item => {
+      if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.title, 300) || !text(item.createdAt, 40) || !validAt(item.createdAt) || !int(Number(item.pageCount), 1, 50) || !int(Number(item.sizeBytes), 0, 2_000_000_000) || !bool(item.pdfExported) || !Array.isArray(item.pageKeys) || item.pageKeys.length > 100) throw new Error('স্ক্যান করা নোটের তথ্য সঠিক নয়।');
+      return { id: item.id, subject: item.subject, ...(item.chapterId !== undefined ? { chapterId: item.chapterId } : {}), title: item.title, createdAt: item.createdAt, pageCount: Number(item.pageCount), sizeBytes: Number(item.sizeBytes), pdfExported: item.pdfExported, pageKeys: item.pageKeys as string[] } as ScannedNoteMeta;
+    });
+    if (new Set(result.scannedNotes.map(n => n.id)).size !== result.scannedNotes.length) throw new Error('স্ক্যান করা নোট তালিকায় একই ID দুইবার আছে।');
   }
 
   return result;
