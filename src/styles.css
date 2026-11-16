@@ -4765,3 +4765,63 @@ body {
 .generator-head small { font-size: .72rem; color: var(--muted); }
 .generator-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .generator-box .tiny-muted { margin: 0; line-height: 1.5; }
+
+/* ---------- Syllabus heatmap ---------- */
+.heatmap-head-stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: .78rem; color: var(--muted); }
+.heatmap-head-stats span { display: inline-flex; align-items: center; gap: 5px; }
+.heatmap-head-stats strong { color: var(--text); font-size: .95rem; }
+.heatmap-head-stats .warn strong { color: #b4532a; }
+.heat-legend { display: flex; gap: 10px; flex-wrap: wrap; }
+.heat-chip { display: inline-flex; align-items: center; gap: 6px; font-size: .74rem; padding: 4px 9px; border-radius: 999px; background: var(--soft, #f4f6f3); }
+.heat-chip i { width: 10px; height: 10px; border-radius: 3px; }
+.heat-chip small { color: var(--muted); font-weight: 600; }
+.heat-controls { display: flex; gap: 14px; align-items: end; flex-wrap: wrap; margin-top: 10px; }
+.heat-controls label { display: grid; gap: 4px; font-size: .76rem; color: var(--muted); }
+.heat-controls select { padding: 6px 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); }
+.heat-controls .check-line { display: inline-flex; align-items: center; gap: 6px; }
+
+/* colour scale: 0 untouched → 4 exam-ready */
+.heat-cell, .heat-dot, .heat-chip i { --l0: #d9ded9; --l1: #e7a07a; --l2: #e8c86a; --l3: #9ec48a; --l4: #3f8a5e; }
+.heat-chip.l0 i, .heat-dot.l0 { background: var(--l0); }
+.heat-chip.l1 i, .heat-dot.l1 { background: var(--l1); }
+.heat-chip.l2 i, .heat-dot.l2 { background: var(--l2); }
+.heat-chip.l3 i, .heat-dot.l3 { background: var(--l3); }
+.heat-chip.l4 i, .heat-dot.l4 { background: var(--l4); }
+
+.heat-focus-list, .heat-slip-list { display: grid; gap: 8px; }
+.heat-focus-row, .heat-slip-row { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto; gap: 10px; align-items: center; text-align: start; padding: 9px 10px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); cursor: pointer; }
+.heat-focus-row:hover, .heat-slip-row:hover { border-color: var(--accent, #3f8a5e); }
+.heat-focus-title strong { display: block; font-size: .84rem; }
+.heat-focus-title small { font-size: .72rem; color: var(--muted); }
+.heat-focus-meta { display: grid; justify-items: end; font-size: .7rem; color: var(--muted); }
+.heat-focus-meta strong { font-size: .9rem; color: var(--text); }
+.heat-dot { width: 12px; height: 12px; border-radius: 4px; display: block; }
+
+.heat-row { padding-block: 12px; border-top: 1px solid var(--border); }
+.heat-row:first-of-type { border-top: 0; }
+.heat-row-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 8px; }
+.heat-row-progress { flex: 1 1 160px; display: grid; gap: 3px; min-width: 120px; }
+.heat-row-progress small { font-size: .7rem; color: var(--muted); }
+.heat-cold { font-size: .7rem; color: #b4532a; background: #fbeee7; padding: 2px 8px; border-radius: 999px; }
+.heat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; }
+.heat-cell { position: relative; display: grid; gap: 2px; padding: 8px 8px 10px; border-radius: 9px; border: 1px solid var(--border); background: var(--card); text-align: start; cursor: pointer; overflow: hidden; }
+.heat-cell strong { font-size: .76rem; }
+.heat-cell span { font-size: .64rem; line-height: 1.3; color: var(--muted); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.heat-cell i { position: absolute; inset-inline: 0; bottom: 0; height: 4px; }
+.heat-cell.l0 i { background: var(--l0); }
+.heat-cell.l1 i { background: var(--l1); }
+.heat-cell.l2 i { background: var(--l2); }
+.heat-cell.l3 i { background: var(--l3); }
+.heat-cell.l4 i { background: var(--l4); }
+.heat-cell.l4 { background: #f2f8f3; }
+.heat-slip-row { grid-template-columns: 12px minmax(0, 1fr) auto auto; }
+.heat-slip-row span { display: grid; gap: 1px; }
+.heat-slip-row small { font-size: .72rem; color: var(--muted); }
+.heat-slip-stats { font-size: .72rem; color: var(--muted); white-space: nowrap; }
+.heat-slip-card .card-heading p, .heat-focus-card .card-heading p { font-size: .78rem; color: var(--muted); }
+.heat-legend-card { margin-bottom: 12px; }
+@media (max-width: 620px) {
+  .heat-grid { grid-template-columns: repeat(auto-fill, minmax(74px, 1fr)); }
+  .heat-slip-row { grid-template-columns: 12px minmax(0, 1fr); }
+  .heat-slip-stats, .heat-slip-row .text-button { grid-column: 2; justify-self: start; }
+}

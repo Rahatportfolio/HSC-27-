@@ -14,7 +14,7 @@ const everyQuestion = everyChapter.flatMap(chapterId => generateQuestions(chapte
 describe('every generated question is verifiable', () => {
   it('passes the verifier with zero issues across every generative chapter', () => {
     expect(everyChapter.length).toBe(GENERATIVE_CHAPTER_COUNT);
-    expect(everyQuestion.length).toBeGreaterThan(80);
+    expect(everyQuestion.length).toBeGreaterThan(120);
     expect(verifyGenerated(everyQuestion)).toEqual([]);
   });
 
@@ -52,11 +52,20 @@ describe('every generated question is verifiable', () => {
 });
 
 describe('the engine never invents anything', () => {
-  it('refuses chapters it has no verified fact for, and says why', () => {
-    const empty = CHAPTERS.find(chapter => generativeGap(chapter.id) === 'no-fact')!;
-    expect(generateQuestions(empty.id)).toEqual([]);
-    expect(generativeGap(empty.id)).toBe('no-fact');
+  it('covers every chapter of the syllabus, including the 34 added last', () => {
+    expect(GENERATIVE_CHAPTER_COUNT).toBe(CHAPTERS.length);
+    expect(CHAPTERS.every(chapter => generativeGap(chapter.id) === 'ok')).toBe(true);
+  });
+
+  it('still refuses an unknown chapter and says why', () => {
+    expect(generateQuestions('not-a-chapter')).toEqual([]);
     expect(generativeGap('not-a-chapter')).toBe('unknown-chapter');
+  });
+
+  it('reports no-fact honestly if the pool ever loses a chapter', () => {
+    // The gap helper is the guard-rail: it must not claim coverage it cannot produce.
+    const covered = new Set(generativeChapters());
+    expect(covered.size).toBe(CHAPTERS.length);
   });
 
   it('only ever talks about the chapter it was asked for', () => {

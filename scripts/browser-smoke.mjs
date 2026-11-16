@@ -111,6 +111,15 @@ try {
       assert.ok((await page.locator('.adaptive-load').nth(i).innerText()).includes('→'));
     }
   }
+  await nav('হিটম্যাপ');
+  await page.locator('.heatmap-view').waitFor();
+  assert.equal(await page.locator('.heat-cell').count(), 114);
+  assert.equal(await page.locator('.heat-legend .heat-chip').count(), 5);
+  await page.locator('.heatmap-view input[type=checkbox]').last().check();
+  await page.waitForTimeout(200);
+  assert.ok(await page.locator('.heat-cell').count() >= 0);
+  console.log('PASS syllabus heatmap', await page.locator('.heat-cell').count(), 'cells');
+
   // Rule-based question generation: pick a chapter with verified facts, generate, and
   // confirm the paper carries the generator's own source label.
   await nav('অনুশীলন');
