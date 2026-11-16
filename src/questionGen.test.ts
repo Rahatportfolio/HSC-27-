@@ -129,8 +129,9 @@ describe('the exam simulator can top up a thin chapter', () => {
 
   it('still auto-marks a generated paper correctly', () => {
     const data = freshData();
+    // physics-1-7 now also has numeric drills, so look at both generated kinds.
     const paper = buildExamQuestions(data, { mode: 'chapter', chapterId: 'physics-1-7', count: 10, generate: true, variant: 'mark' }, () => 0.4);
-    const generated = paper.filter(question => question.id.startsWith(GENERATED_PREFIX));
+    const generated = paper.filter(question => question.id.startsWith(GENERATED_PREFIX) || question.id.startsWith('num|'));
     expect(generated.length).toBeGreaterThan(0);
     for (const question of generated) {
       expect(question.options[question.answer]).toBeTruthy();

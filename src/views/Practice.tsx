@@ -13,6 +13,7 @@ import { STARTER_QUESTIONS } from '../quiz-data';
 import {
   ENGINE_LABEL, GENERATIVE_CHAPTER_COUNT, generativeChapters, generativeGap, generateQuestions, verifyGenerated,
 } from '../questionGen';
+import { numericChapters, numericQuestions, verifyNumeric } from '../numericGen';
 import { CHAPTER_CLASSES } from '../classLinks';
 import type { CqEntry, CqParts, QuizQuestion } from '../types';
 import { ClassLinkRow, EmptyState, Modal, PageHeading, ProgressBar, SubjectBadge } from '../components';
@@ -67,8 +68,11 @@ function McqPractice({ stats, weekStats }: { stats: { total: number; correct: nu
     if (!chapterId) { notify('আগে একটি অধ্যায় বাছো—জেনারেটর অধ্যায়ভিত্তিক তথ্য থেকে প্রশ্ন বানায়।', 'info'); return; }
     const gap = generativeGap(chapterId);
     if (gap !== 'ok') { notify(gap === 'no-fact' ? 'এই অধ্যায়ের যাচাই করা তথ্য এখনো যোগ হয়নি, তাই প্রশ্ন বানানো হবে না।' : 'এই অধ্যায়ের জন্য এখনো যথেষ্ট যাচাই করা তথ্য নেই।', 'info'); return; }
-    const generated = generateQuestions(chapterId, { variant: Date.now(), count });
-    const issues = verifyGenerated(generated);
+    // Two engines: textbook facts, plus formula drills whose answers are recomputed here.
+    const factItems = generateQuestions(chapterId, { variant: Date.now(), count });
+    const numericItems = numericQuestions(chapterId, 4).map(built => built.question);
+    const generated = [...factItems, ...numericItems].slice(0, Math.max(count, 5));
+    const issues = [...verifyGenerated(factItems), ...verifyNumeric(numericItems)];
     if (issues.length || !generated.length) { notify('জেনারেট করা প্রশ্ন যাচাইয়ে উত্তীর্ণ হয়নি—কিছুই যোগ করা হয়নি।', 'error'); return; }
     const known = new Set(questions.map(question => question.id));
     const fresh = generated.filter(question => !known.has(question.id));
@@ -121,9 +125,9 @@ function McqPractice({ stats, weekStats }: { stats: { total: number; correct: nu
           <p className="tiny-muted">{t("নিয়মভিত্তিক ইঞ্জিন পাঠ্যবইয়ের যাচাই করা তথ্য থেকেই প্রশ্ন বানায়—প্রতিটি উত্তরের সূত্র ব্যাখ্যায় লেখা থাকে, আর জেনারেটর একটি অধ্যায়ের তথ্য না থাকলে কিছুই বানায় না।", "The rule-based engine builds questions only from verified textbook facts. Every explanation cites its source, and a chapter without facts produces nothing at all.")}</p>
           <div className="generator-actions">
             <button className="button secondary small" onClick={startGenerated} disabled={!chapterId || generativeGap(chapterId) !== 'ok'}><Sparkles size={15} />{t("এই অধ্যায় থেকে প্রশ্ন বানাও", "Generate for this chapter")}</button>
-            <span className="tiny-muted">{!chapterId ? t("অধ্যায় বাছো", "Pick a chapter") : generativeGap(chapterId) === 'ok' ? t(`${bn(generateQuestions(chapterId).length)}টি প্রশ্ন তৈরি হবে`, `${generateQuestions(chapterId).length} question(s) available`) : t("যাচাই করা তথ্য নেই", "No verified facts yet")}</span>
+            <span className="tiny-muted">{!chapterId ? t("অধ্যায় বাছো", "Pick a chapter") : generativeGap(chapterId) === 'ok' ? t(`${bn(generateQuestions(chapterId).length)}টি তথ্যভিত্তিক + ${bn(numericQuestions(chapterId, 4).length)}টি সূত্র-গণনার প্রশ্ন`, `${generateQuestions(chapterId).length} fact-based + ${numericQuestions(chapterId, 4).length} formula drills`) : t("যাচাই করা তথ্য নেই", "No verified facts yet")}</span>
           </div>
-          <p className="tiny-muted">{t(`মোট ${bn(generativeChapters().length)}টি অধ্যায়ে জেনারেশন চালু—বাকিগুলোতে ব্যাংকের প্রশ্নই যথেষ্ট।`, `Generation is available for ${generativeChapters().length} chapters; the rest rely on the bank.`)}</p>
+          <p className="tiny-muted">{t(`মোট ${bn(generativeChapters().length)}টি অধ্যায়ে তথ্যভিত্তিক প্রশ্ন চালু, আর ${bn(numericChapters().length)}টি গণিত/পদার্থ/রসায়ন অধ্যায়ে সূত্র-গণনার ড্রিল—উত্তর প্রতিবার হিসাব করে যাচাই হয়।`, `Fact-based questions cover ${generativeChapters().length} chapters; ${numericChapters().length} maths/physics/chemistry chapters also get formula drills whose answers are recomputed each time.`)}</p>
         </div>
         <button className="button primary wide-button" onClick={start}><Brain size={17} />{t("কুইজ শুরু করো", "Start quiz")}</button>
         <p className="tiny-muted center">নমুনা ব্যাংকে {bn(bankCount)}টি প্রশ্ন, {bn(bankChapterCount)}টি অধ্যায়/ইউনিট ঘেঁষে সাজানো—বোর্ড প্রশ্নের দাবি নয়, কিন্তু প্রতিটি বিষয়ে অনুশীলন শুরু করার জন্য যথেষ্ট।</p>

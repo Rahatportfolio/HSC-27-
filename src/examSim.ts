@@ -5,6 +5,7 @@ import { addDays } from './planner';
 import type { AppData } from './planner';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { generateQuestions } from './questionGen';
+import { numericQuestions } from './numericGen';
 import { applyRetryResults, dueRetryIds, enqueueRetries, retryBuckets } from './retryLoop';
 import { LIMITS, newId, nowIso } from './storage';
 import type { ExamBreakdownRow, ExamCadence, ExamMode, ExamSession, QuizQuestion, TestKind } from './types';
@@ -106,13 +107,23 @@ export function examPool(data: AppData, options: ExamOptions): QuizQuestion[] {
   }
 }
 
-/** Generated items for exactly the chapter/subject the paper asks for. */
+/**
+ * Generated items for exactly the chapter/subject the paper asks for.
+ *
+ * Two engines feed this: fact-based items (`questionGen`) and computed numeric drills
+ * (`numericGen`). Both are verifiable — the fact engine against the shipped bank, the
+ * numeric engine by recomputing the arithmetic from the same seed.
+ */
 function generatedPool(options: ExamOptions): QuizQuestion[] {
   const variant = options.variant ?? 0;
-  if (options.mode === 'chapter') return options.chapterId ? generateQuestions(options.chapterId, { variant }) : [];
+  const forChapter = (chapterId: string): QuizQuestion[] => [
+    ...generateQuestions(chapterId, { variant }),
+    ...numericQuestions(chapterId, 4).map(built => built.question),
+  ];
+  if (options.mode === 'chapter') return options.chapterId ? forChapter(options.chapterId) : [];
   if (options.mode === 'subject') {
     if (!options.subject) return [];
-    return chapterIdsForSubject(options.subject).flatMap(chapterId => generateQuestions(chapterId, { variant }));
+    return chapterIdsForSubject(options.subject).flatMap(forChapter);
   }
   return [];
 }

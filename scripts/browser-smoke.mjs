@@ -132,7 +132,15 @@ try {
   await generateButton.click();
   await page.locator('.quiz-question').waitFor();
   assert.ok(await page.locator('.quiz-question-meta').innerText().then(text => text.includes('স্বয়ংক্রিয়')));
-  console.log('PASS generated question paper');
+  // Formula drills (numeric engine) must also be able to start a paper on their own.
+  await page.locator('.quiz-run').waitFor();
+  await page.locator('.quiz-topline .icon-button').click();
+  await page.locator('.quiz-setup-grid select').nth(1).selectOption('math-2-4');
+  await page.locator('.generator-actions button').click();
+  await page.locator('.quiz-question').waitFor();
+  const drill = await page.locator('.quiz-question').innerText();
+  assert.ok(drill.includes('x²') || drill.includes('মূল'));
+  console.log('PASS generated question paper and formula drills');
 
   await nav('সেটিংস');
   const bufferOptions = await page.locator('.settings-view select').evaluateAll(selects =>

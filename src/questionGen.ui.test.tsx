@@ -39,7 +39,8 @@ it('generates a verified paper for a chapter and starts the quiz with it', async
   await screen.findByText(/স্বয়ংক্রিয় · পাঠ্যবই-যাচাইকৃত তথ্যপুল/);
   const stored = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
   expect(stored.questions.length).toBeGreaterThan(0);
-  expect(stored.questions.every((question: { id: string }) => question.id.startsWith('gen|'))).toBe(true);
+  // Both engines may contribute: fact-based (gen|) and formula drills (num|).
+  expect(stored.questions.every((question: { id: string }) => /^(gen|num)\|/.test(question.id))).toBe(true);
 });
 
 it('keeps the bank untouched until a chapter is chosen', async () => {
