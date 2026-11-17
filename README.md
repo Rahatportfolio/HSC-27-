@@ -72,6 +72,8 @@ Total: **198 planning dates, 827 tasks**. Initial chapter allocation ends on **2
 2. Keep **Move personal targets with the start**, or choose **Keep college/board deadlines fixed** for a confirmed external date.
 3. Review the phase preview and capacity warnings, then **Save → Update routine**.
 
+If an existing profile still has a different start, Settings now offers **“Use 20 November 2026”** (বাংলা: **“২০ নভেম্বর, ২০২৬ থেকে শুরু”**). This is a draft-only shortcut through the same date-cascade transaction, not a profile reset. Review the resulting linked/fixed target dates, then Save and confirm; cancelling leaves the saved date unchanged. It does not remotely change an already installed app's local data.
+
 For example, **20 → 26 November** moves the boost to **13 December**, the personal test target to **7 February**, and the personal board target to **12 June**. With the fixed policy the two exam targets do not move. A routine change cannot postpone a real exam.
 
 **Explicit day/task start times keep priority** over the default session time. Weekly classes remain tied to their weekday/clock time; real appointments and actual study history are not redated. Existing saved profiles are **not silently reset to the new defaults**: choose the new start in Settings and inspect all target dates before applying it. Invalid legacy profiles remain available for repair rather than being replaced with empty data.

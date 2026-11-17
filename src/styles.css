@@ -5117,6 +5117,9 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .covered-board-topic { flex: 1 1 220px; }
 
 /* Date changes: an explicit timeline and persistent capacity warnings. */
+.routine-start-shortcut { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 12px; }
+.routine-start-shortcut p { flex: 1 1 220px; min-width: 0; margin: 0; font-size: 13px; line-height: 1.75; overflow-wrap: anywhere; }
+.routine-start-shortcut .button { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
 .schedule-preview { margin-top: 24px; padding: 20px; border: 1px solid var(--border, #dbe3dc); border-radius: 14px; background: var(--surface-alt, #f5f8f4); overflow-wrap: anywhere; }
 .schedule-preview h3 { margin: 0 0 10px; font-size: 17px; }
 .schedule-preview p, .schedule-preview li { font-size: 13px; line-height: 1.75; }

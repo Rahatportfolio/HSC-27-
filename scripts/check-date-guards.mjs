@@ -67,6 +67,8 @@ const cases = [
   ['remap-invalid-reference', 'src/reschedule.ts', "const range = parseTaskRangeId(id);\n      if (range?.kind === 'part' && idMap.has(range.sourceId))\n        return `smart-part|${encodeURIComponent(idMap.get(range.sourceId)!)}|${range.from}|${range.to}`;", "const [, encoded, ...range] = id.split('|'); const source = decodeURIComponent(encoded); if (idMap.has(source)) return `smart-part|${encodeURIComponent(idMap.get(source))}|${range.join('|')}`;", recheck, 'preserves malformed legacy references verbatim while shifting'],
   ['media-invalid-reference', 'src/mediaBackup.ts', "if (!range || range.kind !== 'video') return [id, at];", "if (!range || range.kind !== 'video') return ['erased', at];", 'src/mediaBackup.test.ts', 'restores media around malformed legacy completion keys'],
   ['boost-workload-copy', 'src/views/Settings.tsx', 'Allow time for breaks, meals and adequate sleep. More hours do not guarantee readiness.', '16, 17, or 18 hours (adjustable anytime)', ui, 'describes the boost by its saved date'],
+  ['start-shortcut-noop', 'src/views/Settings.tsx', 'onClick={() => changeStart(DEFAULT_SETTINGS.startDate)}', 'onClick={() => {}}', ui, 'moves an existing profile to the requested 20 November start'],
+  ['start-shortcut-resets-workload', 'src/views/Settings.tsx', 'onClick={() => changeStart(DEFAULT_SETTINGS.startDate)}', "onClick={() => { changeStart(DEFAULT_SETTINGS.startDate); update('dailyHours', DEFAULT_SETTINGS.dailyHours); }}", ui, 'moves an existing profile to the requested 20 November start'],
 ];
 const filter = process.argv[2];
 const selected = filter ? cases.filter(([id]) => id.includes(filter)) : cases;

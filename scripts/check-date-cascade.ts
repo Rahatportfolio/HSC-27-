@@ -20,8 +20,65 @@ const browser = await chromium.launch({
   args: ['--no-sandbox', '--disable-dev-shm-usage'],
 });
 const results: { timezone: string; status: string; assertions: string[] }[] = [];
+const shortcutFaults: Record<string, string> = {
+  covered: '.routine-start-shortcut { position:relative; } .routine-start-shortcut::after { content:""; position:absolute; inset:0; z-index:9999; }',
+  cramped: '.routine-start-shortcut .button { height:20px!important; min-height:20px!important; padding:0!important; }',
+};
+if (process.env.DATE_SHORTCUT_FAULT && !shortcutFaults[process.env.DATE_SHORTCUT_FAULT]) throw new Error('Unknown DATE_SHORTCUT_FAULT');
+async function verifyStartShortcut(timezoneId: string) {
+  const english = timezoneId !== 'Asia/Dhaka';
+  const data = freshData();
+  data.settings = { ...data.settings, language: english ? 'en' : 'bn', fontScale: 'lg', adaptiveEnabled: false, name: 'Keep my profile', dailyHours: 6, startDate: '2026-11-14', boostStartDate: '2026-12-01' };
+  data.notes['2026-11-15'] = 'Keep this real dated note';
+  data.completed['physics-1-2:part-1'] = '2026-11-15T08:00:00Z';
+  const context = await browser.newContext({ timezoneId, viewport: { width: 320, height: 760 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  try {
+    const page = await context.newPage();
+    const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
+    await page.clock.setFixedTime(new Date('2026-11-16T06:00:00Z'));
+    await page.addInitScript(({ key, data }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(data)); }, { key: STORAGE_KEY, data });
+    await page.goto(`${base}#settings`, { waitUntil: 'networkidle' });
+    await page.evaluate(() => document.fonts.ready);
+    const state = async () => parseBackup(await page.evaluate(key => localStorage.getItem(key)!, STORAGE_KEY));
+    const original = await state();
+    const shortcut = page.locator('.routine-start-shortcut button');
+    await shortcut.scrollIntoViewIfNeeded();
+    if (process.env.DATE_SHORTCUT_FAULT) await page.addStyleTag({ content: shortcutFaults[process.env.DATE_SHORTCUT_FAULT] });
+    const box = await shortcut.evaluate(e => {
+      const r = e.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+      return { left: r.left, right: r.right, height: r.height, width: innerWidth, hit: hit === e || !!hit && e.contains(hit) };
+    });
+    assert.ok(box.height >= 44, 'Start-date shortcut touch target is too small');
+    assert.ok(box.left >= 0 && box.right <= box.width && await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), 'Start-date shortcut overflows the phone');
+    assert.ok(box.hit, 'Start-date shortcut is covered');
+    await page.screenshot({ path: `${output}/start-shortcut-320-${english ? 'en' : 'bn'}.png` });
+    await shortcut.tap();
+    assert.equal(await page.getByLabel(english ? /^Routine start date/ : /^রুটিন শুরুর তারিখ/).inputValue(), '2026-11-20');
+    assert.equal(await page.getByLabel(english ? /^Boost start date/ : /^বাড়তি পড়া শুরুর তারিখ/).inputValue(), '2026-12-07');
+    assert.equal((await state()).settings.startDate, '2026-11-14');
+    const save = page.locator('.settings-form button[type="submit"]');
+    await save.tap();
+    await page.getByRole('dialog').getByRole('button', { name: english ? 'Cancel' : 'বাতিল', exact: true }).tap();
+    assert.equal((await state()).settings.startDate, '2026-11-14');
+    await save.tap();
+    await page.getByRole('dialog').getByRole('button', { name: english ? 'Update routine' : 'রুটিন আপডেট করো', exact: true }).tap();
+    await page.waitForFunction(key => JSON.parse(localStorage.getItem(key)!).settings.startDate === '2026-11-20', STORAGE_KEY);
+    await page.reload({ waitUntil: 'networkidle' });
+    const saved = await state();
+    assert.deepEqual([saved.settings.startDate, saved.settings.boostStartDate, saved.settings.testExamDate, saved.settings.examDate, saved.settings.dailyHours, saved.settings.name, saved.settings.calendarRevision], ['2026-11-20', '2026-12-07', '2027-02-07', '2027-06-12', 6, 'Keep my profile', 1]);
+    assert.deepEqual(saved.notes, original.notes); assert.deepEqual(saved.completed, original.completed);
+    assert.equal(await page.locator('.routine-start-shortcut').count(), 0);
+    assert.deepEqual(errors, []);
+    console.log(`PASS 320px real-touch 20 November shortcut (${timezoneId}, ${english ? 'en' : 'bn'}, large text, cancel/save/reload/history)`);
+  } finally { await context.close(); }
+}
 try {
   for (const timezoneId of ['Asia/Dhaka', 'America/New_York']) {
+    await verifyStartShortcut(timezoneId);
+    if (process.env.DATE_SHORTCUT_ONLY) {
+      results.push({ timezone: timezoneId, status: 'passed', assertions: ['320px touch start shortcut', '20 November saved after confirmation only', 'cancel preserves old date', 'large text fits', 'history/workload retained', 'reload without double shift'] });
+      continue;
+    }
     const context = await browser.newContext({ timezoneId, viewport: { width: 1440, height: 1000 }, acceptDownloads: true, reducedMotion: 'reduce' });
     const page = await context.newPage();
     const errors: string[] = [];
