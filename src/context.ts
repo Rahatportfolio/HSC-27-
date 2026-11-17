@@ -5,11 +5,14 @@ import type { Chapter, SubjectId } from './data';
 import type { PresetTimerInput, useStudyTimer } from './hooks';
 import type { NewSession } from './study';
 import type { FontScale, ThemeMode } from './types';
+import type { AdaptivePlanResult } from './adaptive';
 
 export type View = 'studySystem' | 'today' | 'calendar' | 'syllabus' | 'videos' | 'pdfs' | 'testprep' | 'revision' | 'timer' | 'practice' | 'examsim' | 'weakness' | 'heatmap' | 'backlog' | 'audit' | 'exams' | 'analytics' | 'library' | 'reminders' | 'settings' | 'flashcards' | 'storage' | 'scanner';
 export interface ConfirmRequest { title: string; message: string; label?: string; danger?: boolean; action: () => void }
 export interface PlannerContextValue {
   data: AppData; setData: Dispatch<SetStateAction<AppData>>; plan: Day[]; today: string; now: Date;
+  /** Explanation from the same projection that produced `plan`, never a second adaptation. */
+  adaptive?: AdaptivePlanResult | null;
   view: View; navigate: (view: View, date?: string) => void;
   selectedDate: string; setSelectedDate: (date: string) => void;
   notify: (message: string, type?: 'success' | 'error' | 'info') => void;

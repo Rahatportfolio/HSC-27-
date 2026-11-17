@@ -6,7 +6,7 @@ import { CHAPTERS, PAPER_NAMES, SUBJECTS, syllabusNote, sortChapters, subjectByI
 import type { SubjectId } from '../data';
 import { bn, chapterFirstDate, chapterStudyTasks, formatDate, percent } from '../planner';
 import { chapterMeta } from '../study';
-import { CHAPTER_SCHEDULE } from '../schedule';
+import { CHAPTER_SCHEDULE, scheduleFor } from '../schedule';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
 import { t } from '../i18n';
 import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
@@ -137,7 +137,7 @@ export default function SyllabusView() {
               const endDate = tasks[tasks.length - 1]?.date;
               const meta = chapterMeta(data, chapter.id);
               const isWeak = meta.weak || data.confidence[chapter.id] === 'weak';
-              const slot = CHAPTER_SCHEDULE[chapter.id];
+              const slot = scheduleFor(chapter.id, plan);
               const links = CHAPTER_CLASSES[chapter.id];
               const lessons = BANGLA_LESSONS[chapter.id];
               const progress = chapterClassProgress(data, chapter.id);
@@ -161,7 +161,7 @@ export default function SyllabusView() {
                   </span>
                   {slot && <span className="chapter-plan-cell">
                     <span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span>
-                    <small>{bn(slot.hours)} {t('ঘণ্টা','hours')} · {endDate ? `${t('শেষ','ends')} ${formatDate(endDate)}` : formatDate(slot.end)}</small>
+                    <small>{bn(slot.hours)} {t('ঘণ্টা','hours')} · {endDate ? `${t('শেষ','ends')} ${formatDate(endDate)}` : t('সময় বরাদ্দ নেই', 'Not scheduled')}</small>
                     <small className="plan-links">{progress.watched ? `${bn(progress.watched)}/${bn(progress.total)} ${t('ক্লাস দেখা','classes watched')}` : `${bn(progress.total)} ${t('টি সরাসরি ক্লাস','direct classes')}`}</small>
                   </span>}
                   <span className={`priority-badge ${chapterPriority(chapter, data).toLowerCase()}`}>{chapterPriority(chapter, data)}</span>

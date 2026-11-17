@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
 import { CHAPTERS } from './data';
 import { addDays, buildPlan, chapterTasks, freshData, STORAGE_KEY, todayKey } from './planner';
@@ -174,9 +174,9 @@ describe('application shell', () => {
   it('displays top live Test Exam + HSC 27 countdowns and inline One-Shot/CQ/MCQ class blocks on Today', async () => {
     render(<App />);
     const countdown = screen.getByRole('region', { name: /পরীক্ষার কাউন্টডাউন/ });
-    expect(countdown.textContent).toContain('টেস্ট পরীক্ষা');
-    expect(countdown.textContent).toContain('HSC ’২৭ পরীক্ষা');
-    expect(await screen.findByText(/আজকের নির্ধারিত পড়া|এই দিনের পড়া/)).toBeTruthy();
+    expect(countdown.textContent).toContain('টেস্ট লক্ষ্য');
+    expect(countdown.textContent).toContain('HSC লক্ষ্য');
+    expect(await screen.findByText(/আজকের নির্ধারিত পড়া|নির্বাচিত দিনের পড়া/)).toBeTruthy();
     expect(screen.getAllByText('ওয়ান শট ক্লাস').length).toBeGreaterThan(0);
     expect(screen.getAllByText('CQ সলভিং ক্লাস').length).toBeGreaterThan(0);
     expect(screen.getAllByText('MCQ সলভিং ক্লাস').length).toBeGreaterThan(0);
@@ -187,7 +187,7 @@ describe('personalized study workflows', () => {
   it('adds a task to only the selected day and persists it', async () => {
     render(<App />);
     const date = await screen.findByLabelText('পড়ার তারিখ নির্বাচন');
-    fireEvent.change(date, { target: { value: '2026-11-14' } });
+    fireEvent.change(date, { target: { value: '2026-11-20' } });
     fireEvent.click(screen.getByRole('button', { name: 'নতুন কাজ' }));
     fireEvent.change(screen.getByLabelText('কাজের নাম'), { target: { value: 'নিজের পরীক্ষা' } });
     fireEvent.change(screen.getByLabelText('কাজের সময়'), { target: { value: '19:30' } });
@@ -195,11 +195,12 @@ describe('personalized study workflows', () => {
     fireEvent.click(screen.getByRole('button', { name: 'যোগ করো' }));
     await waitFor(() => {
       const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-      expect(stored.routineBlocks).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'নিজের পরীক্ষা', date: '2026-11-14', minutes: 45, startMinute: 1170 })]));
+      expect(stored.routineBlocks).toEqual(expect.arrayContaining([expect.objectContaining({ title: 'নিজের পরীক্ষা', date: '2026-11-20', minutes: 45, startMinute: 1170 })]));
     });
-    expect(screen.getAllByText('নিজের পরীক্ষা').length).toBeGreaterThan(0);
+    expect(within(screen.getByRole('region', { name: 'নির্বাচিত দিনের সময়সূচি' })).getByText('নিজের পরীক্ষা')).toBeTruthy();
     fireEvent.change(date, { target: { value: '2026-11-21' } });
-    expect(screen.queryByText('নিজের পরীক্ষা')).toBeNull();
+    // Yesterday's unfinished task may appear in the backlog, never as today's own task.
+    expect(within(screen.getByRole('region', { name: 'নির্বাচিত দিনের সময়সূচি' })).queryByText('নিজের পরীক্ষা')).toBeNull();
   });
   it('marks a whole chapter complete and incomplete from its sheet', async () => {
     render(<App />);

@@ -14,6 +14,7 @@ import { categoryScheduleDates, estimatedFinishDate, expectedPercentBy, schedule
 import { isDateLocked, regenerationSummary, rescheduleUnfinished, toggleLockDate } from '../scheduleEdit';
 import { DaySummary, EmptyState, PageHeading, ProgressBar, TaskCard } from '../components';
 import { t, weekdayName } from '../i18n';
+import { planHealth } from '../planHealth';
 
 export default function CalendarView() {
   const { plan, data, setData, today, selectedDate, setSelectedDate, navigate, exportICS, notify, toggleTask, confirm } = usePlanner();
@@ -35,7 +36,8 @@ export default function CalendarView() {
   const [importantDate, setImportantDate] = useState(addDays(today, 7));
   const [importantNote, setImportantNote] = useState('');
   const [importantNotify, setImportantNotify] = useState(true);
-  const phases = getPhases(data.settings.startDate);
+  const phases = getPhases(data.settings);
+  const health = useMemo(() => planHealth(plan, data.settings, data.completed), [plan, data.settings, data.completed]);
   const byDate = useMemo(() => new Map(plan.map(day => [day.date, day])), [plan]);
   const first = `${month}-01`;
   const offset = (new Date(`${first}T00:00:00Z`).getUTCDay() + 6) % 7;
@@ -158,7 +160,7 @@ export default function CalendarView() {
           { key: 'A', label: t('A ক্যাটাগরি শেষ', 'Category A done'), date: categoryDates.A, color: '#236149' },
           { key: 'B', label: t('B ক্যাটাগরি শেষ', 'Category B done'), date: categoryDates.B, color: '#9a6722' },
           { key: 'C', label: t('C ক্যাটাগরি শেষ', 'Category C done'), date: categoryDates.C, color: '#5a4b82' },
-          { key: 'full', label: t('পুরো সিলেবাস শেষ', 'Whole syllabus done'), date: plan[plan.length - 1]?.date, color: '#2c5e8a' },
+          { key: 'full', label: t('পুরো সিলেবাস শেষ', 'Whole syllabus done'), date: health.syllabusEnd, color: '#2c5e8a' },
           { key: 'test', label: t('টেস্ট পরীক্ষা', 'Test Exam'), date: data.settings.testExamDate, color: '#b57463' },
         ]).map(item => (
           <div className="plan-timeline-node" key={item.key}>
@@ -217,15 +219,15 @@ export default function CalendarView() {
         <button className="button primary" type="submit"><Plus size={16} />{t("ব্লক যোগ করো", "Add block")}</button>
       </form>
       {routineRows.length ? <div className="routine-list">{routineRows.map((block, index) => <div className={`routine-row${dragBlockId === block.id ? ' dragging' : ''}`} key={block.id} draggable onDragStart={event => { setDragBlockId(block.id); event.dataTransfer?.setData('text/plain', block.id); if (event.dataTransfer) event.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDragBlockId(null)} onDragOver={event => { event.preventDefault(); if (event.dataTransfer) event.dataTransfer.dropEffect = 'move'; }} onDrop={event => { event.preventDefault(); const dragged = dragBlockId || event.dataTransfer?.getData('text/plain'); if (dragged) swapRoutineTimes(dragged, block.id); setDragBlockId(null); }}><span className="routine-grip" aria-hidden="true"><GripVertical size={14} /></span><span className="routine-time">{bn(String(Math.floor(block.startMinute / 60)).padStart(2, '0'))}:{bn(String(block.startMinute % 60).padStart(2, '0'))}</span><span className="subject-dot" style={{ background: subjectById[block.subject].color }} /><strong>{block.title || t(`${subjectById[block.subject].name}: কাস্টম সেশন`, `${subjectById[block.subject].english}: custom session`)}</strong><small>{t(`${bn(block.minutes)} মিনিট`, `${block.minutes} min`)} · {t(`${weekdayName(block.weekday, true)}বার`, `every ${weekdayName(block.weekday)}`)}</small><span className="routine-move"><button type="button" className="icon-button" aria-label={t("ব্লক উপরে সরাও", "Move block up")} disabled={index === 0} onClick={() => moveRoutineBlock(block.id, -1)}><ChevronUp size={14} /></button><button type="button" className="icon-button" aria-label={t("ব্লক নিচে সরাও", "Move block down")} disabled={index === routineRows.length - 1} onClick={() => moveRoutineBlock(block.id, 1)}><ChevronDown size={14} /></button></span><button className="icon-button delete-button" aria-label={t("ব্লক মুছো", "Delete block")} onClick={() => removeRoutineBlock(block.id)}><Trash2 size={15} /></button></div>)}</div> : <p className="muted padded">{t("এই দিনে কোনো কাস্টম ব্লক নেই। উপরে একটি যোগ করো।", "No custom block on this day. Add one above.")}</p>}
-      <p className="tiny-muted">{t('কাস্টম ব্লক ১৮১ দিনের রুটিনে প্রতি সপ্তাহে একই দিনে যোগ হবে। অনেকগুলো ব্লক একই সময়ে থাকলে সময় মিলিয়ে নাও।', 'A custom block repeats on the same weekday for the whole 181-day routine. If several blocks land at the same time, adjust the times.')}</p>
+      <p className="tiny-muted">{t('কাস্টম ব্লক পুরো রুটিনে প্রতি সপ্তাহে একই দিনে যোগ হবে। অনেকগুলো ব্লক একই সময়ে থাকলে সময় মিলিয়ে নাও।', 'A custom block repeats on the same weekday throughout the routine. If several blocks land at the same time, adjust the times.')}</p>
     </section>
     <section className="card important-dates-card">
       <div className="card-heading"><div><h2><BellRing size={20} />{t("গুরুত্বপূর্ণ তারিখ", "Important dates")}</h2><p>{t("টেস্ট পরীক্ষা, ঈদুল আজহা, বোর্ড পরীক্ষা ও তোমার নিজের লক্ষ্য তারিখ—সব এক নজরে।", "Test Exam, Eid-ul-Adha, Board Exam and your own target dates — at a glance.")}</p></div><span className="count-badge">{bn(upcomingImportant.length)} {t('আসন্ন','upcoming')}</span></div>
       <div className="built-in-milestones">
         {[
-          { key: 'test', date: data.settings.testExamDate, title: t('কলেজের টেস্ট পরীক্ষা (জানুয়ারি ২০২৭)', 'College Test Exam (January 2027)'), note: t('সেটিংসে কলেজের নির্দিষ্ট তারিখ বসানো যাবে', 'Editable in Settings') },
-          { key: 'eid', date: '2027-05-16', title: t('ঈদুল আজহা ২০২৭ (সম্ভাব্য)', 'Eid-ul-Adha 2027 (expected)'), note: t('ঈদের আগেই পুরো মডেল টেস্ট ধাপ শেষ', 'Model test phase finishes right before Eid') },
-          { key: 'hsc', date: data.settings.examDate, title: t('HSC ’২৭ বোর্ড পরীক্ষা শুরু (সম্ভাব্য)', "HSC '27 Board Exam starts (expected)"), note: t('ঈদুল আজহার পর সম্ভাব্য তারিখ · ৬ জুন ২০২৭', 'Post-Eid expected board schedule · 6 June 2027') },
+          { key: 'test', date: data.settings.testExamDate, title: t('কলেজের টেস্টের ব্যক্তিগত লক্ষ্য', 'Personal college-test target'), note: t('সেটিংসে কলেজের নির্দিষ্ট তারিখ বসানো যাবে', 'Editable in Settings') },
+          { key: 'eid', date: '2027-05-16', title: t('ঈদুল আজহা ২০২৭ (সম্ভাব্য)', 'Eid-ul-Adha 2027 (expected)'), note: t('চাঁদ দেখা সাপেক্ষে; রুটিন সরালেও ছুটির তারিখ সরে না', 'Subject to moon sighting; moving the plan does not move this date') },
+          { key: 'hsc', date: data.settings.examDate, title: t('HSC প্রস্তুতির ব্যক্তিগত লক্ষ্য', 'Personal HSC preparation target'), note: t('সরকারি রুটিন নিশ্চিত করা যায়নি; সেটিংসে পরিবর্তনযোগ্য', 'Official routine not verified; editable in Settings') },
         ].map(m => {
           const left = daysUntil(m.date);
           return <div className="milestone-chip-card" key={m.key}>

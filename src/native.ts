@@ -280,13 +280,14 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
   }[] = [];
 
   for (const day of plan) {
-    if (day.date < today) continue;
+    // A late session from yesterday's plan may actually begin after midnight today.
+    // Filter per-task instants below rather than dropping the entire planning day.
     if (day.date > lastDate) break;
 
     // 1. Morning daily briefing (20 min before first session, clamped >= 5:45 AM): what to study + total hours + remaining work
     const incompleteDayTasks = day.tasks.filter(t => !data.completed[t.id]);
-    if (incompleteDayTasks.length > 0) {
-      const firstStart = Math.min(...incompleteDayTasks.map(t => taskStart(t).minute));
+    if (day.date >= today && incompleteDayTasks.length > 0) {
+      const firstStart = Math.min(...incompleteDayTasks.map(t => t.startMinute));
       const briefMinute = Math.max(5 * 60 + 45, firstStart - 20);
       const briefAt = instant(day.date, briefMinute);
       if (briefAt > now && briefAt <= instant(lastDate, 24 * 60)) {
@@ -320,7 +321,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
     }
 
     // 3. Evening remaining-study check-in at 8:30 PM when tasks are still incomplete
-    if (incompleteDayTasks.length > 0) {
+    if (day.date >= today && incompleteDayTasks.length > 0) {
       const eveAt = instant(day.date, 20 * 60 + 30);
       if (eveAt > now && eveAt <= instant(lastDate, 24 * 60)) {
         const checkin = buildEveningCheckinNotification(plan, data, day.date);

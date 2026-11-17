@@ -1,3 +1,87 @@
+# প্রস্তুতি · HSC 27 — current feature status
+
+**Working version: 2.42.0 / Android code 22 · recorded 16 November 2026 · unreleased.**
+The [published v2.41.0 APK](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.41.0) and [public PWA](https://rahatportfolio.github.io/HSC-27-/) have not been replaced by this working update. This report distinguishes measured software behavior from official dates, content coverage and device verification.
+
+## এই আপডেট: এক জায়গায় তারিখ বদল, সংযুক্ত পরিকল্পনায় প্রয়োগ
+
+| Item | Current behavior | Evidence / limit |
+|---|---|---|
+| Default start | **20 November 2026, 06:30 Bangladesh time** | New-profile default. Existing saved settings are not silently overwritten |
+| Linked personal targets | Boost **7 Dec**, test-preparation **1 Feb 2027**, board-preparation **6 Jun 2027** | Automatically shift by the start-date offset when linked policy is selected; these are **not verified examination dates** |
+| Fixed external dates | A confirmed college/board deadline can stay fixed | Rebuilds phases and shows capacity shortfalls rather than pretending an exam can be postponed |
+| Settings transaction | Draft preview → confirmation → one validated update | Cancellation is non-destructive; reload does not shift the dates twice |
+| Routine and time | Phases, ordinary study slots, custom planned dates, countdowns, exports and reminder inputs derive from settings | Explicit custom clocks and real weekly appointments retain their meaning |
+| History | Notes, marks, actual completion timestamps, measured sessions and recall history keep real dates | Pending custom references and partial evidence move without duplicate aliases; undo/reverse-shift stays undone |
+| Unsafe changes | Locked plans, data collisions and custom work beyond the horizon block save | Original profile is preserved; user can repair the conflicting customisation |
+| Honest capacity | Missing learning/practice/revision/mocks, conflicts and deferred workload are warnings | Allocation is not completion or mastery; no “full preparation” promise |
+| Lectures/adaptation | One shared final plan in Settings and the app; 180-minute mocks cannot become partial exams | Displacement rolls back if the original work cannot fit; Weakness reports actual changes |
+| Before-start dashboard | Explicit future-routine notice and first-day preview | The normal smart target appears on the chosen start date, not before it |
+| Small-screen UI | Source links wrap; countdown contrast corrected | Responsive/browser and deliberate-fault regressions passed; not certification of every device |
+
+### Default phases (inclusive)
+
+| Phase | Dates | Days |
+|---|---|---:|
+| Learning / test preparation | 20 Nov 2026–31 Jan 2027 | 73 |
+| Revision / question practice | 1 Feb–6 May 2027 | 95 |
+| Final practice / personal mocks | 7 May–5 Jun 2027 | 30 |
+
+**198 planning dates / 827 tasks.** Default chapter allocation ends on **29 January**. Workload starts at 8 net hours/day, then the editable boost is 16 net hours/day; breaks are extra. This is not a recommendation to sacrifice sleep. Lower the target to a sustainable level and inspect the resulting warnings.
+
+Example: **20 → 26 November** moves linked boost/test/board-preparation targets to **13 December / 7 February / 12 June**. Fixed policy preserves the two examination targets.
+
+### Existing study features (unchanged scope)
+
+- **23 views**, 114 chapters/units, seven subjects and 13 papers; Bengali-first, local-first React/Capacitor app.
+- Task tracking, measured timer sessions, chapter notes/confidence, spaced recall, practice, timed MCQ simulation, retry ladder, weakness/heatmap/backlog, marks/GPA arithmetic and analytics.
+- Permitted local media, notes/PDF libraries, full-media backup/restore and JSON/CSV/Markdown/ICS export. Online YouTube playback still needs internet and is not an offline download permission.
+- Content honesty: **1,176 authored starter MCQs**, not 1,176 original board questions. The separate recovered-board collection has **10 questions**, **24 source-coverage rows**, **3 rejected sources**, five boards/2023–2025 and **6/114 chapters**. Coverage rows are not questions.
+- English translates navigation and most controls; chapter names and some long-form content remain Bengali. Question generation is rule-based, not a cloud AI service.
+
+## আবার যাচাই করে যা ঠিক করা হয়েছে
+
+- Completed split work and its promoted canonical task no longer double-count the same minutes in the lecture plan. A reproduced **240 → 300 minute** error now stays **240**, so the remaining work is not falsely pushed to another day.
+- Overlapping completion ranges count once; old evidence is clipped to a source shortened by an hours change without erasing the original timestamps/keys.
+- Malformed legacy task references no longer crash plan rendering or block full-media restore. A shared parser prevents them from certifying completion while keeping the original backup evidence intact. Invalid video ranges cannot certify content beyond the actual class duration.
+- Settings labels describe the configured boost date, not an assumed “next month”; high-hour options do not claim full preparation and explicitly mention breaks, meals and adequate sleep.
+
+These defects have failing-before-fix regressions, independent mutation proof, and production-browser recovery/dedup checks. The earlier 684-test result did not cover all of these cases; the final counts below supersede it.
+
+## শেষ কোডে মাপা যাচাই
+
+| Check | Result |
+|---|---|
+| TypeScript | `npx tsc --noEmit` passed |
+| Full unit/jsdom UI suite | **695/695 tests in 79 files** |
+| Targeted fault injection | **109 control tests; 55/55 intentional mutations caught**, source bytes restored |
+| Production build | Passed; nonfatal large-chunk warning |
+| Actual date-change browser flow | **Asia/Dhaka + America/New_York**, production build: save/cancel/reload, history, partial evidence, future start, fixed-policy warnings, real Markdown/ICS downloads, malformed-reference recovery and promoted-completion dedup after reload |
+| Responsive browser flow | **23 views**, 320–768px, large text, English/dark, dialogs and running timer; real content/no page errors/no detected width or sibling overlap |
+| Offline study browser flow | Real playable WebM, resume, notes, full backup/restore, shared collector, mobile tabs and production PWA offline reload |
+
+The 109 controls are included in the full suite, not another 109 independent features. Mutation proof is targeted, not exhaustive. Details and commands: [README](README.md), [current audit](AUDIT.md), `scripts/check-date-guards.mjs`, `scripts/check-date-cascade.ts`.
+
+## যা এখনো নিশ্চিত করা হয়নি
+
+1. **সরকারি পরীক্ষার তারিখ:** an official HSC 2027 routine and this student's college-test notice could not be verified. [NCTB](https://nctb.gov.bd/pages/notices/), [Sylhet HSC Corner](https://sylhetboard.gov.bd/corner/hsc), [Sylhet college notices](https://sylhetboard.gov.bd/order/college) and [Dhaka Board HSC notices](https://dhakaeducationboard.gov.bd/index.php/site/product/hsccorner) were checked with retrieval limits recorded in the audit. This does not prove no notice exists. **1 February / 6 June remain personal preparation targets.**
+2. **ফোনে native behavior:** no v2.42.0 APK build/install or physical-device alarm/battery/background-delivery check was done here. Capacitor notification regressions are mocked; Chromium PWA testing is not Android-device verification.
+3. **নিশ্চয়তা নয়:** passing tests does not mean zero bugs, a certified syllabus, guaranteed board questions or guaranteed GPA. A/B/C priorities and stars are editorial study aids.
+4. **Local data:** there is no cloud account/sync or push server. Storage clearing or uninstalling can erase progress. Take a JSON/full-media backup before changing the schedule or installing an update.
+
+### ব্যবহার / update status
+
+Open **Settings & backup → Routine start date**, choose linked personal targets or fixed external deadlines, review the phase/capacity preview, then **Save → Update routine**. Export a new calendar file after changes; previously imported events do not update themselves.
+
+The regenerated default is [HSC-27-STUDY-PLAN.md](HSC-27-STUDY-PLAN.md). The working app can be viewed in the workspace's production live preview. **No v2.42.0 release or public deployment has been made.**
+
+---
+
+<details>
+<summary>Archived feature reports — older versions, counts and incomplete historical claims</summary>
+
+The following original reports are retained as history only. This current section supersedes their old plan sizes, test totals, question counts, dates, “complete” statements and installation links.
+
 # প্রস্তুতি · HSC 27 — ফিচার স্ট্যাটাস রিপোর্ট
 
 **ভার্সন:** 2.41.0 · **APK:** [সর্বশেষ ইনস্টল পেজ](https://github.com/Rahatportfolio/HSC-27-/releases) · **ওয়েব (PWA):** https://rahatportfolio.github.io/HSC-27-/
@@ -459,3 +543,5 @@ npm run dev         # ব্রাউজারে চালু (0.0.0.0:3000)
 ---
 
 *এই রিপোর্টের সব সংখ্যা কোড থেকে মাপা। ক্লাস-লিংকের বিস্তারিত `CLASS-LINKS.md`-এ, প্ল্যানের বিস্তারিত `HSC-27-STUDY-PLAN.md`-এ।*
+
+</details>

@@ -61,7 +61,7 @@ export interface AdaptivePlanResult {
   loads: { date: string; before: number; after: number }[];
   /** work that moved from a full day to a lighter one; nothing is lost. */
   moved: DeferredWork[];
-  /** deferred work that found no room and would otherwise have been dropped. */
+  /** Replacements rolled back because displaced work found no room. Originals stay in the plan. */
   dropped: DeferredWork[];
 }
 
@@ -148,9 +148,11 @@ function balanceDay(day: Day, rows: WeaknessRow[], cap: number, minBlock: number
   for (const row of rows) {
     if (covered.has(row.chapterId)) continue;
     if (dayCovers(day.tasks, row.chapterId)) { covered.add(row.chapterId); continue; }
-    if (room >= minBlock) {
-      const minutes = Math.min(room, Math.max(minBlock, 45));
-      const slot = slotFor(day, minutes);
+    const slotStart = slotFor({ ...day, tasks }, 0).start;
+    const available = Math.min(room, diffDays(day.date, data.settings.examDate) * 1440 - slotStart);
+    if (available >= minBlock) {
+      const minutes = Math.min(available, Math.max(minBlock, 45));
+      const slot = slotFor({ ...day, tasks }, minutes);
       tasks = [...tasks, makeTask(row, day, minutes, slot.start)];
       swaps.push({
         date: day.date, replacedTaskId: '', replacedTitle: '', replacedChapterIds: [],
@@ -161,9 +163,9 @@ function balanceDay(day: Day, rows: WeaknessRow[], cap: number, minBlock: number
       covered.add(row.chapterId);
       continue;
     }
-    const victim = displaceableTask({ ...day, tasks }, data);
+    const victim = displaceableTask({ ...day, tasks: tasks.filter(task => task.endMinute - task.startMinute >= minBlock) }, data);
     if (!victim) { unfitted.push(row.chapterId); continue; }
-    const minutes = Math.max(minBlock, victim.endMinute - victim.startMinute);
+    const minutes = victim.endMinute - victim.startMinute;
     tasks = tasks.filter(task => task.id !== victim.id);
     tasks = [...tasks, makeTask(row, day, minutes, victim.startMinute)];
     deferred.push({ from: day.date, task: victim });
@@ -174,7 +176,7 @@ function balanceDay(day: Day, rows: WeaknessRow[], cap: number, minBlock: number
     });
     covered.add(row.chapterId);
   }
-  return { day: { ...day, tasks }, swaps, unfitted, deferred };
+  return { day: { ...day, tasks: tasks.sort((a, b) => a.startMinute - b.startMinute) }, swaps, unfitted, deferred };
 }
 
 /**
@@ -207,9 +209,13 @@ export function applyAdaptivePlan(
   for (let offset = 0; offset < horizon; offset++) {
     const date = addDays(today, offset);
     const current = next.find(entry => entry.date === date);
-    if (!current) continue;
+    if (!current || date >= data.settings.examDate) continue;
     if (locked.has(date)) { skippedLocked++; continue; }
     const before = plannedMinutes(current);
+    // A manually boosted day is not permission to add even more. Full exam days
+    // and any existing overruns also remain intact for the student to review.
+    if (before > adaptiveCap(data, date, options.bufferMinutes ?? 0) || current.tasks.some(task =>
+      task.kind === 'exam' || task.endMinute > diffDays(date, data.settings.examDate) * 1440)) continue;
     const balanced = balanceDay(current, targets.filter(row =>
       !swaps.some(swap => swap.chapterId === row.chapterId) && !dayCovers(current.tasks, row.chapterId)), adaptiveCap(data, date, options.bufferMinutes ?? 0), minBlock, data);
     unfitted.push(...balanced.unfitted);
@@ -228,11 +234,16 @@ export function applyAdaptivePlan(
     for (let offset = 1; offset <= horizon && !placed; offset++) {
       const date = addDays(today, offset);
       const target = next.find(entry => entry.date === date);
-      if (!target || locked.has(date)) continue;
+      if (!target || date <= item.from || locked.has(date) || target.tasks.some(task => task.kind === 'exam')) continue;
       const minutes = item.task.endMinute - item.task.startMinute;
       if (roomOnDay(target, adaptiveCap(data, date, options.bufferMinutes ?? 0)) < minutes) continue;
       const slot = slotFor(target, minutes);
-      const task: Task = { ...item.task, id: `${item.task.id}~moved`, date, startMinute: slot.start, endMinute: slot.end };
+      const sourceId = item.task.originalTaskId || item.task.id;
+      const initial = sourceId.includes(':part-') || sourceId.startsWith('chap-practice-');
+      const deadline = initial ? data.settings.testExamDate : data.settings.examDate;
+      if (slot.end > diffDays(date, deadline) * 1440) continue;
+      // A move is still the same task: do not detach its completion evidence by inventing a new id.
+      const task: Task = { ...item.task, date, dayIndex: target.index, phase: target.phase, startMinute: slot.start, endMinute: slot.end };
       next = next.map(entry => entry.date === date ? { ...target, tasks: [...target.tasks, task] } : entry);
       moved.push(item);
       placed = true;
@@ -240,7 +251,20 @@ export function applyAdaptivePlan(
     if (!placed) dropped.push(item);
   }
 
-  return { plan: next, swaps, unfitted, skippedLocked, capMinutes, loads, moved, dropped };
+  // A failed relocation is not permission to lose a learning/revision block.
+  // Roll back just that replacement; successful, fully accounted-for moves remain.
+  for (const item of dropped) {
+    const index = swaps.findIndex(swap => swap.date === item.from && swap.replacedTaskId === item.task.id);
+    if (index < 0) continue;
+    const swap = swaps[index];
+    next = next.map(day => day.date === item.from
+      ? { ...day, tasks: day.tasks.map(task => task.id === swap.taskId ? item.task : task).sort((a, b) => a.startMinute - b.startMinute) } : day);
+    swaps.splice(index, 1);
+    unfitted.push(swap.chapterId);
+  }
+  const actualLoads = loads.filter(load => swaps.some(swap => swap.date === load.date))
+    .map(load => ({ ...load, after: plannedMinutes(next.find(day => day.date === load.date)) }));
+  return { plan: next, swaps, unfitted, skippedLocked, capMinutes, loads: actualLoads, moved, dropped };
 }
 
 /** The adaptive blocks already on a date. */

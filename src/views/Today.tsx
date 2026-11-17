@@ -220,7 +220,7 @@ export default function TodayView() {
   };
 
   const markTasksComplete = (tasksToMark: Task[]) => {
-    setData(d => setTaskCompletion(d, tasksToMark.map(task => task.id), !tasksToMark.every(task => !!d.completed[task.id])));
+    setData(d => setTaskCompletion(d, tasksToMark.map(task => task.id), !tasksToMark.every(task => !!d.completed[task.id]), plan));
   };
 
   const runPreset = (tk: Task, chapter?: Chapter, customMinutes?: number) => {
@@ -419,7 +419,7 @@ export default function TodayView() {
     <section className="card testprep-quick" aria-label={t('টেস্ট প্রস্তুতি সংক্ষিপ্ত', 'Test prep snapshot')}>
       <div className="testprep-quick-top">
         <div>
-          <span className="eyebrow">{t('ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা', 'Feb 2027 Test Exam')}</span>
+          <span className="eyebrow">{t(`টেস্ট লক্ষ্য · ${formatDate(data.settings.testExamDate, 'long')}`, `Test target · ${formatDate(data.settings.testExamDate, 'long')}`)}</span>
           <h2>{t('টেস্ট প্রস্তুতি', 'Test prep')} · {t(`${bn(prep.daysLeft)} দিন বাকি`, `${prep.daysLeft} days left`)}</h2>
         </div>
         <button type="button" className="button secondary small" onClick={() => navigate('testprep')}>{t('টেস্ট মোডে যাও', 'Open test mode')}<ArrowRight size={13} /></button>
@@ -435,7 +435,7 @@ export default function TodayView() {
     </section>
     <section className="welcome-hero">
       <div className="hero-copy">
-        <div className="hero-eyebrow"><span className="live-dot" />{t('লক্ষ্য: ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা · দিনে ২টি বিষয়', 'Target: Feb 2027 Test Exam · 2 Subjects Daily')}</div>
+        <div className="hero-eyebrow"><span className="live-dot" />{t(`টেস্ট লক্ষ্য: ${formatDate(data.settings.testExamDate)} · দিনে সর্বোচ্চ ২টি বিষয়`, `Test target: ${formatDate(data.settings.testExamDate)} · up to 2 subjects daily`)}</div>
         <h1>{isToday ? t('প্রতিদিন ২টি বিষয়,', '2 subjects a day,') : t('তোমার গোছানো রুটিন,', 'Your focused routine,')}<br /><span>{t('ধাপে ধাপে এগিয়ে যাই।', 'moves us forward.')}</span></h1>
         <p>{formatDate(selectedDate, 'long')}, {formatDate(selectedDate, 'weekday')} <span className="hero-separator">·</span> {day ? `${t('দিন', 'Day')} ${bn(dayNumber)} / ${bn(plan.length)}` : t('পরিকল্পনার বাইরে', 'outside plan range')}</p>
         <div className="hero-chips">
@@ -685,7 +685,7 @@ export default function TodayView() {
       </section>
     )}
 
-    <PhaseJourney startDate={data.settings.startDate} activeDate={selectedDate} />
+    <PhaseJourney activeDate={selectedDate} />
 
     <div className="stats-grid">
       <button className="stat-card stat-link" onClick={() => navigate('syllabus')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস সম্পন্ন', 'Syllabus progress')}</span><strong>{bn(learning.overall.percent)}<small>%</small></strong><p>{bn(learning.overall.completed)} / {bn(learning.overall.total)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={learning.overall.percent} className="stat-progress" /></button>
@@ -699,7 +699,7 @@ export default function TodayView() {
     {nextImportant && <div className="important-banner"><span><Bell size={17} /><strong>{nextImportant.title}</strong> · {formatDate(nextImportant.date, 'long')} · {diffDays(today, nextImportant.date) === 0 ? t('আজ', 'today') : `${bn(diffDays(today, nextImportant.date))} ${t('দিন বাকি', 'days left')}`}{nextImportant.note ? ` — ${nextImportant.note}` : ''}</span><button className="text-button" onClick={() => navigate('calendar')}>{t('সব তারিখ', 'All dates')} <ArrowRight size={15} /></button></div>}
 
     <div className="dashboard-grid">
-      <section id="today-timeline-card" className="card schedule-card">
+      <section id="today-timeline-card" className="card schedule-card" aria-label={t('নির্বাচিত দিনের সময়সূচি', 'Selected day timeline')}>
         <div className="schedule-heading">
           <div>
             <h2>{isToday ? t('আজকের সময়সূচি · এক নজরে', 'Today’s timeline · at a glance') : t('দিনের সময়সূচি · এক নজরে', 'Day timeline · at a glance')} <span className="count-badge">{bn(day?.tasks.length || 0)}{t('টি সেশন', ' sessions')}</span></h2>
@@ -711,7 +711,7 @@ export default function TodayView() {
         </div>
         {!isToday && <div className="selected-date-bar"><span>{formatDate(selectedDate, 'long')}</span><button className="text-button" onClick={() => setSelectedDate(today)}>{t('আজকে ফেরো', 'Back to today')} <ArrowRight size={14} /></button></div>}
         {day?.isCatchup && <div className="catchup-note"><RotateCcw size={16} />{t('সাপ্তাহিক গোছানো ও রিভিশন দিন (২টি বিষয়) — জমে থাকা পড়া ও বোর্ড প্রশ্ন ঝালাই করো।', 'Weekly 2-subject catch-up & revision day.')}</div>}
-        {carryovers.length > 0 && <div className="carryover-list"><div className="carryover-heading"><strong><ListChecks size={15} />{t('এই দিনের ব্যাকলগ', 'Backlog for this day')}</strong><span>{bn(carryovers.filter(item => !item.completedAt).length)} {t('টি বাকি', 'left')}</span></div>{carryovers.map(item => <div key={item.id} className={`carryover-row ${item.completedAt ? 'done' : ''}`}><button className={`task-check ${item.completedAt ? 'checked' : ''}`} aria-pressed={!!item.completedAt} aria-label={t(`${item.title} সম্পন্ন`, `Mark ${item.title} complete`)} onClick={() => setData(d => toggleCarryover(d, item.id))}>{item.completedAt && <span>✓</span>}</button><div><strong>{item.title}</strong><span>{phaseName(plan.find(d => d.date === item.fromDate)?.phase || 'learn')} · {t('থেকে', 'from')} {formatDate(item.fromDate)} · {bn(item.minutes)} {t('মি.', 'min')}</span></div><button className="icon-button" aria-label={t('ব্যাকলগ থেকে সরাও', 'Remove from backlog')} onClick={() => setData(d => removeCarryover(d, item.id))}><Trash2 size={15} /></button></div>)}</div>}
+        {carryovers.length > 0 && <div className="carryover-list"><div className="carryover-heading"><strong><ListChecks size={15} />{t('এই দিনের ব্যাকলগ', 'Backlog for this day')}</strong><span>{bn(carryovers.filter(item => !item.completedAt).length)} {t('টি বাকি', 'left')}</span></div>{carryovers.map(item => <div key={item.id} className={`carryover-row ${item.completedAt ? 'done' : ''}`}><button className={`task-check ${item.completedAt ? 'checked' : ''}`} aria-pressed={!!item.completedAt} aria-label={t(`${item.title} সম্পন্ন`, `Mark ${item.title} complete`)} onClick={() => setData(d => toggleCarryover(d, item.id, plan))}>{item.completedAt && <span>✓</span>}</button><div><strong>{item.title}</strong><span>{phaseName(plan.find(d => d.date === item.fromDate)?.phase || 'learn')} · {t('থেকে', 'from')} {formatDate(item.fromDate)} · {bn(item.minutes)} {t('মি.', 'min')}</span></div><button className="icon-button" aria-label={t('ব্যাকলগ থেকে সরাও', 'Remove from backlog')} onClick={() => setData(d => removeCarryover(d, item.id))}><Trash2 size={15} /></button></div>)}</div>}
         {day ? <><div className="filter-bar task-filter-bar"><select aria-label={t('কাজের বিষয়', 'Task subject')} value={taskSubject} onChange={e => setTaskSubject(e.target.value as SubjectId | 'all')}><option value="all">{t('সব বিষয়', 'All subjects')}</option>{SUBJECTS.map(subject => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select><select aria-label={t('কাজের অবস্থা', 'Task status')} value={taskStatus} onChange={e => setTaskStatus(e.target.value as 'all' | 'pending' | 'done')}><option value="all">{t('সব কাজ', 'All tasks')}</option><option value="pending">{t('বাকি', 'Pending')}</option><option value="done">{t('সম্পন্ন', 'Done')}</option></select><button className="button secondary small" onClick={() => setShowTaskForm(v => !v)}><Plus size={15} />{t('নতুন কাজ', 'New task')}</button></div>
         {showTaskForm && <form className="personal-task-form" onSubmit={addPersonalTask}><input aria-label={t('কাজের নাম', 'Task title')} placeholder={t('কাজের নাম', 'Task title')} maxLength={120} required value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} /><select aria-label={t('নতুন কাজের বিষয়', 'New task subject')} value={newTaskSubject} onChange={e => setNewTaskSubject(e.target.value as SubjectId)}>{SUBJECTS.map(subject => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select><input aria-label={t('কাজের সময়', 'Task time')} type="time" required value={newTaskTime} onChange={e => setNewTaskTime(e.target.value)} /><input aria-label={t('কাজের সময়কাল মিনিট', 'Task duration minutes')} type="number" min="15" max="480" required value={newTaskMinutes} onChange={e => setNewTaskMinutes(e.target.value)} /><button className="button primary small" type="submit">{t('যোগ করো', 'Add task')}</button></form>}
         <div className="task-list">{filteredTasks.map(task => { const custom = data.routineBlocks.find(block => block.date === selectedDate && task.id === `custom-${selectedDate}-${block.id}`); return <div key={task.id}><TaskCard task={task} compact />{custom && <button className="text-button" onClick={() => confirm({ title: t('নিজের কাজ মুছবে?', 'Delete this task?'), message: task.title, danger: true, label: t('মুছে ফেলো', 'Delete'), action: () => setData(d => { const completed = { ...d.completed }; delete completed[task.id]; return { ...d, completed, routineBlocks: d.routineBlocks.filter(block => block.id !== custom.id), carryovers: d.carryovers.filter(item => item.taskId !== task.id) }; }) })}><Trash2 size={14} />{t('নিজের কাজ মুছো', 'Delete personal task')}</button>}</div>; })}{!filteredTasks.length && <p className="tiny-muted">{t('এই ফিল্টারে কোনো কাজ নেই।', 'No tasks match these filters.')}</p>}</div><DaySummary day={day} /><div className="schedule-footer"><span>{t(`বিরতি বাদে মোট ${bn(activeHours)} ঘণ্টা পড়ার লক্ষ্য · বাংলাদেশ সময়`, `Total ${activeHours}h net study time · Bangladesh time`)}</span><button className="text-button" onClick={() => navigate('calendar', selectedDate)}><CalendarDays size={15} />{t('মাসিক রুটিন দেখো', 'Open monthly calendar')}</button></div></> : <EmptyState title={t('এই তারিখে কোনো সেশন নেই', 'No session on this date')} description={t(`তোমার পরিকল্পনা ${formatDate(plan[0].date)} থেকে ${formatDate(plan[plan.length - 1].date)} পর্যন্ত।`, `Your plan runs from ${formatDate(plan[0].date)} to ${formatDate(plan[plan.length - 1].date)}.`)} action={<button className="button primary" onClick={() => setSelectedDate(today)}>{t('আজকের পড়ায় ফিরে যাও', 'Back to today’s study')}</button>} />}

@@ -1,9 +1,10 @@
 import { remainingMedia } from './smartSchedule';
 import type { SubjectId } from './data';
 import type { AppData, Day, Mistake, Task } from './planner';
-import { addDays, taskStart, todayKey } from './planner';
+import { addDays, hasFullTaskAllocation, taskStart, todayKey } from './planner';
 import type { Carryover, ChapterMeta, MistakeCategory, StudyMode, StudySession } from './types';
 import { newId, nowIso } from './storage';
+import { parseTaskRangeId } from './taskReferences';
 
 export const EMPTY_META: ChapterMeta = { note: '', weak: false, cq: 'none', mcq: 'none', updatedAt: '' };
 export function chapterMeta(data: AppData, chapterId: string): ChapterMeta {
@@ -53,25 +54,47 @@ export function addCarryover(data: AppData, task: Pick<Task, 'id' | 'title' | 's
   return { ...data, carryovers: [...data.carryovers, entry] };
 }
 /** One completion state for an original task and all of its carried copies. */
-export function setTaskCompletion(data: AppData, ids: string[], done: boolean): AppData {
-  const selected = new Set(ids.filter(id=>{
-    if(!done || !id.startsWith('smart-video|'))return true;
-    const [,encoded,start,end]=id.split('|');
-    const c=data.advanced?.classes.find(c=>c.id===decodeURIComponent(encoded));
-    return !!c && !remainingMedia(c).some(([s,e])=>s<Number(end)/1000-.01 && e>Number(start)/1000+.01);
+export function setTaskCompletion(data: AppData, ids: string[], done: boolean, plan?: Day[]): AppData {
+  const selected = new Set(ids.filter(id => {
+    if (!done || (!id.startsWith('smart-video|') && !id.startsWith('smart-part|'))) return true;
+    const range = parseTaskRangeId(id);
+    if (!range) return false;
+    if (range.kind === 'part') return true;
+    const c = data.advanced?.classes.find(c => c.id === range.sourceId);
+    return !!c && range.to / 1000 <= c.duration + 0.01 &&
+      !remainingMedia(c).some(([s, e]) => s < range.to / 1000 - 0.01 && e > range.from / 1000 + 0.01);
   }));
   const completed = { ...data.completed };
   const stamp = nowIso();
+  const splitSources = new Set<string>();
   for (const id of selected) {
     if (done) completed[id] = completed[id] || stamp;
-    else delete completed[id];
+    else {
+      delete completed[id];
+      if (!id.startsWith('smart-part|')) {
+        const prefix = `smart-part|${encodeURIComponent(id)}|`;
+        Object.keys(completed).filter(key => key.startsWith(prefix)).forEach(key => { delete completed[key]; });
+      }
+    }
+    if (id.startsWith('smart-part|')) {
+      const range = parseTaskRangeId(id);
+      if (range?.kind === 'part') splitSources.add(range.sourceId);
+    }
+  }
+  const tasks = plan?.flatMap(day => day.tasks);
+  for (const source of splitSources) {
+    if (!done) delete completed[source];
+    // Once all fragments are actually complete, retain canonical completion across
+    // future date/hour changes. A single visible fragment can never promote it.
+    else if (tasks && hasFullTaskAllocation(tasks, source, completed)) completed[source] ||= stamp;
+    selected.add(source);
   }
   return { ...data, completed, carryovers: data.carryovers.map(entry => selected.has(entry.taskId)
     ? { ...entry, completedAt: done ? completed[entry.taskId] : undefined } : entry) };
 }
-export function toggleCarryover(data: AppData, id: string): AppData {
+export function toggleCarryover(data: AppData, id: string, plan?: Day[]): AppData {
   const item = data.carryovers.find(entry => entry.id === id);
-  return item ? setTaskCompletion(data, [item.taskId], !data.completed[item.taskId]) : data;
+  return item ? setTaskCompletion(data, [item.taskId], !data.completed[item.taskId], plan) : data;
 }
 export function removeCarryover(data: AppData, id: string): AppData {
   return { ...data, carryovers: data.carryovers.filter(item => item.id !== id) };

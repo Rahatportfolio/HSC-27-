@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS } from './data';
-import { buildPlan, freshData } from './planner';
+import { addDays, buildPlan, freshData } from './planner';
 import { addBacklogToToday, addCarryover, addStudySession, autoCarryover, chapterMeta, deleteStudySession, mistakesByCategory, pendingCarryovers, toggleCarryover, unresolvedMistakeCount, updateChapterMeta } from './study';
 
 const plan = buildPlan();
@@ -37,19 +37,21 @@ describe('study sessions and carryover', () => {
   it('auto-carries at most six recent non-exam sessions per day', () => {
     const data = freshData();
     data.settings.carryoverMode = 'auto';
-    const next = autoCarryover(plan, data, '2026-11-20');
-    const today = next.carryovers.filter(item => item.date === '2026-11-20');
+    const date = plan[6].date;
+    const next = autoCarryover(plan, data, date);
+    const today = next.carryovers.filter(item => item.date === date);
     expect(today.length).toBeGreaterThan(0);
     expect(today.length).toBeLessThanOrEqual(6);
-    expect(today.every(item => item.fromDate < '2026-11-20' && item.fromDate >= '2026-11-10')).toBe(true);
-    expect(autoCarryover(plan, next, '2026-11-20')).toBe(next);
+    expect(today.every(item => item.fromDate < date && item.fromDate >= addDays(date, -10))).toBe(true);
+    expect(autoCarryover(plan, next, date)).toBe(next);
   });
   it('adds up to five backlog sessions on demand', () => {
     const data = freshData();
-    const result = addBacklogToToday(plan, data, '2026-11-20', 5);
+    const date = plan[6].date;
+    const result = addBacklogToToday(plan, data, date, 5);
     expect(result.added).toBe(5);
     expect(result.data.carryovers).toHaveLength(5);
-    expect(result.data.carryovers.every(item => item.date === '2026-11-20')).toBe(true);
+    expect(result.data.carryovers.every(item => item.date === date)).toBe(true);
   });
 });
 

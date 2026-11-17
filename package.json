@@ -1,7 +1,7 @@
 {
   "name": "hsc-27-prostuti",
   "private": true,
-  "version": "2.41.0",
+  "version": "2.42.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
@@ -16,7 +16,9 @@
     "android:apk": "npm run android:assets && npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:open": "cap open android",
     "test:responsive": "node scripts/check-responsive.mjs",
-    "test:study-browser": "tsx scripts/check-study-system.ts"
+    "test:study-browser": "tsx scripts/check-study-system.ts",
+    "test:date-guards": "node scripts/check-date-guards.mjs",
+    "test:date-browser": "tsx scripts/check-date-cascade.ts"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",

@@ -51,9 +51,9 @@ export function PageHeading({ eyebrow, title, titleEn, description, descriptionE
 export function EmptyState({ title, description, titleEn, descriptionEn, action }: { title: string; description: string; titleEn?: string; descriptionEn?: string; action?: ReactNode }) {
   return <div className="empty-state"><div className="empty-icon"><CheckCheck size={28} strokeWidth={1.5} /></div><h3>{t(title, titleEn || title)}</h3><p>{t(description, descriptionEn || description)}</p>{action}</div>;
 }
-export function PhaseJourney({ startDate, activeDate }: { startDate: string; activeDate: string }) {
-  const { navigate } = usePlanner();
-  const phases = getPhases(startDate);
+export function PhaseJourney({ activeDate }: { activeDate: string }) {
+  const { navigate, data } = usePlanner();
+  const phases = getPhases(data.settings);
   return <div className="phase-journey">{phases.map((p, i) => {
     const active = activeDate >= p.start && activeDate <= p.end;
     return <button key={p.id} className={`phase-step ${active ? 'active' : ''}`} onClick={() => navigate('calendar', p.start)} style={{ '--phase-color': p.color } as CSSProperties}><span className="phase-number">{active ? <span className="live-dot" /> : bn(i + 1)}</span><span className="phase-copy"><strong>{p.name}</strong><span>{formatDate(p.start)} – {formatDate(p.end)} <span className="phase-days">· {bn(p.days)} {t('দিন', 'days')}</span></span></span>{i < 2 && <ChevronRight className="phase-arrow" size={17} />}</button>;

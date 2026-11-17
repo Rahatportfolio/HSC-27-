@@ -24,7 +24,7 @@ import { newId } from "../storage";
 import { Modal, PageHeading } from "../components";
 import { formatBytes } from "../pdfCatalog";
 import { t } from "../i18n";
-import { diffDays, todayKey } from "../planner";
+import { diffDays, formatDate, todayKey } from "../planner";
 
 const labels: Record<PreparationStep, string> = {
   lecture: "Lecture completed",
@@ -307,6 +307,13 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
 }
 export function StudyOverview() {
   const { data, plan, today, navigate } = usePlanner();
+  if (today < data.settings.startDate) return (
+    <section className="study-panel" aria-label={t('পরিকল্পনা এখনো শুরু হয়নি', 'Plan has not started')}>
+      <h2>{t('রুটিন শুরু', 'Routine starts')} · {formatDate(data.settings.startDate, 'long')}</h2>
+      <p>{t('শুরুর আগে কোনো রুটিন সেশন নির্ধারিত নেই। নিচে তারিখ বেছে দিনের পূর্বরূপ দেখতে পারো; চাইলে এখনো নিজের অনুশীলন বা পড়ার সময় লিখে রাখতে পারো।', 'No routine sessions are assigned before the start. Use the date picker below to preview a planned day; optional practice and study logging remain available.')}</p>
+      <button className="button secondary" onClick={() => navigate('calendar', data.settings.startDate)}>{t('প্রথম দিনের পরিকল্পনা দেখো', 'Preview the first day')}</button>
+    </section>
+  );
   const week = videoWeek(data, plan, today);
   const a = data.advanced || emptyAdvanced();
   const priorities = priorityChapters(data, today)

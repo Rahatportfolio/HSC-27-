@@ -8,7 +8,7 @@ import { CHAPTERS } from "../src/data";
 import { emptyAdvanced } from "../src/advanced";
 
 if (!process.env.CHROMIUM_PATH) throw new Error("Set CHROMIUM_PATH");
-const server = await createServer({ server: { host: "127.0.0.1", port: 0 } });
+const server = await createServer({ server: { host: "0.0.0.0", port: 0 } });
 await server.listen();
 const address = server.httpServer!.address() as { port: number };
 const base = `http://127.0.0.1:${address.port}`;
@@ -208,7 +208,7 @@ try {
   )
     throw new Error("PWA shared link was not collected");
   await fits();
-  const production = await preview({ preview: { host: "127.0.0.1", port: 0 } });
+  const production = await preview({ preview: { host: "0.0.0.0", port: 0 } });
   const productionAddress = production.httpServer.address() as { port: number };
   const offlineContext = await browser.newContext({
     viewport: { width: 360, height: 800 },

@@ -1,12 +1,12 @@
-import { integrateStudyPlan } from './smartSchedule';
+import { buildStudyProjection } from './studyPlan';
 import StudySystem from './views/StudySystem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, BadgeCheck, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, Grid3x3, HardDrive, Layers, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
-import { applyDayOverrides, applyRoutine, bn, buildPlan, diffDays, formatDate, isValidDate, todayKey } from './planner';
-import { applyManualSchedule } from './scheduleEdit';
+import { bn, diffDays, formatDate, isValidDate, scheduleDateError, todayKey } from './planner';
+import { planHealth } from './planHealth';
 import type { AppData } from './planner';
 import { loadData, parseBackup, saveData, SAVED_AT_KEY, RECOVERY_KEY } from './storage';
 import { persistToDatabase, restoreFromDatabase } from './db';
@@ -16,8 +16,6 @@ import { canNotify, clearLiveTimerNotification, notifySessionDone, showNotificat
 import type { PresetTimerInput } from './hooks';
 import { cancelTimerAlarm, isNativeApp, nativeNotify, openNativeTimerPictureInPicture, prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
 import { buildDailyNotificationDigest, buildDailyStatusNotification, buildExamRoutineLine } from './notifications';
-import { applyAdaptivePlan } from './adaptive';
-import { weaknessReport } from './weakness';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover, setTaskCompletion } from './study';
 import { PlannerContext } from './context';
@@ -98,7 +96,7 @@ export default function App() {
   const [storageOk, setStorageOk] = useState(true);
   const [view, setView] = useState<View>(viewFromHash);
   const now = useNow(); const today = todayKey(now);
-  const [selectedDate, setSelectedDateState] = useState(today);
+  const [selectedDate, setSelectedDateState] = useState(() => today < initial.data.settings.startDate ? initial.data.settings.startDate : today);
   const setSelectedDate = useCallback((date: string) => { if (isValidDate(date)) setSelectedDateState(date); }, []);
   const [dbReady, setDbReady] = useState(() => !isNativeApp());
   const [dbMirrorSafe, setDbMirrorSafe] = useState(true);
@@ -107,34 +105,18 @@ export default function App() {
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; id: number } | null>(initial.warning ? { message: initial.warning, type: 'info', id: 0 } : null);
   const notify = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => setToast({ message, type, id: Date.now() }), []);
-  const basePlan = useMemo(() => buildPlan(data.settings), [data.settings]);
-  const planWithRoutine = useMemo(() => applyRoutine(basePlan, data.routineBlocks), [basePlan, data.routineBlocks]);
-  // Manual edits (moves, deletions, subject/title changes) are re-applied on every build, so a
-  // settings-driven regeneration never silently drops the student's own schedule changes.
-  const planEdited = useMemo(() => applyManualSchedule(planWithRoutine, data), [planWithRoutine, data]);
-  const ordinaryPlan = useMemo(() => applyDayOverrides(planEdited, data.dayOverrides, data.settings), [planEdited, data.dayOverrides, data.settings]);
-  const planIntegrated = useMemo(() => integrateStudyPlan(ordinaryPlan, data, today), [ordinaryPlan, data, today]);
-  /**
-   * The adaptive planner is a presentation layer, exactly like the manual edits above:
-   * the stored routine is never rewritten, so switching it off restores the original plan.
-   */
-  const plan = useMemo(() => {
-    if (!data.settings.adaptiveEnabled) return planIntegrated;
-    const rows = weaknessReport(planIntegrated, data, today);
-    if (!rows.length) return planIntegrated;
-    return applyAdaptivePlan(planIntegrated, rows, data, today, {
-      horizonDays: 3,
-      minBlockMinutes: 45,
-      bufferMinutes: data.settings.adaptiveBuffer,
-    }).plan;
-  }, [planIntegrated, data, today]);
+  // One projection also powers Settings' draft preview; saved customisations are
+  // always re-applied and the stored routine/history are never rewritten by rendering.
+  const { plan, adaptive } = useMemo(() => buildStudyProjection(data, today), [data, today]);
+  const health = useMemo(() => planHealth(plan, data.settings, data.completed), [plan, data.settings, data.completed]);
+  const invalidSchedule = scheduleDateError(data.settings);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
     onComplete: session => {
       setData(d => {
         const next = addStudySession(d, { minutes: session.minutes, subject: session.subject, chapterId: session.chapterId || undefined, mode: session.mode, label: session.label || undefined });
-        return session.taskId ? setTaskCompletion(next, [session.taskId], true) : next;
+        return session.taskId ? setTaskCompletion(next, [session.taskId], true, plan) : next;
       });
       void clearLiveTimerNotification();
       // React may defer the state updater, so derive the notification from the
@@ -424,7 +406,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', key);
   }, [confirmRequest, modal]);
   useEffect(() => { const onStorage = (e: StorageEvent) => { if (e.key !== STORAGE_KEY || !e.newValue) return; try { setData(parseBackup(e.newValue)); notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info'); } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); } }; window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage); }, [notify]);
-  const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !d.completed[id])), []);
+  const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !d.completed[id], plan)), [plan]);
   const logSession = useCallback((session: Parameters<typeof addStudySession>[1]) => setData(d => addStudySession(d, session)), []);
   const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify(t('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'No unfinished session in this period.'), 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch { notify(t('ক্যালেন্ডার ফাইল তৈরি হয়নি। আবার চেষ্টা করো।', 'The calendar file was not created. Try again.'), 'error'); } }, [plan, data, today, notify]);
   /**
@@ -551,11 +533,11 @@ export default function App() {
   const todayDigest = useMemo(() => buildDailyNotificationDigest(plan, data, today), [plan, data, today]);
   const currentNav = NAV.find(n => n.id === view);
   const context = {
-    data, setData, plan, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
+    data, setData, plan, adaptive, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, heatmap: HeatmapView, backlog: BacklogView, audit: AuditView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
+  const ViewComponent = invalidSchedule ? SettingsView : { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, heatmap: HeatmapView, backlog: BacklogView, audit: AuditView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');
@@ -689,16 +671,16 @@ export default function App() {
         <div className="exam-countdown-bar" role="region" aria-label={t('পরীক্ষার কাউন্টডাউন', 'Exam countdown')}>
           <button type="button" className={`exam-countdown-pill test ${testExamDays >= 0 && testExamDays <= 45 ? 'soon' : ''}`} onClick={() => navigate('settings')} title={t(`কলেজের টেস্ট পরীক্ষার লক্ষ্য তারিখ: ${formatDate(data.settings.testExamDate)} (সেটিংসে পরিবর্তনযোগ্য)`, `College Test Exam target: ${formatDate(data.settings.testExamDate)} (editable in Settings)`)}>
             <span className="exam-pill-dot" aria-hidden="true" />
-            <span className="exam-pill-label">{t('টেস্ট পরীক্ষা', 'Test Exam')} <small>· {formatDate(data.settings.testExamDate)}</small></span>
+            <span className="exam-pill-label">{t('টেস্ট লক্ষ্য', 'Test target')} <small>· {formatDate(data.settings.testExamDate)}</small></span>
             <strong className="exam-pill-days">{countdownText(testExamDays)}</strong>
           </button>
-          <button type="button" className={`exam-countdown-pill hsc`} onClick={() => navigate('settings')} title={t(`HSC ২০২৭ বোর্ড পরীক্ষার সম্ভাব্য তারিখ (ঈদুল আজহার পর): ${formatDate(data.settings.examDate)}`, `Expected HSC 2027 Board Exam date (post-Eid-ul-Adha): ${formatDate(data.settings.examDate)}`)}>
+          <button type="button" className={`exam-countdown-pill hsc`} onClick={() => navigate('settings')} title={t(`ব্যক্তিগত HSC লক্ষ্য: ${formatDate(data.settings.examDate)} — সরকারি রুটিন নিশ্চিত করা যায়নি`, `Personal HSC target: ${formatDate(data.settings.examDate)} — official routine not verified`)}>
             <Timer size={14} aria-hidden="true" />
-            <span className="exam-pill-label">{t('HSC ’২৭ পরীক্ষা', "HSC '27 Exam")} <small>· {formatDate(data.settings.examDate)}</small></span>
+            <span className="exam-pill-label">{t('HSC লক্ষ্য', 'HSC target')} <small>· {formatDate(data.settings.examDate)}</small></span>
             <strong className="exam-pill-days">{countdownText(examDays)}</strong>
           </button>
         </div>
-        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}<ViewComponent /></main>
+        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}{health.warnings.length > 0 && <section className="schedule-warning" role="alert" aria-label={t('রুটিনের সময়সীমার সতর্কতা', 'Schedule capacity warning')}><strong>{t('সময়সীমা মিলিয়ে নাও', 'Check your schedule capacity')}</strong><ul>{health.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul><button type="button" className="text-button" onClick={() => navigate('settings')}>{t('তারিখ ও সময় ঠিক করো', 'Review dates and times')}</button></section>}<ViewComponent /></main>
       </div>
       <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>
         {(['today', 'calendar', 'syllabus', 'videos'] as const).map(id => NAV.find(n => n.id === id)!).map(n => (

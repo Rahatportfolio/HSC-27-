@@ -1,5 +1,6 @@
 import { CHAPTERS, CORE, PAPERS, chapterById, subjectById } from './data';
-import { isEnglish } from './i18n';
+import { isEnglish, t } from './i18n';
+import { parseTaskRangeId } from './taskReferences';
 import type { Chapter, SubjectId } from './data';
 import type {
   BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
@@ -21,18 +22,21 @@ export interface Settings extends SettingsExtras {
   reminderLead: number;
   syllabusChecked: boolean;
   calendarRevision: number;
-  /** Personal target for the college Test Exam (ফেব্রুয়ারি ২০২৭ টেস্ট পরীক্ষা). */
+  /** Personal planning target, not a verified college notice. */
   testExamDate: string;
-  /** Personal target for the HSC 2027 Board Exam (জুন ২০২৭ · ঈদুল আজহার পর সম্ভাব্য তারিখ). */
+  /** Personal planning target, not a verified board routine. */
   examDate: string;
+  /** Move personal exam targets with the start, or keep externally set deadlines fixed. */
+  examDatePolicy: 'shift' | 'fixed';
 }
 
+/** Defaults are personal planning targets; see EXAM_DATE_INFORMATION for verification limits. */
 export const DEFAULT_SETTINGS: Settings = {
-  startDate: '2026-11-14',
+  startDate: '2026-11-20',
   startTime: '06:30',
   dailyHours: 8,
   boostEnabled: true,
-  boostStartDate: '2026-12-01',
+  boostStartDate: '2026-12-07',
   boostDailyHours: 16,
   adaptiveEnabled: true,
   adaptiveBuffer: 30,
@@ -48,6 +52,7 @@ export const DEFAULT_SETTINGS: Settings = {
   carryoverMode: 'manual',
   testExamDate: '2027-02-01',
   examDate: '2027-06-06',
+  examDatePolicy: 'shift',
   pomodoroFocus: 25,
   pomodoroBreak: 5,
   pomodoroLongBreak: 15,
@@ -57,6 +62,8 @@ export const DEFAULT_SETTINGS: Settings = {
 export interface Task {
   video?: { classId: string; from: number; to: number };
   originalTaskId?: string;
+  /** Full source duration for split allocations, so a visible fragment cannot imply full coverage. */
+  sourceMinutes?: number;
   id: string;
   date: string;
   dayIndex: number;
@@ -370,14 +377,77 @@ export function isTaskCurrent(task: Pick<Task, 'date' | 'startMinute' | 'endMinu
 export const toMinutes = (time: string): number => { const [h, m] = time.split(':').map(Number); return h * 60 + m; };
 export const percent = (done: number, total: number): number => total ? Math.round(done / total * 100) : 0;
 
-export function getPhases(start: string): Phase[] {
-  const a = addMonths(start, 3), b = addMonths(start, 5), c = addMonths(start, 6);
+/** Shift linked personal targets by calendar days, never by milliseconds in a device timezone.
+ * Fixed exam deadlines are deliberately NOT moved. The caller must validate before saving.
+ */
+export function shiftPlanStart(settings: Settings, startDate: string): Settings {
+  if (!isValidDate(settings.startDate) || !isValidDate(startDate)) throw new Error(t('সঠিক শুরুর তারিখ বাছো।', 'Pick a valid start date.'));
+  const delta = diffDays(settings.startDate, startDate);
+  const shift = (date: string) => isValidDate(date) ? addDays(date, delta) : date;
+  return {
+    ...settings, startDate,
+    boostStartDate: shift(settings.boostStartDate),
+    ...(settings.examDatePolicy === 'shift' ? {
+      testExamDate: shift(settings.testExamDate),
+      examDate: shift(settings.examDate),
+    } : {}),
+  };
+}
+
+/** A late start may spill into the following date. Reserve that final night before an exam. */
+function studyEndExclusive(settings: Settings, deadline = settings.examDate, learning = false): string {
+  const last = addDays(deadline, -1);
+  const hours = Math.max(effectiveDailyHours(settings, last), effectiveDailyHours(settings, addDays(last, -1)));
+  const short = hours >= 16 ? 10 : 15;
+  const meal = hours >= 16 ? 25 : hours >= 12 ? 40 : 60;
+  // Final-phase days have four entries (two short breaks and one meal break).
+  const spill = Math.floor((toMinutes(settings.startTime) + hours * 60 + (learning ? 4 : 2) * short + meal - 1) / 1440);
+  return addDays(deadline, -Math.max(0, spill));
+}
+
+/** Kept separate from backup parsing: an old inconsistent profile must be repairable, not erased. */
+export function scheduleDateError(settings: Settings): string | null {
+  if (![settings.startDate, settings.testExamDate, settings.examDate, settings.boostStartDate].every(isValidDate)) {
+    return t('পরিকল্পনার সব তারিখ সঠিকভাবে বাছো।', 'Choose valid dates for the whole plan.');
+  }
+  if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(settings.startTime) || ![settings.dailyHours, settings.boostDailyHours].every(h => Number.isInteger(h) && h >= 4 && h <= 18)) return t('পড়ার সময় ও দৈনিক ঘণ্টা সঠিকভাবে বাছো।', 'Choose valid study times and daily hours.');
+  if (settings.startDate >= studyEndExclusive(settings, settings.testExamDate, true)) return t('টেস্ট পরীক্ষার লক্ষ্য শুরুর তারিখের পরে হতে হবে।', 'The test target must be after the start date.');
+  if (settings.testExamDate >= settings.examDate) return t('বোর্ড পরীক্ষার লক্ষ্য টেস্টের পরে হতে হবে।', 'The board target must be after the test target.');
+  if (diffDays(settings.startDate, settings.examDate) > 730) return t('একটি প্রস্তুতি পরিকল্পনা সর্বোচ্চ ৭৩০ দিনের হতে পারে।', 'A preparation plan can span at most 730 days.');
+  if (diffDays(settings.testExamDate, studyEndExclusive(settings)) < 2) return t('টেস্টের পরে রিভিশন ও মডেল টেস্টের জন্য অন্তত ২টি পড়ার দিন রাখো।', 'Leave at least two study days after the test target for revision and mocks.');
+  if (settings.boostEnabled && (settings.boostStartDate < settings.startDate || settings.boostStartDate >= settings.examDate)) {
+    return t('বাড়তি পড়ার তারিখ রুটিনের শুরু থেকে বোর্ড লক্ষ্য তারিখের আগের মধ্যে রাখো।', 'Keep the boost date within the plan, before the board target.');
+  }
+  return null;
+}
+
+/** A single source of truth for the planner, phase journey, calendar and exports.
+ * Learn through the eve of the test target; reserve up to 30 days for mocks, and
+ * spend the intervening dates revising. No phase extends beyond the board target.
+ */
+export function getPhases(settings: Settings = DEFAULT_SETTINGS): Phase[] {
+  if (scheduleDateError(settings)) return [];
+  const start = settings.startDate;
+  const a = studyEndExclusive(settings, settings.testExamDate, true);
+  const c = studyEndExclusive(settings);
+  const b = addDays(c, -Math.min(30, diffDays(a, c) - 1));
   return [
-    { id: 'learn', name: 'পূর্ণ সিলেবাস (ফেব্রুয়ারি টেস্ট লক্ষ্য)', subtitle: 'দিনে ২টি বিষয় · ধাপে ধাপে সমাপ্তি', start, end: addDays(a, -1), days: diffDays(start, a), color: '#236149' },
-    { id: 'revise', name: 'পূর্ণাঙ্গ রিভিশন ও প্রশ্ন সমাধান', subtitle: 'দুই রাউন্ড রিভিশন · দিনে ২টি বিষয়', start: a, end: addDays(b, -1), days: diffDays(a, b), color: '#9a6722' },
-    { id: 'exam', name: '১৩টি পূর্ণাঙ্গ মডেল টেস্ট', subtitle: 'জুন HSC ’২৭ চূড়ান্ত প্রস্তুতি', start: b, end: addDays(c, -1), days: diffDays(b, c), color: '#5a4b82' },
+    { id: 'learn', name: t('সিলেবাস ও টেস্ট প্রস্তুতি', 'Syllabus & test preparation'), subtitle: t('দিনে সর্বোচ্চ ২টি বিষয় · সময়ের ঘাটতি হলে সতর্কবার্তা দেখো', 'Up to 2 subjects/day · check any capacity warning'), start, end: addDays(a, -1), days: diffDays(start, a), color: '#236149' },
+    { id: 'revise', name: t('রিভিশন ও প্রশ্ন সমাধান', 'Revision & question practice'), subtitle: t('দুই রাউন্ডের জন্য বরাদ্দ সময়', 'Time allocated for two revision rounds'), start: a, end: addDays(b, -1), days: diffDays(a, b), color: '#9a6722' },
+    { id: 'exam', name: t('মডেল টেস্ট ও চূড়ান্ত প্রস্তুতি', 'Model tests & final preparation'), subtitle: t('১৩ পত্রের লক্ষ্য · সময় কম হলে সতর্কবার্তা দেখো', 'Target: 13 papers · check any capacity warning'), start: b, end: addDays(c, -1), days: diffDays(b, c), color: '#5a4b82' },
   ];
 }
+
+/** No official HSC 2027 / college-test notice could be verified on this date.
+ * A teachers.gov.bd blog is not an education-board circular. Never promote it to one.
+ */
+export const EXAM_DATE_INFORMATION = {
+  checkedOn: '2026-11-16',
+  nctb: 'https://nctb.gov.bd/pages/notices/',
+  board: 'https://sylhetboard.gov.bd/',
+  dhaka: 'https://dhakaeducationboard.gov.bd/index.php/site/product/hsccorner',
+} as const;
+
 export const phaseName = (id: PhaseId): string => isEnglish()
   ? ({ learn: 'Syllabus', revise: 'Revision', exam: 'Model tests' })[id]
   : ({ learn: 'সিলেবাস', revise: 'রিভিশন', exam: 'মডেল টেস্ট' })[id];
@@ -476,7 +546,8 @@ function timedTwoSubjectDay(day: Omit<Day, 'tasks'>, entries: RawEntry[], settin
 }
 
 export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
-  const phases = getPhases(settings.startDate);
+  const phases = getPhases(settings);
+  if (!phases.length) return [];
   const total = phases.reduce((n, p) => n + p.days, 0);
 
   // Per-subject chapter queues ordered Priority A -> Priority B -> textbook order
@@ -504,7 +575,7 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
           subject: s,
           kind: kindFor(s),
           title: `${subjectById[s].name}: টেস্ট পরীক্ষা রিভিশন`,
-          detail: 'ফেব্রুয়ারির টেস্ট পরীক্ষার জন্য গুরুত্বপূর্ণ অধ্যায়ের সূত্র, নোট ও সংজ্ঞা দ্রুত ঝালাই করো।',
+          detail: 'নির্ধারিত টেস্ট লক্ষ্যের জন্য গুরুত্বপূর্ণ অধ্যায়ের সূত্র, নোট ও সংজ্ঞা দ্রুত ঝালাই করো।',
           chapterIds: [],
         },
         {
@@ -635,7 +706,7 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
       } else if (anyChaptersLeft) {
         const active = ALL_SUBJECTS.filter(hasRemaining);
         const ranked = [...active].sort((a, b) => {
-          // Slight penalty if studied yesterday so consecutive days feel fresh while finishing all 114 chapters before Feb Test Exam
+          // Slight penalty if studied yesterday so consecutive days feel fresh. Capacity is checked separately, never promised.
           const scoreA = remainingCount(a) - (prevDaySubjects.includes(a) && active.length > 2 ? 1.5 : 0);
           const scoreB = remainingCount(b) - (prevDaySubjects.includes(b) && active.length > 2 ? 1.5 : 0);
           if (scoreB !== scoreA) return scoreB - scoreA;
@@ -647,7 +718,7 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
         }
         prevDaySubjects = chosen;
       } else {
-        // All 114 chapters finished before February Test Exam! Run 2-subjects/day Test Exam Final Prep
+        // All chapter queues are finished. Use the remaining learning days for test preparation.
         const s1 = ALL_SUBJECTS[testPrepSlot++ % ALL_SUBJECTS.length];
         const s2 = ALL_SUBJECTS[testPrepSlot++ % ALL_SUBJECTS.length];
         for (const sub of [s1, s2]) {
@@ -831,9 +902,52 @@ export function chapterStudyTasks(plan: Day[], chapterId: string): Task[] {
     (((task.kind === 'learn' || task.kind === 'language' || task.kind === 'ict') && (task.originalTaskId || task.id).includes(':part-')) ||
      (task.kind === 'practice' && (task.originalTaskId || task.id).startsWith(`chap-practice-${chapterId}-`))));
 }
+/** Does the allocation cover an entire source task, not merely one visible fragment?
+ * With `completed`, only real completion evidence counts; old split ranges still count
+ * when a date shift puts their historical day outside the newly generated range.
+ */
+export function hasFullTaskAllocation(tasks: Task[], id: string, completed?: Record<string, string>, includeScheduled = false): boolean {
+  if (completed?.[id]) return true;
+  const matching = tasks.filter(task => (task.originalTaskId || task.id) === id);
+  const total = Math.max(0, ...matching.map(task => task.sourceMinutes ||
+    (!task.id.startsWith('smart-part|') ? task.endMinute - task.startMinute : 0)));
+  const ranges: [number, number][] = [];
+  const addRange = (key: string) => {
+    if (!key.startsWith('smart-part|')) return;
+    const range = parseTaskRangeId(key);
+    if (range?.kind === 'part' && range.sourceId === id) ranges.push([range.from, range.to]);
+  };
+  for (const task of matching) {
+    if (completed && !includeScheduled && !completed[task.id]) continue;
+    if (!task.id.startsWith('smart-part|')) return true;
+    addRange(task.id);
+  }
+  if (completed) Object.keys(completed).forEach(addRange);
+  // A fragment without its source size cannot prove that the final part was allocated.
+  if (!total) return false;
+  let through = 0;
+  for (const [from, to] of ranges.sort((a, b) => a[0] - b[0])) {
+    if (from > through + 0.01) return false;
+    through = Math.max(through, to);
+  }
+  return through >= total - 0.01;
+}
+
+/** Complete canonical parts remain evidence even when a shorter new plan cannot schedule them.
+ * Conversely, ticking only the visible subset can never complete an unallocated part.
+ */
 export function isChapterDone(plan: Day[], id: string, completed: Record<string, string>): boolean {
+  const chapter = chapterById[id];
+  if (!chapter) return false;
   const tasks = chapterStudyTasks(plan, id);
-  return tasks.length > 0 && tasks.every(t => !!completed[t.id]);
+  const allParts = Array.from({ length: chapter.effort }, (_, part) => `${id}:part-${part + 1}`)
+    .every(part => hasFullTaskAllocation(tasks, part, completed));
+  const practice = [...new Set([...tasks.map(task => task.originalTaskId || task.id), ...Object.keys(completed)]
+    .filter(key => key.startsWith(`chap-practice-${id}-`)))];
+  const requiresPractice = chapter.effort === 1 || (chapter.effort >= 4 && chapter.effort % 2 === 1);
+  const practiceDone = practice.every(key => hasFullTaskAllocation(tasks, key, completed)) &&
+    (!requiresPractice || practice.length > 0);
+  return allParts && practiceDone;
 }
 export function chapterFirstDate(plan: Day[], id: string): string | undefined {
   return chapterTasks(plan, id)[0]?.date;

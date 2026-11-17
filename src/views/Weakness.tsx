@@ -5,7 +5,7 @@ import { chapterById, subjectById } from '../data';
 import { bn, formatDate, percent } from '../planner';
 import { EmptyState, PageHeading, ProgressBar, SubjectBadge } from '../components';
 import { weaknessReport, weaknessSummary, weaknessWeekPlan, markWeaknessPracticed, pullRevisionForward } from '../weakness';
-import { applyAdaptivePlan, adaptiveCap, crowdedDays, daysToExam, HARD_DAILY_CAP_MINUTES, plannedMinutes } from '../adaptive';
+import { adaptiveCap, crowdedDays, daysToExam, HARD_DAILY_CAP_MINUTES, plannedMinutes } from '../adaptive';
 import type { WeaknessRow } from '../weakness';
 import { retryBuckets } from '../retryLoop';
 import { chapterStage } from '../learning';
@@ -14,15 +14,13 @@ import { t } from '../i18n';
 const ACTION_ICON = { retry: RotateCcw, practice: ClipboardList, revise: CalendarClock, study: Target } as const;
 
 export default function WeaknessView() {
-  const { plan, data, setData, today, openChapter, navigate, notify, startTimer } = usePlanner();
+  const { plan, adaptive: adaptation, data, setData, today, openChapter, navigate, notify, startTimer } = usePlanner();
   const [filter, setFilter] = useState<'all' | 'critical' | 'retry'>('all');
   const rows = useMemo(() => weaknessReport(plan, data, today), [plan, data, today]);
   const summary = useMemo(() => weaknessSummary(plan, data, today), [plan, data, today]);
   const week = useMemo(() => weaknessWeekPlan(plan, data, today), [plan, data, today]);
   const retries = useMemo(() => retryBuckets(data, today), [data, today]);
-  const adaptive = useMemo(() => applyAdaptivePlan(plan, rows, data, today, {
-    horizonDays: 3, minBlockMinutes: 45, bufferMinutes: data.settings.adaptiveBuffer,
-  }), [plan, rows, data, today]);
+  const adaptive = adaptation || { swaps: [], moved: [], dropped: [], loads: [], unfitted: [] };
   const capToday = adaptiveCap(data, today, data.settings.adaptiveBuffer);
   const crowded = crowdedDays(plan, data, today, data.settings.adaptiveBuffer);
   const examDays = daysToExam(data, today);
@@ -68,7 +66,7 @@ export default function WeaknessView() {
       </div>
       {!data.settings.adaptiveEnabled
         ? <p className="tiny-muted padded">{t('সেটিংসে চালু করলে দুর্বল অধ্যায় আগে বসবে; বন্ধ থাকলে নির্ধারিত রুটিনই অটুট থাকবে।', 'Turn it on in Settings to give weak chapters priority; while off, the generated routine stays untouched.')}</p>
-        : adaptive.swaps.length === 0 && adaptive.moved.length === 0
+        : adaptive.swaps.length === 0 && adaptive.moved.length === 0 && adaptive.dropped.length === 0
           ? <p className="tiny-muted padded">{t('এই মুহূর্তে বদলানোর দরকার নেই—হয় দুর্বলতা নেই, নয়তো দিন আগেই পূর্ণ।', 'Nothing to reshuffle right now — either no weakness, or the days are already full.')}</p>
           : <div className="adaptive-changes">
             {adaptive.loads.map(load => <div className="adaptive-change" key={load.date}>
@@ -80,7 +78,7 @@ export default function WeaknessView() {
               <span className="adaptive-load">{bn(load.before)} → {bn(load.after)} {t('মি.', 'min')}</span>
             </div>)}
             {adaptive.moved.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.moved.length)}টি ব্লক হালকা দিনে সরানো হয়েছে—কোনো পড়া বাদ যায়নি।`, `${adaptive.moved.length} block(s) moved to lighter days — nothing was dropped.`)}</p>}
-            {adaptive.dropped.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.dropped.length)}টি ব্লক জায়গা না পেয়ে বাদ গেছে; টেস্ট প্রস্তুতি স্ক্রিন থেকে নিজে সাজাতে পারো।`, `${adaptive.dropped.length} block(s) found no room; use the test-prep screen to place them yourself.`)}</p>}
+            {adaptive.dropped.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.dropped.length)}টি পরিবর্তন বাতিল হয়েছে: সরানো কাজের জায়গা নেই, তাই আসল কাজ অক্ষত রাখা হয়েছে।`, `${adaptive.dropped.length} replacement(s) cancelled: displaced work had no room, so the original tasks were kept.`)}</p>}
             {adaptive.unfitted.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.unfitted.length)}টি দুর্বল অধ্যায়ের জন্য জায়গা নেই—রুটিন ইতিমধ্যে পূর্ণ।`, `${adaptive.unfitted.length} weak chapter(s) have no room — the routine is already full.`)}</p>}
           </div>}
     </section>

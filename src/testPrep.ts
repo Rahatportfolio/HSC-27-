@@ -1,7 +1,7 @@
 import { CHAPTERS } from './data';
 import type { Priority } from './data';
 import { chapterPriority, chapterStage, isLearningComplete } from './learning';
-import { addDays, diffDays, percent } from './planner';
+import { addDays, chapterStudyTasks, diffDays, hasFullTaskAllocation, percent, todayKey } from './planner';
 import type { AppData, Day } from './planner';
 
 /**
@@ -35,23 +35,18 @@ const PACE_WINDOW = 14;
 
 export function testPrepStats(data: AppData, plan: Day[], today: string): TestPrepStats {
   const testDate = data.settings.testExamDate;
-  const daysLeft = Math.max(0, diffDays(today, testDate));
+  const daysLeft = Math.max(0, diffDays(today < data.settings.startDate ? data.settings.startDate : today, testDate));
   const aChapters = CHAPTERS.filter(chapter => chapterPriority(chapter, data) === 'A');
   const doneA = aChapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
   const remainingA = aChapters.length - doneA;
 
-  const aIds = new Set(aChapters.map(chapter => chapter.id));
-  const aTaskIds = new Set<string>();
-  for (const day of plan) {
-    for (const task of day.tasks) {
-      if (task.chapterIds.some(id => aIds.has(id))) aTaskIds.add(task.id);
-    }
-  }
-  let remainingATasks = 0;
-  for (const day of plan) {
-    for (const task of day.tasks) {
-      if (aTaskIds.has(task.id) && !data.completed[task.id] && !data.removedTasks.includes(task.id)) remainingATasks++;
-    }
+  const aTasks = aChapters.flatMap(chapter => chapterStudyTasks(plan, chapter.id));
+  const aTaskIds = new Set(aTasks.map(task => task.id));
+  const scheduledParts = new Set(aTasks.map(task => task.originalTaskId || task.id));
+  let remainingATasks = aTasks.filter(task => !data.completed[task.id] && !data.completed[task.originalTaskId || task.id] && !data.removedTasks.includes(task.id)).length;
+  for (const chapter of aChapters) for (let part = 1; part <= chapter.effort; part++) {
+    const id = `${chapter.id}:part-${part}`;
+    if (!data.completed[id] && (!scheduledParts.has(id) || !hasFullTaskAllocation(aTasks, id, data.completed, true))) remainingATasks++;
   }
 
   const windowFrom = addDays(today, -(PACE_WINDOW - 1));
@@ -59,7 +54,7 @@ export function testPrepStats(data: AppData, plan: Day[], today: string): TestPr
   for (const id of aTaskIds) {
     const at = data.completed[id];
     if (!at) continue;
-    const day = at.slice(0, 10);
+    const day = todayKey(new Date(at));
     if (day >= windowFrom && day <= today) paceDone++;
   }
   const paceTasksPerDay = paceDone / PACE_WINDOW;

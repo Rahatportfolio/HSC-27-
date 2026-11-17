@@ -1,6 +1,6 @@
 import { parseAdvanced } from './advanced';
 import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
-import { isValidDate, STORAGE_KEY, todayKey } from './planner';
+import { addDays, isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
 import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta, ExamMode, ExamCadence } from './types';
@@ -85,7 +85,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (!text(raw.startTime, 5) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(raw.startTime)) throw new Error('শুরুর সময় সঠিক নয়।');
   if (!int(Number(raw.dailyHours), 4, 18)) throw new Error('দৈনিক পড়ার সময় ৪ থেকে ১৮ ঘণ্টার মধ্যে হতে হবে।');
   const boostEnabled = raw.boostEnabled === undefined ? d.boostEnabled : raw.boostEnabled === true;
-  const boostStartDate = raw.boostStartDate === undefined ? d.boostStartDate : raw.boostStartDate;
+  const boostStartDate = raw.boostStartDate === undefined ? addDays(raw.startDate, 17) : raw.boostStartDate;
   if (!text(boostStartDate, 10) || !isValidDate(boostStartDate)) throw new Error('পরবর্তী ধাপের শুরুর তারিখ সঠিক নয়।');
   const boostDailyHours = raw.boostDailyHours === undefined ? d.boostDailyHours : Number(raw.boostDailyHours);
   if (!int(boostDailyHours, 4, 18)) throw new Error('পরবর্তী ধাপের পড়ার সময় ৪ থেকে ১৮ ঘণ্টার মধ্যে হতে হবে।');
@@ -95,6 +95,8 @@ export function sanitizeSettings(raw: unknown): Settings {
   if (!text(testExamDate, 10) || !isValidDate(testExamDate)) throw new Error('টেস্ট পরীক্ষার তারিখ সঠিক নয়।');
   const examDate = raw.examDate === undefined ? d.examDate : raw.examDate;
   if (!text(examDate, 10) || !isValidDate(examDate)) throw new Error('HSC পরীক্ষার লক্ষ্য তারিখ সঠিক নয়।');
+  const examDatePolicy = raw.examDatePolicy === undefined ? d.examDatePolicy : raw.examDatePolicy;
+  if (examDatePolicy !== 'shift' && examDatePolicy !== 'fixed') throw new Error('পরীক্ষার তারিখ সরানোর নিয়ম সঠিক নয়।');
   const theme = raw.theme === undefined ? d.theme : raw.theme;
   if (!['light', 'dark', 'system'].includes(String(theme))) throw new Error('থিম সেটিংস সঠিক নয়।');
   const language = raw.language === undefined ? d.language : raw.language;
@@ -118,6 +120,7 @@ export function sanitizeSettings(raw: unknown): Settings {
     calendarRevision: int(raw.calendarRevision, 0, 999999) ? Number(raw.calendarRevision) : 0,
     testExamDate,
     examDate,
+    examDatePolicy,
     theme: theme as Settings['theme'],
     language: language as Settings['language'],
     revisionEnabled: raw.revisionEnabled === undefined ? d.revisionEnabled : raw.revisionEnabled === true,

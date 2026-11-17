@@ -1,7 +1,7 @@
 import { readiness } from './advanced';
 import { CHAPTERS, chapterById } from './data';
 import type { AppData, Day } from './planner';
-import { addDays, chapterStudyTasks, todayKey } from './planner';
+import { addDays, chapterStudyTasks, isChapterDone, todayKey } from './planner';
 import type { RecallRating, RevisionInterval, RevisionItem } from './types';
 import { LIMITS, newId, nowIso } from './storage';
 
@@ -11,8 +11,12 @@ export const INTERVAL_LABEL: Record<RevisionInterval, string> = { 1: '১ দি
 /** All parts of a chapter must be ticked; the latest tick date becomes the cycle anchor. */
 export function chapterCompletionDate(plan: Day[], chapterId: string, completed: Record<string, string>): string | null {
   const tasks = chapterStudyTasks(plan, chapterId);
-  if (!tasks.length || !tasks.every(task => !!completed[task.id])) return null;
-  const latest = tasks.map(task => completed[task.id]).sort().at(-1);
+  if (!isChapterDone(plan, chapterId, completed)) return null;
+  const evidence = [
+    ...tasks.map(task => completed[task.id]),
+    ...Object.entries(completed).filter(([id]) => id.startsWith(`${chapterId}:part-`) || id.startsWith(`chap-practice-${chapterId}-`)).map(([, at]) => at),
+  ].filter(Boolean);
+  const latest = evidence.sort((a, b) => Date.parse(a) - Date.parse(b)).at(-1);
   return latest ? todayKey(new Date(latest)) : null;
 }
 

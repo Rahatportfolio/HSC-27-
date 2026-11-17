@@ -3,6 +3,7 @@ import type { AppData } from "./planner";
 import { parseBackup, newId } from "./storage";
 import { getFile, putFile, deleteFile, storageEstimate } from "./files";
 import type { StoredFile } from "./files";
+import { parseTaskRangeId } from './taskReferences';
 
 // Versioned binary container, not base64 JSON: PDFs/videos keep their original bytes.
 const MAGIC = "PROSTUTI-MEDIA-1\n";
@@ -199,11 +200,10 @@ export async function stageMediaRestore(
     data.completed = Object.fromEntries(
       Object.entries(data.completed).map(([id, at]) => {
         if (!id.startsWith("smart-video|")) return [id, at];
+        const range = parseTaskRangeId(id);
+        if (!range || range.kind !== 'video') return [id, at];
         const parts = id.split("|");
-        parts[1] = encodeURIComponent(
-          mapping.get(decodeURIComponent(parts[1])) ||
-            decodeURIComponent(parts[1]),
-        );
+        parts[1] = encodeURIComponent(mapping.get(range.sourceId) || range.sourceId);
         return [parts.join("|"), at];
       }),
     );

@@ -1,7 +1,7 @@
 import { readiness } from './advanced';
 import { CHAPTERS, SUBJECTS } from './data';
 import type { Chapter, Priority, SubjectId } from './data';
-import { chapterStudyTasks } from './planner';
+import { chapterStudyTasks, isChapterDone } from './planner';
 import type { AppData, Day } from './planner';
 import type { ChapterStage, ChapterStep } from './types';
 
@@ -32,7 +32,7 @@ export function chapterStage(chapter: Chapter, data: AppData, plan: Day[]): Chap
   }
   if (meta?.stage) return meta.stage;
   const tasks = chapterStudyTasks(plan, chapter.id);
-  if (tasks.length && tasks.every(task => !!data.completed[task.id])) return 'completed';
+  if (isChapterDone(plan, chapter.id, data.completed)) return 'completed';
   if (tasks.some(task => !!data.completed[task.id]) || Object.values(meta?.steps || {}).some(Boolean) || meta?.cq === 'ready' || meta?.mcq === 'ready') return 'inProgress';
   return 'notStarted';
 }
