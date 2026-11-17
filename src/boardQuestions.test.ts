@@ -142,13 +142,16 @@ describe('coverage is reported as it is, not rounded up', () => {
 describe('subject coverage is stated per paper, not averaged away', () => {
   it('names which papers have real board questions and which have none', () => {
     const covered = new Set(VERIFIED_BOARD_QUESTIONS.map(q => q.subject));
-    // Only Physics carries a question whose stimulus could actually be read back.
-    // Chemistry's classes named their topics, but not the values — those live in
-    // COVERED_BOARD_TOPICS, not here. Saying otherwise would inflate the bank.
+    // Physics and Chemistry both carry questions whose stimulus could be read back
+    // from the class. Earlier chemistry entries were bare summaries; these three are
+    // rebuilt from the transcript (stimulus + values + asks).
     expect(covered.has('physics')).toBe(true);
-    expect(covered.has('chemistry')).toBe(false);
-    // The chemistry classes are still recorded as coverage, with their board + year.
-    expect(COVERED_BOARD_TOPICS.some(topic => topic.subject === 'chemistry')).toBe(true);
+    expect(covered.has('chemistry')).toBe(true);
+    // Every chemistry question must be answerable, not a "this chapter had a CQ" note.
+    for (const question of VERIFIED_BOARD_QUESTIONS.filter(item => item.subject === 'chemistry')) {
+      expect(/ধাপে সমাধান/.test(question.text)).toBe(false);
+      expect(/\(গ\)/.test(question.text)).toBe(true);
+    }
     // A paper with no verified source must not appear at all — no placeholder rows.
     for (const empty of ['math', 'biology', 'bangla', 'english', 'ict'] as const) {
       expect(VERIFIED_BOARD_QUESTIONS.some(q => (q.subject as string) === empty)).toBe(false);

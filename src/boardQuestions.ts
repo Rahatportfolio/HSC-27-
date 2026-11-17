@@ -66,6 +66,27 @@ const LOBDHI = 'LOBDHI';
 const APURBO = 'Apurbo Physics';
 const UDVASH = 'উদ্ভাস-উন্মেষ';
 
+const EDU_CHEM_QUALITATIVE = {
+  videoId: '4bl5W2e3jxg',
+  title: 'Rajshahi Board 2023- HSC || Chemistry 1st Paper || গুণগত রসায়ন CQ solution.',
+  channel: EDU_MARATHON,
+  url: 'https://www.youtube.com/watch?v=4bl5W2e3jxg',
+} as const;
+
+const EDU_CHEM_PERIODIC = {
+  videoId: 'sXPOZtZxHJw',
+  title: 'Rajshahi Board 2023- HSC || Chemistry 1st Paper || মৌলের পর্যাবৃত্ত ধর্ম CQ solution.',
+  channel: EDU_MARATHON,
+  url: 'https://www.youtube.com/watch?v=sXPOZtZxHJw',
+} as const;
+
+const EDU_CHEM_CHANGE = {
+  videoId: '5bcIy_xALfo',
+  title: 'Rajshahi Board 2023- HSC || Chemistry 1st Paper || রাসায়নিক পরিবর্তন CQ solution.',
+  channel: EDU_MARATHON,
+  url: 'https://www.youtube.com/watch?v=5bcIy_xALfo',
+} as const;
+
 const VECTOR_ALL_BOARD = {
   videoId: 'zxNbm_8JV3I',
   title: 'HSC -24 Vector All Board CQ Solution || Physics 1st Paper',
@@ -216,6 +237,51 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     evidence: 'video-title-names-board',
   },
   // ── ভেক্টর: MCQ (একক প্রশ্ন, বোর্ড ও সাল ক্লাসেই বলা) ──────────────────
+  {
+    id: 'board|chemistry-1-2|rajshahi-2023|2',
+    subject: 'chemistry',
+    chapterId: 'chemistry-1-2',
+    type: 'CQ',
+    board: 'রাজশাহী',
+    year: 2023,
+    text:
+      'উদ্দীপক: হাইড্রোজেন পরমাণুর বিকিরণ বর্ণালীতে বিভিন্ন সিরিজ এবং কোন শক্তিস্তর থেকে কোন সিরিজে ' +
+      'ইলেকট্রন আসে তা দেখানো হয়েছে। (গ) বোর তত্ত্ব অনুযায়ী উদ্দীপকের বর্ণালী সিরিজের উৎপত্তি ব্যাখ্যা করো। ' +
+      '(ঘ) উদ্দীপকের বামার সিরিজের সবগুলো রেখাই দৃশ্যমান হবে কি—যুক্তিসহ বিশ্লেষণ করো ' +
+      '(R = 1.097×10⁷ m⁻¹, দৃশ্যমান সীমা 480–780 nm ধরে)।',
+    source: EDU_CHEM_QUALITATIVE,
+    evidence: 'transcript-names-board',
+  },
+
+  {
+    id: 'board|chemistry-1-3|rajshahi-2023|2',
+    subject: 'chemistry',
+    chapterId: 'chemistry-1-3',
+    type: 'CQ',
+    board: 'রাজশাহী',
+    year: 2023,
+    text:
+      'উদ্দীপক: কোনো মৌলের ইলেকট্রন বিন্যাসের শেষ অংশ (n−1)dˣ ns¹ আকারে দেওয়া আছে। ' +
+      '(গ) উদ্দীপকে উল্লিখিত x-এর সম্ভাব্য মান যুক্তিসহ উল্লেখ করো। ' +
+      '(ঘ) M⁺ আয়নটি ডায়াচুম্বকীয় হলে M-এর ক্লোরাইড যৌগটি রঙিন হবে কি—ব্যাখ্যা করো।',
+    source: EDU_CHEM_PERIODIC,
+    evidence: 'transcript-names-board',
+  },
+
+  {
+    id: 'board|chemistry-1-4|rajshahi-2023|2',
+    subject: 'chemistry',
+    chapterId: 'chemistry-1-4',
+    type: 'CQ',
+    board: 'রাজশাহী',
+    year: 2023,
+    text:
+      'উদ্দীপক: A₂(g) + 3B₂(g) ⇌ 2AB₃(g) বিক্রিয়াটি উভমুখী এবং সব উপাদান গ্যাসীয়। ' +
+      '(গ) উদ্দীপকের বিক্রিয়ার Kp রাশিমালা প্রতিপাদন করো (মোট চাপ P ও বিয়োজন মাত্রা α ধরে)। ' +
+      '(ঘ) শিল্পক্ষেত্রে AB₃-এর সর্বোচ্চ উৎপাদন পেতে তাপমাত্রা, ঘনমাত্রা ও চাপের শর্তসমূহ ব্যাখ্যা করো।',
+    source: EDU_CHEM_CHANGE,
+    evidence: 'transcript-names-board',
+  },
 ];
 
 /**

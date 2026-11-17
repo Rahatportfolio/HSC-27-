@@ -172,7 +172,7 @@ function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; c
         {chaptersBySubject[form.subject].map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}</select></label>
       <label className="form-label">{t('সামনা (প্রশ্ন)', 'Front / question')}<textarea data-autofocus rows={3} value={form.front} onChange={e => { setForm({ ...form, front: e.target.value }); setError(''); }} placeholder={t('যেমন: বৃত্তের ক্ষেত্রফলের সূত্র', 'e.g. Area of a circle')}/></label>
       <label className="form-label">{t('উত্তর (পেছন)', 'Back / answer')}<textarea rows={4} value={form.back} onChange={e => setForm({ ...form, back: e.target.value })} placeholder={t('যেমন: πr²', 'e.g. πr²')}/></label>
-      <label className="form-label">{t('কার드의 ধরন', 'Card type')}<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value as FlashcardCategory })}>
+      <label className="form-label">{t('কার্ডের ধরন', 'Card type')}<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value as FlashcardCategory })}>
         <option value="definition">{FLASHCARD_CATEGORY_LABEL.definition}</option>
         <option value="formula">{FLASHCARD_CATEGORY_LABEL.formula}</option>
         <option value="reaction">{FLASHCARD_CATEGORY_LABEL.reaction}</option>

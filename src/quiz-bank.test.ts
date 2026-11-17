@@ -51,3 +51,23 @@ describe('starter MCQ bank', () => {
     expect(explained).toBeGreaterThanOrEqual(25);
   });
 });
+
+/**
+ * A stray non-Bengali character inside a question or an option is not cosmetic:
+ * 'সেলুলোজ만' shipped as the CORRECT answer to a biology MCQ, so a student reading
+ * it was taught a misspelt fact. This scans the whole bank.
+ */
+describe('no foreign character sneaks into the question bank', () => {
+  it('keeps every question and option in Bengali or plain ASCII', () => {
+    const foreign = /[\u0600-\u06FF\u0900-\u097F\u0400-\u04FF\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/;
+    const offenders: string[] = [];
+    for (const question of [...STARTER_QUESTIONS, ...BANK_QUESTIONS]) {
+      const fields: [string, string][] = [['question', question.question]];
+      question.options.forEach((option, index) => fields.push([`option ${index}`, option]));
+      for (const [where, text] of fields) {
+        if (typeof text === 'string' && foreign.test(text)) offenders.push(`${question.id} ${where}: ${text.slice(0, 50)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});

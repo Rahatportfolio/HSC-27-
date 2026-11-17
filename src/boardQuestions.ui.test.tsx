@@ -77,11 +77,13 @@ it('lists which papers have board questions instead of implying full coverage', 
   const block = await openBoardsTab();
   const chips = [...block.querySelectorAll('.verified-paper-chip')].map(chip => chip.textContent ?? '');
   expect(chips.length).toBeGreaterThan(0);
-  // The chip row describes answerable questions only. Chemistry's classes named
-  // their board and year but not the stimulus, so chemistry must NOT be advertised
-  // here — it appears in the coverage list instead.
+  // The chip row describes answerable questions only. Chemistry now has three
+  // rebuilt questions from the Rajshahi 2023 classes, so it is advertised — and it
+  // must still carry a real count, never an empty placeholder row.
   expect(chips.some(text => text.includes('পদার্থবিজ্ঞান'))).toBe(true);
-  expect(chips.some(text => text.includes('রসায়ন'))).toBe(false);
+  expect(chips.some(text => text.includes('রসায়ন'))).toBe(true);
+  const chemChip = chips.find(text => text.includes('রসায়ন')) ?? '';
+  expect(chemChip).not.toContain('· ০ ');
   expect(block.querySelector('.covered-board-block')?.textContent).toContain('রসায়ন');
   // A paper with no source must not be advertised as covered.
   expect(chips.some(text => text.includes('উচ্চতর গণিত'))).toBe(false);
