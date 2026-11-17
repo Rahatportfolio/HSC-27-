@@ -4005,6 +4005,7 @@ body {
   .topbar-left { gap: 0; flex: 0 0 auto; }
   .topbar-left .breadcrumb { display: none; }
   .topbar-actions { flex: 1 1 auto; justify-content: flex-end; gap: 4px; }
+  .topbar .global-search { min-width: 36px; flex-shrink: 0; }
   .topbar-progress-pill { flex-shrink: 0; padding: 4px 6px; gap: 5px; }
   .topbar-progress-pill strong { padding: 1px 4px; }
   .topbar-quick-tools { flex-shrink: 0; }
@@ -4035,6 +4036,9 @@ body {
   .text-button, .button { max-width: 100%; white-space: normal; }
   .modal-header h2, .modal-body, .modal-body > *, .daily-hub-title, .chapter-copy { min-width: 0; overflow-wrap: anywhere; }
 }
+/* On a started plan, the optional progress pill must not squeeze menu/search
+   under the install/quick tools. Full daily progress remains on the dashboard. */
+@media (max-width: 390px) { .topbar-progress-pill { display: none; } }
 @media (max-width: 360px) {
   .topbar { padding-left: max(7px, var(--safe-left)); padding-right: max(7px, var(--safe-right)); }
   .topbar-actions { gap: 2px; }

@@ -35,6 +35,7 @@ const mutations: Record<string, string> = {
   'unsafe-bottom': '.mobile-bottom-nav { padding-bottom: 0 !important; }',
   'no-scroll-clearance': 'html { scroll-padding-top: 0 !important; scroll-padding-bottom: 0 !important; }',
   'wrong-status-background': '.top-chrome-stack { background: #14271f !important; }',
+  'colliding-toolbar': '.topbar-progress-pill { display: inline-flex !important; }',
 };
 if (mutation && !mutations[mutation]) throw new Error(`Unknown mobile-shell mutation: ${mutation}`);
 
@@ -104,7 +105,7 @@ try {
     { width: 412, height: 915, language: 'en' as const, theme: 'light' as const },
     { width: 797, height: 393, language: 'en' as const, theme: 'dark' as const },
   ];
-  for (const scenario of scenarios.filter(s => !process.env.MOBILE_VIEWPORT || String(s.width) === process.env.MOBILE_VIEWPORT)) {
+  for (const scenario of scenarios.filter(s => selected !== 'first-study-day-toolbar' && (!process.env.MOBILE_VIEWPORT || String(s.width) === process.env.MOBILE_VIEWPORT))) {
     const key = `${scenario.width}x${scenario.height}-${scenario.language}-${scenario.theme}`;
     const context = await browser.newContext({ viewport: scenario, isMobile: true, hasTouch: true, deviceScaleFactor: 2, reducedMotion: 'reduce', timezoneId: 'Asia/Dhaka' });
     const page = await context.newPage();
@@ -206,6 +207,31 @@ try {
     });
     await context.close();
   }
+  await probe('first-study-day-toolbar', async () => {
+    // Before-start profiles do not show the daily progress pill. Exercise the
+    // actual first study day plus the conditional PWA install control as well.
+    const context = await browser.newContext({ viewport: { width: 320, height: 760 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+    try {
+      const page = await context.newPage();
+      await page.clock.install({ time: new Date('2026-11-20T06:00:00Z') });
+      await prepare(page);
+      await page.evaluate(() => {
+        document.documentElement.dataset.font = 'lg';
+        const event = new Event('beforeinstallprompt') as Event & { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }> };
+        event.prompt = async () => {}; event.userChoice = Promise.resolve({ outcome: 'dismissed' }); window.dispatchEvent(event);
+      });
+      await page.waitForSelector('.install-app-btn');
+      assert.equal(await page.locator('.topbar-progress-pill').count(), 1, 'First-day progress state was not exercised');
+      const layout = await page.locator('.topbar').evaluate(bar => [...bar.querySelectorAll('button')].map(e => ({ name: e.getAttribute('aria-label') || e.className, rect: e.getBoundingClientRect().toJSON() })).filter(e => e.rect.width && e.rect.height));
+      for (let i = 0; i < layout.length; i++) for (let j = i + 1; j < layout.length; j++) {
+        const a = layout[i].rect, b = layout[j].rect;
+        assert.ok(Math.min(a.right, b.right) - Math.max(a.left, b.left) <= 1 || Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) <= 1, `Toolbar buttons overlap: ${layout[i].name} / ${layout[j].name}`);
+      }
+      assert.ok(await page.locator('.global-search').evaluate(e => e.getBoundingClientRect().width >= 32), 'Search shrank below a usable touch target');
+      await page.screenshot({ path: `${output}/first-study-day-toolbar.png` });
+      return layout;
+    } finally { await context.close(); }
+  });
   assert.ok(results.length > 0, 'No mobile shell checks were selected');
 } finally {
   await writeFile(`${output}/results.json`, JSON.stringify({ mutation: mutation || null, results, failures }, null, 2));

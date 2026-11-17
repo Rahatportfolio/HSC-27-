@@ -36,6 +36,7 @@ if (mode !== 'source') {
   assert.ok(control.report.results.every(row => row.passed));
   const landscape = run('landscape-control', '', 'navigated-and-open-clock', '797');
   assert.equal(landscape.code, 0, 'Landscape control failed');
+  assert.ok(control.report.results.some(row => row.name === 'first-study-day-toolbar' && row.passed), 'First study-day control did not pass');
   console.log(`Browser controls: ${control.report.results.length + landscape.report.results.length} passed`);
   for (const [id, selected, message, width] of [
     ['no-card-inset', 'progress-insets-and-text', 'no breathing room'],
@@ -49,6 +50,7 @@ if (mode !== 'source') {
     ['unsafe-bottom', 'safe-toolbar-and-bottom-nav', 'Gesture bar padding'],
     ['no-scroll-clearance', 'navigated-and-open-clock', 'covered by', '797'],
     ['wrong-status-background', 'running-clock', 'Status-bar background'],
+    ['colliding-toolbar', 'first-study-day-toolbar', 'Toolbar buttons overlap'],
   ]) {
     const { code, report } = run(id, id, selected, width || '360');
     const failed = report.results.filter(row => !row.passed && row.name.includes(selected));

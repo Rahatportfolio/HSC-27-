@@ -243,12 +243,18 @@ jobs:
             if (!fs.existsSync(dir)) { core.warning('Native shell evidence directory is missing'); return; }
             const measurements = `${dir}/measurements.jsonl`;
             if (fs.existsSync(measurements)) core.notice(fs.readFileSync(measurements, 'utf8'), {title: 'Android shell measurements'});
-            for (const name of ['startup', 'scrolled-130', 'paused-130']) {
+            // The check API truncates each annotation message at 4096 chars.
+            // Keep the running/scrolled visual proof in numbered small chunks;
+            // full-resolution startup/paused images remain in the test artifact.
+            for (const name of ['scrolled-130']) {
               const path = `${dir}/${name}.png`;
               if (!fs.existsSync(path)) continue;
               const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();
               const data = image.toString('base64');
-              if (data.length < 56000) core.notice(JSON.stringify({name: `${name}.webp`, encoding: 'base64', data}), {title: `Android shell image ${name}`});
+              const total = Math.ceil(data.length / 3000);
+              for (let part = 0; part < total; part++) {
+                core.notice(JSON.stringify({name: `${name}.webp`, encoding: 'base64', part, total, data: data.slice(part * 3000, (part + 1) * 3000)}), {title: `Android shell image ${name} part ${part + 1}/${total}`});
+              }
             }
       - name: Save Android test results
         if: always()

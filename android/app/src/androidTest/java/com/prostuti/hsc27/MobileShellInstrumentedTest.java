@@ -58,14 +58,32 @@ public class MobileShellInstrumentedTest {
   private void waitFor(WebView web, String expression) throws Exception {
     long until = SystemClock.elapsedRealtime() + 45000;
     while (SystemClock.elapsedRealtime() < until) {
-      if ("true".equals(evaluate(web, expression))) return;
+      if ("true".equals(evaluate(web, expression))) {
+        // DOM readiness precedes compositor presentation. Wait for a real WebView
+        // draw before capturing pixels or injecting a screen-coordinate tap.
+        CountDownLatch painted = new CountDownLatch(1);
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.postVisualStateCallback(
+          SystemClock.uptimeMillis(), new WebView.VisualStateCallback() {
+            @Override public void onComplete(long requestId) { painted.countDown(); }
+          }
+        ));
+        assertTrue("WebView did not present its layout", painted.await(15, TimeUnit.SECONDS));
+        InstrumentationRegistry.getInstrumentation().waitForIdleSync();
+        SystemClock.sleep(150);
+        return;
+      }
       SystemClock.sleep(100);
     }
     fail("Mobile shell did not become ready: " + expression);
   }
 
   private JSONObject object(WebView web, String expression) throws Exception {
-    return new JSONObject((String) new JSONTokener(evaluate(web, "JSON.stringify(" + expression + ")")).nextValue());
+    String raw = evaluate(web, "JSON.stringify((()=>{try{return (" + expression + ");}catch(error){return {__measurementError:String(error),stack:String(error.stack)};}})())");
+    Object decoded = new JSONTokener(raw == null ? "null" : raw).nextValue();
+    assertTrue("WebView returned no geometry; raw=" + raw + ", expression=" + expression, decoded instanceof String);
+    JSONObject result = new JSONObject((String) decoded);
+    assertFalse("WebView measurement threw: " + result, result.has("__measurementError"));
+    return result;
   }
 
   private File evidenceDirectory() {
@@ -120,6 +138,7 @@ public class MobileShellInstrumentedTest {
   }
 
   private void tap(WebView web, String selector) throws Exception {
+    waitFor(web, "!!document.querySelector(" + JSONObject.quote(selector) + ")");
     evaluate(web, "document.querySelector(" + JSONObject.quote(selector) + ").scrollIntoView({block:'center',behavior:'instant'});true");
     SystemClock.sleep(150);
     JSONObject point = object(web,
