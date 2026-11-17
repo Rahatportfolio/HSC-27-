@@ -119,4 +119,13 @@ function main() {
   console.log(`::notice title=APK artifact verification::${JSON.stringify(report).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')}`);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  try { main(); }
+  catch (error) {
+    // Preserve a failing exit and expose diagnostics through the annotations API:
+    // log archives use the same restricted CDN as the APK itself.
+    const message = String(error.stack || error).slice(0, 4000).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
+    console.error(`::error title=APK inspection failed::${message}`);
+    process.exitCode = 1;
+  }
+}
