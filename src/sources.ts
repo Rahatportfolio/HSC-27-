@@ -2,7 +2,7 @@ import { CHAPTERS, SUBJECTS } from './data';
 import { CLASS_CATALOG } from './videoCatalog';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { factsFor } from './questionGen';
-import { VERIFIED_BOARD_QUESTIONS, chaptersWithBoardQuestions } from './boardQuestions';
+import { COVERED_BOARD_TOPICS, VERIFIED_BOARD_QUESTIONS, chaptersWithBoardQuestions } from './boardQuestions';
 
 /**
  * Where every chapter's material actually comes from.
@@ -46,9 +46,11 @@ export interface ChapterSources {
 export interface SourcesReport {
   chapters: ChapterSources[];
   totals: {
-    /** Board questions whose board + year are stated in the source video. */
+    /** Board questions recovered in full, with board + year stated in the video. */
     boardQuestions: number;
     chaptersWithBoardQuestion: number;
+    /** Classes with a known board + year whose stimulus was not readable in full. */
+    coveredBoardTopics: number;
     verifiedLinks: number;
     searchLinks: number;
     bankQuestions: number;
@@ -122,6 +124,7 @@ export function buildSourcesReport(): SourcesReport {
     totals: {
       boardQuestions: VERIFIED_BOARD_QUESTIONS.length,
       chaptersWithBoardQuestion: chaptersWithBoardQuestions().length,
+      coveredBoardTopics: COVERED_BOARD_TOPICS.length,
       verifiedLinks,
       searchLinks,
       bankQuestions: bankTotal,
@@ -133,11 +136,13 @@ export function buildSourcesReport(): SourcesReport {
     verdictBn:
       `প্রতিটি প্রশ্ন অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে আসে—বোর্ডের মূল প্রশ্নপত্র থেকে নয়। ` +
       `${withBoard}/${chapters.length}টি অধ্যায়ে বোর্ড-প্রশ্নের যাচাই করা প্লেলিস্ট আছে; বাকি ${noBoard}টিতে নেই, এবং অ্যাপ সেটাই দেখায়। ` +
-      `ইউটিউবের MCQ/CQ ক্লাস থেকে ${VERIFIED_BOARD_QUESTIONS.length}টি বোর্ড প্রশ্ন পাওয়া গেছে (${chaptersWithBoardQuestions().length}টি অধ্যায়ে)—প্রতিটির বোর্ড ও সাল ভিডিওতেই বলা আছে, তাই যাচাই করা যায়।`,
+      `ইউটিউবের CQ/MCQ ক্লাস থেকে পুরোপুরি পড়ে নেওয়া গেছে এমন ${VERIFIED_BOARD_QUESTIONS.length}টি বোর্ড প্রশ্ন (${chaptersWithBoardQuestions().length}টি অধ্যায়ে)—বোর্ড ও সাল ভিডিওতেই বলা, তাই যাচাই করা যায়। ` +
+      `আরও ${COVERED_BOARD_TOPICS.length}টি ক্লাসে বোর্ড ও সাল জানা গেছে কিন্তু উদ্দীপকের সংখ্যা এতটা পরিষ্কার নয় যে হুবহু প্রশ্ন বানানো যায়; সেগুলো "কোন ক্লাসে কী পড়ানো হয়েছে" হিসেবে আলাদা রাখা, প্রশ্ন হিসেবে গোনা হয় না।`,
     verdictEn:
       `Every question comes from the app's own textbook-checked bank, not from an original board paper. ` +
       `${withBoard}/${chapters.length} chapters have a verified board-question playlist; the other ${noBoard} do not, and the app says so. ` +
-      `${VERIFIED_BOARD_QUESTIONS.length} board questions were recovered from YouTube CQ/MCQ classes (${chaptersWithBoardQuestions().length} chapters), each with its board and year stated in the video so it can be checked.`,
+      `${VERIFIED_BOARD_QUESTIONS.length} board questions were recovered in full from YouTube CQ/MCQ classes (${chaptersWithBoardQuestions().length} chapters), each with its board and year stated in the video so it can be checked. ` +
+      `A further ${COVERED_BOARD_TOPICS.length} classes have a known board and year but no cleanly readable stimulus; they are recorded as coverage, never counted as questions.`,
   };
 }
 

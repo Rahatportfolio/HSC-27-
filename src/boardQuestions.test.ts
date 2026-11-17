@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   REJECTED_SOURCES,
+  COVERED_BOARD_TOPICS,
   VERIFIED_BOARD_QUESTIONS,
   boardQuestionsForChapter,
   chaptersWithBoardQuestions,
@@ -69,6 +70,30 @@ describe('every recovered board question carries real provenance', () => {
     }
   });
 
+  /**
+   * The old array held one-line summaries of what a class covered ("…সংক্রান্ত
+   * উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান"), which are not answerable. A count of 31
+   * looked healthy while 24 of those could not be solved. This asserts the real
+   * list only ever holds a question a student can actually attempt.
+   */
+  it('never files a class summary as a question', () => {
+    const summaries = VERIFIED_BOARD_QUESTIONS.filter(question =>
+      /ধাপে সমাধান|ধাপে গাণিতিক সমাধান|সংক্রান্ত উদ্দীপক/.test(question.text));
+    expect(summaries.map(question => question.id)).toEqual([]);
+  });
+
+  it('keeps every covered topic out of the question list', () => {
+    const questionIds = new Set(VERIFIED_BOARD_QUESTIONS.map(question => question.id));
+    const overlap = COVERED_BOARD_TOPICS.filter(topic => questionIds.has(topic.id));
+    expect(overlap).toEqual([]);
+    // A coverage record must never be empty-handed: it names what was covered.
+    for (const topic of COVERED_BOARD_TOPICS) {
+      expect(topic.topic.length).toBeGreaterThan(8);
+      // Every record must say what the stimulus was about, not just "a CQ".
+      expect(topic.topic).toContain('উদ্দীপক');
+    }
+  });
+
   it('cites in one line a student can check', () => {
     const line = citationFor(VERIFIED_BOARD_QUESTIONS[0]);
     expect(line).toContain(VERIFIED_BOARD_QUESTIONS[0].board);
@@ -117,9 +142,13 @@ describe('coverage is reported as it is, not rounded up', () => {
 describe('subject coverage is stated per paper, not averaged away', () => {
   it('names which papers have real board questions and which have none', () => {
     const covered = new Set(VERIFIED_BOARD_QUESTIONS.map(q => q.subject));
-    // These are the only papers with evidence-backed questions today.
+    // Only Physics carries a question whose stimulus could actually be read back.
+    // Chemistry's classes named their topics, but not the values — those live in
+    // COVERED_BOARD_TOPICS, not here. Saying otherwise would inflate the bank.
     expect(covered.has('physics')).toBe(true);
-    expect(covered.has('chemistry')).toBe(true);
+    expect(covered.has('chemistry')).toBe(false);
+    // The chemistry classes are still recorded as coverage, with their board + year.
+    expect(COVERED_BOARD_TOPICS.some(topic => topic.subject === 'chemistry')).toBe(true);
     // A paper with no verified source must not appear at all — no placeholder rows.
     for (const empty of ['math', 'biology', 'bangla', 'english', 'ict'] as const) {
       expect(VERIFIED_BOARD_QUESTIONS.some(q => (q.subject as string) === empty)).toBe(false);
@@ -144,5 +173,50 @@ describe('subject coverage is stated per paper, not averaged away', () => {
     // Ids must still be unique, because that is what the UI keys on.
     const ids = VERIFIED_BOARD_QUESTIONS.map(q => q.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+});
+
+/**
+ * The bug this guards against is real: six Newtonian-mechanics videos were filed
+ * under physics-1-3, which is "গতিবিদ্যা". The chapter id and the chapter named in
+ * the video title have to agree, otherwise a student practises the wrong chapter.
+ */
+describe('the chapter id matches the chapter the video names', () => {
+  const NAMED_IN_TITLE: { pattern: RegExp; chapterId: string }[] = [
+    { pattern: /ভেক্টর|Vector/i, chapterId: 'physics-1-2' },
+    { pattern: /নিউটন/, chapterId: 'physics-1-4' },
+    { pattern: /কাজ, শক্তি ও ক্ষমতা|কাজ শক্তি/, chapterId: 'physics-1-5' },
+    { pattern: /মহাকর্ষ ও অভিকর্ষ/, chapterId: 'physics-1-6' },
+    { pattern: /গাঠনিক ধর্ম/, chapterId: 'physics-1-7' },
+    { pattern: /Static Electricity|স্থির তড়িৎ/, chapterId: 'physics-2-2' },
+    { pattern: /Current Elec|চল তড়িৎ|চলতড়িৎ/, chapterId: 'physics-2-3' },
+    { pattern: /Thermodynamics|তাপগতিবিদ্যা/, chapterId: 'physics-2-1' },
+    { pattern: /Physical Optics|ভৌত আলোকবিজ্ঞান/, chapterId: 'physics-2-7' },
+    { pattern: /Modern Physics|আধুনিক পদার্থবিজ্ঞান/, chapterId: 'physics-2-8' },
+    { pattern: /Nuclear Physics|নিউক্লিয়ার/, chapterId: 'physics-2-9' },
+    { pattern: /Semiconductor|সেমিকন্ডাক্টর/, chapterId: 'physics-2-10' },
+    { pattern: /Periodicity|পর্যায়বৃত্ত/, chapterId: 'chemistry-1-3' },
+    { pattern: /রাসায়নিক পরিবর্তন/, chapterId: 'chemistry-1-4' },
+    { pattern: /গুণগত রসায়ন/, chapterId: 'chemistry-1-2' },
+  ];
+
+  it('never files a video under a chapter its own title contradicts', () => {
+    const wrong: string[] = [];
+    for (const question of VERIFIED_BOARD_QUESTIONS) {
+      const title = question.source.title;
+      const claimed = NAMED_IN_TITLE.filter(entry => entry.pattern.test(title));
+      // Only judge when the title names exactly one of the chapters we know about.
+      if (claimed.length === 1 && claimed[0].chapterId !== question.chapterId) {
+        wrong.push(`${question.id}: title "${title}" names ${claimed[0].chapterId}, filed as ${question.chapterId}`);
+      }
+    }
+    expect(wrong).toEqual([]);
+  });
+
+  it('does not use physics-1-3 (গতিবিদ্যা) for mechanics-video titles', () => {
+    // গতিবিদ্যা is kinematics; the Newtonian-mechanics classes belong to physics-1-4.
+    const misfiled = VERIFIED_BOARD_QUESTIONS.filter(q =>
+      q.chapterId === 'physics-1-3' && /নিউটন/.test(q.source.title));
+    expect(misfiled.map(q => q.id)).toEqual([]);
   });
 });

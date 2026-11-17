@@ -5,7 +5,9 @@
  *  1. The video is a real, public YouTube class linked in this repository's own
  *     class catalog (`classLinks.ts`), or a board-CQ-solution playlist found next to it.
  *  2. The question text was read out of the video's own caption transcript — not
- *     written from memory and not taken from a scanned paper.
+ *     written from memory and not taken from a scanned paper. Where the numbers in
+ *     the stimulus could not be recovered, the entry goes to COVERED_BOARD_TOPICS
+ *     instead of being written as a question with invented values.
  *  3. `board` and `year` are written ONLY where the transcript or the video's own
  *     description states them. If a class never names the board, the entry is not
  *     here — the app would rather show nothing than invent an attribution.
@@ -14,9 +16,24 @@
  * asks), not a verbatim copy of a copyrighted question paper. `source` always
  * carries the video id and time offset so a student can check it in one click.
  *
+ * TWO SEPARATE COLLECTIONS — this distinction is the point:
+ *
+ *  - `VERIFIED_BOARD_QUESTIONS` holds a question only when its actual stimulus
+ *    (numbers, vectors, circuit values) could be read back from the class. A
+ *    student must be able to sit down and solve it. Today that is a small set.
+ *
+ *  - `COVERED_BOARD_TOPICS` holds a class we know covered a given board + year,
+ *    where the transcript named the topic but the stimulus could not be read back
+ *    reliably. Nothing is guessed: it records *what the class covered*, never
+ *    inventing the numbers that would turn it into a question.
+ *
+ * An earlier revision put those summaries in the question array. The count looked
+ * healthy and the entries were not answerable — that is exactly the dishonesty this
+ * project is meant to avoid, so the two lists were split and a test enforces it.
+ *
  * Coverage is deliberately uneven and reported as such by `src/sources.ts`:
- * Physics 1st paper and Chemistry 1st paper only, and only the chapters those
- * classes covered.
+ * Physics 1st paper, Physics 2nd paper and Chemistry 1st paper only, and only the
+ * chapters those classes covered.
  */
 
 export type SourceBoard = 'ঢাকা' | 'রাজশাহী' | 'চট্টগ্রাম' | 'সিলেট' | 'ময়মনসিংহ' | 'যশোর' | 'দিনাজপুর' | 'কুমিল্লা' | 'বরিশাল';
@@ -90,7 +107,6 @@ export const REJECTED_SOURCES = [
 ] as const;
 
 export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
-  // ── ভেক্টর (physics-1-2) ────────────────────────────────────────────────
   {
     id: 'board|physics-1-2|dhaka-2024|1',
     subject: 'physics',
@@ -118,72 +134,6 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     evidence: 'chapter-list-names-board',
   },
   {
-    id: 'board|physics-1-2|sylhet-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-2',
-    type: 'CQ',
-    board: 'সিলেট',
-    year: 2024,
-    text: 'ভেক্টর অধ্যায়ের বোর্ড সৃজনশীল: লব্ধি ও উপাংশ সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে গাণিতিক সমাধান চাওয়া হয়েছে। (ক্লাসে এই বোর্ডের প্রশ্নটি ধাপে ধাপে সমাধান করা হয়েছে।)',
-    source: { ...VECTOR_ALL_BOARD, at: '40:20' },
-    evidence: 'chapter-list-names-board',
-  },
-  {
-    id: 'board|physics-1-2|chattagram-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-2',
-    type: 'CQ',
-    board: 'চট্টগ্রাম',
-    year: 2024,
-    text: 'ভেক্টর অধ্যায়ের বোর্ড সৃজনশীল: স্কেলার গুণফল ও ভেক্টর গুণফলভিত্তিক উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান। (ক্লাসে এই বোর্ডের প্রশ্নটি সমাধান করা হয়েছে।)',
-    source: { ...VECTOR_ALL_BOARD, at: '01:48' },
-    evidence: 'chapter-list-names-board',
-  },
-  {
-    id: 'board|physics-1-2|rajshahi-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-2',
-    type: 'CQ',
-    board: 'রাজশাহী',
-    year: 2024,
-    text: 'ভেক্টর অধ্যায়ের বোর্ড সৃজনশীল: ভেক্টরের লব্ধি ও কোণ সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে গাণিতিক সমাধান। (ক্লাসে এই বোর্ডের প্রশ্নটি সমাধান করা হয়েছে।)',
-    source: { ...VECTOR_ALL_BOARD, at: '23:41' },
-    evidence: 'chapter-list-names-board',
-  },
-  {
-    id: 'board|physics-1-2|mymensingh-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-2',
-    type: 'CQ',
-    board: 'ময়মনসিংহ',
-    year: 2024,
-    text: 'ভেক্টর অধ্যায়ের বোর্ড সৃজনশীল: ভেক্টর যোগ ও বিয়োগভিত্তিক উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান। (ক্লাসে এই বোর্ডের প্রশ্নটি সমাধান করা হয়েছে।)',
-    source: { ...VECTOR_ALL_BOARD, at: '51:37' },
-    evidence: 'chapter-list-names-board',
-  },
-  {
-    id: 'board|physics-1-2|cumilla-2025|1',
-    subject: 'physics',
-    chapterId: 'physics-1-2',
-    type: 'CQ',
-    board: 'কুমিল্লা',
-    year: 2025,
-    text:
-      'উদ্দীপক: ইঞ্জিনচালিত নৌকার স্রোতের অনুকূলে বেগ 15 km/h, প্রতিকূলে 5 km/h; ' +
-      'প্রস্থ 5 km নদীতে মাঝি A থেকে সোজা অপর পাড়ের B-তে পৌঁছাতে চায়, আর B থেকে 2 km দূরে C ' +
-      'থেকে অন্য ব্যক্তি 4 km/h বেগে B-র দিকে একই সময়ে রওনা হয়। (গ) B-তে পৌঁছাতে মাঝিকে কত কোণে ' +
-      'যাত্রা শুরু করতে হবে? (ঘ) দুজনের সাক্ষাৎ হবে কিনা তা গাণিতিকভাবে যাচাই করো।',
-    source: {
-      videoId: 'TQd0O7ift0A',
-      title: 'HSC 2025 Cumilla Board | Physics 1st Paper | Vector CQ Explained',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=TQd0O7ift0A',
-    },
-    evidence: 'video-title-names-board',
-  },
-
-  // ── ভেক্টর: MCQ (একক প্রশ্ন, বোর্ড ও সাল ক্লাসেই বলা) ──────────────────
-  {
     id: 'board|physics-1-2|dhaka-2024|mcq1',
     subject: 'physics',
     chapterId: 'physics-1-2',
@@ -205,192 +155,7 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     source: LOBDHI_MCQ_1,
     evidence: 'transcript-names-board',
   },
-
-  // ── নিউটনীয় বলবিদ্যা (physics-1-3) ─────────────────────────────────────
-  {
-    id: 'board|physics-1-3|dhaka-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-3',
-    type: 'CQ',
-    board: 'ঢাকা',
-    year: 2024,
-    text: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: উদ্দীপকে বস্তুর ওপর ক্রিয়াশীল বল ও ত্বরণ দেওয়া আছে—(গ) ত্বরণ/বল নির্ণয় ও (ঘ) গতির বিশ্লেষণ।',
-    source: {
-      videoId: 'CHHesvkrceI',
-      title: 'Dhaka Board - 2024 || নিউটনীয় বলবিদ্যা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=CHHesvkrceI',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-3|rajshahi-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-3',
-    type: 'CQ',
-    board: 'রাজশাহী',
-    year: 2024,
-    text: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: ঘর্ষণ ও বলের উপাংশভিত্তিক উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'd92lWPv1oWk',
-      title: 'Rajshahi Board - 2024 || নিউটনীয় বলবিদ্যা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=d92lWPv1oWk',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-3|sylhet-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-3',
-    type: 'CQ',
-    board: 'সিলেট',
-    year: 2024,
-    text: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: টান ও কোণভিত্তিক উদ্দীপক—(গ) ও (ঘ) ধাপে গাণিতিক সমাধান।',
-    source: {
-      videoId: 'TjQwVIfo_Uk',
-      title: 'Sylhet Board - 2024 || নিউটনীয় বলবিদ্যা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=TjQwVIfo_Uk',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-3|chattagram-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-3',
-    type: 'CQ',
-    board: 'চট্টগ্রাম',
-    year: 2024,
-    text: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: রকেট/ভরবেগ সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'I4CFIuAHHkY',
-      title: 'Chattagram Board - 2024 || নিউটনীয় বলবিদ্যা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=I4CFIuAHHkY',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-3|barishal-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-3',
-    type: 'CQ',
-    board: 'বরিশাল',
-    year: 2024,
-    text: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: বলের লব্ধি ও ত্বরণ সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'RYM63HZuVZ4',
-      title: 'Barishal Board - 2024 || নিউটনীয় বলবিদ্যা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=RYM63HZuVZ4',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-3|jessore-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-3',
-    type: 'CQ',
-    board: 'যশোর',
-    year: 2024,
-    text: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: ঘর্ষণ গুণাঙ্ক ও বলভারসাম্য সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'n8VoLKa46kM',
-      title: 'Jessore Board - 2024 || নিউটনীয় বলবিদ্যা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=n8VoLKa46kM',
-    },
-    evidence: 'video-title-names-board',
-  },
-
-  // ── কাজ, শক্তি ও ক্ষমতা (physics-1-5) ─────────────────────────────────
-  {
-    id: 'board|physics-1-5|dhaka-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-5',
-    type: 'CQ',
-    board: 'ঢাকা',
-    year: 2024,
-    text: 'কাজ, শক্তি ও ক্ষমতার বোর্ড সৃজনশীল: পাম্প/মোটরের ক্ষমতা ও কর্মদক্ষতাভিত্তিক উদ্দীপক—(গ) ক্ষমতা নির্ণয় ও (ঘ) শক্তি সংক্রান্ত বিশ্লেষণ।',
-    source: {
-      videoId: 'WEMV2rglo1k',
-      title: 'Dhaka Board - 2024 || কাজ, শক্তি ও ক্ষমতা || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=WEMV2rglo1k',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-5|cumilla-2025|1',
-    subject: 'physics',
-    chapterId: 'physics-1-5',
-    type: 'CQ',
-    board: 'কুমিল্লা',
-    year: 2025,
-    text: 'কাজ, শক্তি ও ক্ষমতার বোর্ড সৃজনশীল: পাম্পের কাজ নির্ণয় সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'WrPDE5okL9w',
-      title: 'HSC 2025 Comilla Board | Physics 1st Paper | Pump Work',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=WrPDE5okL9w',
-    },
-    evidence: 'video-title-names-board',
-  },
-
-  // ── মহাকর্ষ ও অভিকর্ষ (physics-1-6) ───────────────────────────────────
-  {
-    id: 'board|physics-1-6|sylhet-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-6',
-    type: 'CQ',
-    board: 'সিলেট',
-    year: 2024,
-    text: 'মহাকর্ষ ও অভিকর্ষের বোর্ড সৃজনশীল: উচ্চতা ও অভিকর্ষজ ত্বরণ সংক্রান্ত উদ্দীপক—(গ) g-এর মান নির্ণয় ও (ঘ) তুলনামূলক বিশ্লেষণ।',
-    source: {
-      videoId: '3z07sTeq7RQ',
-      title: 'Sylhet Board - 2024 || মহাকর্ষ ও অভিকর্ষ || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=3z07sTeq7RQ',
-    },
-    evidence: 'video-title-names-board',
-  },
-  {
-    id: 'board|physics-1-6|barishal-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-6',
-    type: 'CQ',
-    board: 'বরিশাল',
-    year: 2024,
-    text: 'মহাকর্ষ ও অভিকর্ষের বোর্ড সৃজনশীল: কৃত্রিম উপগ্রহ ও মুক্তিবেগ সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'f6gD3r9g6_Q',
-      title: 'Barishal Board - 2024 || মহাকর্ষ ও অভিকর্ষ || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=f6gD3r9g6_Q',
-    },
-    evidence: 'video-title-names-board',
-  },
-
-  // ── পদার্থের গাঠনিক ধর্ম (physics-1-7) ────────────────────────────────
-  {
-    id: 'board|physics-1-7|all-board-2024|1',
-    subject: 'physics',
-    chapterId: 'physics-1-7',
-    type: 'CQ',
-    board: 'ঢাকা',
-    year: 2024,
-    text: 'পদার্থের গাঠনিক ধর্মের বোর্ড সৃজনশীল: পীড়ন-বিকৃতি ও ইয়ং গুণাঙ্কভিত্তিক উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান (সব বোর্ডের প্রশ্ন একই ক্লাসে)।',
-    source: {
-      videoId: 'Ud7EWaQ97Dk',
-      title: 'HSC - 2024 পদার্থের গাঠনিক ধর্ম All Board CQ Solution || Physics 1st Paper',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=Ud7EWaQ97Dk',
-    },
-    evidence: 'chapter-list-names-board',
-  },
-
-  // ── পদার্থবিজ্ঞান ২য় পত্র ───────────────────────────────────────────
+  // ── নিউটনিয়ান বলবিদ্যা (physics-1-4) ─────────────────────────────────────
   {
     id: 'board|physics-2-2|dhaka-2024|1',
     subject: 'physics',
@@ -429,6 +194,198 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     },
     evidence: 'transcript-names-board',
   },
+  // ── ভেক্টর (physics-1-2) ────────────────────────────────────────────────
+  {
+    id: 'board|physics-1-2|cumilla-2025|1',
+    subject: 'physics',
+    chapterId: 'physics-1-2',
+    type: 'CQ',
+    board: 'কুমিল্লা',
+    year: 2025,
+    text:
+      'উদ্দীপক: ইঞ্জিনচালিত নৌকার স্রোতের অনুকূলে বেগ 15 km/h, প্রতিকূলে 5 km/h; ' +
+      'প্রস্থ 5 km নদীতে মাঝি A থেকে সোজা অপর পাড়ের B-তে পৌঁছাতে চায়, আর B থেকে 2 km দূরে C ' +
+      'থেকে অন্য ব্যক্তি 4 km/h বেগে B-র দিকে একই সময়ে রওনা হয়। (গ) B-তে পৌঁছাতে মাঝিকে কত কোণে ' +
+      'যাত্রা শুরু করতে হবে? (ঘ) দুজনের সাক্ষাৎ হবে কিনা তা গাণিতিকভাবে যাচাই করো।',
+    source: {
+      videoId: 'TQd0O7ift0A',
+      title: 'HSC 2025 Cumilla Board | Physics 1st Paper | Vector CQ Explained',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=TQd0O7ift0A',
+    },
+    evidence: 'video-title-names-board',
+  },
+  // ── ভেক্টর: MCQ (একক প্রশ্ন, বোর্ড ও সাল ক্লাসেই বলা) ──────────────────
+];
+
+/**
+ * Classes that provably covered a board + year, where the transcript named the
+ * topic but not enough of the stimulus to rebuild an answerable question.
+ * This is a coverage record, NOT a question list — the UI labels it that way.
+ */
+export interface CoveredBoardTopic {
+  id: string;
+  subject: VerifiedBoardQuestion['subject'];
+  chapterId: string;
+  type: 'CQ' | 'MCQ';
+  board: SourceBoard;
+  year: number;
+  /** What the teacher actually discussed, taken from the class transcript. */
+  topic: string;
+  evidence: VerifiedBoardQuestion['evidence'];
+}
+
+export const COVERED_BOARD_TOPICS: CoveredBoardTopic[] = [
+  {
+    id: 'board|physics-1-2|sylhet-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-2',
+    type: 'CQ',
+    board: 'সিলেট',
+    year: 2024,
+    topic: 'লব্ধি ও উপাংশ সংক্রান্ত উদ্দীপক',
+    evidence: 'chapter-list-names-board',
+  },
+  {
+    id: 'board|physics-1-2|chattagram-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-2',
+    type: 'CQ',
+    board: 'চট্টগ্রাম',
+    year: 2024,
+    topic: 'স্কেলার গুণফল ও ভেক্টর গুণফলভিত্তিক উদ্দীপক',
+    evidence: 'chapter-list-names-board',
+  },
+  {
+    id: 'board|physics-1-2|rajshahi-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-2',
+    type: 'CQ',
+    board: 'রাজশাহী',
+    year: 2024,
+    topic: 'ভেক্টরের লব্ধি ও কোণ সংক্রান্ত উদ্দীপক',
+    evidence: 'chapter-list-names-board',
+  },
+  {
+    id: 'board|physics-1-2|mymensingh-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-2',
+    type: 'CQ',
+    board: 'ময়মনসিংহ',
+    year: 2024,
+    topic: 'ভেক্টর যোগ ও বিয়োগভিত্তিক উদ্দীপক',
+    evidence: 'chapter-list-names-board',
+  },
+  {
+    id: 'board|physics-1-4|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-4',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    topic: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: উদ্দীপকে বস্তুর ওপর ক্রিয়াশীল বল ও ত্বরণ দেওয়া আছে',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-4|rajshahi-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-4',
+    type: 'CQ',
+    board: 'রাজশাহী',
+    year: 2024,
+    topic: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: ঘর্ষণ ও বলের উপাংশভিত্তিক উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-4|sylhet-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-4',
+    type: 'CQ',
+    board: 'সিলেট',
+    year: 2024,
+    topic: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: টান ও কোণভিত্তিক উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-4|chattagram-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-4',
+    type: 'CQ',
+    board: 'চট্টগ্রাম',
+    year: 2024,
+    topic: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: রকেট/ভরবেগ সংক্রান্ত উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-4|barishal-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-4',
+    type: 'CQ',
+    board: 'বরিশাল',
+    year: 2024,
+    topic: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: বলের লব্ধি ও ত্বরণ সংক্রান্ত উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-4|jessore-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-4',
+    type: 'CQ',
+    board: 'যশোর',
+    year: 2024,
+    topic: 'নিউটনীয় বলবিদ্যার বোর্ড সৃজনশীল: ঘর্ষণ গুণাঙ্ক ও বলভারসাম্য সংক্রান্ত উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-5|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-5',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    topic: 'কাজ, শক্তি ও ক্ষমতার বোর্ড সৃজনশীল: পাম্প/মোটরের ক্ষমতা ও কর্মদক্ষতাভিত্তিক উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-5|cumilla-2025|1',
+    subject: 'physics',
+    chapterId: 'physics-1-5',
+    type: 'CQ',
+    board: 'কুমিল্লা',
+    year: 2025,
+    topic: 'কাজ, শক্তি ও ক্ষমতার বোর্ড সৃজনশীল: পাম্পের কাজ নির্ণয় সংক্রান্ত উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-6|sylhet-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-6',
+    type: 'CQ',
+    board: 'সিলেট',
+    year: 2024,
+    topic: 'মহাকর্ষ ও অভিকর্ষের বোর্ড সৃজনশীল: উচ্চতা ও অভিকর্ষজ ত্বরণ সংক্রান্ত উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-6|barishal-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-6',
+    type: 'CQ',
+    board: 'বরিশাল',
+    year: 2024,
+    topic: 'মহাকর্ষ ও অভিকর্ষের বোর্ড সৃজনশীল: কৃত্রিম উপগ্রহ ও মুক্তিবেগ সংক্রান্ত উদ্দীপক',
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-1-7|all-board-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-1-7',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    topic: 'পদার্থের গাঠনিক ধর্মের বোর্ড সৃজনশীল: পীড়ন-বিকৃতি ও ইয়ং গুণাঙ্কভিত্তিক উদ্দীপক',
+    evidence: 'chapter-list-names-board',
+  },
   {
     id: 'board|physics-2-1|jessore-2024|1',
     subject: 'physics',
@@ -436,13 +393,7 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'যশোর',
     year: 2024,
-    text: 'তাপগতিবিদ্যার বোর্ড সৃজনশীল: গ্যাসের চাপ-আয়তন-তাপমাত্রা সংক্রান্ত উদ্দীপক—(গ) কার্য/তাপ নির্ণয় ও (ঘ) প্রক্রিয়ার তুলনামূলক বিশ্লেষণ।',
-    source: {
-      videoId: 'yjInEHk3xz0',
-      title: 'Jessore Board 2024- HSC || Physics 2nd Paper || Thermodynamics CQ solution.',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=yjInEHk3xz0',
-    },
+    topic: 'তাপগতিবিদ্যার বোর্ড সৃজনশীল: গ্যাসের চাপ-আয়তন-তাপমাত্রা সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
@@ -452,13 +403,7 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'ঢাকা',
     year: 2024,
-    text: 'ভৌত আলোকবিজ্ঞানের বোর্ড সৃজনশীল: ব্যতিচার/অপবর্তন সংক্রান্ত উদ্দীপক—(গ) তরঙ্গদৈর্ঘ্য বা ডোরা ব্যবধান নির্ণয় ও (ঘ) ফলাফলের বিশ্লেষণ।',
-    source: {
-      videoId: 'UQkxfskWOOM',
-      title: 'Dhaka Board - 2024 || ভৌত আলোকবিজ্ঞান || Physics 2nd Paper || HSC',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=UQkxfskWOOM',
-    },
+    topic: 'ভৌত আলোকবিজ্ঞানের বোর্ড সৃজনশীল: ব্যতিচার/অপবর্তন সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
@@ -468,13 +413,7 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'ঢাকা',
     year: 2024,
-    text: 'আধুনিক পদার্থবিজ্ঞানের সূচনা অধ্যায়ের বোর্ড সৃজনশীল: ফটোইলেকট্রিক ক্রিয়া সংক্রান্ত উদ্দীপক—(গ) নিবৃত্তি বিভব/কাজ অপেক্ষক নির্ণয় ও (ঘ) ফলাফল বিশ্লেষণ।',
-    source: {
-      videoId: 'ozgvxFFRaiI',
-      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Modern Physics CQ solution.',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=ozgvxFFRaiI',
-    },
+    topic: 'ফটোইলেকট্রিক ক্রিয়া সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
@@ -484,13 +423,7 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'ঢাকা',
     year: 2024,
-    text: 'নিউক্লিয়ার পদার্থবিজ্ঞান অধ্যায়ের বোর্ড সৃজনশীল: তেজস্ক্রিয় ক্ষয় ও অর্ধায়ু সংক্রান্ত উদ্দীপক—(গ) ক্ষয়কাল/ভর নির্ণয় ও (ঘ) শক্তির হিসাব।',
-    source: {
-      videoId: '5g2KpLyxu1c',
-      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Nuclear Physics CQ solution.',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=5g2KpLyxu1c',
-    },
+    topic: 'তেজস্ক্রিয় ক্ষয় ও অর্ধায়ু সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
@@ -500,47 +433,17 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'ঢাকা',
     year: 2024,
-    text: 'সেমিকন্ডাক্টর ও ইলেকট্রনিকস অধ্যায়ের বোর্ড সৃজনশীল: ডায়োড/ট্রানজিস্টর বর্তনী সংক্রান্ত উদ্দীপক—(গ) প্রবাহ বা বিভব নির্ণয় ও (ঘ) কার্যপ্রণালির বিশ্লেষণ।',
-    source: {
-      videoId: 'Ml8dXr2cR88',
-      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Semiconductor and Electronics CQ solution.',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=Ml8dXr2cR88',
-    },
+    topic: 'ডায়োড/ট্রানজিস্টর বর্তনী সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
-    id: 'board|physics-2-6|mymensingh-2024|1',
+    id: 'board|physics-2-7|mymensingh-2024|1',
     subject: 'physics',
-    chapterId: 'physics-2-6',
+    chapterId: 'physics-2-7',
     type: 'CQ',
     board: 'ময়মনসিংহ',
     year: 2024,
-    text: 'জ্যামিতিক আলোকবিজ্ঞানের বোর্ড সৃজনশীল: লেন্সের ক্ষমতা ও প্রতিবিম্ব সংক্রান্ত উদ্দীপক—(গ) ফোকাস দূরত্ব/বিবর্ধন নির্ণয় ও (ঘ) বিশ্লেষণ।',
-    source: {
-      videoId: '7H_Db5DC6YI',
-      title: 'Mymensingh board 2024 || ভৌত আলোকবিজ্ঞান || Physics 2nd Paper || HSC',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=7H_Db5DC6YI',
-    },
-    evidence: 'video-title-names-board',
-  },
-
-  // ── রসায়ন ১ম পত্র (chemistry-1-*) ─────────────────────────────────────
-  {
-    id: 'board|chemistry-1-1|rajshahi-2023|1',
-    subject: 'chemistry',
-    chapterId: 'chemistry-1-1',
-    type: 'CQ',
-    board: 'রাজশাহী',
-    year: 2023,
-    text: 'রসায়নের ধারণা অধ্যায়ের বোর্ড সৃজনশীল: ল্যাবরেটরির নিরাপদ ব্যবহার ও রাসায়নিক পদার্থ সংরক্ষণ সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'sXPOZtZxHJw',
-      title: 'Rajshahi Board 2023 - HSC || Chemistry 1st Paper || Periodicity of Elements CQ solution',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=sXPOZtZxHJw',
-    },
+    topic: 'ভৌত আলোকবিজ্ঞানের বোর্ড সৃজনশীল: ব্যতিচার/অপবর্তন সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
@@ -550,13 +453,7 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'রাজশাহী',
     year: 2023,
-    text: 'মৌলের পর্যায়বৃত্ত ধর্ম অধ্যায়ের বোর্ড সৃজনশীল: ইলেকট্রন বিন্যাস ও পর্যায়বৃত্ত ধর্মের তুলনা সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: 'sXPOZtZxHJw',
-      title: 'Rajshahi Board 2023 - HSC || Chemistry 1st Paper || Periodicity of Elements CQ solution',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=sXPOZtZxHJw',
-    },
+    topic: 'ইলেকট্রন বিন্যাস ও পর্যায়বৃত্ত ধর্মের তুলনা সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
@@ -566,29 +463,17 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
     type: 'CQ',
     board: 'রাজশাহী',
     year: 2023,
-    text: 'রাসায়নিক পরিবর্তন অধ্যায়ের বোর্ড সৃজনশীল: রাসায়নিক বিক্রিয়া ও শক্তির পরিবর্তন সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: '5bcIy_xALfo',
-      title: 'Rajshahi Board 2023 - HSC || Chemistry 1st Paper || রাসায়নিক পরিবর্তন CQ solution.',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=5bcIy_xALfo',
-    },
+    topic: 'রাসায়নিক বিক্রিয়া ও শক্তির পরিবর্তন সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
   {
-    id: 'board|chemistry-1-5|rajshahi-2023|1',
+    id: 'board|chemistry-1-2|rajshahi-2023|1',
     subject: 'chemistry',
-    chapterId: 'chemistry-1-5',
+    chapterId: 'chemistry-1-2',
     type: 'CQ',
     board: 'রাজশাহী',
     year: 2023,
-    text: 'কর্মমুখী রসায়ন অধ্যায়ের বোর্ড সৃজনশীল: শিল্পে রাসায়নিক প্রক্রিয়া ও গুণগত রসায়ন সংক্রান্ত উদ্দীপক—(গ) ও (ঘ) ধাপে সমাধান।',
-    source: {
-      videoId: '4bl5W2e3jxg',
-      title: 'Rajshahi Board 2023 - HSC || Chemistry 1st Paper || গুণগত রসায়ন CQ solution.',
-      channel: EDU_MARATHON,
-      url: 'https://www.youtube.com/watch?v=4bl5W2e3jxg',
-    },
+    topic: 'গুণগত বিশ্লেষণ (ক্যাটায়ন/অ্যানায়ন শনাক্তকরণ) সংক্রান্ত উদ্দীপক',
     evidence: 'video-title-names-board',
   },
 ];

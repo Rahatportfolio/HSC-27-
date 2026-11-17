@@ -187,7 +187,7 @@ export default function SyllabusView() {
         </div>;
       })}
 
-      {!visible.length && <EmptyState title={t('মিলে যাওয়া অধ্যায় নেই', 'No matching chapter')} description="অন্য শব্দ দিয়ে খুঁজো, অগ্রাধিকার ফিল্টার বদলাও বা দুর্বল ফিল্টার বন্ধ করো।" />}
+      {!visible.length && <EmptyState title={t('মিলে যাওয়া অধ্যায় নেই', 'No matching chapter')} description={t('অন্য শব্দ দিয়ে খুঁজো, অগ্রাধিকার ফিল্টার বদলাও বা দুর্বল ফিল্টার বন্ধ করো।', 'Search another word, change the priority filter, or turn the weak filter off.')} />}
     </section>
     <div className="info-panel"><ArrowUpRight size={18} /><p>{SYLLABUS_NOTE}</p></div>
   </div>;

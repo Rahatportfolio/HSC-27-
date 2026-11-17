@@ -93,7 +93,7 @@ export default function StorageView() {
       )}
 
       {!usage && !loading && (
-        <EmptyState title={t('স্টোরেজ তথ্য পাওয়ா যায়নি', 'Storage info unavailable')} description="ব্রাউজার স্টোরেজ APIs এ această ডিভাইসে সীমাবদ্ধ হতে পারে।" />
+        <EmptyState title={t('স্টোরেজ তথ্য পাওয়ா যায়নি', 'Storage info unavailable')} description={t('ব্রাউজার স্টোরেজ APIs এই ডিভাইসে সীমাবদ্ধ হতে পারে।', 'Browser storage APIs may be limited on this device.')} />
       )}
     </div>
   );

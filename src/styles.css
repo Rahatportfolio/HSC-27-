@@ -5076,3 +5076,9 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 /* Which papers actually have board questions — stated, not implied. */
 .verified-board-papers{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
 .verified-paper-chip{padding:4px 9px;border-radius:999px;background:#eef3ea;color:#3c5638;font-size:.74rem;font-weight:600}
+
+.covered-board-block { margin-top: 18px; border-top: 1px dashed var(--border); padding-top: 16px; }
+.covered-board-list { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 8px; }
+.covered-board-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; padding: 9px 12px; border-radius: 10px; background: var(--surface-2, rgba(127,127,127,.07)); font-size: .88rem; }
+.covered-board-where { font-weight: 600; font-size: .8rem; opacity: .8; white-space: nowrap; }
+.covered-board-topic { flex: 1 1 220px; }
