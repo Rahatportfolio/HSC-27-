@@ -2,7 +2,7 @@
 
 ## v2.43.0 — backup/scanner/timer recheck and release gates
 
-Branch `arena/d8039a21-hsc-27` is based on release `12cae9421fcb6e1f3719c16545c09d14b322bbfa`. Source/Android metadata are **2.43.0 / code 23**. Publication and exact remote CI/deployment results are tracked on the [v2.43.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). Tagged uploads remain drafts until emulator/Pages results are verified; source version or asset appearance alone is not a release claim. [Current audit](AUDIT.md).
+**v2.43.0 / code 23 is published** from source/tag `64ac7c99fcf635a7703bf6fb23fbc6020be318e5` ([PR #15](https://github.com/Rahatportfolio/HSC-27-/pull/15)). The source was prepared on `arena/d8039a21-hsc-27`; publication completed on continuation branch `arena/34a32742-hsc-27` without changing application code or the APK. [Public release and exact evidence](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0), [current audit](AUDIT.md). Android build/API 35 checks, same-source Pages deployment and uploaded-APK byte/version/signature inspection passed before the draft was promoted; public/latest status was independently verified.
 
 | Rechecked area | Current measured behavior |
 |---|---|
@@ -14,6 +14,9 @@ Branch `arena/d8039a21-hsc-27` is based on release `12cae9421fcb6e1f3719c16545c0
 | Narrow-screen controls | Populated scanner checked at 320/360/390/768px, large text; existing 23-view source responsive checks also passed |
 | Final local gates | **763/763 tests, 86 files**, clean typecheck, production build; **100 controls / 76 application mutations**, **117 controls / 55 date/history mutations**, and **3 controls / 6 release-policy mutations** caught in this audit; originals restored |
 | Real browser gates | Final production date flows in Dhaka/New York, actual scanned-image bytes/PDF/fresh-profile restore/dirty draft/quota retry, real media resume and production PWA offline reload passed |
+| Published Android/PWA | Tagged [Android run](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44151291901), same-source [Pages deployment](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44151187101) and [asset inspection](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44159411468) passed. APK is 15,229,928 bytes; embedded web bundle matches the local tested build byte-for-byte |
+| Asset-checker proof | 24 separate Node tests, 19 targeted auditor mutations caught. Continuation reran 763 Vitest tests, typecheck and build; application source unchanged |
+| Upgrade compatibility | **Published v2.42.0 / v2.43.0 signing certificates differ**: normal Android in-place update is not supported. Keep the old app/device; do not uninstall until progress and all scanned PDFs/images are independently verified. PWA data is separate |
 
 **ব্যাকআপ সতর্কতা:** JSON ও প্রকাশিত পুরোনো Full backup-এ স্ক্যানের নাম-তথ্য আছে, ছবির bytes নেই। মূল ডিভাইস মুছে গেলে এবং আলাদা PDF/ছবি না থাকলে ওই backup থেকে ছবি উদ্ধার করা যায় না। ব্যাকআপ যাচাই না করে পুরোনো অ্যাপ uninstall কোরো না। নতুন ছবিসহ full-backup format v2.43.0 থেকে সমর্থিত; ইনস্টল করা version ও backup যাচাই করো।
 

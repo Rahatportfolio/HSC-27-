@@ -4,6 +4,24 @@
 
 This section supersedes the release-baseline counts below for the current working tree. The date derivation, personal-target policy and official-date uncertainty are unchanged.
 
+## Publication completed — v2.43.0
+
+Publication was completed from continuation branch `arena/34a32742-hsc-27` after Arena blocked remote access on the merged source branch. The release/tag remains **`64ac7c99fcf635a7703bf6fb23fbc6020be318e5`**, tree **`8067d012a29f71ebc54e882374f1aed35ad4de35`**, from [PR #15](https://github.com/Rahatportfolio/HSC-27-/pull/15). No application code, tag or existing APK was replaced during this continuation; only inspection tooling and documentation changed.
+
+- **Public release:** [v2.43.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0), ID `449052328`, non-draft/non-prerelease; publication and latest status independently confirmed through the unauthenticated public API.
+- **APK:** [prostuti-hsc27-v2.43.0.apk](https://github.com/Rahatportfolio/HSC-27-/releases/download/v2.43.0/prostuti-hsc27-v2.43.0.apk), asset `760227469`, **15,229,928 bytes**, `com.prostuti.hsc27`, **versionName 2.43.0 / versionCode 23**.
+- **APK SHA-256:** `38992c88d72797dac9c57d8100555f52d8b8e239e28696f7b6f516e94fb7653d`.
+- [Tagged Android run 44151291901](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44151291901): APK **5m11s**, API 35 storage/playback/restart/reset emulator checks **4m35s**, both successful. Release-keystore steps were skipped; this is a **debug-signed APK**, not a production-keystore APK/AAB.
+- [Pages run 44151187101](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44151187101): same release SHA, build **2m31s**, deploy **11s**, successful deployment **7862887230** for **https://rahatportfolio.github.io/HSC-27-/**. Deployment success is observed; direct public-site inspection was restricted by the sandbox's outbound-host allowlist.
+- [Uploaded-APK inspection run 44159411468](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44159411468): **28s, success**, using tooling commit `31ae1f267e9104a94b4168d9e082a44722937ce9`. The runner downloaded the exact release asset and checked its bytes against GitHub's size/digest, ZIP integrity, embedded Android version/package, cryptographic signature and previous-release certificate. It did not rebuild or replace either APK. Local direct downloads failed at the restricted asset CDN; verification happened on the GitHub runner, not locally.
+- APK's `assets/index-BIn-0ZZw.js` SHA-256 **`8eebadfbe76a83fa8a87987eb948d85389cd575724dd161d13e6009509aae545`** matches the locally tested production bundle **byte-for-byte**.
+
+**Measured upgrade incompatibility:** v2.43.0 certificate SHA-256 is `30c33e6e24b125db7291e3fb6f3ea746054532b2c016bb3f24d79023cac5ab72`; published v2.42.0 is `fa69e88eb5d49174e02ae91b5b711b192a1e0698c108b8a1015b8eda6c77e8f7`. They differ. Normal Android in-place update from that APK is **not supported**. Do not uninstall/clear the original app to resolve the conflict without independently opening and verifying progress exports **and every scanned PDF/image**. Legacy JSON/full archives omitted those image bytes. PWA and APK data do not automatically sync.
+
+Continuation gates: clean typecheck, **763/763 Vitest tests / 86 files** and a **6.13s** build reran successfully; large-chunk warning remains. The separate artifact checker has **24 passing Node tests** and **19 targeted auditor mutations caught**, with original source unchanged. This is additional tooling evidence, not a fresh combined application/date/release mutation run. New Android SDK signer-format handling first failed four added tests, then passed. Failed inspection attempts exposed draft visibility and the SDK's new `V2 Signer:` format; no release was published until inspection succeeded.
+
+Inspection is opt-in via the existing Android workflow's `audit_release`, `audit_sha`, `audit_previous` dispatch inputs; build/device jobs are skipped in that mode. It makes GET requests only. GitHub's read-only token omitted draft releases in an observed failed run, so the isolated inspection job needs `contents: write` for draft visibility; it still never publishes, replaces assets or builds an APK. Results/failures are exposed through check annotations and an uploaded JSON report. Reproduction: `node --test scripts/verify-release-asset.node-test.mjs`. The source date/history contracts and physical-phone limitations below remain unchanged.
+
 ## Important backup safety finding
 
 **Released legacy full-media backups saved scanned-note metadata but omitted the handwritten image bytes. JSON backups are also metadata-only.** A title and `pageKeys` are not the images themselves. If the old device has been erased and no separate PDF/image export exists, these backups cannot reconstruct the missing pages. Do not uninstall or clear the original device on the assumption that a legacy full backup preserved them.

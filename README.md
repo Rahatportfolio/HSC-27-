@@ -6,7 +6,7 @@ A Bengali-first, offline study companion for HSC 2027 science preparation (Sylhe
 
 ## v2.43.0 changes and release gates
 
-These fixes follow the v2.42.0 base. Package/lockfile/Android metadata are **2.43.0 / versionCode 23**. Tagged APK uploads stay **draft** until the Android emulator and Pages results have explicitly been checked; asset appearance alone is not publication. Check the release page for the published artifact and its exact CI evidence. The workspace preview serves the local production build.
+These fixes follow the v2.42.0 base. **v2.43.0 / versionCode 23 is published**, with APK/API 35 and Pages success for source `64ac7c99fcf635a7703bf6fb23fbc6020be318e5`. [Release notes and exact evidence](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). Tagged uploads stay **draft** until checks are explicitly verified; asset appearance alone is not publication. The uploaded APK's size/hash, embedded version and signature were inspected on an Android CI runner before promotion. The workspace preview serves the same tested web bundle.
 
 - Restore must save durably before replacing a profile or clearing clocks; dirty Settings and concurrent progress are protected.
 - Scanned-note persistence, image edits, per-page navigation, limits and complete PDF export are corrected. New scan-bearing full backups include checksummed image bytes and restore them under fresh keys.
@@ -131,7 +131,9 @@ npm run android:apk
 # android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-An APK signed with the same key/app id normally updates in place. Different signatures can require uninstalling the old app, which loses local data; take a JSON/full-media backup first.
+**Known signing incompatibility:** the published v2.42.0 and v2.43.0 debug APKs have **different verified certificates**, so normal Android in-place update is not supported. **Do not uninstall/clear the old app to resolve the conflict** until progress exports and every scanned PDF/image are independently opened and verified elsewhere. JSON and legacy full backups omitted scan bytes; they alone do not make uninstall safe. Keep the original app/device. PWA data is separate and does not automatically sync with the APK.
+
+The existing Android workflow also supports **GET-only uploaded-APK inspection** without rebuilding or publishing: set dispatch inputs `audit_release` (tag), `audit_sha` (exact source SHA), and optionally `audit_previous` (previous published tag). The inspected source/asset stays unchanged; package/version, ZIP/signature, size/hash and signing compatibility are checked on the runner. Inspect mode skips build/device jobs. GitHub hides drafts from read-only tokens, so that isolated job needs content-write permission for visibility, not for a write operation. Run `node --test scripts/verify-release-asset.node-test.mjs` for its 24 independent Node tests. [Measured inspection and signing evidence](AUDIT.md#publication-completed--v2430).
 
 ## Reminders, data and privacy
 
