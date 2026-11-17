@@ -113,3 +113,36 @@ describe('coverage is reported as it is, not rounded up', () => {
     expect(cited.length).toBeGreaterThanOrEqual(inCatalog.length);
   });
 });
+
+describe('subject coverage is stated per paper, not averaged away', () => {
+  it('names which papers have real board questions and which have none', () => {
+    const covered = new Set(VERIFIED_BOARD_QUESTIONS.map(q => q.subject));
+    // These are the only papers with evidence-backed questions today.
+    expect(covered.has('physics')).toBe(true);
+    expect(covered.has('chemistry')).toBe(true);
+    // A paper with no verified source must not appear at all — no placeholder rows.
+    for (const empty of ['math', 'biology', 'bangla', 'english', 'ict'] as const) {
+      expect(VERIFIED_BOARD_QUESTIONS.some(q => (q.subject as string) === empty)).toBe(false);
+    }
+  });
+
+  it('keeps physics 2nd paper entries on physics 2nd paper chapters', () => {
+    const second = VERIFIED_BOARD_QUESTIONS.filter(q => q.chapterId.startsWith('physics-2-'));
+    expect(second.length).toBeGreaterThan(0);
+    for (const question of second) {
+      expect(chapterById[question.chapterId].subject).toBe('physics');
+      expect(question.chapterId).toMatch(/^physics-2-\d+$/);
+    }
+  });
+
+  it('never repeats the same question text', () => {
+    // One board paper can legitimately carry two CQ parts for the same chapter
+    // (Dhaka 2024 Vector did, solved as part 1 and part 2), so the board+year key
+    // is not unique — the text must be.
+    const texts = VERIFIED_BOARD_QUESTIONS.map(q => q.text.trim());
+    expect(new Set(texts).size).toBe(texts.length);
+    // Ids must still be unique, because that is what the UI keys on.
+    const ids = VERIFIED_BOARD_QUESTIONS.map(q => q.id);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+});

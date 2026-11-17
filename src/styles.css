@@ -5073,3 +5073,6 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
   .verified-board-card p{font-size:.84rem}
   .verified-board-source{font-size:.72rem}
 }
+/* Which papers actually have board questions — stated, not implied. */
+.verified-board-papers{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0}
+.verified-paper-chip{padding:4px 9px;border-radius:999px;background:#eef3ea;color:#3c5638;font-size:.74rem;font-weight:600}

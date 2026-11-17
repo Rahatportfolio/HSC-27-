@@ -23,7 +23,7 @@ export type SourceBoard = 'ঢাকা' | 'রাজশাহী' | 'চট্�
 
 export interface VerifiedBoardQuestion {
   id: string;
-  subject: 'physics' | 'chemistry';
+  subject: 'physics' | 'chemistry' | 'math' | 'biology';
   /** Syllabus chapter this question really belongs to. */
   chapterId: string;
   type: 'CQ' | 'MCQ';
@@ -82,6 +82,11 @@ const LOBDHI_MCQ_1 = {
 export const REJECTED_SOURCES = [
   { videoId: 'ep3FdeUNdiI', channel: UDVASH, reason: 'caption is English fragments, not the Bengali speech' },
   { videoId: 'y5fZs_pghyE', channel: APURBO, reason: 'caption is Devanagari, not Bengali script' },
+  {
+    videoId: 'iRR-9w5uoH8',
+    channel: 'Triangular Kamal Academy',
+    reason: 'Higher Math 2nd paper board CQ — the caption came out in Arabic script, so the equation cannot be read back reliably',
+  },
 ] as const;
 
 export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
@@ -383,6 +388,142 @@ export const VERIFIED_BOARD_QUESTIONS: VerifiedBoardQuestion[] = [
       url: 'https://www.youtube.com/watch?v=Ud7EWaQ97Dk',
     },
     evidence: 'chapter-list-names-board',
+  },
+
+  // ── পদার্থবিজ্ঞান ২য় পত্র ───────────────────────────────────────────
+  {
+    id: 'board|physics-2-2|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-2',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    text:
+      'উদ্দীপক: Q ও R বিন্দুতে প্রত্যেকে 15×10⁻⁹ C ধনাত্মক চার্জ আছে; P বিন্দু দুইটি থেকে 2√2 m দূরে, ' +
+      'QP ও RP পরস্পর লম্ব। (গ) P বিন্দুর বিভব নির্ণয় করো। (ঘ) P বিন্দুতে স্থাপিত 1 kg ভরের বস্তুকে ' +
+      'শূন্যে ঝুলিয়ে রাখা যাবে কিনা—যুক্তিসহ বিশ্লেষণ করো। (ক্লাসে নিট বল 16875 N আর ওজন 9.8 N পেয়ে দেখানো হয়েছে যে ঝুলিয়ে রাখা যাবে না।)',
+    source: {
+      videoId: 'VCkwV9o_LJ4',
+      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Static Electricity CQ solution',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=VCkwV9o_LJ4',
+    },
+    evidence: 'transcript-names-board',
+  },
+  {
+    id: 'board|physics-2-3|barishal-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-3',
+    type: 'CQ',
+    board: 'বরিশাল',
+    year: 2024,
+    text:
+      'উদ্দীপক: 9 V ও 7 V-এর দুইটি ভোল্টেজ উৎস, 2 Ω ও 8 Ω রোধ এবং AB অংশে একটি চাবি নিয়ে গঠিত বর্তনী। ' +
+      '(গ) চাবি খোলা অবস্থায় AB-এর মধ্য দিয়ে তড়িৎ প্রবাহ নির্ণয় করো। (ঘ) চাবি খোলা ও বন্ধ—দুই অবস্থায় ' +
+      'AB-এর দুই প্রান্তের বিভব পার্থক্যের পরিবর্তন বিশ্লেষণ করো। (ক্লাসে (গ)-এর উত্তর 9/13 A দেখানো হয়েছে।)',
+    source: {
+      videoId: 'VrIcIlTlduw',
+      title: 'Barishal Board - 2024 || চল তড়িৎ || Physics 2nd Paper || HSC',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=VrIcIlTlduw',
+    },
+    evidence: 'transcript-names-board',
+  },
+  {
+    id: 'board|physics-2-1|jessore-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-1',
+    type: 'CQ',
+    board: 'যশোর',
+    year: 2024,
+    text: 'তাপগতিবিদ্যার বোর্ড সৃজনশীল: গ্যাসের চাপ-আয়তন-তাপমাত্রা সংক্রান্ত উদ্দীপক—(গ) কার্য/তাপ নির্ণয় ও (ঘ) প্রক্রিয়ার তুলনামূলক বিশ্লেষণ।',
+    source: {
+      videoId: 'yjInEHk3xz0',
+      title: 'Jessore Board 2024- HSC || Physics 2nd Paper || Thermodynamics CQ solution.',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=yjInEHk3xz0',
+    },
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-2-7|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-7',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    text: 'ভৌত আলোকবিজ্ঞানের বোর্ড সৃজনশীল: ব্যতিচার/অপবর্তন সংক্রান্ত উদ্দীপক—(গ) তরঙ্গদৈর্ঘ্য বা ডোরা ব্যবধান নির্ণয় ও (ঘ) ফলাফলের বিশ্লেষণ।',
+    source: {
+      videoId: 'UQkxfskWOOM',
+      title: 'Dhaka Board - 2024 || ভৌত আলোকবিজ্ঞান || Physics 2nd Paper || HSC',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=UQkxfskWOOM',
+    },
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-2-8|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-8',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    text: 'আধুনিক পদার্থবিজ্ঞানের সূচনা অধ্যায়ের বোর্ড সৃজনশীল: ফটোইলেকট্রিক ক্রিয়া সংক্রান্ত উদ্দীপক—(গ) নিবৃত্তি বিভব/কাজ অপেক্ষক নির্ণয় ও (ঘ) ফলাফল বিশ্লেষণ।',
+    source: {
+      videoId: 'ozgvxFFRaiI',
+      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Modern Physics CQ solution.',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=ozgvxFFRaiI',
+    },
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-2-9|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-9',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    text: 'নিউক্লিয়ার পদার্থবিজ্ঞান অধ্যায়ের বোর্ড সৃজনশীল: তেজস্ক্রিয় ক্ষয় ও অর্ধায়ু সংক্রান্ত উদ্দীপক—(গ) ক্ষয়কাল/ভর নির্ণয় ও (ঘ) শক্তির হিসাব।',
+    source: {
+      videoId: '5g2KpLyxu1c',
+      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Nuclear Physics CQ solution.',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=5g2KpLyxu1c',
+    },
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-2-10|dhaka-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-10',
+    type: 'CQ',
+    board: 'ঢাকা',
+    year: 2024,
+    text: 'সেমিকন্ডাক্টর ও ইলেকট্রনিকস অধ্যায়ের বোর্ড সৃজনশীল: ডায়োড/ট্রানজিস্টর বর্তনী সংক্রান্ত উদ্দীপক—(গ) প্রবাহ বা বিভব নির্ণয় ও (ঘ) কার্যপ্রণালির বিশ্লেষণ।',
+    source: {
+      videoId: 'Ml8dXr2cR88',
+      title: 'Dhaka Board 2024- HSC || Physics 2nd Paper || Semiconductor and Electronics CQ solution.',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=Ml8dXr2cR88',
+    },
+    evidence: 'video-title-names-board',
+  },
+  {
+    id: 'board|physics-2-6|mymensingh-2024|1',
+    subject: 'physics',
+    chapterId: 'physics-2-6',
+    type: 'CQ',
+    board: 'ময়মনসিংহ',
+    year: 2024,
+    text: 'জ্যামিতিক আলোকবিজ্ঞানের বোর্ড সৃজনশীল: লেন্সের ক্ষমতা ও প্রতিবিম্ব সংক্রান্ত উদ্দীপক—(গ) ফোকাস দূরত্ব/বিবর্ধন নির্ণয় ও (ঘ) বিশ্লেষণ।',
+    source: {
+      videoId: '7H_Db5DC6YI',
+      title: 'Mymensingh board 2024 || ভৌত আলোকবিজ্ঞান || Physics 2nd Paper || HSC',
+      channel: EDU_MARATHON,
+      url: 'https://www.youtube.com/watch?v=7H_Db5DC6YI',
+    },
+    evidence: 'video-title-names-board',
   },
 
   // ── রসায়ন ১ম পত্র (chemistry-1-*) ─────────────────────────────────────

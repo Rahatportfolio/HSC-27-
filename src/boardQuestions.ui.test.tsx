@@ -63,3 +63,15 @@ it('states how many chapters still have no board question', async () => {
   const block = await openBoardsTab();
   expect(block.textContent).toMatch(/বাকি\s*[০-৯]+\s*টিতে এখনো নেই/);
 });
+
+it('lists which papers have board questions instead of implying full coverage', async () => {
+  const block = await openBoardsTab();
+  const chips = [...block.querySelectorAll('.verified-paper-chip')].map(chip => chip.textContent ?? '');
+  expect(chips.length).toBeGreaterThan(0);
+  // Physics and Chemistry 1st paper are the only papers with evidence today.
+  expect(chips.some(text => text.includes('পদার্থবিজ্ঞান'))).toBe(true);
+  expect(chips.some(text => text.includes('রসায়ন'))).toBe(true);
+  // A paper with no source must not be advertised as covered.
+  expect(chips.some(text => text.includes('উচ্চতর গণিত'))).toBe(false);
+  expect(chips.some(text => text.includes('জীববিজ্ঞান'))).toBe(false);
+});

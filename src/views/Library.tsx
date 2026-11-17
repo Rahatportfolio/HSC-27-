@@ -284,6 +284,12 @@ function BoardsTab() {
           <Play size={12} />{question.source.channel} · {question.source.title}{question.source.at ? ` · ${question.source.at}` : ''}
         </a>
       </article>)}</div>
+      <div className="verified-board-papers">{[...new Set(VERIFIED_BOARD_QUESTIONS.map(question => question.subject))].map(subjectId => {
+        const count = VERIFIED_BOARD_QUESTIONS.filter(question => question.subject === subjectId).length;
+        const chapters = new Set(VERIFIED_BOARD_QUESTIONS.filter(question => question.subject === subjectId).map(question => question.chapterId)).size;
+        const info = SUBJECTS.find(item => item.id === subjectId);
+        return <span key={subjectId} className="verified-paper-chip">{t(info?.name ?? subjectId, info?.english ?? subjectId)} · {bn(count)} {t('প্রশ্ন', 'questions')} · {bn(chapters)} {t('অধ্যায়', 'ch.')}</span>;
+      })}</div>
       <p className="tiny-muted">{t(
         `এখন ${bn(chaptersWithBoardQuestions().length)}টি অধ্যায়ে বোর্ড প্রশ্ন পাওয়া গেছে; বাকি ${bn(CHAPTERS.length - chaptersWithBoardQuestions().length)}টিতে এখনো নেই—সেখানে নিজের প্রশ্ন যোগ করো।`,
         `Board questions exist for ${chaptersWithBoardQuestions().length} chapters; the other ${CHAPTERS.length - chaptersWithBoardQuestions().length} still have none — add your own there.`,
