@@ -2,7 +2,9 @@
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, within } from '@testing-library/react';
 import App from './App';
-import { STORAGE_KEY, freshData, todayKey } from './planner';
+import { STORAGE_KEY, freshData, shiftPlanStart, todayKey } from './planner';
+import { CHAPTERS } from './data';
+import { buildOrdinaryStudyPlan, buildStudyProjection } from './studyPlan';
 
 beforeAll(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -55,6 +57,26 @@ it('never promises more swaps than the plan actually carries', async () => {
   for (const row of Array.from(rows)) {
     expect(row.querySelector('.adaptive-date')?.textContent).toBeTruthy();
   }
+});
+
+it('describes the actual first adaptation instead of adapting the final routine again', async () => {
+  const data = freshData(), today = todayKey();
+  data.settings = { ...shiftPlanStart(data.settings, today), language: 'en', dailyHours: 4, boostEnabled: false, adaptiveBuffer: 60 };
+  const original = buildOrdinaryStudyPlan(data);
+  const covered = new Set(original.slice(0, 3).flatMap(day => day.tasks.flatMap(task => task.chapterIds)));
+  const chapter = CHAPTERS.find(chapter => chapter.priority === 'A' && !covered.has(chapter.id))!;
+  data.confidence[chapter.id] = 'weak';
+  const expected = buildStudyProjection(data, today).adaptive!;
+  expect(expected.swaps).toHaveLength(1);
+  expect(expected.swaps[0].date).toBe(today);
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+  render(<App />);
+  const heading = await screen.findByRole('heading', { name: 'Adaptive routine' });
+  const card = heading.closest('section') as HTMLElement;
+  expect(card.querySelectorAll('.adaptive-swap')).toHaveLength(expected.swaps.length);
+  expect(card.querySelector('.adaptive-date')?.textContent).toBe('Today');
+  expect(card.querySelector('.adaptive-load')?.textContent).toBe(`${expected.loads[0].before} → ${expected.loads[0].after} min`);
+  expect(card.querySelector('.adaptive-in strong')?.textContent).toBe(chapter.title);
 });
 
 it('keeps the hard cap visible in settings and offers only the three allowed buffers', async () => {

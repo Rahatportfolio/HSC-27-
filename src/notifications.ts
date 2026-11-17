@@ -2,7 +2,6 @@ import { chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import {
   bn,
-  dailyTargetMinutes,
   formatDurationBn,
   formatTime,
   getNextUnfinishedDay,
@@ -57,7 +56,7 @@ export interface NotificationPayload {
 
 function describeDayStudy(day: Day | undefined): string {
   if (!day || day.tasks.length === 0) {
-    return isEnglish() ? 'Revision & self-study' : 'রিভিশন ও নিজস্ব অনুশীলন';
+    return isEnglish() ? 'No scheduled study on this date' : 'এই তারিখে নির্ধারিত পড়া নেই';
   }
   const bySubject = new Map<string, string[]>();
   for (const tk of day.tasks) {
@@ -90,10 +89,9 @@ export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: s
   const day = plan.find(d => d.date === date);
   const tasks = day?.tasks ?? [];
   const totalTasks = tasks.length;
-  const fallbackTargetMin = dailyTargetMinutes(data,date);
-  const totalMinutes = totalTasks > 0
-    ? tasks.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0)
-    : fallbackTargetMin;
+  // A future start or an empty/deferred day is not a completed study day and
+  // must not invent 8/16 hours of scheduled work from the settings target.
+  const totalMinutes = tasks.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
 
   const doneList = tasks.filter(tk => Boolean(data.completed[tk.id]));
   const remainingList = tasks.filter(tk => !data.completed[tk.id]);
@@ -123,7 +121,9 @@ export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: s
     ? `${doneTasks}/${totalTasks} sessions (${formatDurationBn(doneMinutes)} · ${percentDone}%)`
     : `${bn(doneTasks)}/${bn(totalTasks)}টি সেশন (${formatDurationBn(doneMinutes)} · ${bn(percentDone)}%)`;
 
-  const remainingSummary = remainingTasks === 0
+  const remainingSummary = totalTasks === 0
+    ? (isEnglish() ? 'No scheduled sessions' : 'কোনো নির্ধারিত সেশন নেই')
+    : remainingTasks === 0
     ? (isEnglish() ? 'All completed for today!' : 'আজকের সব পড়া সম্পন্ন!')
     : isEnglish()
       ? `${remainingTasks} sessions left (${formatDurationBn(remainingMinutes)})`

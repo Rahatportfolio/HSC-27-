@@ -87,6 +87,27 @@ describe("full media backup and safe staged restore", () => {
     await staged.rollback();
     expect([...store.keys()]).toEqual(["pdf", "video"]);
   });
+  it("restores media around malformed legacy completion keys without erasing them or failing the backup", async () => {
+    const data = setup();
+    const at = "2026-11-20T08:00:00Z";
+    data.completed = {
+      "smart-video|%|0|30000": at,
+      "smart-video|video|NaN|30000": at,
+      "smart-video|video|0|50000": at,
+    };
+    const original = JSON.stringify(data);
+    const parsed = await inspectMediaBackup(await createMediaBackup(data));
+    const staged = await stageMediaRestore(parsed);
+    const id = staged.data.advanced!.classes[0].id;
+    expect(staged.data.completed).toEqual({
+      "smart-video|%|0|30000": at,
+      "smart-video|video|NaN|30000": at,
+      [`smart-video|${encodeURIComponent(id)}|0|50000`]: at,
+    });
+    expect(JSON.stringify(data)).toBe(original);
+    await staged.rollback();
+    expect([...store.keys()]).toEqual(["pdf", "video"]);
+  });
   it("rejects truncation, corruption and missing source files without altering existing data", async () => {
     const data = setup();
     const full = await createMediaBackup(data);

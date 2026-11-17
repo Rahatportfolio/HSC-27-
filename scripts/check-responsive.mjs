@@ -9,7 +9,7 @@ if (!executablePath) {
   process.exit(1);
 }
 
-const server = await createServer({ server: { host: '127.0.0.1', port: 0, strictPort: false } });
+const server = await createServer({ server: { host: '0.0.0.0', port: 0, strictPort: false } });
 let browser;
 try {
   await server.listen();
@@ -17,8 +17,13 @@ try {
   const base = `http://127.0.0.1:${address.port}`;
   browser = await chromium.launch({ executablePath, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 320, height: 800 }, reducedMotion: 'reduce' });
-  const views = ['today', 'calendar', 'syllabus', 'videos', 'pdfs', 'studySystem', 'revision', 'timer', 'practice', 'exams', 'analytics', 'library', 'reminders', 'settings'];
+  const pageErrors = [];
+  page.on('pageerror', error => pageErrors.push(error.message));
+  const views = ['today', 'calendar', 'syllabus', 'videos', 'pdfs', 'studySystem', 'scanner', 'testprep', 'flashcards', 'revision', 'timer', 'practice', 'examsim', 'weakness', 'heatmap', 'backlog', 'audit', 'exams', 'analytics', 'library', 'reminders', 'storage', 'settings'];
   const assertFits = async label => {
+    if (pageErrors.length) throw new Error(`${label}: browser error: ${pageErrors.join('; ')}`);
+    const view = page.locator('.view');
+    if (await view.count() !== 1 || (await view.innerText()).trim().length < 40) throw new Error(`${label}: real view content did not render`);
     const size = await page.evaluate(() => ({ width: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth }));
     if (size.scrollWidth > size.width + 1) throw new Error(`${label}: page width ${size.width}, content width ${size.scrollWidth}`);
     // Check separately laid-out text-bearing siblings, not icons or intentional absolute overlays.

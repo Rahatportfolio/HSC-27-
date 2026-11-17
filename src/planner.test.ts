@@ -4,19 +4,19 @@ import {
   addDays, addMonths, applyDayOverrides, applyRoutine, buildPlan, chapterLastDate, chapterTasks,
   DEFAULT_SETTINGS, diffDays, effectiveDailyHours, formatDayOffset, freshData, getNextUnfinishedDay,
   getPhases, getStats, getUnfinishedPastTasks, isChapterDone, isDayComplete, isTaskCurrent, isValidDate,
-  taskStart, todayKey,
+  shiftPlanStart, taskStart, todayKey,
 } from './planner';
 
 describe('Bangladesh date helpers', () => {
   it('uses Dhaka calendar dates at an UTC boundary', () => { expect(todayKey(new Date('2026-11-13T20:00:00Z'))).toBe('2026-11-14'); });
   it('clamps month addition and handles leap years', () => { expect(addMonths('2024-01-31', 1)).toBe('2024-02-29'); expect(addMonths('2026-11-14', 6)).toBe('2027-05-14'); });
   it('rejects invalid and out-of-range dates', () => { expect(isValidDate('2026-02-30')).toBe(false); expect(isValidDate('2026-11-14')).toBe(true); expect(isValidDate('1999-01-01')).toBe(false); });
-  it('builds the agreed 3 + 2 + 1 calendar-month phases inclusively', () => {
-    const phases = getPhases(DEFAULT_SETTINGS.startDate);
+  it('builds inclusive phases bounded by the personal test and board targets', () => {
+    const phases = getPhases(DEFAULT_SETTINGS);
     expect(phases.map(p => [p.start, p.end, p.days])).toEqual([
-      ['2026-11-14', '2027-02-13', 92], ['2027-02-14', '2027-04-13', 59], ['2027-04-14', '2027-05-13', 30],
+      ['2026-11-20', '2027-01-31', 73], ['2027-02-01', '2027-05-06', 95], ['2027-05-07', '2027-06-05', 30],
     ]);
-    expect(phases.reduce((n, p) => n + p.days, 0)).toBe(181);
+    expect(phases.reduce((n, p) => n + p.days, 0)).toBe(198);
   });
 });
 
@@ -25,9 +25,9 @@ describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
   const tasks = plan.flatMap(d => d.tasks);
 
   it('has a 2-subject routine for every date and unique task IDs', () => {
-    expect(plan).toHaveLength(181);
+    expect(plan).toHaveLength(198);
     expect(new Set(tasks.map(t => t.id)).size).toBe(tasks.length);
-    expect(plan.every((d, i) => d.date === addDays('2026-11-14', i) && d.index === i + 1)).toBe(true);
+    expect(plan.every((d, i) => d.date === addDays('2026-11-20', i) && d.index === i + 1)).toBe(true);
     for (const day of plan) {
       const distinctSubjects = new Set(day.tasks.map(t => t.subject));
       expect(distinctSubjects.size).toBeLessThanOrEqual(2);
@@ -38,11 +38,11 @@ describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
     }
   });
 
-  it('allocates 8h/day in Nov 2026 and boosts to 16h/day from Dec 2026, with non-overlapping sessions', () => {
+  it('allocates 8h/day for 17 days and then boosts to 16h/day, with non-overlapping sessions', () => {
     for (const day of plan) {
       const expectedMin = effectiveDailyHours(DEFAULT_SETTINGS, day.date) * 60;
       expect(day.tasks.reduce((n, t) => n + t.endMinute - t.startMinute, 0)).toBe(expectedMin);
-      if (day.date < '2026-12-01') expect(expectedMin).toBe(8 * 60);
+      if (day.date < '2026-12-07') expect(expectedMin).toBe(8 * 60);
       else expect(expectedMin).toBe(16 * 60);
       for (let i = 1; i < day.tasks.length; i++) expect(day.tasks[i].startMinute).toBeGreaterThanOrEqual(day.tasks[i - 1].endMinute);
     }
@@ -82,7 +82,7 @@ describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
       const customPlan = buildPlan({ ...DEFAULT_SETTINGS, dailyHours: hours, boostEnabled: false });
       expect(customPlan.every(d => d.tasks.reduce((n, t) => n + t.endMinute - t.startMinute, 0) === hours * 60)).toBe(true);
     }
-    const shifted = buildPlan({ ...DEFAULT_SETTINGS, startDate: '2027-01-31' });
+    const shifted = buildPlan(shiftPlanStart(DEFAULT_SETTINGS, '2027-01-31'));
     const shiftedTasks = shifted.flatMap(d => d.tasks);
     expect(new Set(shiftedTasks.filter(t => t.id.includes(':part-')).map(t => t.id))).toEqual(new Set(tasks.filter(t => t.id.includes(':part-')).map(t => t.id)));
     expect(shiftedTasks.filter(t => t.kind === 'exam').map(t => t.id)).toEqual(tasks.filter(t => t.kind === 'exam').map(t => t.id));
@@ -143,7 +143,7 @@ describe('2-subjects-per-day February 2027 Test Exam study plan', () => {
     data.completed['extra'] = '2026-11-13T08:00:00Z';
     expect(getStats(plan, data, '2026-11-14').streak).toBe(2);
     expect(getStats(plan, data, '2026-11-16').streak).toBe(0);
-    expect(diffDays(plan[0].date, plan[plan.length - 1].date)).toBe(180);
+    expect(diffDays(plan[0].date, plan[plan.length - 1].date)).toBe(197);
   });
 });
 
@@ -194,7 +194,7 @@ describe('chapter and personalized task synchronization', () => {
   it('places one-off tasks only on their date and uses Dhaka dates for weekly block activation', () => {
     const plan = buildPlan(), date = plan[0].date;
     const weekday = new Date(`${date}T00:00:00Z`).getUTCDay();
-    const block = { id: 'block', weekday, startMinute: 1200, minutes: 45, subject: 'math' as const, title: 'Practice', createdAt: '2026-11-14T20:00:00Z' };
+    const block = { id: 'block', weekday, startMinute: 1200, minutes: 45, subject: 'math' as const, title: 'Practice', createdAt: `${date}T20:00:00Z` };
     const weekly = applyRoutine(plan, [block]);
     expect(weekly[0].tasks.some(task => task.kind === 'custom')).toBe(false);
     expect(weekly[7].tasks.some(task => task.kind === 'custom')).toBe(true);

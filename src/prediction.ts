@@ -1,5 +1,6 @@
 import { addDays, diffDays, percent } from './planner';
 import type { AppData, Day } from './planner';
+import { isInitialStudyTask } from './planHealth';
 
 /**
  * Honest progress forecasting from the student's own completed tasks.
@@ -92,6 +93,7 @@ export function categoryScheduleDates(plan: Day[], chapterIdsByPriority: Record<
   const out: Record<'A' | 'B' | 'C', string | undefined> = { A: undefined, B: undefined, C: undefined };
   for (const day of plan) {
     for (const task of day.tasks) {
+      if (!isInitialStudyTask(task)) continue;
       for (const key of ['A', 'B', 'C'] as const) {
         if (task.chapterIds.some(id => chapterIdsByPriority[key].has(id))) out[key] = day.date;
       }

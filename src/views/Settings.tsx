@@ -1,10 +1,14 @@
 import { clearFiles } from '../files';
 import FullBackup from '../components/FullBackup';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, CalendarDays, CheckCircle2, Database, Download, ExternalLink, FileText, Info, Languages, Monitor, Moon, Palette, RotateCcw, Save, Share2, ShieldCheck, Sun, Timer, Play, ArrowUpRight, Type } from 'lucide-react';
 import { usePlanner } from '../context';
 import { SOURCES, syllabusNote, chapterById, subjectById } from '../data';
-import { freshData, todayKey } from '../planner';
+import { bn, EXAM_DATE_INFORMATION, formatDate, freshData, getPhases, isValidDate, shiftPlanStart, todayKey } from '../planner';
+import { planHealth } from '../planHealth';
+import { buildStudyPlan } from '../studyPlan';
+import { applyScheduleSettings, scheduleChanged } from '../reschedule';
+import { version } from '../../package.json';
 import type { Settings } from '../planner';
 import { downloadCsv, downloadText, makeMarkdown } from '../exports';
 import { parseBackup, RECOVERY_KEY, sanitizeSettings, saveData } from '../storage';
@@ -17,25 +21,52 @@ import { t, weekdayName } from '../i18n';
 
 const BOARDS = ['সিলেট', 'ঢাকা', 'চট্টগ্রাম', 'রাজশাহী', 'কুমিল্লা', 'যশোর', 'বরিশাল', 'দিনাজপুর', 'ময়মনসিংহ', 'মাদ্রাসা', 'কারিগরি'];
 export default function SettingsView() {
-  const { data, setData, plan, notify, confirm, setSelectedDate, setTheme, setFontScale, timer } = usePlanner();
+  const { data, setData, plan, today, notify, confirm, setSelectedDate, setTheme, setFontScale, timer } = usePlanner();
   const [draft, setDraft] = useState<Settings>(data.settings);
   const [dirty, setDirty] = useState(false);
   const [recoveryRaw, setRecoveryRaw] = useState<string | null>(() => { try { return localStorage.getItem(RECOVERY_KEY); } catch { return null; } });
   const fileRef = useRef<HTMLInputElement>(null);
-  useEffect(() => { if (!dirty) setDraft(data.settings); }, [data.settings, dirty]);
+  const startAnchor = useRef(data.settings.startDate);
+  const latestData = useRef(data);
+  latestData.current = data;
+  useEffect(() => { if (!dirty) { setDraft(data.settings); startAnchor.current = data.settings.startDate; } }, [data.settings, dirty]);
   const update = <K extends keyof Settings>(key: K, value: Settings[K]) => { setDirty(true); setDraft(current => ({ ...current, [key]: value })); };
+  const changeStart = (value: string) => {
+    setDirty(true);
+    if (!isValidDate(value)) { setDraft(current => ({ ...current, startDate: value })); return; }
+    const previous = startAnchor.current;
+    setDraft(current => shiftPlanStart({ ...current, startDate: previous }, value));
+    startAnchor.current = value;
+  };
+  const preview = useMemo(() => {
+    try {
+      const settings = sanitizeSettings(draft);
+      const next = applyScheduleSettings(data, settings);
+      return { phases: getPhases(settings), health: planHealth(buildStudyPlan(next, today), settings, next.completed), error: '' };
+    } catch (err) { return { phases: [], health: null, error: (err as Error).message }; }
+  }, [draft, data, today]);
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     let settings: Settings;
-    try { settings = sanitizeSettings(draft); } catch (err) { notify((err as Error).message, 'error'); return; }
-    const scheduleChanged = (['startDate', 'startTime', 'dailyHours', 'boostEnabled', 'boostStartDate', 'boostDailyHours', 'adaptiveEnabled', 'adaptiveBuffer'] as const).some(key => settings[key] !== data.settings[key]);
+    try {
+      settings = sanitizeSettings(draft);
+      applyScheduleSettings(data, settings); // Validate the entire transaction before confirmation.
+    } catch (err) { notify((err as Error).message, 'error'); return; }
+    const changed = scheduleChanged(data.settings, settings);
     const apply = () => {
-      setData(d => ({ ...d, settings: { ...settings, calendarRevision: d.settings.calendarRevision + (scheduleChanged ? 1 : 0) } }));
-      setDirty(false);
-      if (scheduleChanged) setSelectedDate(settings.startDate);
-      notify(scheduleChanged ? 'রুটিন আপডেট হয়েছে। অগ্রগতি রাখা হয়েছে; ক্যালেন্ডার আবার ইমপোর্ট করো।' : 'সেটিংস সেভ হয়েছে।');
+      try {
+        setData(applyScheduleSettings(latestData.current, settings));
+        setDirty(false);
+        startAnchor.current = settings.startDate;
+        if (changed) setSelectedDate(settings.startDate);
+        notify(changed ? t('রুটিন ও ব্যক্তিগত সময়সূচি আপডেট হয়েছে। ক্যালেন্ডার আবার ইমপোর্ট করো।', 'Routine and personal schedule updated. Re-import your calendar.') : t('সেটিংস সেভ হয়েছে।', 'Settings saved.'));
+      } catch (err) { notify((err as Error).message, 'error'); }
     };
-    if (scheduleChanged) confirm({ title: 'রুটিনের সময় বদলাবে?', message: 'নতুন শুরুর তারিখ/সময় অনুযায়ী সব সেশন আবার সাজানো হবে। কাজের অগ্রগতি মুছবে না, তবে দিনের নোট নিজের তারিখেই থাকবে। আগে ইমপোর্ট করা ক্যালেন্ডার আপডেট করতে নতুন .ics ফাইল নাও।', label: 'রুটিন আপডেট করো', action: apply }); else apply();
+    if (changed) confirm({
+      title: t('রুটিনের তারিখ/সময় বদলাবে?', 'Update routine dates and times?'),
+      message: t('সংযুক্ত ব্যক্তিগত লক্ষ্য ও দিনের কাস্টম সময়সূচি মিলিয়ে নেওয়া হবে। সম্পন্ন কাজের আসল সময়, দিনের নোট, নম্বর, রিভিশন কার্ড ও গুরুত্বপূর্ণ ক্যালেন্ডার তারিখ সরবে না। নতুন .ics ফাইল নাও; পুরোনো ইমপোর্ট নিজে থেকে বদলায় না।', 'Linked personal targets and day customisations will be updated. Actual completion times, daily notes, marks, recall cards and important calendar dates do not move. Export a new .ics file; an old import cannot update itself.') + (preview.health?.warnings.length ? `\n${preview.health.warnings.join(' ')}` : ''),
+      label: t('রুটিন আপডেট করো', 'Update routine'), action: apply,
+    }); else apply();
   };
   const exportRoutine = () => {
     if (!data.routineBlocks.length) { notify(t('কোনো কাস্টম রুটিন ব্লক নেই।', 'There is no custom routine block.'), 'info'); return; }
@@ -81,18 +112,29 @@ export default function SettingsView() {
       <div className="form-grid">
         <label>{t("তোমার নাম", "Your name")}<span className="optional">{t("(ইচ্ছামতো)", "(custom)")}</span><input value={draft.name} maxLength={60} placeholder={t("কী নামে ডাকব?", "What should I call you?")} onChange={e => update('name', e.target.value)} /></label>
         <label>{t("শিক্ষা বোর্ড", "Education board")}<select value={draft.board} onChange={e => update('board', e.target.value)}>{!BOARDS.includes(draft.board) && <option value={draft.board}>{draft.board}</option>}{BOARDS.map(board => <option key={board}>{board}</option>)}</select></label>
-        <label>{t("রুটিন শুরুর তারিখ", "Routine start date")}<input type="date" required min="2020-01-01" max="2040-12-31" value={draft.startDate} onChange={e => update('startDate', e.target.value)} /><small>{t("দিনে ২টি বিষয় · ফেব্রুয়ারি টেস্টের আগেই পূর্ণ সিলেবাস শেষ", "2 subjects/day · full syllabus done before Feb Test Exam")}</small></label>
-        <label>{t("প্রথম সেশনের সময়", "First session time")}<input type="time" required value={draft.startTime} onChange={e => update('startTime', e.target.value)} /><small>{t("বাংলাদেশ সময় · বদলালে পরের সব সেশন স্বয়ংক্রিয়ভাবে মিলিয়ে নেবে", "Bangladesh time · changing auto-cascades all slots")}</small></label>
-        <label>{t("দৈনিক পড়ার লক্ষ্য (বর্তমান মাস)", "Daily study target (current phase)")}<select value={draft.dailyHours} onChange={e => update('dailyHours', Number(e.target.value))}>{Array.from({ length: 15 }, (_, idx) => idx + 4).map(h => <option key={h} value={h}>{t(`${h} ঘণ্টা${h === 8 ? ' · প্রস্তাবিত' : ''}`, `${h} hours${h === 8 ? ' · current month' : ''}`)}</option>)}</select><small>{t("নিজের সামর্থ্য অনুযায়ী ৪ থেকে ১৮ ঘণ্টা বেছে নাও", "Pick anywhere from 4 to 18 hours/day")}</small></label>
-        <label>{t("পরের মাস থেকে বাড়তি পড়া", "Next-month study boost")}<select value={draft.boostEnabled ? 'on' : 'off'} onChange={e => update('boostEnabled', e.target.value === 'on')}><option value="on">{t("চালু (ডিসেম্বর থেকে ১৬–১৮ ঘণ্টা)", "Enabled (16–18h from next month)")}</option><option value="off">{t("বন্ধ (সব সময় একই লক্ষ্য)", "Disabled (flat daily hours)")}</option></select><small>{t("নির্ধারিত তারিখ থেকে দৈনিক পড়ার লক্ষ্য স্বয়ংক্রিয়ভাবে বাড়বে", "Automatically scales up daily study hours from boost date")}</small></label>
+        <label>{t("রুটিন শুরুর তারিখ", "Routine start date")}<input type="date" required min="2020-01-01" max="2040-12-31" value={draft.startDate} onChange={e => changeStart(e.target.value)} /><small>{t("শুরুর তারিখ বদলালে সংযুক্ত লক্ষ্য ও রুটিন মিলবে; নিচে সময়ের ঘাটতি যাচাই করো", "Linked targets and the routine follow this date; check capacity below")}</small></label>
+        <label>{t('পরীক্ষার লক্ষ্য তারিখ সরানোর নিয়ম', 'Exam target date policy')}<select value={draft.examDatePolicy} onChange={e => update('examDatePolicy', e.target.value as Settings['examDatePolicy'])}><option value="shift">{t('ব্যক্তিগত লক্ষ্য শুরুর সঙ্গে সরবে', 'Move personal targets with the start')}</option><option value="fixed">{t('কলেজ/বোর্ডের তারিখ স্থির থাকবে', 'Keep college/board deadlines fixed')}</option></select><small>{t('নিশ্চিত পরীক্ষার তারিখ পেলে স্থির রাখো। রুটিন বদলানোয় আসল পরীক্ষা পেছায় না।', 'Keep a confirmed exam date fixed. Moving your routine cannot postpone a real exam.')}</small></label>
+        <label>{t("প্রথম সেশনের সময়", "First session time")}<input type="time" required value={draft.startTime} onChange={e => update('startTime', e.target.value)} /><small>{t("বাংলাদেশ সময় · সাধারণ সেশনগুলো মিলবে; নিজের নির্দিষ্ট দিন/সেশনের সময় অগ্রাধিকার পাবে", "Bangladesh time · default slots follow; explicit day/task times keep priority")}</small></label>
+        <label>{t("বাড়তি পর্যায়ের আগে দৈনিক পড়ার লক্ষ্য", "Daily study target (before boost)")}<select value={draft.dailyHours} onChange={e => update('dailyHours', Number(e.target.value))}>{Array.from({ length: 15 }, (_, idx) => idx + 4).map(h => <option key={h} value={h}>{t(`${h} ঘণ্টা`, `${h} hours`)}</option>)}</select><small>{t("নিজের সামর্থ্য অনুযায়ী ৪ থেকে ১৮ ঘণ্টা বেছে নাও", "Pick anywhere from 4 to 18 hours/day")}</small></label>
+        <label>{t("নির্ধারিত দিন থেকে বাড়তি পড়া", "Scheduled study boost")}<select value={draft.boostEnabled ? 'on' : 'off'} onChange={e => update('boostEnabled', e.target.value === 'on')}><option value="on">{t("চালু (নির্ধারিত বাড়তি পড়ার তারিখ থেকে)", "Enabled (from the boost date)")}</option><option value="off">{t("বন্ধ (সব সময় একই লক্ষ্য)", "Disabled (flat daily hours)")}</option></select><small>{t("নির্ধারিত তারিখ থেকে দৈনিক পড়ার লক্ষ্য স্বয়ংক্রিয়ভাবে বদলাবে", "Automatically changes daily study hours from the boost date")}</small></label>
         {draft.boostEnabled && <>
-          <label>{t("বাড়তি পড়া শুরুর তারিখ", "Boost start date")}<input type="date" required min="2026-01-01" max="2041-12-31" value={draft.boostStartDate} onChange={e => update('boostStartDate', e.target.value)} /><small>{t("যেমন ১ ডিসেম্বর ২০২৬ থেকে বাড়তি রুটিন শুরু", "e.g. start boosted hours from 1 Dec 2026")}</small></label>
-          <label>{t("বাড়তি পর্যায়ে দৈনিক পড়া", "Boosted daily study hours")}<select value={draft.boostDailyHours} onChange={e => update('boostDailyHours', Number(e.target.value))}>{Array.from({ length: 15 }, (_, idx) => idx + 4).map(h => <option key={h} value={h}>{t(`${h} ঘণ্টা${h >= 16 ? ' · পূর্ণ প্রস্তুতি' : ''}`, `${h} hours${h >= 16 ? ' · full boost' : ''}`)}</option>)}</select><small>{t("১৬, ১৭ বা ১৮ ঘণ্টা (চাইলে যেকোনো সময় কমানো-বাড়ানো যাবে)", "16, 17, or 18 hours (adjustable anytime)")}</small></label>
+          <label>{t("বাড়তি পড়া শুরুর তারিখ", "Boost start date")}<input type="date" required min="2020-01-01" max="2041-12-31" value={draft.boostStartDate} onChange={e => update('boostStartDate', e.target.value)} /><small>{t("শুরুর তারিখ যত দিন সরবে, এই তারিখও তত দিন সরবে", "Moves by the same number of days as the start date")}</small></label>
+          <label>{t("বাড়তি পর্যায়ে দৈনিক পড়া", "Boosted daily study hours")}<select value={draft.boostDailyHours} onChange={e => update('boostDailyHours', Number(e.target.value))}>{Array.from({ length: 15 }, (_, idx) => idx + 4).map(h => <option key={h} value={h}>{t(`${h} ঘণ্টা`, `${h} hours`)}</option>)}</select><small>{t("বিরতি, খাবার ও পর্যাপ্ত ঘুমের সময় রাখো। বেশি ঘণ্টা প্রস্তুতির নিশ্চয়তা নয়।", "Allow time for breaks, meals and adequate sleep. More hours do not guarantee readiness.")}</small></label>
         </>}
-        <label>{t("টেস্ট পরীক্ষার লক্ষ্য তারিখ", "Test exam target date")}<input type="date" required min="2026-01-01" max="2041-12-31" value={draft.testExamDate} onChange={e => update('testExamDate', e.target.value)} /><small>{t("ফেব্রুয়ারি ২০২৭ কলেজের টেস্ট পরীক্ষা (নিজের কলেজের তারিখ বসাতে পারো)", "February 2027 college test exam (adjust to your college schedule)")}</small></label>
-        <label>{t("HSC ’২৭ পরীক্ষার লক্ষ্য তারিখ", "HSC '27 exam target date")}<input type="date" required min="2026-01-01" max="2041-12-31" value={draft.examDate} onChange={e => update('examDate', e.target.value)} /><small>{t("ঈদুল আজহার পর সম্ভাব্য বোর্ড তারিখ (৬ জুন ২০২৭)", "Expected post-Eid-ul-Adha board date (6 June 2027)")}</small></label>
+        <label>{t("টেস্ট পরীক্ষার লক্ষ্য তারিখ", "Test exam target date")}<input type="date" required min="2020-01-01" max="2041-12-31" value={draft.testExamDate} onChange={e => update('testExamDate', e.target.value)} /><small>{t("ব্যক্তিগত লক্ষ্য, নিশ্চিত কলেজ নোটিশ নয়। কলেজের তারিখ পেলে বসাও।", "Personal target, not a verified college notice. Enter your college date when known.")}</small></label>
+        <label>{t("HSC ’২৭ পরীক্ষার লক্ষ্য তারিখ", "HSC '27 exam target date")}<input type="date" required min="2020-01-01" max="2041-12-31" value={draft.examDate} onChange={e => update('examDate', e.target.value)} /><small>{t("ব্যক্তিগত লক্ষ্য, নিশ্চিত সরকারি রুটিন নয়। বোর্ডের নোটিশ পেলে বসাও।", "Personal target, not a verified official routine. Enter the date from a board notice.")}</small></label>
         <div className="fixed-setting"><span>{t("বিষয় ও লক্ষ্য", "Subjects & targets")}</span><strong>{t("বিজ্ঞান · উচ্চতর গণিত ৪র্থ বিষয়", "Science · Higher Math as 4th subject")}</strong><small>{t("A+ / GPA 5.00 / Golden — লক্ষ্য, নিশ্চয়তা নয়", "A+ / GPA 5.00 / Golden — a goal, not a guarantee")}</small></div>
       </div>
+      <section className="schedule-preview" aria-label={t('তারিখ পরিবর্তনের পূর্বরূপ', 'Date change preview')}>
+        <h3>{t('সেভের আগে পুরো তারিখ মিলিয়ে দেখো', 'Review the whole timeline before saving')}</h3>
+        <p>{t('এগুলো ব্যক্তিগত প্রস্তুতির লক্ষ্য, সরকারি পরীক্ষার রুটিন নয়। সরকারি HSC ২০২৭ ও কলেজের টেস্টের নির্দিষ্ট নোটিশ নিশ্চিত করা যায়নি।', 'These are personal preparation targets, not an official exam routine. Specific HSC 2027 and college-test notices could not be verified.')} {t('যাচাইয়ের চেষ্টা', 'Verification attempted')}: {formatDate(EXAM_DATE_INFORMATION.checkedOn, 'long')}.</p>
+        <p className="schedule-source-links"><a href={EXAM_DATE_INFORMATION.nctb} target="_blank" rel="noreferrer">NCTB</a><a href={EXAM_DATE_INFORMATION.board} target="_blank" rel="noreferrer">{t('সিলেট শিক্ষা বোর্ড', 'Sylhet Education Board')}</a><a href={EXAM_DATE_INFORMATION.dhaka} target="_blank" rel="noreferrer">{t('ঢাকা বোর্ড HSC নোটিশ', 'Dhaka Board HSC notices')}</a></p>
+        <p>{t('পরিকল্পিত কাস্টম দিনগুলো শুরুর সঙ্গে সরবে। নিজের নির্দিষ্ট সেশনের সময়, সাপ্তাহিক ক্লাস ও আসল ইতিহাস অক্ষত থাকবে; সময়ের সংঘর্ষ হলে নিচে সতর্কতা দেখো। পুরোনো সেভ করা প্রোফাইলের তারিখ নিজে থেকে বদলানো হয় না।', 'Planned custom days move with the start. Explicit session times, weekly classes and real history stay intact; check any time-conflict warnings below. Existing saved profiles are not silently given new dates.')}</p>
+        <ul>{preview.phases.map(phase => <li key={phase.id}><strong>{phase.name}</strong>: {formatDate(phase.start, 'long')} – {formatDate(phase.end, 'long')} · {bn(phase.days)} {t('দিন', 'days')}</li>)}</ul>
+        {preview.error && <p role="alert">{preview.error}</p>}
+        {preview.health?.warnings.map(warning => <p className="schedule-capacity-warning" role="alert" key={warning}>{warning}</p>)}
+        {preview.health && !preview.health.warnings.length && <p>{t('এই বরাদ্দে সব অধ্যায়ের ধাপ, দুই রাউন্ড বিজ্ঞান রিভিশন ও ১৩টি মডেল টেস্ট রাখা গেছে। এটি পড়া শেষ হওয়ার নিশ্চয়তা নয়।', 'All chapter parts, two science revision rounds and 13 mock papers fit in this allocation. This does not guarantee completion.')}</p>}
+      </section>
       <div className="settings-subsection"><h3><Timer size={18} />{t("পড়ার অভ্যাস", "Study habits")}</h3><div className="form-grid">
         <label>{t("রিভিশন কার্ড", "Revision cards")}<select value={draft.revisionEnabled ? 'on' : 'off'} onChange={e => update('revisionEnabled', e.target.value === 'on')}><option value="on">{t("অটো তৈরি হবে", "generated automatically")}</option><option value="off">{t("বন্ধ", "Off")}</option></select><small>{t("অধ্যায় শেষ হলে ১/৩/৭/১৪/৩০ দিনের কার্ড", "Cards at 1/3/7/14/30 days after a chapter")}</small></label>
         <label>{t("অ্যাডাপ্টিভ প্ল্যানার", "Adaptive planner")}<select value={draft.adaptiveEnabled ? 'on' : 'off'} onChange={e => update('adaptiveEnabled', e.target.value === 'on')}><option value="on">{t("চালু (দুর্বল অধ্যায় আগে)", "Enabled (weak chapters first)")}</option><option value="off">{t("বন্ধ (নির্ধারিত রুটিন অটুট)", "Disabled (routine untouched)")}</option></select><small>{t("দুর্বল অধ্যায়ের জন্য পরের ৩ দিনের রুটিন নিজে থেকে সাজানো হবে; কখনোই ৮ ঘণ্টার বেশি নয়।", "Reshuffles the next three days towards weak chapters, never above eight hours a day.")}</small></label>
@@ -119,6 +161,6 @@ export default function SettingsView() {
       <div className="channel-grid">{CHANNELS.map(channel => <a key={channel.handle} className="channel-row" href={channel.url} target="_blank" rel="noreferrer"><strong>{channel.name}</strong><span>{channel.note}</span><ArrowUpRight size={14} /></a>)}</div>
     </section>
     <section className="card sources-card"><h2>{t("সিলেবাস ও পরীক্ষার তথ্য যাচাই", "Verify syllabus & exam info")}</h2><p>{t('অ্যাপের তালিকা সহায়ক পরিকল্পনা। তোমার পরীক্ষার বছরের সরকারি নোটিশ ও পাঠ্যবইই চূড়ান্ত।', 'The app’s list is a planning aid. The official notice and textbook for your exam year are final.')}</p>{SOURCES.map(source => <a key={source.url} href={source.url} target="_blank" rel="noreferrer"><div><strong>{source.name}</strong><span>{source.note}</span></div><ExternalLink size={17} /></a>)}<div className="inline-note"><CheckCircle2 size={16} /><p>{t('কোনো অধ্যায় থেকে প্রশ্ন আসা ১০০% নিশ্চিত নয়। এই অ্যাপ ফলাফলের নিশ্চয়তা দেয় না।', 'No chapter is guaranteed to appear. This app does not promise any result.')}</p></div></section>
-    <section className="card about-card"><div className="card-heading"><div><h2><Info size={20} />{t("অ্যাপের তথ্য", "About the app")}</h2><p>{t('প্রস্তুতি · HSC 27 Study Planner · সংস্করণ ২.১৬', 'Prostuti · HSC 27 Study Planner · version 2.16')}</p></div><span className="version-badge">OFFLINE FIRST</span></div><div className="about-grid"><div><strong>{t("কী কাজ করে", "What works")}</strong><p>{t('রুটিন, টাইমার, রিভিশন, MCQ/CQ, টেস্ট, GPA, নোট, ভিডিও লিংক, সূত্র, বোর্ড প্রশ্ন, ব্যাকআপ—সব অফলাইনে। YouTube ভিডিও দেখতে ইন্টারনেট লাগবে।', 'Routine, timer, revision, MCQ/CQ, tests, GPA, notes, video links, formulas, board questions and backup — all offline. Watching YouTube videos needs internet.')}</p></div><div><strong>{t("কী নেই", "What's missing")}</strong><p>{t('লগইন, ক্লাউড সিঙ্ক, অনলাইন অ্যাকাউন্ট, পেইড API, AI সার্ভার বা সোশ্যাল ফিচার নেই। এক ডিভাইসের তথ্য অন্য ডিভাইসে নিতে JSON ব্যাকআপ ব্যবহার করো।', 'No login, cloud sync, online account, paid API, AI server or social features. Move data between devices with a JSON backup.')}</p></div><div><strong>{t("আপডেট", "Update")}</strong><p>{t('একই স্বাক্ষর ও একই অ্যাপ আইডির নতুন APK আপডেট হিসেবে ইনস্টল হলে ডেটা সাধারণত থাকে। ভিন্ন স্বাক্ষরের APK ইনস্টল করতে পুরোনো অ্যাপ মুছতে হলে ডেটা হারাবে—আগে JSON ব্যাকআপ রাখো।', 'A new APK with the same signature and app id installs as an update and normally keeps your data. Installing an APK with a different signature means removing the old app, which loses data — take a JSON backup first.')}</p></div><div><strong>{t("ভাষা / Language", "Language / ভাষা")}</strong><p>{t('ইংরেজি মোডে অনেক নেভিগেশন ও নিয়ন্ত্রণ ইংরেজিতে দেখা যায়। কিছু লেবেল, বার্তা ও পড়ার কনটেন্ট এখনও বাংলায় থাকে।', 'English mode translates navigation and most controls. Some labels, messages and study content still show in Bengali.')}</p></div></div></section>
+    <section className="card about-card"><div className="card-heading"><div><h2><Info size={20} />{t("অ্যাপের তথ্য", "About the app")}</h2><p>{t(`প্রস্তুতি · HSC 27 Study Planner · সংস্করণ ${bn(version)}`, `Prostuti · HSC 27 Study Planner · version ${version}`)}</p></div><span className="version-badge">OFFLINE FIRST</span></div><div className="about-grid"><div><strong>{t("কী কাজ করে", "What works")}</strong><p>{t('রুটিন, টাইমার, রিভিশন, MCQ/CQ, টেস্ট, GPA, নোট, ভিডিও লিংক, সূত্র, বোর্ড প্রশ্ন, ব্যাকআপ—সব অফলাইনে। YouTube ভিডিও দেখতে ইন্টারনেট লাগবে।', 'Routine, timer, revision, MCQ/CQ, tests, GPA, notes, video links, formulas, board questions and backup — all offline. Watching YouTube videos needs internet.')}</p></div><div><strong>{t("কী নেই", "What's missing")}</strong><p>{t('লগইন, ক্লাউড সিঙ্ক, অনলাইন অ্যাকাউন্ট, পেইড API, AI সার্ভার বা সোশ্যাল ফিচার নেই। এক ডিভাইসের তথ্য অন্য ডিভাইসে নিতে JSON ব্যাকআপ ব্যবহার করো।', 'No login, cloud sync, online account, paid API, AI server or social features. Move data between devices with a JSON backup.')}</p></div><div><strong>{t("আপডেট", "Update")}</strong><p>{t('একই স্বাক্ষর ও একই অ্যাপ আইডির নতুন APK আপডেট হিসেবে ইনস্টল হলে ডেটা সাধারণত থাকে। ভিন্ন স্বাক্ষরের APK ইনস্টল করতে পুরোনো অ্যাপ মুছতে হলে ডেটা হারাবে—আগে JSON ব্যাকআপ রাখো।', 'A new APK with the same signature and app id installs as an update and normally keeps your data. Installing an APK with a different signature means removing the old app, which loses data — take a JSON backup first.')}</p></div><div><strong>{t("ভাষা / Language", "Language / ভাষা")}</strong><p>{t('ইংরেজি মোডে অনেক নেভিগেশন ও নিয়ন্ত্রণ ইংরেজিতে দেখা যায়। কিছু লেবেল, বার্তা ও পড়ার কনটেন্ট এখনও বাংলায় থাকে।', 'English mode translates navigation and most controls. Some labels, messages and study content still show in Bengali.')}</p></div></div></section>
   </div>;
 }

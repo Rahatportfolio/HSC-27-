@@ -1,3 +1,104 @@
+# Date/time cascade audit — v2.42.0
+
+**Local verification recorded: 16 November 2026.** Publication is tracked on the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); this audit is not physical-device certification.
+Base: `0fa77ce` (v2.41.0) · branch: `arena/9745ddec-hsc-27` · Android metadata: `2.42.0` / `versionCode 22`.
+
+This section supersedes the older reports folded below. Their counts, dates and statements such as “all complete”, “no browser available” or “zero risk” are historical, not claims about the current tree.
+
+## Confirmed scope and derived defaults
+
+The requested default start is **20 November 2026**. The selected policy moves **personal planning targets** with the start; it does not move a real board or college examination.
+
+| Setting | New-profile default |
+|---|---|
+| Start / first session | 20 Nov 2026 / 06:30 Asia/Dhaka |
+| Initial daily target | 8 net hours; breaks additional |
+| Boost | 7 Dec 2026 / 16 net hours; editable, not a health recommendation |
+| Personal test-preparation target | 1 Feb 2027 — unverified as a college examination date |
+| Personal board-preparation target | 6 Jun 2027 — unverified as an official HSC examination date |
+| Date policy | Move personal targets with the start; fixed external deadlines are also supported |
+
+The regenerated default contains **198 planning dates / 827 tasks**: learning 20 Nov–31 Jan (73 days), revision 1 Feb–6 May (95), final practice 7 May–5 Jun (30). Default initial chapter allocation ends on **29 January**. These are allocations, not proof that a student has completed or mastered the syllabus. Reduced hours, added lectures and fixed deadlines can produce explicit capacity warnings.
+
+A start change **20 → 26 November** moves the boost to **13 December**, the test target to **7 February**, and the board-preparation target to **12 June**. With fixed policy the test/board dates stay unchanged. A global first-session change to **05:30** changes ordinary slots and their ICS instants; explicit day/task clocks retain priority.
+
+## Changes reviewed
+
+| Area | Implementation / safety contract |
+|---|---|
+| Date derivation | `planner.ts`: validated dates, leap/month/year boundaries, contiguous phases, daily-minute conservation and final-night reserves before test/board targets |
+| Atomic transaction | `reschedule.ts`: preview/save/cancel; unsafe locked plans, date/ID collisions and custom work outside the horizon are rejected without partially changing the profile |
+| History | Actual completion timestamps, notes, marks, measured sessions, recall dates and real appointments remain actual evidence. Pending dated custom references remap once, including partial ranges; no duplicate completion aliases |
+| Completion | Full contiguous canonical source allocation plus required accompanying practice is needed. Duplicate or gapped fragments do not count as a completed chapter; split promotion and undo remain reload-safe |
+| Shared projection | `studyPlan.ts` powers Settings and the running app with the same customised/lecture/adaptive plan. The Weakness explanation reports that actual adaptation rather than applying a second one |
+| Capacity and deadlines | `planHealth.ts`, `smartSchedule.ts`, `adaptive.ts`: incomplete learning/practice/revision/mocks, overlapping pending work and deferred work remain visible. Full 180-minute mocks stay atomic; displaced work rolls back if it has no safe destination |
+| Dashboard | Before the start, the overview identifies a future routine instead of claiming an assigned target for today. The first-day preview button navigates to that date; the normal target appears on the start date |
+| Exports / reminders | Dynamic Markdown targets/boost, updated ICS sequence and Dhaka instants. Native scheduling inputs use actual minute offsets; stale study alarms are cancelled without cancelling the timer alarm (mocked Capacitor evidence) |
+| Mobile usability | Official-source links wrap without overlap at 320px. HSC countdown text was 1.611:1 against its background; a light foreground fixes the measured contrast and is regression-tested |
+
+## Follow-up recheck: additional defects reproduced and fixed
+
+The previous 684-test gate did not cover every consequential edge case. The user's request to check again led to new failing-then-passing regressions rather than merely repeating that result:
+
+- **Promoted split completion was counted twice in lecture-plan capacity.** The original task and its completed fragments both appeared: a 240-minute fixture became 300 minutes, pushing unfinished work to another day. Canonical completion now represents those fragments once; the same fixture remains **240 minutes**, with its 180-minute pending task on the original day.
+- Overlapping historical fragments now consume only their unique source minutes. Old ranges from a later-shortened source are bounded by its current duration. All original evidence keys/timestamps remain unchanged.
+- **A malformed percent-encoded legacy completion key could crash the projection or block full-media restore.** A shared `taskReferences.ts` parser rejects malformed/empty/nonfinite/reversed ranges for computation, but preserves the stored evidence. Completion, remapping, scheduling and staged media restore use the same validation. Undo can still remove invalid legacy ticks.
+- A video tick cannot certify content beyond the actual class duration. Invalid generated references cannot create fresh completion evidence.
+- Boost labels no longer assume a calendar-month boundary or label high hours “full preparation”; breaks, meals and adequate sleep are explicitly noted in Settings.
+
+New evidence: `scheduleRecheck.test.ts` (9 tests), one additional media-backup test, one Settings UI test, and production-browser recovery/dedup assertions in both device timezones. `.cache/recheck-red.log` records **7 failing regressions before the fix**; `.cache/recheck-boost-copy-red.log` records the original misleading boost UI. Deliberate fault injection independently rebreaks the added guards and restores the source afterward.
+
+## Final measured gates
+
+All results below were rerun after the follow-up application-source changes. Documentation-only edits followed them.
+
+| Gate | Observed result |
+|---|---|
+| `npx tsc --noEmit` | Passed |
+| `CI=true npm test` | **695/695 tests; 79 files**; 181.87s |
+| `npm run test:date-guards` | **109 unmodified control tests passed; 55/55 targeted mutations killed** by failing assertions, not runtime/import failures. Original source bytes restored |
+| `npm run plan` | **198 dates / 827 tasks** exported to `HSC-27-STUDY-PLAN.md` |
+| `npm run build` | Passed; 6.76s. Nonfatal large-chunk warning remains |
+| `npm run test:date-browser` | Actual production Settings edits, confirmation/cancel, reload, partial evidence, retained history, future-start notice, Markdown/ICS downloads, mobile timeline and fixed-deadline warnings passed in **Asia/Dhaka and America/New_York** device timezones. Also verified malformed legacy references do not blank the app/erase history and promoted split work appears once after reload |
+| `npm run test:responsive` | **23 views**, 320/360/390/768px, large text, English/dark mode, selected dialogs and running timer; nonempty real view, page-error, width and sibling-overlap guards passed |
+| `npm run test:study-browser` | Real WebM playback/save/resume, notes, full media backup/restore, shared collector, mobile tabs and **production PWA offline reload** passed |
+| Production preview host | Port 3000 bound to `0.0.0.0`; ordinary request and Arena-shaped preview Host returned HTTP 200 |
+
+The full suite includes the focused controls; the counts are not additive. The mutation runner proves these selected regressions can be detected; **55/55 is not exhaustive mutation coverage or a zero-bug guarantee**.
+
+Focused evidence covers six month/year/leap starts; 25 daily-hour/start-clock combinations; invalid/reversed/oversized plans; fixed versus linked targets; locked dates and collisions; 10,000 completion entries; partial completion → shift → undo → reverse shift → reload; required chapter practice; omitted completed work and actual recall anchors; atomic mocks; lossless adaptive replacement; preview/saved-warning equality; export and native minute/briefing inputs.
+
+Reproducible runners: `scripts/check-date-guards.mjs`, `scripts/check-date-cascade.ts`, `scripts/check-responsive.mjs`, `scripts/check-study-system.ts`. Logs, screenshots and reports are generated under ignored `.cache/`, not committed as bulky artifacts. Latest follow-up logs: `recheck-full-suite.log/json`, `recheck-date-guards.log`, `date-mutations/report.md`, `recheck-date-browser.log`, `recheck-responsive.log`, `recheck-study-browser.log`, `recheck-build.log`, `recheck-green-probes.log`. Earlier `date-*-final` files belong to the preceding pass and are not the latest evidence.
+
+## Official-date verification limit
+
+An official **HSC 2027 routine and this student's college-test date could not be verified**. Attempts used [NCTB notices](https://nctb.gov.bd/pages/notices/), [Sylhet HSC Corner](https://sylhetboard.gov.bd/corner/hsc), [Sylhet college notices](https://sylhetboard.gov.bd/order/college) and [Dhaka Board HSC notices](https://dhakaeducationboard.gov.bd/index.php/site/product/hsccorner). NCTB notice content retrieval was incomplete; Dhaka returned a challenge; the fetched Sylhet pages did not establish the two dates. This is not evidence that no notice exists. Unofficial blogs, similarly named sites, SSC notices and 2026 examination dates were not treated as 2027 authority.
+
+**1 February / 6 June are personal defaults only.** An earlier unsupported January 28 assertion was retracted. Confirm a real date with the issuing board/college, enter it in Settings, select fixed policy, and review capacity warnings.
+
+## Android release verification
+
+[CI run 44091010547](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44091010547), application commit `ac45922d770175aa7cb18a95fcb19d66ff1fc245`, passed both jobs:
+
+- **Build installable APK:** dependency install, typecheck, full unit/UI suite, Android assets, production web build, responsive/offline browser checks, Capacitor sync and debug APK assembly/upload.
+- **Android WebView device checks:** instrumented app on an API 35 emulator, with network disabled, verified native local-file storage, real playback, Activity recreation/persistence, failed-download handling and explicit reset.
+
+The default downloadable APK is debug-signed. A different signing certificate can prevent updating an earlier install in place; retain JSON/full-media backups before any uninstall. The artifact archive could not be downloaded into this sandbox because its redirected storage host was inaccessible; the CI result and release asset metadata are the available remote evidence.
+
+## Remaining limits and release status
+
+- **No physical Android phone was used.** Native reminder unit tests mock Capacitor; permissions, exact alarms, battery policies and background delivery still need real-device checks. The emulator checks above do not certify alarms.
+- Production PWA offline reload was tested in Chromium, not on every phone/browser. There is no push server that can keep a closed PWA alive.
+- Existing profiles retain their saved settings instead of silently being reset to November 20. Back up, apply the desired start in Settings, and review the preview. Re-export/re-import ICS; an old external calendar import cannot update itself.
+- A large production bundle remains a performance warning. Passing tests cannot prove the absence of all defects or guarantee preparation, sleep adequacy, an examination date or GPA.
+- Content was not expanded in this date update: **1,176 authored starter MCQs**, separately **10 recovered board questions / 24 coverage rows / 3 rejected sources / 6 of 114 chapters**. A coverage row is not an answerable question; authored MCQs are not all verified board questions.
+- Release operations are tracked by [PR #14](https://github.com/Rahatportfolio/HSC-27-/pull/14), the [v2.42.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0), and the [Pages deployment workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/static.yml). Only an uploaded APK asset establishes a download; the version in source alone does not establish publication. APK and PWA deployment status are separate.
+
+---
+
+<details>
+<summary>Archived audits — v2.16 through v2.41 (historical claims and counts, not current status)</summary>
+
 # সম্পূর্ণ অডিট — HSC‑27 Study Planner → Smart Learning OS
 
 **তারিখ:** ২০২৬‑১১‑১৬ · **বেস কমিট:** `ecf7f5f` (v2.16.0) · **পদ্ধতি:** প্রতিটি দাবি কোড, টেস্ট ও স্ক্রিন পড়ে যাচাই — অনুমান নয়।
@@ -479,3 +580,5 @@ PR #11 মার্জ হলো (`58b8aed`)। মার্জের পর `An
 **সীমা (খোলাখুলি):** arthis sandbox-এ আর্টিফ্যাক্ট ও রিলিজ-অ্যাসেট ডাউনলোড Azure/GitHub-asset হোস্টে রিডাইরেক্ট হয়, যা অনুমোদিত নয় — তাই আমি APK-টা নামিয়ে নিজে যাচাই করতে পারিনি। তবে স্টেপ-লেভেল প্রমাণ আছে: `Build debug APK: success`, `Collect artifacts: success`।
 
 **সর্বশেষ:** ৬১৪ টেস্ট (৭৫ ফাইল) · `tsc` পরিষ্কার · Pages সফল · APK সফল।
+
+</details>

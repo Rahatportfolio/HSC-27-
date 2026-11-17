@@ -1,6 +1,7 @@
 import { CHAPTERS, PAPERS, SOURCES, SUBJECTS, syllabusNote, subjectById } from './data';
 import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, getPhases, getStats, isChapterDone, phaseName, taskStart, todayKey } from './planner';
 import type { AppData, Day, Task } from './planner';
+import { planHealth } from './planHealth';
 
 export function downloadText(content: string, filename: string, type = 'text/plain;charset=utf-8'): void {
   const blob = new Blob([content], { type });
@@ -49,19 +50,22 @@ function addDaysLocal(date: string, days: number): string { return new Date(Date
 const mdCell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 export function makeMarkdown(plan: Day[], data: AppData): string {
   const { settings } = data;
-  const phases = getPhases(settings.startDate);
+  const phases = getPhases(settings);
   const stats = getStats(plan, data, todayKey());
   const lines = [
     '# প্রস্তুতি — HSC 2027 বিজ্ঞান', '',
     `**শিক্ষার্থী:** ${mdCell(settings.name || 'আমার প্রস্তুতি')} · **বোর্ড:** ${mdCell(settings.board)} · **চতুর্থ বিষয়:** উচ্চতর গণিত`,
-    `**শুরু:** ${settings.startDate} · **শেষ:** ${plan[plan.length - 1].date} · **সময়:** ${bn(plan.length)} দিন (শেষ দিনসহ)`,
+    `**শুরু:** ${settings.startDate} · **শেষ:** ${plan.at(-1)?.date || '—'} · **সময়:** ${bn(plan.length)} দিন (শেষ দিনসহ)`,
     `**দৈনিক পড়ার লক্ষ্য:** ${bn(settings.dailyHours)} ঘণ্টা পড়া; বিরতি আলাদা। **সময় অঞ্চল:** Asia/Dhaka (UTC+6)।`,
+    settings.boostEnabled ? `**বাড়তি পর্যায়:** ${settings.boostStartDate} থেকে দৈনিক ${bn(settings.boostDailyHours)} ঘণ্টা। নিজের সামর্থ্য ও বিশ্রাম অনুযায়ী কমাও।` : '**বাড়তি পর্যায়:** বন্ধ; একই দৈনিক লক্ষ্য।',
+    `**টেস্টের ব্যক্তিগত লক্ষ্য:** ${settings.testExamDate} · **বোর্ড প্রস্তুতির ব্যক্তিগত লক্ষ্য:** ${settings.examDate} · সরকারি/কলেজের রুটিন নিশ্চিত করা যায়নি।`,
     '**লক্ষ্য:** A+ / GPA 5.00 / Golden — এটি লক্ষ্য, ফলের নিশ্চয়তা নয়।', '',
     '## আগে এটা পড়ো', '', syllabusNote(), '',
     '- কোনো অধ্যায় থেকে প্রশ্ন আসা ১০০% নিশ্চিত নয়। পুরোনো প্রশ্ন অনুশীলনের সহায়ক, ভবিষ্যৎ প্রশ্নের ভবিষ্যদ্বাণী নয়।',
     '- শেষ মাসের ১৩টি পরীক্ষা ব্যক্তিগত মডেল টেস্ট। বোর্ড পরীক্ষার প্রকৃত তারিখ/সময় আলাদাভাবে যাচাই করো।',
-    '- তারিখ বদলালে অ্যাপের পুরো রুটিন নতুন করে তৈরি হয়। কাজের ID একই থাকায় অগ্রগতি মুছে যায় না; Calendar ফাইল আবার ইমপোর্ট করতে হয়।',
+    '- শুরুর তারিখ বদলালে রুটিন ও সংযুক্ত ব্যক্তিগত লক্ষ্য নতুন করে মেলে; স্থির পরীক্ষার তারিখ সরবে না। সাধারণ কাজের ID স্থির থাকে; সরানো কাস্টম কাজের রেফারেন্সে আসল completion timestamp অক্ষত থাকে। Calendar ফাইল আবার ইমপোর্ট করতে হয়।',
     '- অসমাপ্ত সেশন Today পেজ থেকে আজকের দিনে যোগ করা যায়। Settings-এ অটো ক্যারিওভার চালু করলে দিনে সর্বোচ্চ ৬টি সেশন পরের দিনে যায়; প্রতি ৭ম দিনের ব্যাকলগ সেশনেও সেগুলো আগে শেষ করো।', '',
+    ...planHealth(plan, settings, data.completed).warnings.map(warning => `> সতর্কতা: ${warning}`), '',
     '## তিনটি ধাপ', '', '| ধাপ | শুরু | শেষ | দিন | কাজ |', '|---|---|---|---:|---|',
     ...phases.map(p => `| ${p.name} | ${p.start} | ${p.end} | ${p.days} | ${p.subtitle} |`), '',
     '## প্রতিদিন যেভাবে পড়বে', '',

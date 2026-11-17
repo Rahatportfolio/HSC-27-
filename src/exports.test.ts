@@ -6,7 +6,7 @@ describe('calendar and Markdown exports', () => {
   const plan = buildPlan(), data = freshData(), tasks = plan[0].tasks;
   it('emits Dhaka-time events with stable UIDs and alarms', () => {
     const ics = makeICS(tasks, data, new Date('2026-11-14T00:00:00Z'));
-    expect(ics).toContain('TZID=Asia/Dhaka:20261114T063000');
+    expect(ics).toContain('TZID=Asia/Dhaka:20261120T063000');
     expect(ics).toContain('BEGIN:VALARM\r\nTRIGGER:-PT10M\r\nACTION:DISPLAY');
     expect((ics.match(/BEGIN:VEVENT/g) || []).length).toBe(tasks.length);
     expect(ics).toContain(`UID:${tasks[0].id}@hsc27.prostuti.local`);
@@ -41,7 +41,7 @@ describe('calendar and Markdown exports', () => {
     for (const day of plan) expect(md).toContain(day.date);
     expect(md).toContain('ভেক্টর');
     expect(md).toContain('মডেল টেস্টের রেকর্ড');
-    expect(md).toContain('১৮১');
+    expect(md).toContain('১৯৮');
     expect(md).toContain('[1](https://nctb.gov.bd/');
     data.completed[tasks[0].id] = '2026-11-14T08:00:00Z';
     expect(makeMarkdown(plan, data)).toContain('| [x] |');

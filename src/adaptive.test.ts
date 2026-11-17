@@ -104,7 +104,8 @@ describe('rebalancing a full day', () => {
       task('b', chapterB.id, 160, 320),
       task('c', chapterC.id, 320, 480),
     ]);
-    const result = applyAdaptivePlan([mixed], [row(chapterA2.id)], data, TODAY, { horizonDays: 1, minBlockMinutes: 45 });
+    const lighter = day('2026-03-11', [task('later', chapterB.id, 0, 120)]);
+    const result = applyAdaptivePlan([mixed, lighter], [row(chapterA2.id)], data, TODAY, { horizonDays: 1, minBlockMinutes: 45 });
     expect(result.swaps).toHaveLength(1);
     const swap = result.swaps[0];
     expect(swap.filledGap).toBe(false);
@@ -113,6 +114,50 @@ describe('rebalancing a full day', () => {
     // The weak chapter now owns a block; the displaced work moved to a later day or is reported.
     expect(adaptiveTasksFor(result.plan, TODAY)).toHaveLength(1);
     expect(result.moved.length + result.dropped.length).toBe(1);
+  });
+
+  it('rolls a replacement back when the displaced original has no later slot', () => {
+    const mixed = day(TODAY, [task('b', chapterB.id, 0, 240), task('c', chapterC.id, 240, 480)]);
+    const result = applyAdaptivePlan([mixed], [row(chapterA.id)], freshData(), TODAY, { horizonDays: 1 });
+    expect(result.plan).toEqual([mixed]);
+    expect(result.swaps).toEqual([]);
+    expect(result.loads).toEqual([]);
+    expect(result.unfitted).toContain(chapterA.id);
+    expect(result.dropped).toHaveLength(1); // proposed move cancelled, not lost work
+  });
+
+  it('does not inflate a short victim beyond the daily cap to satisfy the minimum block', () => {
+    const full = day(TODAY, [task('a', chapterA.id, 0, 450), task('b', chapterB.id, 450, 480)]);
+    const later = day('2026-03-11', []);
+    const result = applyAdaptivePlan([full, later], [row(chapterA2.id)], freshData(), TODAY, { minBlockMinutes: 45, horizonDays: 1 });
+    expect(result.plan).toEqual([full, later]);
+    expect(plannedMinutes(result.plan[0])).toBe(480);
+  });
+
+  it('appends multiple gap allocations without putting them on top of one another', () => {
+    const light = day(TODAY, [task('b', chapterB.id, 480, 600)]);
+    const result = applyAdaptivePlan([light], [row(chapterA.id), row(chapterA2.id)], freshData(), TODAY);
+    const tasks = result.plan[0].tasks;
+    expect(result.swaps).toHaveLength(2);
+    tasks.forEach((entry, index) => { if (index) expect(entry.startMinute).toBeGreaterThanOrEqual(tasks[index - 1].endMinute); });
+  });
+
+  it('keeps initial learning in place if its proposed new date would miss the test target', () => {
+    const data = freshData(); data.settings.testExamDate = '2026-03-11';
+    const mixed = day(TODAY, [task(`${chapterC.id}:part-1`, chapterC.id, 0, 240), task('a', chapterA2.id, 240, 480)]);
+    const later = day('2026-03-11', []);
+    const result = applyAdaptivePlan([mixed, later], [row(chapterA.id)], data, TODAY, { horizonDays: 1 });
+    expect(result.plan).toEqual([mixed, later]);
+    expect(result.swaps).toEqual([]);
+    expect(result.moved).toEqual([]);
+  });
+
+  it('does not append a weak block across the board deadline or alter a full exam day', () => {
+    const data = freshData(); data.settings.examDate = '2026-03-11';
+    const late = day(TODAY, [task('a', chapterA.id, 1400, 1430)]);
+    expect(applyAdaptivePlan([late], [row(chapterA2.id)], data, TODAY).plan).toEqual([late]);
+    const exam = day(TODAY, [task('paper', chapterB.id, 480, 660, 'exam')]);
+    expect(applyAdaptivePlan([exam], [row(chapterA.id)], data, TODAY).plan).toEqual([exam]);
   });
 
   it('fills genuine spare room instead of displacing anything', () => {
@@ -151,6 +196,8 @@ describe('rebalancing a full day', () => {
       const date = `2026-03-${String(10 + offset).padStart(2, '0')}`;
       return day(date, [task(`b-${offset}`, chapterB.id, 0, 240), task(`c-${offset}`, chapterC.id, 240, 480)]);
     });
+    // Reallocations may only stay applied when the displaced blocks have a real home.
+    days.push(day('2026-03-13', []));
     const result = applyAdaptivePlan(days, [row(chapterA.id, 9), row(chapterA2.id, 8)], data, TODAY, { horizonDays: 3 });
     const placed = result.swaps.map(swap => swap.chapterId);
     expect(placed).toContain(chapterA.id);

@@ -27,13 +27,13 @@ const contrast = (foreground: string, background: string): number => {
 };
 
 /** Pull the declared colour out of the last rule matching `selector`. */
-const colourOf = (selector: string): string => {
+const colourOf = (selector: string, property = 'color'): string => {
   const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const matches = [...CSS.matchAll(new RegExp(`(?:^|\\n)${escaped}\\{([^}]*)\\}`, 'g'))];
+  const matches = [...CSS.matchAll(new RegExp(`(?:^|\\n)${escaped}\\s*\\{([^}]*)\\}`, 'g'))];
   expect(matches.length, `no rule for ${selector}`).toBeGreaterThan(0);
   const body = matches[matches.length - 1][1];
-  const colour = body.match(/color:(#[0-9a-fA-F]{6})/);
-  expect(colour, `no colour in ${selector}`).not.toBeNull();
+  const colour = body.match(new RegExp(`${property}:\\s*(#[0-9a-fA-F]{6})`));
+  expect(colour, `no ${property} in ${selector}`).not.toBeNull();
   return colour![1];
 };
 
@@ -72,6 +72,12 @@ describe('text keeps WCAG AA contrast', () => {
       expect(found, `${name} missing`).not.toBeNull();
       expect(contrast(found![1], DARK_SURFACE), name).toBeGreaterThanOrEqual(4.5);
     }
+  });
+
+  it('keeps the HSC countdown number readable in both themes', () => {
+    const background = colourOf('.exam-pill-days', 'background');
+    expect(contrast(colourOf('.exam-countdown-pill.hsc strong'), background)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(colourOf('[data-theme="dark"] .exam-countdown-pill.hsc strong'), background)).toBeGreaterThanOrEqual(4.5);
   });
 
   it('never ships an outline:none without a visible focus ring', () => {

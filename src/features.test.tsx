@@ -205,10 +205,10 @@ describe('direct class archive & test exam readiness', () => {
     expect(await screen.findByText('জৈব রসায়ন')).toBeTruthy();
   });
 
-  it('shows the February 2027 Test Exam readiness tracker on Exams', async () => {
+  it('shows the date-independent Test Exam readiness tracker on Exams', async () => {
     render(<App />);
     go('exams');
-    expect(await screen.findByText(/টেস্ট পরীক্ষা প্রস্তুতি ট্র্যাকার \(ফেব্রুয়ারি ২০২৭\)/)).toBeTruthy();
+    expect(await screen.findByText(/টেস্ট প্রস্তুতি ট্র্যাকার/)).toBeTruthy();
   });
 
   it('starts an inline preset timer on Today and keeps the recording-style live status bar visible across views', async () => {

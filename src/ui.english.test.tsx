@@ -85,7 +85,7 @@ function contentVocabulary(): { whole: Set<string>; words: Set<string> } {
   for (const papers of Object.values(PAPER_NAMES)) for (const name of papers) add(name);
   for (const subject of SUBJECTS) { add(subject.name); add(subject.short); }
   const plan = buildPlan();
-  for (const phase of getPhases(plan[0].date)) { add(phase.name); add(phase.subtitle); }
+  for (const phase of getPhases(freshData().settings)) { add(phase.name); add(phase.subtitle); }
   // Teachers, channels and class-type names are proper nouns, not interface copy.
   for (const teacher of TEACHERS) { add(teacher.name); }
   for (const type of CLASS_TYPES) { add(type.bn); }

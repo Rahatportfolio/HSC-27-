@@ -1,8 +1,9 @@
 import { chapterById } from "./data";
 import type { SubjectId } from "./data";
-import { addDays, effectiveDailyHours, toMinutes, todayKey } from "./planner";
+import { addDays, diffDays, effectiveDailyHours, toMinutes, todayKey } from "./planner";
 import type { AppData, Day, Task } from "./planner";
 import { mergeWatched, priority } from "./advanced";
+import { parseTaskRangeId } from './taskReferences';
 
 const PREFIX = "smart-part|";
 export function remainingTaskMinutes(
@@ -11,13 +12,12 @@ export function remainingTaskMinutes(
 ): { from: number; to: number }[] {
   const total = Math.max(0, task.endMinute - task.startMinute);
   if (data.completed[task.id]) return [];
-  const prefix = `${PREFIX}${encodeURIComponent(task.id)}|`;
   let done: [number, number][] = [];
   for (const id of Object.keys(data.completed)) {
-    if (!id.startsWith(prefix)) continue;
-    const [from, to] = id.slice(prefix.length).split("|").map(Number);
-    if (Number.isFinite(from) && Number.isFinite(to))
-      done = mergeWatched(done, [from, to], total);
+    if (!id.startsWith(PREFIX)) continue;
+    const range = parseTaskRangeId(id);
+    if (range?.kind === 'part' && range.sourceId === task.id)
+      done = mergeWatched(done, [range.from, range.to], total);
   }
   const remaining: { from: number; to: number }[] = [];
   let cursor = 0;
@@ -77,23 +77,32 @@ export function integrateStudyPlan(
     .sort((x, y) => y.rank - x.rank);
   const taskById = new Map(base.flatMap((d) => d.tasks).map((t) => [t.id, t]));
   const history = new Map<string, Task[]>();
-  for (const [id, at] of Object.entries(data.completed)) {
+  const accounted = new Map<string, [number, number][]>();
+  const rangeMinutes = (ranges: [number, number][]) => ranges.reduce((sum, [from, to]) => sum + to - from, 0);
+  // Attribute overlapping evidence to the earliest real completion, irrespective
+  // of map insertion order. Do not erase old keys or change their timestamps.
+  for (const [id, at] of Object.entries(data.completed).sort((a, b) => Date.parse(a[1]) - Date.parse(b[1]) || a[0].localeCompare(b[0]))) {
     if (!id.startsWith(PREFIX)) continue;
-    const [, encoded, start, end] = id.split("|");
-    const task = taskById.get(decodeURIComponent(encoded));
-    const from = Number(start),
-      to = Number(end);
-    if (!task || !Number.isFinite(from) || !Number.isFinite(to) || to <= from)
-      continue;
+    const range = parseTaskRangeId(id);
+    if (!range || range.kind !== 'part') continue;
+    const task = taskById.get(range.sourceId);
+    if (!task || data.completed[task.id]) continue; // Canonical completion already represents every fragment.
+    const total = Math.max(0, task.endMinute - task.startMinute);
+    const seen = accounted.get(task.id) || [];
+    const covered = mergeWatched(seen, [range.from, range.to], total);
+    const uniqueMinutes = rangeMinutes(covered) - rangeMinutes(seen);
+    accounted.set(task.id, covered);
+    if (uniqueMinutes <= 0.001) continue;
     const date = todayKey(new Date(at));
     const list = history.get(date) || [];
     list.push({
       ...task,
       id,
       originalTaskId: task.id,
+      sourceMinutes: total,
       date,
       startMinute: 0,
-      endMinute: to - from,
+      endMinute: uniqueMinutes,
     });
     history.set(date, list);
   }
@@ -113,14 +122,14 @@ export function integrateStudyPlan(
 
   const byDate = new Map(base.map((d) => [d.date, d]));
   const last = base.at(-1)!;
-  let date = today;
+  let date = today < base[0].date ? base[0].date : today;
   let index = 0;
-  // Each non-zero day consumes pending work; original horizon is always retained.
-  while (
+  // Added lectures cannot silently postpone the real preparation deadline.
+  while (date < data.settings.examDate && (
     date <= last.date ||
     queue.length ||
     media.some((m) => m.ranges.length)
-  ) {
+  )) {
     if (index++ > 5000) {
       if (result.length)
         result[result.length - 1] = {
@@ -143,7 +152,7 @@ export function integrateStudyPlan(
     const shell: Day = original || {
       ...last,
       date,
-      index: last.index + index,
+      index: diffDays(base[0].date, date) + 1,
       tasks: [],
     };
     if (locked.has(date)) {
@@ -176,6 +185,10 @@ export function integrateStudyPlan(
       tasks.push({ ...t, startMinute: cursor, endMinute: cursor + minutes });
       cursor += minutes;
     }
+    const availableFor = (task?: Task) => {
+      const custom = task ? data.dayOverrides[date]?.taskStartMinutes?.[task.originalTaskId || task.id] : undefined;
+      return Math.max(0, Math.min(budget, diffDays(date, data.settings.examDate) * 1440 - Math.max(cursor, custom ?? cursor)));
+    };
     const append = (task: Task, minutes: number) => {
       const custom =
         data.dayOverrides[date]?.taskStartMinutes?.[
@@ -194,7 +207,9 @@ export function integrateStudyPlan(
     };
     const consume = (i: number): boolean => {
       const q = queue[i];
-      const minutes = Math.min(budget, q.to - q.from);
+      const minutes = Math.min(availableFor(q.task), q.to - q.from);
+      // A full paper is not a set of arbitrary fragments. Leave it pending if it cannot fit.
+      if (minutes <= 0.01 || (q.task.kind === 'exam' && minutes < q.to - q.from)) return false;
       const end = q.from + minutes;
       const entire =
         q.from === 0 && end === q.task.endMinute - q.task.startMinute;
@@ -205,6 +220,7 @@ export function integrateStudyPlan(
             ? q.task.id
             : `${PREFIX}${encodeURIComponent(q.task.id)}|${q.from}|${end}`,
           originalTaskId: q.task.id,
+          sourceMinutes: q.task.endMinute - q.task.startMinute,
         },
         minutes,
       );
@@ -249,10 +265,12 @@ export function integrateStudyPlan(
         const [from, end] = m.ranges[0];
         const minutes = Math.min(
           30,
+          availableFor(),
           mediaBudget,
           a.subjectMinutes - (used[subject] || 0),
           ((end - from) / 60 / m.c.speed) * 1.5,
         );
+        if (minutes <= 0.01) break;
         const to = Math.min(end, from + (minutes / 1.5) * 60 * m.c.speed);
         append(
           {
@@ -287,5 +305,8 @@ export function integrateStudyPlan(
     result.push({ ...shell, tasks });
     date = addDays(date, 1);
   }
+  const deferred = queue.reduce((sum, q) => sum + q.to - q.from, 0) + media.reduce((sum, m) =>
+    sum + m.ranges.reduce((n, [from, to]) => n + ((to - from) / 60 / m.c.speed) * 1.5, 0), 0);
+  if (deferred > 0.01 && result.length) result[result.length - 1] = { ...result[result.length - 1], deferredMinutes: deferred };
   return result;
 }
