@@ -1,6 +1,6 @@
-# Date/time cascade audit — working v2.42.0
+# Date/time cascade audit — v2.42.0
 
-**Recorded: 16 November 2026. Unreleased working tree; not a release or device certification.**
+**Local verification recorded: 16 November 2026.** Publication is tracked on the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); this audit is not physical-device certification.
 Base: `0fa77ce` (v2.41.0) · branch: `arena/9745ddec-hsc-27` · Android metadata: `2.42.0` / `versionCode 22`.
 
 This section supersedes the older reports folded below. Their counts, dates and statements such as “all complete”, “no browser available” or “zero risk” are historical, not claims about the current tree.
@@ -76,14 +76,23 @@ An official **HSC 2027 routine and this student's college-test date could not be
 
 **1 February / 6 June are personal defaults only.** An earlier unsupported January 28 assertion was retracted. Confirm a real date with the issuing board/college, enter it in Settings, select fixed policy, and review capacity warnings.
 
+## Android release verification
+
+[CI run 44091010547](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44091010547), application commit `ac45922d770175aa7cb18a95fcb19d66ff1fc245`, passed both jobs:
+
+- **Build installable APK:** dependency install, typecheck, full unit/UI suite, Android assets, production web build, responsive/offline browser checks, Capacitor sync and debug APK assembly/upload.
+- **Android WebView device checks:** instrumented app on an API 35 emulator, with network disabled, verified native local-file storage, real playback, Activity recreation/persistence, failed-download handling and explicit reset.
+
+The default downloadable APK is debug-signed. A different signing certificate can prevent updating an earlier install in place; retain JSON/full-media backups before any uninstall. The artifact archive could not be downloaded into this sandbox because its redirected storage host was inaccessible; the CI result and release asset metadata are the available remote evidence.
+
 ## Remaining limits and release status
 
-- **No physical Android phone/emulator or APK build was verified for v2.42.0 in this workspace.** Native reminder tests mock Capacitor; permissions, exact alarms, battery policies and background delivery still need real-device checks.
+- **No physical Android phone was used.** Native reminder unit tests mock Capacitor; permissions, exact alarms, battery policies and background delivery still need real-device checks. The emulator checks above do not certify alarms.
 - Production PWA offline reload was tested in Chromium, not on every phone/browser. There is no push server that can keep a closed PWA alive.
 - Existing profiles retain their saved settings instead of silently being reset to November 20. Back up, apply the desired start in Settings, and review the preview. Re-export/re-import ICS; an old external calendar import cannot update itself.
 - A large production bundle remains a performance warning. Passing tests cannot prove the absence of all defects or guarantee preparation, sleep adequacy, an examination date or GPA.
 - Content was not expanded in this date update: **1,176 authored starter MCQs**, separately **10 recovered board questions / 24 coverage rows / 3 rejected sources / 6 of 114 chapters**. A coverage row is not an answerable question; authored MCQs are not all verified board questions.
-- The previously published [v2.41.0 APK](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.41.0) and [public PWA](https://rahatportfolio.github.io/HSC-27-/) are not this unreleased working update. No v2.42.0 push, merge, tag, release or public deployment was performed in this update.
+- Release operations are tracked by [PR #14](https://github.com/Rahatportfolio/HSC-27-/pull/14), the [v2.42.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0), and the [Pages deployment workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/static.yml). Only an uploaded APK asset establishes a download; the version in source alone does not establish publication. APK and PWA deployment status are separate.
 
 ---
 

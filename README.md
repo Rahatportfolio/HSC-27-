@@ -2,7 +2,7 @@
 
 A Bengali-first, offline study companion for HSC 2027 science preparation (Sylhet board), with Higher Mathematics as the fourth subject. React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API.
 
-**Working update: 2.42.0 — date/time cascade.** The repository version is not a publication claim. The previously published APK is [v2.41.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.41.0); this update has not yet been released or deployed to the public PWA.
+**Version 2.42.0 — date/time cascade.** For the installable APK and publication status, use the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0). A repository version alone is not a publication claim. The previous APK is [v2.41.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.41.0); the public PWA has a separate deployment workflow.
 
 ## What changed
 
@@ -105,11 +105,11 @@ The mutation runner changes one guard at a time, requires an unmodified passing 
 
 ## Android and public PWA
 
-- **Published APK:** [v2.41.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.41.0). Back up before installing or updating.
-- **Published PWA:** https://rahatportfolio.github.io/HSC-27-/ — this is not a link to the unreleased working update.
+- **APK download/status:** [v2.42.0 release](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0). Install an uploaded `.apk` asset, not the source archive. Back up before installing or updating.
+- **Public PWA:** https://rahatportfolio.github.io/HSC-27-/ — deployment status is tracked by the [Pages workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/static.yml). An APK release and a Pages deployment are separate operations.
 - `.github/workflows/android-apk.yml` builds on `main` and `arena/**` pushes and on `v*` tags. It runs unit/UI and browser checks, builds a debug APK, and attaches tagged builds to Releases. Optional signing secrets also enable signed release APK/AAB output.
 - `.github/workflows/static.yml` tests/builds and deploys `dist/` to GitHub Pages from `main` (or workflow dispatch). Pages must use **GitHub Actions** as its build source.
-- Working Android metadata: **versionName 2.42.0 / versionCode 22**. This does not mean an APK has been built or installed for this update.
+- Android metadata: **versionName 2.42.0 / versionCode 22**. The [release-candidate CI run](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44091010547) passed the APK build and API 35 Android WebView storage/playback/restart/reset checks. This is emulator evidence, not physical-phone alarm certification.
 
 Local Android builds need JDK 21 and Android SDK 36:
 

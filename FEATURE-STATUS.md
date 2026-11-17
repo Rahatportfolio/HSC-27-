@@ -1,7 +1,7 @@
 # প্রস্তুতি · HSC 27 — current feature status
 
-**Working version: 2.42.0 / Android code 22 · recorded 16 November 2026 · unreleased.**
-The [published v2.41.0 APK](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.41.0) and [public PWA](https://rahatportfolio.github.io/HSC-27-/) have not been replaced by this working update. This report distinguishes measured software behavior from official dates, content coverage and device verification.
+**Version: 2.42.0 / Android code 22 · local verification recorded 16 November 2026.**
+APK assets/publication are tracked on the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0). The [public PWA](https://rahatportfolio.github.io/HSC-27-/) has a separate deployment workflow. This report distinguishes measured software behavior from official dates, content coverage and device verification.
 
 ## এই আপডেট: এক জায়গায় তারিখ বদল, সংযুক্ত পরিকল্পনায় প্রয়োগ
 
@@ -59,13 +59,14 @@ These defects have failing-before-fix regressions, independent mutation proof, a
 | Actual date-change browser flow | **Asia/Dhaka + America/New_York**, production build: save/cancel/reload, history, partial evidence, future start, fixed-policy warnings, real Markdown/ICS downloads, malformed-reference recovery and promoted-completion dedup after reload |
 | Responsive browser flow | **23 views**, 320–768px, large text, English/dark, dialogs and running timer; real content/no page errors/no detected width or sibling overlap |
 | Offline study browser flow | Real playable WebM, resume, notes, full backup/restore, shared collector, mobile tabs and production PWA offline reload |
+| Android build + emulator | [CI run 44091010547](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44091010547) passed APK assembly and API 35 WebView offline storage, playback, restart/persistence and reset checks |
 
 The 109 controls are included in the full suite, not another 109 independent features. Mutation proof is targeted, not exhaustive. Details and commands: [README](README.md), [current audit](AUDIT.md), `scripts/check-date-guards.mjs`, `scripts/check-date-cascade.ts`.
 
 ## যা এখনো নিশ্চিত করা হয়নি
 
 1. **সরকারি পরীক্ষার তারিখ:** an official HSC 2027 routine and this student's college-test notice could not be verified. [NCTB](https://nctb.gov.bd/pages/notices/), [Sylhet HSC Corner](https://sylhetboard.gov.bd/corner/hsc), [Sylhet college notices](https://sylhetboard.gov.bd/order/college) and [Dhaka Board HSC notices](https://dhakaeducationboard.gov.bd/index.php/site/product/hsccorner) were checked with retrieval limits recorded in the audit. This does not prove no notice exists. **1 February / 6 June remain personal preparation targets.**
-2. **ফোনে native behavior:** no v2.42.0 APK build/install or physical-device alarm/battery/background-delivery check was done here. Capacitor notification regressions are mocked; Chromium PWA testing is not Android-device verification.
+2. **ফোনে native behavior:** the APK build and API 35 emulator storage/playback/restart/reset checks passed in CI, but no physical-device alarm/battery/background-delivery check was done. Capacitor notification regressions are mocked; emulator success is not certification of every phone. The default APK is debug-signed; a signing mismatch may require backup/restore instead of an in-place update.
 3. **নিশ্চয়তা নয়:** passing tests does not mean zero bugs, a certified syllabus, guaranteed board questions or guaranteed GPA. A/B/C priorities and stars are editorial study aids.
 4. **Local data:** there is no cloud account/sync or push server. Storage clearing or uninstalling can erase progress. Take a JSON/full-media backup before changing the schedule or installing an update.
 
@@ -73,7 +74,7 @@ The 109 controls are included in the full suite, not another 109 independent fea
 
 Open **Settings & backup → Routine start date**, choose linked personal targets or fixed external deadlines, review the phase/capacity preview, then **Save → Update routine**. Export a new calendar file after changes; previously imported events do not update themselves.
 
-The regenerated default is [HSC-27-STUDY-PLAN.md](HSC-27-STUDY-PLAN.md). The working app can be viewed in the workspace's production live preview. **No v2.42.0 release or public deployment has been made.**
+The regenerated default is [HSC-27-STUDY-PLAN.md](HSC-27-STUDY-PLAN.md). The app can be viewed in the workspace's production live preview. For the installable APK, use the uploaded asset on the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); PWA publication is tracked separately by the [Pages workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/static.yml).
 
 ---
 
