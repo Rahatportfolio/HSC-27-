@@ -69,8 +69,14 @@ it('never invents numbers for a profile with no sessions', async () => {
 });
 
 it('warns about a long unbroken sitting instead of praising it', async () => {
-  // Two hours with no gap: the panel must prompt a break.
-  seed([session('a', 9, 60), session('b', 10, 60)]);
+  // Two hours with no gap, ending at the moment the test runs. Seeding fixed clock
+  // hours made this test pass only inside a 30-minute window after the last
+  // session — "continuous up to now" is 0 once the run is over, which is correct.
+  const minutesAgo = (mins: number) => new Date(Date.now() - mins * 60000).toISOString();
+  seed([
+    { id: 'a', date: todayKey(), at: minutesAgo(120), minutes: 60, subject: 'physics', mode: 'pomodoro' },
+    { id: 'b', date: todayKey(), at: minutesAgo(60), minutes: 60, subject: 'physics', mode: 'pomodoro' },
+  ]);
   render(<App />);
   await screen.findByRole('heading', { name: /ফোকাসের আসল ছবি/ });
   const chip = document.querySelector('.break-chip');

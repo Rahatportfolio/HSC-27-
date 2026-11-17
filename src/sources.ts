@@ -2,6 +2,7 @@ import { CHAPTERS, SUBJECTS } from './data';
 import { CLASS_CATALOG } from './videoCatalog';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { factsFor } from './questionGen';
+import { VERIFIED_BOARD_QUESTIONS, chaptersWithBoardQuestions } from './boardQuestions';
 
 /**
  * Where every chapter's material actually comes from.
@@ -36,13 +37,18 @@ export interface ChapterSources {
   bank: number;
   /** Facts the generator can turn into MCQs (bank + hand-written). */
   facts: number;
+  /** Real board questions recovered from class transcripts for this chapter. */
+  boardQuestions: number;
   /** Letters: what this chapter still lacks, said plainly. */
-  gaps: ('no-direct-class' | 'no-board-video' | 'few-mcqs')[];
+  gaps: ('no-direct-class' | 'no-board-video' | 'few-mcqs' | 'no-board-question')[];
 }
 
 export interface SourcesReport {
   chapters: ChapterSources[];
   totals: {
+    /** Board questions whose board + year are stated in the source video. */
+    boardQuestions: number;
+    chaptersWithBoardQuestion: number;
     verifiedLinks: number;
     searchLinks: number;
     bankQuestions: number;
@@ -84,10 +90,12 @@ export function buildSourcesReport(): SourcesReport {
     const verified = Object.values(videos).reduce((sum, count) => sum + count, 0);
     const bank = bankByChapter.get(chapter.id) ?? 0;
     const subject = SUBJECTS.find(item => item.id === chapter.subject);
+    const boardQuestions = VERIFIED_BOARD_QUESTIONS.filter(item => item.chapterId === chapter.id).length;
     const gaps: ChapterSources['gaps'] = [];
     if (!Object.keys(videos).some(type => type !== 'search' && videos[type] > 0)) gaps.push('no-direct-class');
     if (!(videos.board > 0)) gaps.push('no-board-video');
     if (bank < PRIORITY_GAP_MCQS) gaps.push('few-mcqs');
+    if (!boardQuestions) gaps.push('no-board-question');
     return {
       chapterId: chapter.id,
       title: chapter.title,
@@ -98,6 +106,7 @@ export function buildSourcesReport(): SourcesReport {
       verifiedLinks: verified,
       hasDirectClass: Object.keys(videos).some(type => type !== 'search'),
       bank,
+      boardQuestions,
       facts: factsFor(chapter.id).length,
       gaps,
     };
@@ -111,6 +120,8 @@ export function buildSourcesReport(): SourcesReport {
   return {
     chapters,
     totals: {
+      boardQuestions: VERIFIED_BOARD_QUESTIONS.length,
+      chaptersWithBoardQuestion: chaptersWithBoardQuestions().length,
       verifiedLinks,
       searchLinks,
       bankQuestions: bankTotal,
@@ -122,11 +133,11 @@ export function buildSourcesReport(): SourcesReport {
     verdictBn:
       `প্রতিটি প্রশ্ন অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে আসে—বোর্ডের মূল প্রশ্নপত্র থেকে নয়। ` +
       `${withBoard}/${chapters.length}টি অধ্যায়ে বোর্ড-প্রশ্নের যাচাই করা প্লেলিস্ট আছে; বাকি ${noBoard}টিতে নেই, এবং অ্যাপ সেটাই দেখায়। ` +
-      `ইউটিউবের MCQ/CQ ক্লাসের লিংক আলাদা করে গোনা হয়, প্রশ্নের উৎস হিসেবে দাবি করা হয় না।`,
+      `ইউটিউবের MCQ/CQ ক্লাস থেকে ${VERIFIED_BOARD_QUESTIONS.length}টি বোর্ড প্রশ্ন পাওয়া গেছে (${chaptersWithBoardQuestions().length}টি অধ্যায়ে)—প্রতিটির বোর্ড ও সাল ভিডিওতেই বলা আছে, তাই যাচাই করা যায়।`,
     verdictEn:
       `Every question comes from the app's own textbook-checked bank, not from an original board paper. ` +
       `${withBoard}/${chapters.length} chapters have a verified board-question playlist; the other ${noBoard} do not, and the app says so. ` +
-      `YouTube MCQ/CQ class links are counted separately and never claimed as the source of a question.`,
+      `${VERIFIED_BOARD_QUESTIONS.length} board questions were recovered from YouTube CQ/MCQ classes (${chaptersWithBoardQuestions().length} chapters), each with its board and year stated in the video so it can be checked.`,
   };
 }
 

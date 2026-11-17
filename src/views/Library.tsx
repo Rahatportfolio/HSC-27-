@@ -1,12 +1,13 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
-import { BookMarked, BookOpen, Download, ExternalLink, FileText, Filter, Link2, NotebookPen, Pin, Plus, Search, Star, Trash2, Youtube } from 'lucide-react';
+import { BookMarked, BookOpen, Check, Download, ExternalLink, FileText, Filter, Link2, NotebookPen, Pin, Play, Plus, Search, Star, Trash2, Youtube } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { bn, formatDate } from '../planner';
 import { STARTER_FORMULAS } from '../quiz-data';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
+import { VERIFIED_BOARD_QUESTIONS, chaptersWithBoardQuestions } from '../boardQuestions';
 import { classProgress, isWatched, toggleClassWatched } from '../classes';
 import { newId, nowIso } from '../storage';
 import { downloadText } from '../exports';
@@ -270,6 +271,24 @@ function BoardsTab() {
   return <section className="card library-panel">
     <div className="card-heading"><div><h2><BookMarked size={20} />{t("বোর্ড প্রশ্ন লাইব্রেরি", "Board question library")}</h2><p>নিজে দেখা/সংগ্রহ করা বোর্ড প্রশ্নের নোট এখানে রাখো। প্রশ্নের পূর্ণ টেক্সট নিজে লিখে যোগ করো; অ্যাপ কোনো বোর্ডের কপিরাইট করা প্রশ্নপত্র সংযুক্ত করে না।</p></div><button className="button primary" onClick={() => setOpen(true)}><Plus size={16} />{t("প্রশ্ন যোগ করো", "Add a question")}</button></div>
     <div className="filter-bar"><label className="search-field"><Search size={17} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("প্রশ্ন, বোর্ড বা সাল খুঁজো…", "Search question, board or year…")} aria-label={t("বোর্ড প্রশ্ন খুঁজো", "Search board questions")} /></label><select value={subject} onChange={e => setSubject(e.target.value as SubjectId | 'all')}><option value="all">{t("সব বিষয়", "All subjects")}</option>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><div className="segmented small">{(['all', 'CQ', 'MCQ'] as const).map(value => <button key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{value === 'all' ? 'সব' : value}</button>)}</div><button className={`button ${onlyMarked ? 'primary' : 'secondary'} small`} onClick={() => setOnlyMarked(!onlyMarked)}><Star size={14} />{t("গুরুত্বপূর্ণ", "Important")}</button></div>
+    <div className="verified-board-block">
+      <div className="card-heading"><div><h3><Play size={17} />{t('ইউটিউব ক্লাস থেকে নেওয়া বোর্ড প্রশ্ন', 'Board questions taken from YouTube classes')}</h3><p>{t(
+        'প্রতিটি প্রশ্নের বোর্ড ও সাল ভিডিওটিতেই বলা আছে—নিচের লিংকে গিয়ে যাচাই করতে পারবে। যেখানে ক্লাসে বোর্ডের নাম বলা হয়নি, সেখানে প্রশ্ন রাখা হয়নি।',
+        'Every board and year below is stated inside the video itself — open the link and check. Where a class never named the board, no question was taken.',
+      )}</p></div><span className="tiny-muted">{bn(VERIFIED_BOARD_QUESTIONS.length)} · {bn(chaptersWithBoardQuestions().length)} {t('অধ্যায়', 'chapters')}</span></div>
+      <div className="verified-board-list">{VERIFIED_BOARD_QUESTIONS.map(question => <article key={question.id} className="verified-board-card">
+        <div className="board-top"><span className="board-meta">{question.board} বোর্ড · {bn(question.year)} · {question.type}</span><SubjectBadge subject={question.subject} small /><span className="verified-chip"><Check size={12} />{t('ভিডিওতে যাচাই', 'verified in video')}</span></div>
+        <p>{question.text}</p>
+        {chapterById[question.chapterId] && <span className="board-chapter">{chapterById[question.chapterId].title}</span>}
+        <a className="verified-board-source" href={question.source.url} target="_blank" rel="noreferrer noopener">
+          <Play size={12} />{question.source.channel} · {question.source.title}{question.source.at ? ` · ${question.source.at}` : ''}
+        </a>
+      </article>)}</div>
+      <p className="tiny-muted">{t(
+        `এখন ${bn(chaptersWithBoardQuestions().length)}টি অধ্যায়ে বোর্ড প্রশ্ন পাওয়া গেছে; বাকি ${bn(CHAPTERS.length - chaptersWithBoardQuestions().length)}টিতে এখনো নেই—সেখানে নিজের প্রশ্ন যোগ করো।`,
+        `Board questions exist for ${chaptersWithBoardQuestions().length} chapters; the other ${CHAPTERS.length - chaptersWithBoardQuestions().length} still have none — add your own there.`,
+      )}</p>
+    </div>
     {questions.length ? <div className="board-list">{questions.map(question => <article key={question.id} className={`board-card ${question.bookmarked ? 'marked' : ''}`}><div className="board-top"><span className="board-meta">{question.board} · {bn(question.year)} · {question.type} · {bn(question.marks)} নম্বর</span><SubjectBadge subject={question.subject} small /><button className={`icon-button ${question.bookmarked ? 'active' : ''}`} aria-label={t("গুরুত্বপূর্ণ চিহ্নিত করো", "Mark as important")} onClick={() => setData(d => ({ ...d, boardQuestions: d.boardQuestions.map(item => item.id === question.id ? { ...item, bookmarked: !item.bookmarked } : item) }))}><Star size={15} fill={question.bookmarked ? 'currentColor' : 'none'} /></button></div><p>{question.text}</p>{question.chapterId && chapterById[question.chapterId] && <span className="board-chapter">{chapterById[question.chapterId].title}</span>}<button className="text-button delete-link" onClick={() => confirm({ title: 'প্রশ্নটি মুছে ফেলবে?', message: question.text, danger: true, label: 'মুছে ফেলো', action: () => { setData(d => ({ ...d, boardQuestions: d.boardQuestions.filter(item => item.id !== question.id) })); notify(t('প্রশ্ন মুছে ফেলা হয়েছে।', 'Question deleted.'), 'info'); } })}><Trash2 size={13} />{t("মুছো", "Delete")}</button></article>)}</div> : <EmptyState title={t("প্রশ্ন লাইব্রেরি খালি", "The question library is empty")} description="বিগত বোর্ডের গুরুত্বপূর্ণ প্রশ্ন, বছর ও অধ্যায়সহ যোগ করো।" action={<button className="button primary" onClick={() => setOpen(true)}>{t("প্রথম প্রশ্ন যোগ করো", "Add the first question")}</button>} />}
     {open && <BoardModal onClose={() => setOpen(false)} />}
   </section>;

@@ -69,13 +69,14 @@ export default function AuditView() {
         <div><span>{t('যাচাই করা ক্লাস লিংক', 'Verified class links')}</span><strong>{bnNum(report.sources.totals.verifiedLinks)}</strong></div>
         <div><span>{t('সার্চ-লিংক (শুধু সার্চ)', 'Search-only links')}</span><strong>{bnNum(report.sources.totals.searchLinks)}</strong></div>
         <div><span>{t('প্রতি অধ্যায়ে প্রশ্ন', 'Questions per chapter')}</span><strong>{bnNum(report.sources.totals.averageBank)}</strong></div>
+        <div className={report.sources.totals.chaptersWithBoardQuestion ? '' : 'warn'}><span>{t('ভিডিও থেকে পাওয়া বোর্ড প্রশ্ন', 'Board questions from videos')}</span><strong>{bnNum(report.sources.totals.boardQuestions)} · {bnNum(report.sources.totals.chaptersWithBoardQuestion)} {t('অধ্যায়', 'ch.')}</strong></div>
         <div className="warn"><span>{t('বোর্ড প্লেলিস্ট নেই', 'No board playlist')}</span><strong>{bnNum(report.counts.chapters - report.sources.totals.chaptersWithBoardVideo)}</strong></div>
       </div>
       <div className="audit-thin-list">{thinSources.map(entry => <div key={entry.chapterId} className="audit-source-row">
         <span><strong>{entry.title}</strong><small>{t(entry.subject, entry.subjectEn)} · {t('ভিডিও', 'videos')} {bnNum(entry.verifiedLinks)} · {t('প্রশ্ন', 'MCQs')} {bnNum(entry.bank)}</small></span>
         <span className="audit-source-gaps">{entry.gaps.map(gap => <small key={gap} className="warn"><FileWarning size={12} />{t(
-          gap === 'no-board-video' ? 'বোর্ড প্লেলিস্ট নেই' : gap === 'no-direct-class' ? 'সরাসরি ক্লাস নেই' : 'প্রশ্ন কম',
-          gap === 'no-board-video' ? 'no board playlist' : gap === 'no-direct-class' ? 'no direct class' : 'few MCQs',
+          gap === 'no-board-video' ? 'বোর্ড প্লেলিস্ট নেই' : gap === 'no-direct-class' ? 'সরাসরি ক্লাস নেই' : gap === 'no-board-question' ? 'বোর্ড প্রশ্ন নেই' : 'প্রশ্ন কম',
+          gap === 'no-board-video' ? 'no board playlist' : gap === 'no-direct-class' ? 'no direct class' : gap === 'no-board-question' ? 'no board question' : 'few MCQs',
         )}</small>)}</span>
       </div>)}</div>
     </section>

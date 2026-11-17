@@ -5056,3 +5056,20 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .chapter-source-note p+p{margin-top:6px}
 .chapter-source-note strong{display:block;font-size:.8rem;color:#2f3a2b;margin-bottom:3px}
 .chapter-source-note .tiny-muted{color:#606b5b}
+/* ── Verified board questions (v2.35.0) ─────────────────────────────────
+   Recovered from public CQ/MCQ classes. The citation is part of the card,
+   not a footnote: board + year + video + timestamp, so any claim is
+   checkable in one click. Cards without that evidence are never rendered. */
+.verified-board-block{margin:6px 0 18px;padding:14px;border-radius:12px;background:var(--surface-soft,#f3f5f0)}
+.verified-board-block .card-heading h3{display:flex;align-items:center;gap:7px;font-size:1rem;margin:0 0 4px}
+.verified-board-list{display:grid;gap:10px;margin:12px 0 8px}
+.verified-board-card{background:#fff;border:1px solid var(--border-soft,#e6e9e1);border-radius:10px;padding:12px 14px}
+.verified-board-card p{margin:6px 0;font-size:.88rem;line-height:1.65;color:#3c4738}
+.verified-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;background:#e7f2e4;color:#2f6b3e;font-size:.7rem;font-weight:600;margin-left:auto}
+.verified-board-source{display:flex;align-items:center;gap:6px;font-size:.76rem;color:#3d6b8a;text-decoration:none;line-height:1.4;margin-top:6px}
+.verified-board-source:hover{text-decoration:underline}
+.verified-board-source svg{flex-shrink:0}
+@media (max-width:640px){
+  .verified-board-card p{font-size:.84rem}
+  .verified-board-source{font-size:.72rem}
+}
