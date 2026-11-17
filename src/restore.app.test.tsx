@@ -41,7 +41,11 @@ describe('database restoration while editing', () => {
   it('keeps an invalid snapshot for recovery instead of replacing the mirror', async () => {
     mocks.restore.mockResolvedValue({ payload: '{invalid', updatedAt: '2026-11-15T12:00:00.000Z' });
     render(<App />);
+    // The mirror is written first and the profile is saved from an effect afterwards,
+    // so both writes need waiting for. Reading STORAGE_KEY straight after the recovery
+    // key raced the effect and passed locally while failing on a slower CI runner.
     await waitFor(() => expect(localStorage.getItem(RECOVERY_KEY)).toBe('{invalid'));
+    await waitFor(() => expect(localStorage.getItem(STORAGE_KEY)).toBeTruthy());
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').version).toBe(2);
     expect(mocks.persist).not.toHaveBeenCalled();
   });

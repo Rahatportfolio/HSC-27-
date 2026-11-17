@@ -444,3 +444,23 @@ v2.38-এ রসায়নের ৩টি এন্ট্রিকে "সা
 **নিরাপত্তা/সততা পুনঃযাচাই (মাপা):** ১০টি বোর্ড প্রশ্ন · ২৪ কভারেজ · ৩ বাতিল · ব্যাংক ১১৭৬ · ০ ডুপ্লিকেট id · ০ ডুপ্লিকেট টেক্সট · ০ ভুল গঠন · বোর্ড ৫টি (ঢাকা, দিনাজপুর, বরিশাল, কুমিল্লা, রাজশাহী) · সাল ২০২৩–২০২৫ · ৬/১১৪ অধ্যায়।
 
 **মোট:** ৬১৪টি টেস্ট (৭৫ ফাইল) পাস · `tsc --noEmit` পরিষ্কার · `npm run build` ✓ · লাইভ প্রিভিউ ৩০০০ পোর্টে চলছে।
+
+## ৭৭. CI-তে APK বিল্ড ফেল — আসল কারণ ও সমাধান (v2.40.2)
+
+PR #11 মার্জ হলো (`58b8aed`)। মার্জের পর `Android APK` ওয়ার্কফ্লো **"Unit and UI tests" ধাপে ব্যর্থ** হলো, যেখানে Pages ডিপ্লয় পাস করল — অথচ লোকালে ৬১৪/৬১৪ পাস।
+
+**লগ প্রথমে পাওয়া যায়নি:** `gh run view --log-failed` এবং jobs-logs API দুটোই Azure blob-এ রিডাইরেক্ট করে, যা এই স্যান্ডবক্সে ব্লকড। সমাধান — **jog annotations** (`check-runs/<id>/annotations`), সেখানেই আসল ব্যর্থতা ছিল:
+
+> `src/restore.app.test.tsx:45` — `restore.app.test.tsx > database restoration while editing > keeps an invalid snapshot for recovery instead of replacing the mirror`
+> `AssertionError: expected undefined to be 2`
+
+**আসল বাগ (টেস্টের, অ্যাপের নয়):** `App.tsx`-এ `preserveSnapshot()` **সিঙ্ক্রোনাসে** `RECOVERY_KEY` লেখে, কিন্তু আসল প্রোফাইল `STORAGE_KEY`-তে যায় আলাদা `useEffect` → `saveData()`-এর মধ্য দিয়ে, পরে। টেস্ট `RECOVERY_KEY`-এর জন্য `waitFor` করে তারপরই **সিঙ্ক্রোনাসে** `STORAGE_KEY` পড়ছিল। লোকালে ইফেক্ট আগেই শেষ হয়ে যেত; ধীর CI রানারে এখনো হয়নি — তাই `undefined`।
+
+**সমাধান:** `STORAGE_KEY`-র জন্যও আলাদা `waitFor`। এতে assertion দুর্বল হয়নি — version, পুনরুদ্ধার-অটুটতা ও "persist ডাকা হয়নি" তিনটিই অপরিবর্তিত।
+
+**প্রমাণ (দাবি নয়, মাপা):**
+- ঠিক করা ফাইল ৫ বার ধারাবাহিক পাস (flaky নয়)
+- **Mutation check:** প্রত্যাশিত version `2` → `3` করলে টেস্ট ফেল করে (`expected 2 to be 3`), ফিরিয়ে আনলে পাস — অর্থাৎ assertion সত্যিই কিছু প্রমাণ করে
+- `CI=true` দিয়ে লোকালে পূর্ণ স্যুট: ৬১৪/৬১৪ পাস
+
+**পূর্ণ গেট:** ৬১৪ টেস্ট (৭৫ ফাইল) · `tsc --noEmit` পরিষ্কার।
