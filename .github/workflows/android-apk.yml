@@ -244,9 +244,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      # GitHub hides draft releases from read-only tokens. The script still uses
-      # GET requests exclusively and never changes assets or publication state.
-      contents: write
+      contents: read
     steps:
       - name: Checkout inspection tooling
         uses: actions/checkout@v4

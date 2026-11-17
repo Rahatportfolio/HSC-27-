@@ -11,7 +11,7 @@ import { pathToFileURL } from 'node:url';
 export function signingFingerprint(output) {
   assert.match(output, /^Verifies\s*$/m, 'APK signature must verify');
   const fingerprints = [...output.matchAll(/^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9:]+)\s*$/gm)];
-  assert.equal(fingerprints.length, 1, 'Exactly one signing certificate is required for this comparison');
+  assert.equal(fingerprints.length, 1, `Exactly one signing certificate is required for this comparison. Tool output: ${output.slice(0, 2200)}`);
   const fingerprint = fingerprints[0][1].replaceAll(':', '').toLowerCase();
   assert.match(fingerprint, /^[a-f0-9]{64}$/, 'Invalid signing certificate digest');
   return fingerprint;
