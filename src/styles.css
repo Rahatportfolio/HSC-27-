@@ -2209,9 +2209,10 @@ button, a, .nav-item, .subject-tab, .chapter-row, .search-result, .task-check { 
   display: flex;
   flex-direction: column;
   padding-top: var(--safe-top);
+  /* The OS icon style follows the app theme, so the status-bar inset must too.
+     Only the timer below this inset uses the dark recording background. */
   background: var(--surface, #fcfdf9);
 }
-.top-chrome-stack.has-live-timer { background: #14271f; }
 .top-chrome-stack .topbar {
   position: relative;
   top: auto;

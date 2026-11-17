@@ -579,7 +579,7 @@ export default function App() {
         </div>
       </aside>
       <div className="main-shell">
-        <div ref={chromeRef} className={`top-chrome-stack${timer.running || timer.accumulatedMs > 0 ? ' has-live-timer' : ''}`}>
+        <div ref={chromeRef} className="top-chrome-stack">
           {(timer.running || timer.accumulatedMs > 0) && (
             <div className={`live-timer-topbar ${timer.running ? 'running' : 'paused'}`} role="status" aria-label={t('সক্রিয় পড়ার টাইমার', 'Active study timer')} aria-live="off">
               <button type="button" className="live-timer-indicator" onClick={() => navigate('timer')} aria-label={t('পড়ার টাইমার খুলো', 'Open study timer')} title={timerTitleText}>

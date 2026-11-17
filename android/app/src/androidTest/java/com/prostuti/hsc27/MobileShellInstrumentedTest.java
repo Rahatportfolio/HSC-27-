@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import android.Manifest;
 import android.graphics.Bitmap;
 import android.os.Build;
+import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
 import android.view.MotionEvent;
 import android.view.View;
@@ -15,6 +16,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -77,6 +79,24 @@ public class MobileShellInstrumentedTest {
     try (FileOutputStream out = new FileOutputStream(new File(evidenceDirectory(), "measurements.jsonl"), true)) {
       out.write((result.toString() + "\n").getBytes(StandardCharsets.UTF_8));
     }
+    publishEvidence();
+  }
+
+  private void publishEvidence() throws Exception {
+    // Gradle may uninstall the instrumented APK at teardown, removing its scoped
+    // external-files folder. Copy test-only evidence via the emulator shell first.
+    shell("mkdir -p /sdcard/Download/prostuti-instrumented-shell");
+    shell("cp -r " + evidenceDirectory().getAbsolutePath() + "/. /sdcard/Download/prostuti-instrumented-shell");
+    String files = shell("ls /sdcard/Download/prostuti-instrumented-shell");
+    assertTrue("Could not retain emulator evidence: " + files, files.contains(".png") || files.contains("measurements.jsonl"));
+  }
+
+  private String shell(String command) throws Exception {
+    try (InputStream stream = new ParcelFileDescriptor.AutoCloseInputStream(
+      InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command)
+    )) {
+      return new String(stream.readAllBytes(), StandardCharsets.UTF_8);
+    }
   }
 
   private void screenshot(String name) throws Exception {
@@ -85,6 +105,7 @@ public class MobileShellInstrumentedTest {
     try (FileOutputStream out = new FileOutputStream(new File(evidenceDirectory(), name + ".png"))) {
       assertTrue("Screenshot encoding failed", image.compress(Bitmap.CompressFormat.PNG, 100, out));
     } finally { image.recycle(); }
+    publishEvidence();
   }
 
   private boolean hasVisibleNativeToolbar(View view) {

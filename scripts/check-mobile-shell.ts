@@ -31,8 +31,10 @@ const mutations: Record<string, string> = {
   'nonsticky-clock': '.top-chrome-stack { position: relative !important; }',
   'tiny-clock': '.live-clock-chip strong { font-size: 9px !important; }',
   'covered-clock': '.live-timer-clocks::after { content: ""; position: fixed; top: 0; left: 0; width: 100vw; height: 180px; z-index: 9999; background: white; }',
-  'clipped-clock': '.live-clock-chip { width: 24px !important; overflow: hidden !important; }',
+  'clipped-clock': '.live-clock-chip { height: 24px !important; overflow: hidden !important; }',
   'unsafe-bottom': '.mobile-bottom-nav { padding-bottom: 0 !important; }',
+  'no-scroll-clearance': 'html { scroll-padding-top: 0 !important; scroll-padding-bottom: 0 !important; }',
+  'wrong-status-background': '.top-chrome-stack { background: #14271f !important; }',
 };
 if (mutation && !mutations[mutation]) throw new Error(`Unknown mobile-shell mutation: ${mutation}`);
 
@@ -49,9 +51,21 @@ async function prepare(page: Page, view = 'today', reload = false) {
     await document.fonts.ready;
     document.documentElement.style.setProperty('--safe-area-inset-top', '36px');
     document.documentElement.style.setProperty('--safe-area-inset-bottom', '24px');
+    document.getElementById('mobile-regression-mutation')?.remove();
     const style = document.createElement('style'); style.id = 'mobile-regression-mutation'; document.head.append(style);
   });
   if (mutation) await page.locator('#mobile-regression-mutation').evaluate((e, css) => { e.textContent = css; }, mutations[mutation]);
+}
+
+async function tapVisible(page: Page, selector: string) {
+  const target = page.locator(selector);
+  await target.evaluate(e => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
+  const point = await target.evaluate(e => {
+    const r = e.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
+    return { visible: !!hit && (hit === e || e.contains(hit)), blocker: hit?.tagName + '.' + hit?.getAttribute('class') };
+  });
+  assert.ok(point.visible, `Touch target ${selector} is covered by ${point.blocker}`);
+  await target.tap({ timeout: 2200 });
 }
 
 async function checkClock(page: Page, label: string, count = 2) {
@@ -68,8 +82,11 @@ async function checkClock(page: Page, label: string, count = 2) {
       }
       return { text: e.textContent, rect: r.toJSON(), glyphs: text.toJSON(), visible, clipped, font: parseFloat(getComputedStyle(e).fontSize) };
     });
-    return { safe, width: innerWidth, height: innerHeight, bar: bar.getBoundingClientRect().toJSON(), clocks };
+    const sample = document.createElement('span'); sample.style.background = 'var(--surface, #fcfdf9)'; document.body.append(sample);
+    const themeSurface = getComputedStyle(sample).backgroundColor; sample.remove();
+    return { safe, width: innerWidth, height: innerHeight, bar: bar.getBoundingClientRect().toJSON(), clocks, themeSurface, statusBackground: getComputedStyle(bar.parentElement!).backgroundColor };
   });
+  assert.equal(measurement.statusBackground, measurement.themeSurface, 'Status-bar background must match the theme used for native icon contrast');
   assert.equal(measurement.clocks.length, count, `${label}: missing clock`);
   for (const c of measurement.clocks) {
     assert.ok(c.font >= 16, `${label}: clock font ${c.font}px is too small on a phone`);
@@ -97,6 +114,8 @@ try {
     await page.clock.install({ time: new Date('2026-11-16T06:00:00Z') });
     const data = freshData(); data.settings.fontScale = 'lg'; data.settings.language = scenario.language; data.settings.theme = scenario.theme;
     data.notes['2026-11-15'] = 'Preserve my real note';
+    data.completed['legacy-mobile-evidence'] = '2026-11-15T08:00:00Z';
+    data.studySessions = [{ id: 'mobile-history', date: '2026-11-15', at: '2026-11-15T08:00:00Z', minutes: 17, subject: 'physics', mode: 'stopwatch' }];
     await page.addInitScript(({ data, key }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(data)); }, { data, key: STORAGE_KEY });
     const state = async () => parseBackup(await page.evaluate(key => localStorage.getItem(key)!, STORAGE_KEY));
     await prepare(page);
@@ -118,9 +137,12 @@ try {
       const layout = await page.evaluate(() => {
         const menu = document.querySelector('.topbar .mobile-menu')!.getBoundingClientRect();
         const bottom = document.querySelector('.mobile-bottom-nav')!, style = getComputedStyle(bottom);
-        return { menu: menu.toJSON(), bottomPadding: parseFloat(style.paddingBottom), pointer: matchMedia('(pointer: coarse)').matches, scrollWidth: document.documentElement.scrollWidth, width: innerWidth };
+        const sample = document.createElement('span'); sample.style.background = 'var(--surface, #fcfdf9)'; document.body.append(sample);
+        const themeSurface = getComputedStyle(sample).backgroundColor; sample.remove();
+        return { menu: menu.toJSON(), bottomPadding: parseFloat(style.paddingBottom), pointer: matchMedia('(pointer: coarse)').matches, scrollWidth: document.documentElement.scrollWidth, width: innerWidth, themeSurface, statusBackground: getComputedStyle(document.querySelector('.top-chrome-stack')!).backgroundColor };
       });
       assert.equal(layout.pointer, true, 'Not a realistic touch context');
+      assert.equal(layout.statusBackground, layout.themeSurface, 'Status-bar background must match the theme used for native icon contrast');
       assert.ok(layout.menu.top >= 36, `Toolbar is under the status bar: ${JSON.stringify(layout)}`);
       assert.ok(layout.bottomPadding >= 24, `Gesture bar padding was overridden: ${JSON.stringify(layout)}`);
       assert.ok(layout.scrollWidth <= layout.width + 1, `Horizontal overflow: ${JSON.stringify(layout)}`);
@@ -128,7 +150,7 @@ try {
     });
     await prepare(page, 'timer');
     await probe(`${key} actual-touch-start`, async () => {
-      await page.locator('.timer-main-button').tap({ timeout: 2200 });
+      await tapVisible(page, '.timer-main-button');
       await page.waitForSelector('.live-timer-topbar.running', { timeout: 2200 });
       return { startedWithRealTouch: true };
     });
@@ -165,7 +187,7 @@ try {
       const m = await checkClock(page, `${key} syllabus`);
       await page.locator('.live-timer-indicator').tap({ timeout: 2200 });
       await page.waitForSelector('.timer-view', { timeout: 2200 });
-      await page.locator('.timer-main-button').tap({ timeout: 2200 });
+      await tapVisible(page, '.timer-main-button');
       assert.equal(await page.locator('.live-timer-topbar.paused').count(), 1, 'Main Pause was blocked by the SVG');
       return m;
     });

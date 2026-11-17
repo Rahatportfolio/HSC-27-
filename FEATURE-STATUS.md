@@ -1,5 +1,19 @@
 # প্রস্তুতি · HSC 27 — current feature status
 
+## Unreleased — Android screenshot/UI repair in PR #16
+
+**Not yet published to the APK or public PWA.** The current working preview differs from the released v2.43.0 bundle. The screenshot complaint exposed gaps in the earlier desktop-pointer responsive checks and storage-only emulator tests; those green results did not establish native clock visibility.
+
+- Reproduced in Android CI before the fix: `frameworkActionBar=true`, `visibleNativeToolbar=true`; the persistent splash-painted bar hid the clock. The same red run measured **0px card padding / 0px card gap**.
+- Reproduced with coarse-pointer mobile Chromium: a **270px SVG over a 230px timer container blocked Start**, small 13px banner clocks, status-bar overlap and overridden gesture padding.
+- Fixed splash-theme installation/NoActionBar configuration, dashboard insets/label columns, SVG viewport/pointer behavior, 18px banner digits and single-owner safe-area padding. Actual chrome heights now determine scroll/focus clearance, including short landscape screens.
+- Local controls: **770 tests / 87 files**, typecheck/build and the 23-view responsive runner passed. The production mobile-shell runner passed **40 touch/occlusion/layout probes** in five realistic mobile contexts; paused/running clocks and retained notes/settings/history are checked explicitly.
+- Native API 34/35 shell and existing storage checks passed in [run 44170486656](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44170486656). Targeted proof caught **12 source faults + 11 browser layout faults**, with passing controls and restored originals. Evidence and reproducible commands are in the [mobile audit](AUDIT.md). No physical-phone certification or zero-bug claim is made; published release files have not been replaced.
+
+The routine remains **20 November 2026** by default, with linked personal targets; no profile reset, history redating, scan-byte migration or official-exam-date claim is part of this UI repair.
+
+---
+
 ## v2.43.0 — backup/scanner/timer recheck and release gates
 
 **v2.43.0 / code 23 is published** from source/tag `64ac7c99fcf635a7703bf6fb23fbc6020be318e5` ([PR #15](https://github.com/Rahatportfolio/HSC-27-/pull/15)). The source was prepared on `arena/d8039a21-hsc-27`; publication completed on continuation branch `arena/34a32742-hsc-27` without changing application code or the APK. [Public release and exact evidence](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0), [current audit](AUDIT.md). Android build/API 35 checks, same-source Pages deployment and uploaded-APK byte/version/signature inspection passed before the draft was promoted; public/latest status was independently verified.
