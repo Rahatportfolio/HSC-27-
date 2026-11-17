@@ -135,7 +135,7 @@ export default function FlashcardsView() {
                   <button type="button" className="text-button danger" onClick={() => removeCard(card.id)}>{t('মুছো', 'Delete')}</button>
                 </>
               ) : (
-                <button type="button" className="button secondary answer-btn" onClick={() => setCardOpen(card.id)}>{t('উত্তর দিয়ে রেটিং দাও', 'Answer & rate')}</button>
+                <button type="button" className="button secondary answer-btn" onClick={() => setCardOpen(card.id)}>{t('উত্তর দিয়ে রেটিং দাও', 'Answer & rate')}</button>
               )}
             </div>
           </div>
@@ -159,7 +159,7 @@ function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; c
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!form.front.trim() || !form.back.trim()) { setError('সামনা ও উত্তর দুটিই লিখলেই কার্ড তৈরি হবে।'); return; }
+    if (!form.front.trim() || !form.back.trim()) { setError(t('সামনা ও উত্তর দুটিই লিখলেই কার্ড তৈরি হবে।', 'Write both the front and the back to create a card.')); return; }
     onAdd({ subject: form.subject, chapterId: form.chapterId || undefined, front: form.front.trim(), back: form.back.trim(), category: form.category });
     onClose();
   };

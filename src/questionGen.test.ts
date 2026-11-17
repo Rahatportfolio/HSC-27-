@@ -146,7 +146,7 @@ describe('the exam simulator can top up a thin chapter', () => {
   });
 
   it('keeps the engine label honest for the UI', () => {
-    expect(ENGINE_LABEL).toContain('নিয়মভিত্তিক');
+    expect(ENGINE_LABEL()).toContain('নিয়মভিত্তিক');
   });
 });
 

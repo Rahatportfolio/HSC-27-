@@ -109,7 +109,7 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
           return;
         }
         if (!f) {
-          notify("অফলাইন ফাইল পাওয়া যায়নি — পুনরায় ডাউনলোড করো।", "error");
+          notify(t("অফলাইন ফাইল পাওয়া যায়নি — পুনরায় ডাউনলোড করো।", 'The offline file was not found — download it again.'), "error");
           return;
         }
         revoke = f.revoke;
@@ -172,12 +172,12 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
           }}
           onEnded={flush}
           onError={() =>
-            notify("ভিডিও খোলা যায়নি। ফাইল/নেটওয়ার্ক পরীক্ষা করো।", "error")
+            notify(t("ভিডিও খোলা যায়নি। ফাইল/নেটওয়ার্ক পরীক্ষা করো।", 'Could not open the video. Check the file or your connection.'), "error")
           }
         />
       ) : (
         <p>
-          এই প্ল্যাটফর্মে স্বয়ংক্রিয় watch tracking নেই।{" "}
+          এই প্ল্যাটফর্মে স্বয়ংক্রিয় watch tracking নেই।{" "}
           <a href={item.url} target="_blank" rel="noreferrer">
             {t("মূল ক্লাস খোলো", "Open original class")}
           </a>{" "}
@@ -299,8 +299,8 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
         />
       </label>
       <p className="tiny-muted">
-        ভিডিও progress সংরক্ষিত হয়। Study hours-এর জন্য Focus timer ব্যবহার করো;
-        একই সময় দুইবার যোগ হয় না।
+        ভিডিও progress সংরক্ষিত হয়। Study hours-এর জন্য Focus timer ব্যবহার করো;
+        একই সময় দুইবার যোগ হয় না।
       </p>
     </Modal>
   );
@@ -327,7 +327,7 @@ export function StudyOverview() {
         </button>
       </div>
       <p>
-        {t("লক্ষ্য / পড়েছি / বাকি", "Target / studied / remaining")}:{" "}
+        {t("লক্ষ্য / পড়েছি / বাকি", "Target / studied / remaining")}:{" "}
         {(week[0].capacity / 60).toFixed(1)}h / {(studied / 60).toFixed(1)}h /{" "}
         {(Math.max(0, week[0].capacity - studied) / 60).toFixed(1)}h
       </p>
@@ -425,7 +425,7 @@ export default function StudySystem() {
       const permitted = f.get("permission") === "on";
       if (permitted && !directVideo(url))
         throw new Error(
-          "Offline-এর জন্য অনুমোদিত direct MP4/WebM file প্রয়োজন। YouTube download করা হয় না।",
+          "Offline-এর জন্য অনুমোদিত direct MP4/WebM file প্রয়োজন। YouTube download করা হয় না।",
         );
       change((a) => ({
         ...a,
@@ -447,7 +447,7 @@ export default function StudySystem() {
         ],
       }));
       form.reset();
-      notify("ক্লাস যোগ হয়েছে");
+      notify("ক্লাস যোগ হয়েছে");
     } catch (e) {
       notify((e as Error).message, "error");
     }
@@ -478,7 +478,7 @@ export default function StudySystem() {
         ),
       }));
       void navigator.storage?.persist?.().catch(() => false);
-      notify("অফলাইন ক্লাস সেভ হয়েছে");
+      notify("অফলাইন ক্লাস সেভ হয়েছে");
     } else
       notify(
         `ডাউনলোড ব্যর্থ: ${result.error}. CORS, storage বা connection পরীক্ষা করো।`,
@@ -609,9 +609,8 @@ export default function StudySystem() {
                 ` · Device: ${formatBytes(estimate.usage)} / ${formatBytes(estimate.quota)}`}
             </p>
             <p className="tiny-muted">
-              Android-এ private device files এবং web/PWA-তে IndexedDB ব্যবহৃত হয়।
-              Settings-এর full backup-এ media-সহ রপ্তানি করা যায়। App data
-              clear/uninstall-এর আগে backup রাখো।
+              {t('Android-এ private device files এবং web/PWA-তে IndexedDB ব্যবহৃত হয়।','Uses private device files on Android and IndexedDB on web/PWA.')}
+              {t('Settings-এর full backup-এ media-সহ রপ্তানি করা যায়। App data clear/uninstall-এর আগে backup রাখো।', 'The full backup in Settings exports your media too. Take a backup before clearing app data or uninstalling.')}
             </p>
             {a.classes
               .filter(
@@ -675,7 +674,7 @@ export default function StudySystem() {
                     )}
                     {!c.permitted && (
                       <span className="tiny-muted">
-                        Bookmark only · restricted platform download করা হয় না
+                        {t('শুধু বুকমার্ক · restricted platform download করা হয় না', 'Bookmark only · restricted platforms are not downloaded')}
                       </span>
                     )}
                     <button
@@ -688,7 +687,7 @@ export default function StudySystem() {
                           action: () => {
                             void (async () => {
                               if (c.local && !(await deleteFile(c.id))) {
-                                notify("ফাইল মুছতে ব্যর্থ", "error");
+                                notify(t("ফাইল মুছতে ব্যর্থ", 'Could not delete the file'), "error");
                                 return;
                               }
                               change((a) => ({
@@ -716,7 +715,7 @@ export default function StudySystem() {
                                     : x,
                                 ),
                               }));
-                            else notify("ফাইল মুছতে ব্যর্থ", "error");
+                            else notify(t("ফাইল মুছতে ব্যর্থ", 'Could not delete the file'), "error");
                           })()
                         }
                       >
@@ -728,7 +727,7 @@ export default function StudySystem() {
               ))}
             {!a.classes.some((c) => tab !== "offline" || c.local) && (
               <p>
-                এখনো কোনো ক্লাস নেই। অনুমোদিত direct file অথবা bookmark যোগ করো।
+                {t('এখনো কোনো ক্লাস নেই। অনুমোদিত direct file অথবা bookmark যোগ করো।', 'No classes yet. Add an approved direct file or a bookmark.')}
               </p>
             )}
           </section>
@@ -776,7 +775,7 @@ export default function StudySystem() {
               </label>
               <label className="check-line">
                 <input name="permission" type="checkbox" />{" "}
-                {t("মালিক এই direct video file download করার অনুমতি দিয়েছেন", "The owner allows downloading this direct video file")}
+                {t("মালিক এই direct video file download করার অনুমতি দিয়েছেন", "The owner allows downloading this direct video file")}
               </label>
               <button className="button primary">{t("ক্লাস যোগ করো / বুকমার্ক", "Add class / bookmark")}</button>
             </form>
@@ -789,14 +788,14 @@ export default function StudySystem() {
           <section className="study-panel">
             <h2>Daily target</h2>
             <p>
-              আজ {todayMinutes.toFixed(0)} / {week[0].capacity} min · বাকি{" "}
+              {t('আজ', 'Today')} {todayMinutes.toFixed(0)} / {week[0].capacity} min · {t('বাকি', 'left')}{" "}
               {Math.max(0, week[0].capacity - todayMinutes).toFixed(0)} min
             </p>
             {a.targets[today] !== undefined && (
               <p>{t("আজকের target locked ✓", "Today’s target locked ✓")}</p>
             )}
             <label>
-              প্রতি subject-এ daily video workload limit (min)
+              {t('প্রতি subject-এ daily video workload limit (min)', 'Daily video workload limit per subject (min)')}
               <input
                 type="number"
                 min="1"
@@ -811,10 +810,10 @@ export default function StudySystem() {
             </label>
             <p>
               ভিডিও session মূল routine-এই বসে। দিনের সর্বোচ্চ অর্ধেক video
-              workload; প্রতি subject-এর limit মানা হয়। বাকি textbook/practice
-              কাজ পরের খালি slot-এ থাকে—মুছে যায় না। Video workload-এ ⅔ video + ⅓
+              workload; প্রতি subject-এর limit মানা হয়। বাকি textbook/practice
+              কাজ পরের খালি slot-এ থাকে—মুছে যায় না। Video workload-এ ⅔ video + ⅓
               breaks/notes/practice/revision। অসমাপ্ত ক্লাস actual progress থেকে
-              আবার ভাগ হয়।
+              আবার ভাগ হয়।
             </p>
           </section>
           {week.map((d) => (
@@ -937,7 +936,7 @@ export default function StudySystem() {
           </div>
           <p className="tiny-muted">
             যুক্ত ক্লাস না দেখে Lecture completed হবে না। Exam-ready কার্যকর হতে
-            আগের সব ধাপ সম্পন্ন হওয়া দরকার। পুরোনো task progress অপরিবর্তিত থাকে।
+            আগের সব ধাপ সম্পন্ন হওয়া দরকার। পুরোনো task progress অপরিবর্তিত থাকে।
           </p>
           <h3>Subject readiness</h3>
           {subjectReadiness(data).map((s) => (

@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { FOURTH_SUBJECT, SUBJECTS, SUBJECT_FULL_MARKS, subjectById } from './data';
 import type { SubjectId } from './data';
 import type { SubjectMarks } from './types';
@@ -70,9 +71,9 @@ export function calculateGpa(marks: SubjectMarks): GpaResult {
   return { rows, gpa: failed ? 0 : gpa, complete, golden: golden && !failed, failed, missing, bonus, totalObtained, totalFull };
 }
 export function gpaTargetLabel(gpa: number | null, golden: boolean): string {
-  if (gpa === null) return 'নম্বর যোগ করলে GPA দেখা যাবে';
-  if (golden) return 'Golden A+ এর পথে';
-  if (gpa >= 5) return 'GPA 5.00 — চমৎকার';
-  if (gpa >= 4.5) return 'GPA ৫-এর খুব কাছে';
-  return 'যেখানে ঘাটতি, সেটাই পরের লক্ষ্য';
+  if (gpa === null) return t('নম্বর যোগ করলে GPA দেখা যাবে', 'GPA appears once marks are added');
+  if (golden) return t('Golden A+ এর পথে', 'On track for Golden A+');
+  if (gpa >= 5) return t('GPA 5.00 — চমৎকার', 'GPA 5.00 — excellent');
+  if (gpa >= 4.5) return t('GPA ৫-এর খুব কাছে', 'Very close to GPA 5');
+  return t('যেখানে ঘাটতি, সেটাই পরের লক্ষ্য', 'The next target is wherever the gap is');
 }

@@ -48,8 +48,8 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
 export function PageHeading({ eyebrow, title, titleEn, description, descriptionEn, action }: { eyebrow?: string; title: string; titleEn?: string; description: string; descriptionEn?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{t(title, titleEn || title)}</h1><p>{t(description, descriptionEn || description)}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>;
 }
-export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
-  return <div className="empty-state"><div className="empty-icon"><CheckCheck size={28} strokeWidth={1.5} /></div><h3>{title}</h3><p>{description}</p>{action}</div>;
+export function EmptyState({ title, description, titleEn, descriptionEn, action }: { title: string; description: string; titleEn?: string; descriptionEn?: string; action?: ReactNode }) {
+  return <div className="empty-state"><div className="empty-icon"><CheckCheck size={28} strokeWidth={1.5} /></div><h3>{t(title, titleEn || title)}</h3><p>{t(description, descriptionEn || description)}</p>{action}</div>;
 }
 export function PhaseJourney({ startDate, activeDate }: { startDate: string; activeDate: string }) {
   const { navigate } = usePlanner();

@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { CHAPTERS, chapterById } from './data';
 import type { SubjectId } from './data';
 import { addDays, todayKey } from './planner';
@@ -375,7 +376,7 @@ function focusCaveats(all: StudySession[], inWindow: StudySession[], days: numbe
   const caveats: string[] = [];
   const unsaved = Math.max(0, all.length - inWindow.length);
   if (unsaved > 0) caveats.push(`${unsaved}টি সেশন এই ${days} দিনের বাইরে — হিসাব শুধু ভেতরের সেশন থেকে।`);
-  caveats.push('সময় মাপা হয় টাইমার থেকে; মনোযোগের গুণ নয়। কতটা মনে আছে সেটা রিভিশন কার্ডই বলে।');
+  caveats.push(t('সময় মাপা হয় টাইমার থেকে; মনোযোগের গুণ নয়। কতটা মনে আছে সেটা রিভিশন কার্ডই বলে।', 'Time comes from the timer, not from how well you focused. Only revision cards tell you how much stuck.'));
   return caveats;
 }
 

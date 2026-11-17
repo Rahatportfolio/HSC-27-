@@ -7,7 +7,7 @@ import App from './App';
 import { buildPlan, freshData, getPhases, STORAGE_KEY } from './planner';
 import { CLASS_TYPES, TEACHERS } from './videoCatalog';
 import { BANGLA_LESSONS, CHANNELS } from './classLinks';
-import { CHAPTERS, SUBJECTS } from './data';
+import { CHAPTERS, PAPER_NAMES, SOURCES, SUBJECTS, syllabusNote } from './data';
 
 /**
  * English mode is a real, user-selectable language, so any interface string that
@@ -61,14 +61,35 @@ function contentVocabulary(): { whole: Set<string>; words: Set<string> } {
     whole.add(entry.trim());
     for (const part of entry.split(/[\s·—–|/,()…।]+/)) if (part) words.add(part.trim());
   };
-  for (const c of CHAPTERS) { add(c.title); add(c.focus); add(c.note); }
+  // `number` is a human label for language units, e.g. "পদ্য ১", and the heatmap and
+  // calendar print it directly, so it is content just like the title.
+  for (const c of CHAPTERS) { add(c.title); add(c.focus); add(c.note); add(c.number); }
+  // Same titles with any ASCII digits written as Bengali digits, because the heatmap
+  // and calendar print the numeral that way.
+  const toBengaliDigits = (text: string) => text.replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
+  for (const c of CHAPTERS) { add(toBengaliDigits(c.title)); add(toBengaliDigits(c.focus)); }
+  // A chapter title can be rendered without its trailing numeral ("পদ্য ১" → "পদ্য"),
+  // so register the title with digits stripped as content too.
+  const stripDigits = (text: string) => text.replace(/[\u09E6-\u09EF\d]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // A chapter title may render with or without its Bengali numeral, and some screens
+  // show only the leading word ("পদ্য ৪" → "পদ্য"). Register both forms by whole token,
+  // never by splitting conjuncts apart.
+  for (const c of CHAPTERS) {
+    add(stripDigits(c.title)); add(stripDigits(c.focus));
+    // The heatmap renders the numeral in Bengali digits ("পদ্য ১"), so register the
+    // title with numerals converted to Bengali as well as the raw form.
+    const asBengaliDigits = c.title.replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[Number(d)]);
+    add(asBengaliDigits);
+  }
+  // Paper names ("উদ্ভিদবিজ্ঞান · প্রথম পত্র") are content from the syllabus too.
+  for (const papers of Object.values(PAPER_NAMES)) for (const name of papers) add(name);
   for (const subject of SUBJECTS) { add(subject.name); add(subject.short); }
   const plan = buildPlan();
   for (const phase of getPhases(plan[0].date)) { add(phase.name); add(phase.subtitle); }
   // Teachers, channels and class-type names are proper nouns, not interface copy.
   for (const teacher of TEACHERS) { add(teacher.name); }
   for (const type of CLASS_TYPES) { add(type.bn); }
-  for (const channel of CHANNELS) { add(channel.name); }
+  for (const channel of CHANNELS) { add(channel.name); add(channel.note); }
   // Bangla-textbook lesson titles and the teacher honorifics the UI appends.
   for (const lessons of Object.values(BANGLA_LESSONS)) for (const lesson of lessons) add(lesson.title);
   // Honorifics the UI appends to a teacher's short name, e.g. "অপূর্ব দাদা".
@@ -77,17 +98,40 @@ function contentVocabulary(): { whole: Set<string>; words: Set<string> } {
   return { whole, words };
 }
 
+/**
+ * Reference text that is Bengali *content*, not interface chrome: source names and
+ * their notes in `data.ts`, and the plain number words (`০`, `১১৪`, `০৮:১৯`) that
+ * `bn()` produces for statistics. Leaves of these are skipped by word, and bare
+ * Bengali digits are not words at all.
+ */
+function referenceText(): { whole: Set<string>; words: Set<string> } {
+  const whole = new Set<string>();
+  const words = new Set<string>();
+  const add = (entry: string | undefined) => {
+    if (!entry) return;
+    whole.add(entry.trim());
+    for (const part of entry.split(/[\s·—–|/,()…।]+/)) if (part) words.add(part.trim());
+  };
+  for (const source of SOURCES) { add(source.name); add(source.note); }
+  add(syllabusNote());
+  return { whole, words };
+}
+
 const CONTENT = contentVocabulary();
+const REFERENCE = referenceText();
+
+/** Bengali words made only of digits and separators are numbers, not chrome. */
+const NUMERIC = /^[\u09E6-\u09EF\s:/.,·%+-]+$/;
 
 /** Bengali runs that survive after all content vocabulary is removed. */
 function leaksBengali(text: string): string[] {
   if (!BANGLA.test(text)) return [];
   let rest = text;
-  for (const entry of [...CONTENT.whole].sort((a, b) => b.length - a.length)) {
+  for (const entry of [...CONTENT.whole, ...REFERENCE.whole].sort((a, b) => b.length - a.length)) {
     if (entry.length > 1) rest = rest.split(entry).join(' ');
   }
   const runs = rest.match(/[\u0980-\u09FF]+/g) || [];
-  return [...new Set(runs)].filter(run => !CONTENT.words.has(run));
+  return [...new Set(runs)].filter(run => !CONTENT.words.has(run) && !REFERENCE.words.has(run) && !NUMERIC.test(run));
 }
 
 function go(label: string) {
@@ -152,7 +196,12 @@ describe('English mode has no Bengali leakage in the interface', () => {
       const mounted = document.querySelector('.view') as Element;
       // Wait for the view to render its own heading rather than the previous one.
       await waitFor(() => expect(mounted.textContent && mounted.textContent.length).toBeGreaterThan(40));
-      for (const text of chromeStrings()) {
+      // Body copy counts too: hiding long paragraphs from this sweep is exactly how
+      // 51 Bangla-only sentences once survived inside English mode.
+      const bodyCopy = Array.from(document.querySelectorAll('.view p, .view small, .view li, .view strong, .view span, .view h1, .view h2, .view h3, .view h4'))
+        .map(el => (el.textContent || '').trim())
+        .filter(text => text.length > 0);
+      for (const text of [...chromeStrings(), ...bodyCopy]) {
         // Split on the separators the UI uses to glue chrome to content, so
         // "One-Shot Class · হাসনাত শুভ্র" is judged by its chrome, not the teacher name.
         const leaked = leaksBengali(text);

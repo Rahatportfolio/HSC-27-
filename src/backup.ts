@@ -1,6 +1,7 @@
 import type { AppData, Day } from './planner';
 import { addDays, diffDays, todayKey } from './planner';
 import { downloadText } from './exports';
+import { t } from './i18n';
 
 /**
  * Manual backups only work if the student remembers them, so the app keeps a tiny
@@ -103,7 +104,7 @@ export async function shareBackup(data: AppData, today = todayKey()): Promise<Sh
 /** Bangla date label for the settings row. */
 export function backupLabel(today = todayKey()): string {
   const age = backupAgeDays(today);
-  if (age === null) return 'এখনও ব্যাকআপ নেওয়া হয়নি';
+  if (age === null) return t('এখনও ব্যাকআপ নেওয়া হয়নি', 'No backup taken yet');
   if (age === 0) return 'আজ ব্যাকআপ নেওয়া হয়েছে';
   return `${new Intl.NumberFormat('bn-BD', { useGrouping: false }).format(age)} দিন আগে ব্যাকআপ`;
 }

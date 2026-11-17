@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { CHAPTERS, SUBJECTS, chapterById } from './data';
 import type { Chapter, SubjectId } from './data';
 import type { ChapterStage } from './types';
@@ -165,12 +166,12 @@ export function chapterHeat(
         ? 'Every planned session is finished.'
         : `${gap} of ${planned} planned session(s) still open${pending ? `, ${pending} in the next ${horizon} day(s)` : ''}.`;
   const reason = weak
-    ? `দুর্বলতার স্কোর ${weak.score}/১০ — ${weak.signals[0]?.label ?? 'সাম্প্রতিক সংকেত'}।`
+    ? t(`দুর্বলতার স্কোর ${weak.score}/১০ — ${weak.signals[0]?.label ?? 'সাম্প্রতিক সংকেত'}।`, `Weakness score ${weak.score}/10 — ${weak.signals[0]?.labelEn ?? 'recent signals'}.`)
     : !planned
-      ? 'বর্তমান পরিকল্পনার মধ্যে নেই।'
+      ? t('বর্তমান পরিকল্পনার মধ্যে নেই।', 'Not in the current plan.')
       : done === planned
-        ? 'পরিকল্পিত প্রতিটি সেশন শেষ।'
-        : `${planned}টি পরিকল্পিত সেশনের ${gap}টি এখনো বাকি${pending ? `, পরের ${horizon} দিনে ${pending}টি` : ''}।`;
+        ? t('পরিকল্পিত প্রতিটি সেশন শেষ।', 'Every planned session is done.')
+        : t(`${planned}টি পরিকল্পিত সেশনের ${gap}টি এখনো বাকি${pending ? `, পরের ${horizon} দিনে ${pending}টি` : ''}।`, `${gap} of ${planned} planned sessions are still open${pending ? `, ${pending} in the next ${horizon} days` : ''}.`);
 
   return {
     chapterId, chapter, subject: chapter.subject, level, readiness, pending, planned, done,

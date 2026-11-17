@@ -50,7 +50,7 @@ function NotesTab() {
     notify(t('নোট Markdown ফাইলে ডাউনলোড হয়েছে।', 'Note downloaded as a Markdown file.'), 'success');
   };
   return <section className="card library-panel">
-    <div className="card-heading"><div><h2><NotebookPen size={20} />{t("নোট লাইব্রেরি", "Notes library")}</h2><p>দিনের নোটের বাইরে বড় নোট, সূত্র-ব্যাখ্যা বা ভাবনা লিখে রাখো।</p></div><div className="heading-actions"><button className="button secondary small" onClick={exportNotes}><Download size={15} />Markdown</button><button className="button primary" onClick={() => setOpen('new')}><Plus size={16} />{t("নোট লেখো", "Write a note")}</button></div></div>
+    <div className="card-heading"><div><h2><NotebookPen size={20} />{t("নোট লাইব্রেরি", "Notes library")}</h2><p>{t('দিনের নোটের বাইরে বড় নোট, সূত্র-ব্যাখ্যা বা ভাবনা লিখে রাখো।', 'Keep longer notes, formula explanations or ideas beyond the daily notes.')}</p></div><div className="heading-actions"><button className="button secondary small" onClick={exportNotes}><Download size={15} />Markdown</button><button className="button primary" onClick={() => setOpen('new')}><Plus size={16} />{t("নোট লেখো", "Write a note")}</button></div></div>
     <label className="search-field"><Search size={17} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("নোট, ট্যাগ বা অধ্যায় খুঁজো…", "Search notes, tags or chapter…")} aria-label={t("নোট খুঁজো", "Search notes")} /></label>
     {notes.length ? <div className="note-grid">{notes.map(note => <article className={`card personal-note ${note.pinned ? 'pinned' : ''}`} key={note.id}><div className="personal-note-top"><SubjectBadge subject={note.subject || 'physics'} small />{note.pinned && <span className="pin-pill"><Pin size={11} />{t("পিন", "Pin")}</span>}<button className={`icon-button ${note.pinned ? 'active' : ''}`} aria-label={note.pinned ? t('পিন সরাও', 'Unpin') : t('পিন করো', 'Pin')} onClick={() => setData(d => ({ ...d, libraryNotes: d.libraryNotes.map(item => item.id === note.id ? { ...item, pinned: !item.pinned, updatedAt: nowIso() } : item) }))}><Pin size={14} /></button></div><h3>{note.title}</h3><p className="note-preview">{note.body}</p><div className="note-tags">{note.tags.map(tag => <span key={tag}>{tag}</span>)}{note.chapterId && chapterById[note.chapterId] && <span className="chapter-tag">{chapterById[note.chapterId].title}</span>}</div><div className="personal-note-foot"><span>{formatDate(note.updatedAt.slice(0, 10))}</span><div><button className="text-button" onClick={() => setOpen(note)}>{t("সম্পাদনা", "Edit")}</button><button className="icon-button delete-button" aria-label={t("নোট মুছো", "Delete note")} onClick={() => confirm({ title: t('নোটটি মুছে ফেলবে?', 'Delete this note?'), message: note.title, danger: true, label: t('মুছে ফেলো', 'Delete'), action: () => { setData(d => ({ ...d, libraryNotes: d.libraryNotes.filter(item => item.id !== note.id) })); notify(t('নোট মুছে ফেলা হয়েছে।', 'Note deleted.'), 'info'); } })}><Trash2 size={14} /></button></div></div></article>)}</div> : <EmptyState title={query ? t('মিলে যাওয়া নোট নেই', 'No matching notes') : t('প্রথম নোটটি লেখো', 'Write your first note')} description={query ? t('অন্য শব্দ দিয়ে খুঁজো।', 'Try a different search term.') : t('অধ্যায়ের মূল ধারণা নিজের ভাষায় লিখলে মনে থাকে অনেক বেশি।', 'Writing a chapter’s core idea in your own words makes it stick far better.')} action={!query && <button className="button primary" onClick={() => setOpen('new')}>{t("নোট লেখো", "Write a note")}</button>} />}
     {open && <NoteModal note={open === 'new' ? null : open} onClose={() => setOpen(null)} />}
@@ -68,10 +68,10 @@ function NoteModal({ note, onClose }: { note: PersonalNote | null; onClose: () =
   const [error, setError] = useState('');
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!title.trim()) { setError('নোটের শিরোনাম লেখো।'); return; }
-    if (data.libraryNotes.length >= 1000 && !note) { setError('সর্বোচ্চ ১০০০টি নোট রাখা যায়।'); return; }
+    if (!title.trim()) { setError(t('নোটের শিরোনাম লেখো।', 'Enter a note title.')); return; }
+    if (data.libraryNotes.length >= 1000 && !note) { setError(t('সর্বোচ্চ ১০০০টি নোট রাখা যায়।', 'You can keep at most 1000 notes.')); return; }
     const tagList = tags.split(',').map(tag => tag.trim()).filter(Boolean);
-    if (tagList.length > 10) { setError('সর্বোচ্চ ১০টি ট্যাগ রাখা যায়।'); return; }
+    if (tagList.length > 10) { setError(t('সর্বোচ্চ ১০টি ট্যাগ রাখা যায়।', 'You can keep at most 10 tags.')); return; }
     const stamp = nowIso();
     const entry: PersonalNote = { id: note?.id || newId(), title: title.trim(), body, subject: subject || undefined, chapterId: chapterId || undefined, tags: tagList, pinned, createdAt: note?.createdAt || stamp, updatedAt: stamp };
     setData(d => ({ ...d, libraryNotes: note ? d.libraryNotes.map(item => item.id === note.id ? entry : item) : [...d.libraryNotes, entry] }));
@@ -220,8 +220,8 @@ function VideoModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!title.trim() || !/^https?:\/\//i.test(url.trim())) { setError('শিরোনাম আর http(s) লিংক দাও।'); return; }
-    if (data.videos.length >= 1000) { setError('সর্বোচ্চ ১০০০টি ভিডিও রাখা যায়।'); return; }
+    if (!title.trim() || !/^https?:\/\//i.test(url.trim())) { setError(t('শিরোনাম আর http(s) লিংক দাও।', 'Give a title and an http(s) link.')); return; }
+    if (data.videos.length >= 1000) { setError(t('সর্বোচ্চ ১০০০টি ভিডিও রাখা যায়।', 'You can keep at most 1000 videos.')); return; }
     const entry: VideoLink = { id: newId(), title: title.trim(), url: url.trim(), subject, chapterId: chapterId || undefined, channel: channel.trim() || undefined, watched: false, favorite: false, downloaded: false, watchedPositionSec: 0, watchedPercent: 0, playbackSpeed: 1, completed: false, createdAt: nowIso() };
     setData(d => ({ ...d, videos: [...d.videos, entry] }));
     notify(t('ভিডিও লাইব্রেরিতে যোগ হয়েছে।', 'Video added to the library.'), 'success'); onClose();
@@ -238,7 +238,7 @@ function FormulasTab() {
   const visible = formulas.filter(item => (subject === 'all' || item.subject === subject) && `${item.title} ${item.body}`.toLowerCase().includes(query.toLowerCase()));
   const toggleFavorite = (id: string) => setData(d => ({ ...d, formulaFavorites: d.formulaFavorites.includes(id) ? d.formulaFavorites.filter(item => item !== id) : [...d.formulaFavorites, id].slice(-1000) }));
   return <section className="card library-panel">
-    <div className="card-heading"><div><h2><BookOpen size={20} />{t("সূত্র ও সংজ্ঞা", "Formulas & definitions")}</h2><p>প্রাথমিক সূত্রের তালিকা সঙ্গে দেওয়া; নিজের সূত্র শিটও যোগ করতে পারো। পাঠ্যবই ও শিক্ষকের নির্দেশনা চূড়ান্ত।</p></div><button className="button primary" onClick={() => setOpen(true)}><Plus size={16} />{t("সূত্র যোগ করো", "Add a formula")}</button></div>
+    <div className="card-heading"><div><h2><BookOpen size={20} />{t("সূত্র ও সংজ্ঞা", "Formulas & definitions")}</h2><p>{t('প্রাথমিক সূত্রের তালিকা সঙ্গে দেওয়া; নিজের সূত্র শিটও যোগ করতে পারো। পাঠ্যবই ও শিক্ষকের নির্দেশনা চূড়ান্ত।', 'A starter formula list is included; add your own sheets too. Your textbook and teacher guidance are final.')}</p></div><button className="button primary" onClick={() => setOpen(true)}><Plus size={16} />{t("সূত্র যোগ করো", "Add a formula")}</button></div>
     <div className="filter-bar"><label className="search-field"><Search size={17} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("সূত্র খুঁজো…", "Search formulas…")} aria-label={t("সূত্র খুঁজো", "Search formulas")} /></label><select value={subject} onChange={e => setSubject(e.target.value as SubjectId | 'all')}><option value="all">{t("সব বিষয়", "All subjects")}</option>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><button className={`button ${data.formulaFavorites.length ? 'secondary' : 'ghost'} small`} onClick={() => setData(d => ({ ...d, formulaFavorites: [] }))}><Filter size={15} />প্রিয় ({bn(data.formulaFavorites.length)})</button></div>
     {visible.length ? <div className="formula-grid">{visible.map(formula => <article key={formula.id} className="card formula-card"><div className="formula-top"><span className="formula-subject" style={{ color: subjectById[formula.subject].color }}>{subjectById[formula.subject].short}</span><button className={`icon-button ${data.formulaFavorites.includes(formula.id) ? 'active' : ''}`} aria-label={t("প্রিয় সূত্র", "Favourite formulas")} onClick={() => toggleFavorite(formula.id)}><Star size={15} fill={data.formulaFavorites.includes(formula.id) ? 'currentColor' : 'none'} /></button></div><h3>{formula.title}</h3><pre>{formula.body}</pre>{formula.chapterId && chapterById[formula.chapterId] && <p className="formula-chapter">{chapterById[formula.chapterId].title}</p>}{formula.custom && <button className="text-button delete-link" onClick={() => confirm({ title: 'সূত্রটি মুছে ফেলবে?', message: formula.title, danger: true, label: 'মুছে ফেলো', action: () => { setData(d => ({ ...d, formulas: d.formulas.filter(item => item.id !== formula.id) })); notify(t('সূত্র মুছে ফেলা হয়েছে।', 'Formula deleted.'), 'info'); } })}><Trash2 size={13} />{t("মুছো", "Delete")}</button>}</article>)}</div> : <EmptyState title={t("সূত্র পাওয়া যায়নি", "No formula found")} description={t('অন্য শব্দ বা বিষয় দিয়ে খুঁজো।', 'Try another word or subject.')} />}
     {open && <FormulaModal onClose={() => setOpen(false)} />}
@@ -254,8 +254,8 @@ function FormulaModal({ onClose }: { onClose: () => void }) {
   const [error, setError] = useState('');
   const submit = (event: FormEvent) => {
     event.preventDefault();
-    if (!title.trim() || !body.trim()) { setError('সূত্রের নাম ও বিবরণ লেখো।'); return; }
-    if (data.formulas.length >= 1000) { setError('সর্বোচ্চ ১০০০টি নিজের সূত্র রাখা যায়।'); return; }
+    if (!title.trim() || !body.trim()) { setError(t('সূত্রের নাম ও বিবরণ লেখো।', 'Enter the formula title and details.')); return; }
+    if (data.formulas.length >= 1000) { setError(t('সর্বোচ্চ ১০০০টি নিজের সূত্র রাখা যায়।', 'You can keep at most 1000 of your own formulas.')); return; }
     const entry: FormulaEntry = { id: newId(), subject, chapterId: chapterId || undefined, title: title.trim(), body: body.trim(), favorite: false, createdAt: nowIso() };
     setData(d => ({ ...d, formulas: [...d.formulas, entry] }));
     notify(t('সূত্র যোগ হয়েছে।', 'Formula added.'), 'success'); onClose();
@@ -272,7 +272,7 @@ function BoardsTab() {
   const [onlyMarked, setOnlyMarked] = useState(false);
   const questions = data.boardQuestions.filter(question => (subject === 'all' || question.subject === subject) && (type === 'all' || question.type === type) && (!onlyMarked || question.bookmarked) && `${question.text} ${question.board} ${question.year}`.toLowerCase().includes(query.toLowerCase())).sort((a, b) => Number(b.bookmarked) - Number(a.bookmarked) || b.year - a.year);
   return <section className="card library-panel">
-    <div className="card-heading"><div><h2><BookMarked size={20} />{t("নিজের যোগ করা বোর্ড প্রশ্ন", "Board questions you added")}</h2><p>নিজে দেখা/সংগ্রহ করা বোর্ড প্রশ্নের নোট এখানে রাখো। প্রশ্নের পূর্ণ টেক্সট নিজে লিখে যোগ করো; অ্যাপ কোনো বোর্ডের কপিরাইট করা প্রশ্নপত্র সংযুক্ত করে না।</p></div><button className="button primary" onClick={() => setOpen(true)}><Plus size={16} />{t("প্রশ্ন যোগ করো", "Add a question")}</button></div>
+    <div className="card-heading"><div><h2><BookMarked size={20} />{t("নিজের যোগ করা বোর্ড প্রশ্ন", "Board questions you added")}</h2><p>{t('নিজে দেখা/সংগ্রহ করা বোর্ড প্রশ্নের নোট এখানে রাখো। প্রশ্নের পূর্ণ টেক্সট নিজে লিখে যোগ করো; অ্যাপ কোনো বোর্ডের কপিরাইট করা প্রশ্নপত্র সংযুক্ত করে না।', 'Store notes on board questions you have seen or collected. Type the full question yourself; the app never bundles copyrighted board papers.')}</p></div><button className="button primary" onClick={() => setOpen(true)}><Plus size={16} />{t("প্রশ্ন যোগ করো", "Add a question")}</button></div>
     <div className="filter-bar"><label className="search-field"><Search size={17} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t("প্রশ্ন, বোর্ড বা সাল খুঁজো…", "Search question, board or year…")} aria-label={t("বোর্ড প্রশ্ন খুঁজো", "Search board questions")} /></label><select value={subject} onChange={e => setSubject(e.target.value as SubjectId | 'all')}><option value="all">{t("সব বিষয়", "All subjects")}</option>{SUBJECTS.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select><div className="segmented small">{(['all', 'CQ', 'MCQ'] as const).map(value => <button key={value} className={type === value ? 'active' : ''} onClick={() => setType(value)}>{value === 'all' ? 'সব' : value}</button>)}</div><button className={`button ${onlyMarked ? 'primary' : 'secondary'} small`} onClick={() => setOnlyMarked(!onlyMarked)}><Star size={14} />{t("গুরুত্বপূর্ণ", "Important")}</button></div>
     <div className="verified-board-block">
       <div className="card-heading"><div><h3><Play size={17} />{t('ইউটিউব ক্লাস থেকে সত্যিকারের বোর্ড প্রশ্ন', 'Real board questions recovered from YouTube classes')}</h3><p>{t(
@@ -328,9 +328,9 @@ function BoardModal({ onClose }: { onClose: () => void }) {
     event.preventDefault();
     const marksValue = Number(marks);
     const yearValue = Number(year);
-    if (!text.trim() || !Number.isFinite(marksValue) || marksValue < 0 || marksValue > 100) { setError('প্রশ্ন ও সঠিক নম্বর লেখো।'); return; }
-    if (!Number.isSafeInteger(yearValue) || yearValue < 1990 || yearValue > 2041) { setError('সাল ১৯৯০ থেকে ২০৪১-এর মধ্যে হতে হবে।'); return; }
-    if (data.boardQuestions.length >= 2000) { setError('সর্বোচ্চ ২০০০টি প্রশ্ন রাখা যায়।'); return; }
+    if (!text.trim() || !Number.isFinite(marksValue) || marksValue < 0 || marksValue > 100) { setError(t('প্রশ্ন ও সঠিক নম্বর লেখো।', 'Enter the question and the correct option.')); return; }
+    if (!Number.isSafeInteger(yearValue) || yearValue < 1990 || yearValue > 2041) { setError(t('সাল ১৯৯০ থেকে ২০৪১-এর মধ্যে হতে হবে।', 'The year must be between 1990 and 2041.')); return; }
+    if (data.boardQuestions.length >= 2000) { setError(t('সর্বোচ্চ ২০০০টি প্রশ্ন রাখা যায়।', 'You can keep at most 2000 questions.')); return; }
     const entry: BoardQuestion = { id: newId(), board: board.trim() || 'বোর্ড', year: yearValue, subject, chapterId: chapterId || undefined, type, text: text.trim(), marks: marksValue, bookmarked: false, createdAt: nowIso() };
     setData(d => ({ ...d, boardQuestions: [...d.boardQuestions, entry] }));
     notify(t('বোর্ড প্রশ্ন লাইব্রেরিতে যোগ হয়েছে।', 'Board question added to the library.'), 'success'); onClose();

@@ -689,7 +689,7 @@ export default function TodayView() {
 
     <div className="stats-grid">
       <button className="stat-card stat-link" onClick={() => navigate('syllabus')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস সম্পন্ন', 'Syllabus progress')}</span><strong>{bn(learning.overall.percent)}<small>%</small></strong><p>{bn(learning.overall.completed)} / {bn(learning.overall.total)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={learning.overall.percent} className="stat-progress" /></button>
-      <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> ঘণ্টা {bn(weekMinutes % 60)} মি.</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
+      <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> {t('ঘণ্টা', 'h')} {bn(weekMinutes % 60)} {t('মি.', 'm')}</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => navigate('analytics')}><span className="stat-icon lavender"><Flame size={19} /></span><div><span>{t('টানা পড়ার ধারা', 'Active streak')}</span><strong>{bn(stats.streak)}<small> {t('দিন', 'days')}</small></strong><p>{stats.streak ? t('ধারাবাহিকতা বজায় রাখো', 'Keep this streak going') : t('আজ থেকেই শুরু হোক', 'Start your streak today')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => { setSelectedDate(today); scrollToSection('today-pending'); }}><span className="stat-icon blue"><ListChecks size={19} /></span><div><span>{t('বাকি কাজ ও রিভিশন', 'Pending & revision')}</span><strong>{bn(pending)}<small> {t('টি কাজ', ' tasks')}</small></strong><p>{due.length ? `${bn(due.length)} ${t('টি রিভিশন বাকি', 'revisions due')}` : t('আজ কোনো রিভিশন বাকি নেই', 'No revision due')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
       <button className="stat-card stat-link" onClick={() => navigate('backlog')}><span className="stat-icon lavender"><Layers size={19} /></span><div><span>{t('জমে থাকা কাজ', 'Backlog')}</span><strong>{bn(backlogHours)}<small>{t(' ঘণ্টা', ' h')}</small></strong><p>{backlogCount ? t(`${bn(backlogCount)}টি সেশন · ৮ ঘণ্টার সীমায় ভাগ হবে`, `${backlogCount} sessions · spread under the 8-hour cap`) : t('কিছু জমে নেই', 'Nothing pending')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
@@ -719,7 +719,7 @@ export default function TodayView() {
 
       <aside className="dashboard-rail">
         <section className="focus-card">
-          <div className="focus-heading"><span><span className="live-dot" />{timer.mode === 'pomodoro' ? 'পোমোডোরো' : timer.mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</span><button className="mini-link" onClick={() => navigate('timer')}>{t('পূর্ণ টাইমার', 'Full timer')}<ArrowUpRight size={13} /></button></div>
+          <div className="focus-heading"><span><span className="live-dot" />{timer.mode === 'pomodoro' ? t('পোমোডোরো', 'Pomodoro') : timer.mode === 'countdown' ? t('কাউন্টডাউন', 'Countdown') : t('স্টপওয়াচ', 'Stopwatch')}</span><button className="mini-link" onClick={() => navigate('timer')}>{t('পূর্ণ টাইমার', 'Full timer')}<ArrowUpRight size={13} /></button></div>
           <div className="timer-mini-display"><strong className="timer-digits">{timerText}</strong><span>{chapterById[timer.chapterId]?.title || timer.label || subjectById[timer.subject].name}</span></div>
           <div className="timer-mini-actions"><button className="timer-start" onClick={timer.running ? timer.pause : timer.start}>{timer.running ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}{timer.running ? t('বিরতি', 'Pause') : t('শুরু', 'Start')}</button><button className="timer-reset" onClick={() => navigate('timer')} aria-label={t('টাইমার পেজ', 'Timer page')}><Timer size={16} /></button></div>
           <p>{t('মোট', 'Total')} {bn(data.focus.sessions)}{t('টি সেশন', ' sessions')} · {bn(totalHours)} {t('ঘণ্টা', 'hrs')}</p>
@@ -760,7 +760,7 @@ export default function TodayView() {
     </div>
     <SyllabusNotice />
     <BackupNudge />
-    <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? 'সব তথ্য এই ডিভাইসে সেভ হচ্ছে' : 'সেভ হয়নি — ব্যাকআপ রাখো'}</span><button className="text-button" onClick={() => navigate('settings')}>{t('ব্যাকআপ রাখো', 'Keep a backup')}<ArrowUpRight size={13} /></button></div>
+    <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? t('সব তথ্য এই ডিভাইসে সেভ হচ্ছে', 'Everything is saved on this device') : t('সেভ হয়নি — ব্যাকআপ রাখো', 'Not saved — take a backup')}</span><button className="text-button" onClick={() => navigate('settings')}>{t('ব্যাকআপ রাখো', 'Keep a backup')}<ArrowUpRight size={13} /></button></div>
   </div>;
 }
 

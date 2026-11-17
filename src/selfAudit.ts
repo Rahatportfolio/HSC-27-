@@ -26,6 +26,8 @@ export interface AuditCheck {
   labelEn: string;
   /** The measured value, already formatted for display. */
   value: string;
+  /** English twin of `value` for the numbers that carry Bengali unit words. */
+  valueEn?: string;
   /** What the number means, in plain words. */
   detailBn: string;
   detailEn: string;
@@ -153,6 +155,7 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       key: 'facts',
       labelBn: 'তথ্যভিত্তিক জেনারেটর', labelEn: 'Fact generator',
       value: `${bnNum(generated.length)} · ${bnNum(factChapters.length)} অধ্যায়`,
+      valueEn: `${generated.length} · ${factChapters.length} chapters`,
       detailBn: `প্রতিটি প্রশ্নের সঠিক উত্তর ব্যাংকের তথ্য থেকেই আসে; ${bnNum(verifyIssues.length)}টি যাচাই-ত্রুটি পাওয়া গেছে।`,
       detailEn: `Correct answers are taken from the shipped bank; ${verifyIssues.length} verification issue(s) found.`,
       status: verifyIssues.length ? 'fail' : 'ok',
@@ -161,6 +164,7 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       key: 'numeric',
       labelBn: 'সূত্র-গণনার ইঞ্জিন', labelEn: 'Formula engine',
       value: `${bnNum(NUMERIC_SCHEMA_COUNT)} স্কিমা`,
+      valueEn: `${NUMERIC_SCHEMA_COUNT} schemas`,
       detailBn: `${bnNum(numericChapters().length)}টি অধ্যায়ে সূত্রে সংখ্যা বসিয়ে উত্তর হিসাব করা হয়—হাতে লেখা উত্তর নেই, তাই ভুল উত্তর ঢোকানো অসম্ভব।`,
       detailEn: `${numericChapters().length} chapters compute answers from formulas at request time, so a wrong answer cannot be typed in by hand.`,
       status: NUMERIC_SCHEMA_COUNT >= 40 ? 'ok' : 'warn',
@@ -193,6 +197,7 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       key: 'focus',
       labelBn: 'টাইমারের হিসাব', labelEn: 'Timer accounting',
       value: `${bnNum(focus.sessions)} সেশন`,
+      valueEn: `${focus.sessions} sessions`,
       detailBn: 'ফোকাস রিপোর্ট কেবল সেভ করা সেশন থেকে গোনে; মনোযোগের “স্কোর” বানানো হয় না।',
       detailEn: 'The focus report only counts saved sessions; it never invents an attention score.',
       status: 'ok',
@@ -203,6 +208,7 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       // A deliberately awkward profile: one subject below A+, the 4th subject at A+.
       // The audit re-derives the plan and states what the rule really allows.
       value: `${bnNum(goldenProbe.deficitBudget ?? 0)} পয়েন্ট`,
+      valueEn: `${goldenProbe.deficitBudget ?? 0} points`,
       detailBn: goldenProbe.gpaFive
         ? `একটি বিষয় A (৪ পয়েন্ট) আর ৪র্থ বিষয় A+ নিয়েও GPA ৫.০০ থাকে—বোনাসের সীমা ${bnNum(goldenProbe.deficitBudget ?? 0)} পয়েন্ট। Golden A+-এর জন্য আর ${bnNum(goldenProbe.marksToGolden)} নম্বর দরকার।`
         : 'নমুনা হিসাবে GPA ৫.০০ পাওয়া যায়নি—নিয়ম বদলে থাকলে এখানেই ধরা পড়বে।',
@@ -215,6 +221,7 @@ export function selfAudit(data: AppData = freshData(), today = todayKey()): Audi
       key: 'sources',
       labelBn: 'প্রশ্নের আসল উৎস', labelEn: 'Where the questions really come from',
       value: `${bnNum(CHAPTERS.length - sources.totals.chaptersWithBoardVideo)} অধ্যায়ে বোর্ড ভিডিও নেই`,
+      valueEn: `${CHAPTERS.length - sources.totals.chaptersWithBoardVideo} chapters have no board video`,
       detailBn: `${bnNum(sources.totals.bankQuestions)}টি প্রশ্নই অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে—বোর্ডের মূল প্রশ্নপত্র নয়। ${bnNum(sources.totals.verifiedLinks)}টি যাচাই করা ক্লাস লিংকের মধ্যে ${bnNum(sources.totals.chaptersWithBoardVideo)}টি অধ্যায়ে বোর্ড-প্রশ্নের প্লেলিস্ট আছে; বাকি ${bnNum(CHAPTERS.length - sources.totals.chaptersWithBoardVideo)}টিতে নেই।`,
       detailEn: `All ${sources.totals.bankQuestions} questions come from the app's own textbook-checked bank, not from an original board paper. Of ${sources.totals.verifiedLinks} verified class links, ${sources.totals.chaptersWithBoardVideo} chapters have a board-question playlist and ${CHAPTERS.length - sources.totals.chaptersWithBoardVideo} do not.`,
       status: 'warn',

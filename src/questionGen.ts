@@ -1,3 +1,4 @@
+import { t } from './i18n';
 import { CHAPTERS, chapterById } from './data';
 import { isEnglish } from './i18n';
 import { STARTER_QUESTIONS } from './quiz-data';
@@ -406,8 +407,8 @@ export const FACT_POOL_SIZE = ALL_FACTS.length;
 export const RECOVERED_FACT_COUNT = RECOVERED.length;
 
 export const GENERATED_PREFIX = 'gen|';
-export const GENERATED_SOURCE = 'স্বয়ংক্রিয় · পাঠ্যবই-যাচাইকৃত তথ্যপুল';
-export const ENGINE_LABEL = 'নিয়মভিত্তিক প্রশ্ন ইঞ্জিন';
+export const GENERATED_SOURCE = () => t('স্বয়ংক্রিয় · পাঠ্যবই-যাচাইকৃত তথ্যপুল', 'Automatic · textbook-checked facts');
+export const ENGINE_LABEL = () => t('নিয়মভিত্তিক প্রশ্ন ইঞ্জিন', 'Rule-based question engine');
 
 /** Deterministic PRNG so a given (chapter, variant) pair always yields the same paper. */
 function mulberry32(seed: number): () => number {
@@ -489,7 +490,7 @@ export function buildQuestion(fact: FactPair, seed: string): QuizQuestion | null
     options,
     answer,
     explanation: why.trim(),
-    source: english ? 'Auto-generated · verified textbook facts' : GENERATED_SOURCE,
+    source: english ? 'Auto-generated · verified textbook facts' : GENERATED_SOURCE(),
     createdAt: '2026-01-01T00:00:00.000Z',
   };
 }

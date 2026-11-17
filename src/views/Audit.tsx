@@ -4,7 +4,7 @@ import { usePlanner } from '../context';
 import { PageHeading } from '../components';
 import { auditHeadline, bnNum, selfAudit } from '../selfAudit';
 import { weakestSourcedChapters } from '../sources';
-import { t } from '../i18n';
+import { isEnglish, t } from '../i18n';
 
 const TONE: Record<'ok' | 'warn' | 'fail', string> = { ok: 'ok', warn: 'warn', fail: 'fail' };
 
@@ -36,7 +36,7 @@ export default function AuditView() {
           <span className="audit-check-label">{t(check.labelBn, check.labelEn)}</span>
           {check.status === 'ok' ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
         </div>
-        <strong className="audit-check-value">{check.value}</strong>
+        <strong className="audit-check-value">{isEnglish() && check.valueEn ? check.valueEn : check.value}</strong>
         <p>{t(check.detailBn, check.detailEn)}</p>
       </section>)}
     </div>

@@ -1,3 +1,4 @@
+import { weekdayName } from './i18n';
 import type { AppData } from './planner';
 import { addDays, diffDays } from './planner';
 import type { ExamCadence, ExamSession } from './types';
@@ -97,7 +98,8 @@ export interface CadenceDay { date: string; weekday: string; cadence: ExamCadenc
 
 export function cadenceWeek(data: AppData, today: string): CadenceDay[] {
   const start = addDays(today, -((new Date(`${today}T00:00:00Z`).getUTCDay() + 6) % 7));
-  const weekdays = ['সোম', 'মঙ্গল', 'বুধ', 'বৃহঃ', 'শুক্র', 'শনি', 'রবি'];
+  // Same table as the rest of the app, so English mode does not get Bengali weekdays.
+  const weekdays = [1, 2, 3, 4, 5, 6, 0].map(day => weekdayName(day));
   const takenOn = new Map<string, ExamCadence>();
   for (const session of data.examSessions) {
     const cadence = cadenceOf(session);
