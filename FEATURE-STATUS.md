@@ -1,5 +1,30 @@
 # প্রস্তুতি · HSC 27 — current feature status
 
+## v2.43.0 — backup/scanner/timer recheck and release gates
+
+Branch `arena/d8039a21-hsc-27` is based on release `12cae9421fcb6e1f3719c16545c09d14b322bbfa`. Source/Android metadata are **2.43.0 / code 23**. Publication and exact remote CI/deployment results are tracked on the [v2.43.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). Tagged uploads remain drafts until emulator/Pages results are verified; source version or asset appearance alone is not a release claim. [Current audit](AUDIT.md).
+
+| Rechecked area | Current measured behavior |
+|---|---|
+| Profile restore | Durable commit before state/clocks; failures preserve the old profile; dirty Settings/selected start synchronise; concurrent progress cancels staging; post-commit UI errors cannot erase committed images |
+| Handwritten backup | New scan-bearing binary manifest v2 contains checksummed image bytes and restores under fresh keys. Legacy v1 remains readable **with a missing-image limitation warning** |
+| Scanner | AppData-backed library, Bangladesh creation date, durable save/delete with cleanup, image-source-preserving rotation/contrast/crop/perspective, separate page settings, latest edit wins, zero sliders and reachable neighbour after removal |
+| PDF export | All pages must load; actual two-page PDFs downloaded both before and after a fresh-profile full restore. Export uses the existing native-compatible helper; a browser download does not certify a physical Android picker |
+| Timer and completion | Early finish logs actual time without completing the planned task; changed timer subject/chapter/duration detaches it; legacy stopwatch cannot complete a preset. Complete → reload → undo → reload stays undone |
+| Narrow-screen controls | Populated scanner checked at 320/360/390/768px, large text; existing 23-view source responsive checks also passed |
+| Final local gates | **763/763 tests, 86 files**, clean typecheck, production build; **100 controls / 76 application mutations**, **117 controls / 55 date/history mutations**, and **3 controls / 6 release-policy mutations** caught in this audit; originals restored |
+| Real browser gates | Final production date flows in Dhaka/New York, actual scanned-image bytes/PDF/fresh-profile restore/dirty draft/quota retry, real media resume and production PWA offline reload passed |
+
+**ব্যাকআপ সতর্কতা:** JSON ও প্রকাশিত পুরোনো Full backup-এ স্ক্যানের নাম-তথ্য আছে, ছবির bytes নেই। মূল ডিভাইস মুছে গেলে এবং আলাদা PDF/ছবি না থাকলে ওই backup থেকে ছবি উদ্ধার করা যায় না। ব্যাকআপ যাচাই না করে পুরোনো অ্যাপ uninstall কোরো না। নতুন ছবিসহ full-backup format v2.43.0 থেকে সমর্থিত; ইনস্টল করা version ও backup যাচাই করো।
+
+No physical-phone alarm/battery check was performed. Java/adb were unavailable locally; APK/emulator verification uses the Android CI workflow, with exact results on the current release page. The earlier YouTube test's timeout was not raised: direct route mounting and scoped queries retained persistence assertions and reduced the final observed local duration from 3.583s to 2.033s, not a guarantee against future CI flakes. The date default/personal-target policy and official-exam uncertainty are unchanged. Test counts/control sets overlap; mutation proof is targeted, not exhaustive or a zero-bug guarantee.
+
+---
+
+## Published v2.42.0 release baseline (historical counts below)
+
+The following sections describe the published base, not the newly audited working-tree fixes or new test totals above.
+
 **Version: 2.42.0 / Android code 22 · local verification recorded 16 November 2026.**
 APK assets/publication are tracked on the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0). The [public PWA](https://rahatportfolio.github.io/HSC-27-/) has a separate deployment workflow. This report distinguishes measured software behavior from official dates, content coverage and device verification.
 

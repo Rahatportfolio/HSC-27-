@@ -52,18 +52,23 @@ describe('library screen', () => {
   });
 
   it('stores a YouTube class link with its channel', async () => {
+    // Mount the route directly and scope role queries to the real toolbar/modal.
+    // Scanning every archived class for each keystroke made this exceed CI's 5s
+    // budget; neither the timeout nor the save/render assertions are relaxed.
+    window.location.hash = '#library';
     render(<App />);
-    go('library');
     await screen.findByText('নোট লাইব্রেরি');
     await act(async () => { libraryTab(/^YouTube/).click(); });
-    fireEvent.click((await screen.findAllByRole('button', { name: /ভিডিও যোগ করো|প্রথম ভিডিও যোগ করো/ }))[0]);
-    type(await screen.findByLabelText(/শিরোনাম/), 'ম্যাট্রিক্স ওয়ান শট');
-    type(screen.getByPlaceholderText('https://youtube.com/…'), 'https://www.youtube.com/watch?v=KtqyZ-ANMUk');
-    type(screen.getByLabelText(/চ্যানেল/), 'রাকিব');
-    const dialog = screen.getByRole('dialog');
-    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'যোগ করো' })); });
+    const toolbar = document.querySelector('.library-panel > .card-heading') as HTMLElement;
+    fireEvent.click(within(toolbar).getByRole('button', { name: 'ভিডিও যোগ করো' }));
+    const dialog = within(await screen.findByRole('dialog', { name: 'YouTube লিংক যোগ করো' }));
+    type(dialog.getByLabelText(/শিরোনাম/), 'ম্যাট্রিক্স ওয়ান শট');
+    type(dialog.getByPlaceholderText('https://youtube.com/…'), 'https://www.youtube.com/watch?v=KtqyZ-ANMUk');
+    type(dialog.getByLabelText(/চ্যানেল/), 'রাকিব');
+    await act(async () => { fireEvent.click(dialog.getByRole('button', { name: 'যোগ করো' })); });
     expect(await screen.findByText('ম্যাট্রিক্স ওয়ান শট')).toBeTruthy();
     expect(stored().videos[0].url).toContain('KtqyZ-ANMUk');
+    expect(stored().videos[0].channel).toBe('রাকিব');
   });
 
   it('adds an own formula and a board question', async () => {
@@ -251,6 +256,7 @@ describe('timer safeguards', () => {
     expect(presets.length).toBeGreaterThan(1);
     fireEvent.click(presets[0]);
     const bar = document.querySelector('.live-timer-topbar') as HTMLElement;
+    expect(bar.querySelector('.live-btn.done')?.getAttribute('title')).toContain('পুরো সময় পূর্ণ হলেই');
     fireEvent.click(within(bar).getByRole('button', { name: /সম্পন্ন ও সেভ/ }));
     expect(document.querySelector('.live-timer-topbar.running')).toBeTruthy();
     expect(stored().studySessions).toHaveLength(0);

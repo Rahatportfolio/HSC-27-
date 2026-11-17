@@ -12,6 +12,10 @@ import type { SubjectId } from './data';
 
 export const SCANNED_NOTES_PREFIX = 'scan:';
 export const SCANNED_NOTES_META_KEY = 'hsc27-scanned-notes-meta';
+export const MAX_SCANNED_PAGES = 50;
+/** Stored canvas images only; never treat arbitrary cache values/URLs as note pages. */
+export const isScannedPageDataUrl = (value: unknown): value is string =>
+  typeof value === 'string' && /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+={0,2}$/.test(value);
 
 /** A scanned note entry stored in AppData (lightweight metadata only). */
 export interface ScannedNoteMeta {
@@ -49,8 +53,7 @@ export function adjustImage(
   const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
   const data = imageData.data;
   const b = brightness / 100 - 1;
-  const c = contrast / 100 - 1;
-  const factor = (259 * (c + 255)) / (255 * (259 - c));
+  const factor = contrast / 100;
   for (let i = 0; i < data.length; i += 4) {
     data[i] = clamp(factor * (data[i] - 128) + 128 + b * 255);
     data[i + 1] = clamp(factor * (data[i + 1] - 128) + 128 + b * 255);
@@ -65,25 +68,17 @@ function clamp(value: number): number {
 
 /** Rotate a canvas image by degrees (90/180/270 supported cleanly). */
 export function rotateCanvas(canvas: HTMLCanvasElement, degrees: number): HTMLCanvasElement {
-  const rad = ((degrees % 360) * Math.PI) / 180;
-  const offscreen = new OffscreenCanvas(canvas.width, canvas.height);
-  const ctx = offscreen.getContext('2d');
-  if (!ctx) return canvas;
-  ctx.translate(canvas.width / 2, canvas.height / 2);
-  ctx.rotate(rad);
-  ctx.translate(-canvas.width / 2, -canvas.height / 2);
-  ctx.drawImage(canvas, 0, 0);
+  const rad = ((((degrees % 360) + 360) % 360) * Math.PI) / 180;
   const result = document.createElement('canvas');
-  if (degrees % 180 === 90) {
-    result.width = canvas.height;
-    result.height = canvas.width;
-  } else {
-    result.width = canvas.width;
-    result.height = canvas.height;
-  }
-  const rCtx = result.getContext('2d');
-  if (!rCtx) return canvas;
-  rCtx.drawImage(offscreen, 0, 0);
+  // Rotate inside the expanded destination, never inside a source-sized buffer
+  // that clips the ends of a portrait/landscape page before it can be copied.
+  result.width = Math.max(1, Math.ceil(Math.abs(canvas.width * Math.cos(rad)) + Math.abs(canvas.height * Math.sin(rad)) - 1e-10));
+  result.height = Math.max(1, Math.ceil(Math.abs(canvas.width * Math.sin(rad)) + Math.abs(canvas.height * Math.cos(rad)) - 1e-10));
+  const ctx = result.getContext('2d');
+  if (!ctx) return canvas;
+  ctx.translate(result.width / 2, result.height / 2);
+  ctx.rotate(rad);
+  ctx.drawImage(canvas, -canvas.width / 2, -canvas.height / 2);
   return result;
 }
 
@@ -111,20 +106,24 @@ export function perspectiveCorrect(
   const ctx = result.getContext('2d');
   if (!ctx) return canvas;
 
-  // Bilinear inverse mapping from output quad to input quad.
+  const source = canvas.getContext('2d');
+  if (!source) return canvas;
+  const pixels = source.getImageData(0, 0, canvas.width, canvas.height).data;
+  const image = ctx.createImageData(outWidth, outHeight);
+  // Approximate bilinear inverse mapping. Read SOURCE pixels once; sampling the
+  // blank destination loses the note, and per-pixel canvas reads freeze large scans.
   for (let y = 0; y < outHeight; y++) {
     for (let x = 0; x < outWidth; x++) {
-      const u = x / outWidth;
-      const v = y / outHeight;
-      // Approximate bilinear interpolation inverse (Newton refinement skipped for speed)
+      const u = x / outWidth, v = y / outHeight;
       const ax = corners.tl[0] * (1 - u) * (1 - v) + corners.tr[0] * u * (1 - v) + corners.br[0] * u * v + corners.bl[0] * (1 - u) * v;
       const ay = corners.tl[1] * (1 - u) * (1 - v) + corners.tr[1] * u * (1 - v) + corners.br[1] * u * v + corners.bl[1] * (1 - u) * v;
-      const sx = Math.max(0, Math.min(canvas.width - 1, ax));
-      const sy = Math.max(0, Math.min(canvas.height - 1, ay));
-      const pixel = ctx.getImageData(sx | 0, sy | 0, 1, 1);
-      ctx.putImageData(pixel, x, y);
+      const sx = Math.max(0, Math.min(canvas.width - 1, ax)) | 0;
+      const sy = Math.max(0, Math.min(canvas.height - 1, ay)) | 0;
+      const from = (sy * canvas.width + sx) * 4, to = (y * outWidth + x) * 4;
+      for (let channel = 0; channel < 4; channel++) image.data[to + channel] = pixels[from + channel];
     }
   }
+  ctx.putImageData(image, 0, 0);
   return result;
 }
 
@@ -137,34 +136,41 @@ export function canvasToDataUrl(canvas: HTMLCanvasElement, quality = 0.85): stri
 export function loadImageToCanvas(src: string | File): Promise<HTMLCanvasElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
+    const objectUrl = src instanceof File ? URL.createObjectURL(src) : null;
+    const release = () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
     img.crossOrigin = 'anonymous';
     img.onload = () => {
-      const canvas = document.createElement('canvas');
-      canvas.width = img.naturalWidth;
-      canvas.height = img.naturalHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { reject(new Error('ক্যানভাস তৈরি করা যায়নি।')); return; }
-      ctx.drawImage(img, 0, 0);
-      resolve(canvas);
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) throw new Error('ক্যানভাস তৈরি করা যায়নি।');
+        ctx.drawImage(img, 0, 0);
+        resolve(canvas);
+      } catch (error) { reject(error); }
+      finally { release(); }
     };
-    img.onerror = reject;
-    if (src instanceof File) img.src = URL.createObjectURL(src);
-    else img.src = src;
+    img.onerror = error => { release(); reject(error); };
+    img.src = objectUrl ?? src as string;
   });
 }
 
 /** Save scanned pages to IndexedDB and return per-page keys. */
 export async function savePagesToDb(pages: ScannedPage[]): Promise<string[]> {
   const keys: string[] = [];
-  for (const page of pages) {
-    const key = `${SCANNED_NOTES_PREFIX}${crypto.randomUUID()}`;
-    const size = new TextEncoder().encode(page.dataUrl).byteLength;
-    await idbSet(key, page.dataUrl, 'image', undefined);
-    keys.push(key);
-    // eslint-disable-next-line no-void
-    void size;
+  try {
+    for (const page of pages) {
+      const key = `${SCANNED_NOTES_PREFIX}${crypto.randomUUID()}`;
+      if (await idbSet(key, page.dataUrl, 'image') === null)
+        throw new Error('Scanned pages could not be saved: image storage is unavailable or full.');
+      keys.push(key);
+    }
+    return keys;
+  } catch (error) {
+    await deletePagesFromDb(keys);
+    throw error;
   }
-  return keys;
 }
 
 /** Read all page images for a note from IndexedDB. */
@@ -172,7 +178,9 @@ export async function loadPagesFromDb(pageKeys: string[]): Promise<string[]> {
   const urls: string[] = [];
   for (const key of pageKeys) {
     const value = await idbGet(key);
-    if (typeof value === 'string') urls.push(value);
+    // A partial PDF would silently lose handwritten pages and still look exported.
+    if (typeof value !== 'string' || !isScannedPageDataUrl(value)) return [];
+    urls.push(value);
   }
   return urls;
 }
@@ -206,8 +214,8 @@ export async function scannedNotesSizeBytes(): Promise<number> {
   const scanKeys = keys.filter(k => k.startsWith(SCANNED_NOTES_PREFIX));
   let total = 0;
   for (const key of scanKeys) {
-    const row = (await idbGet(key)) as { sizeBytes?: number } | undefined;
-    total += row?.sizeBytes ?? 0;
+    const image = await idbGet(key);
+    if (typeof image === 'string') total += new TextEncoder().encode(image).byteLength;
   }
   return total;
 }

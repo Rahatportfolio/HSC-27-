@@ -475,7 +475,7 @@ export function parseBackup(rawText: string): AppData {
   }
   if (raw.scannedNotes !== undefined) {
     result.scannedNotes = listOf(raw.scannedNotes, LIMITS.scannedNotes, 'স্ক্যান করা নোট', item => {
-      if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.title, 300) || !text(item.createdAt, 40) || !validAt(item.createdAt) || !int(Number(item.pageCount), 1, 50) || !int(Number(item.sizeBytes), 0, 2_000_000_000) || !bool(item.pdfExported) || !Array.isArray(item.pageKeys) || item.pageKeys.length > 100) throw new Error('স্ক্যান করা নোটের তথ্য সঠিক নয়।');
+      if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.title, 300) || !text(item.createdAt, 40) || !validAt(item.createdAt) || !int(Number(item.pageCount), 1, 50) || !int(Number(item.sizeBytes), 0, 2_000_000_000) || !bool(item.pdfExported) || !Array.isArray(item.pageKeys) || item.pageKeys.length > 100 || item.pageKeys.some(key => !nonEmpty(key, 180) || !key.startsWith('scan:'))) throw new Error('স্ক্যান করা নোটের তথ্য সঠিক নয়।');
       return { id: item.id, subject: item.subject, ...(item.chapterId !== undefined ? { chapterId: item.chapterId } : {}), title: item.title, createdAt: item.createdAt, pageCount: Number(item.pageCount), sizeBytes: Number(item.sizeBytes), pdfExported: item.pdfExported, pageKeys: item.pageKeys as string[] } as ScannedNoteMeta;
     });
     if (new Set(result.scannedNotes.map(n => n.id)).size !== result.scannedNotes.length) throw new Error('স্ক্যান করা নোট তালিকায় একই ID দুইবার আছে।');
@@ -500,12 +500,18 @@ export function saveData(data: AppData, forceTimestamp = false): boolean {
     const payload = JSON.stringify(data);
     // Keep the previous timestamp when nothing changed, so a newer on-device SQLite snapshot can win on startup.
     if (!forceTimestamp && localStorage.getItem(STORAGE_KEY) === payload) return true;
-    const previous = Date.parse(localStorage.getItem(SAVED_AT_KEY) || '');
-    // Keep local snapshots ordered even if the device clock moves backwards or
-    // two changes happen within the same millisecond.
+    const previousStamp = localStorage.getItem(SAVED_AT_KEY);
+    const previous = Date.parse(previousStamp || '');
+    // Write the small freshness marker first: if it cannot be stored, never replace
+    // the user's payload. Roll it back if the (atomic, single-key) payload write fails.
     const stamp = new Date(Math.max(Date.now(), Number.isFinite(previous) ? previous + 1 : 0)).toISOString();
-    localStorage.setItem(STORAGE_KEY, payload);
     localStorage.setItem(SAVED_AT_KEY, stamp);
+    try { localStorage.setItem(STORAGE_KEY, payload); }
+    catch {
+      if (previousStamp === null) localStorage.removeItem(SAVED_AT_KEY);
+      else localStorage.setItem(SAVED_AT_KEY, previousStamp);
+      return false;
+    }
     return true;
   } catch { return false; }
 }

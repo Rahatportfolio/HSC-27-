@@ -1,4 +1,87 @@
-# Date/time cascade audit — v2.42.0
+# Backup/scanner/timer release audit — v2.43.0
+
+**Scope:** `arena/d8039a21-hsc-27`, based on release/main `12cae9421fcb6e1f3719c16545c09d14b322bbfa`. Source/lockfile/Android metadata are **2.43.0 / code 23**. Publication and exact CI/deployment evidence are tracked on the [v2.43.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). A source version or an uploaded draft asset is not a publication claim. The workspace preview serves the release candidate's production build.
+
+This section supersedes the release-baseline counts below for the current working tree. The date derivation, personal-target policy and official-date uncertainty are unchanged.
+
+## Important backup safety finding
+
+**Released legacy full-media backups saved scanned-note metadata but omitted the handwritten image bytes. JSON backups are also metadata-only.** A title and `pageKeys` are not the images themselves. If the old device has been erased and no separate PDF/image export exists, these backups cannot reconstruct the missing pages. Do not uninstall or clear the original device on the assumption that a legacy full backup preserved them.
+
+The v2.43.0 binary backup now uses **manifest v2 when scanned pages are present**, checksums the actual image strings, validates every referenced page and stages restored images under fresh keys. Archives without scans remain manifest v1; the `PROSTUTI-MEDIA-1` framing is unchanged. Old clients that only support manifest v1 cannot import the new scan-bearing format. Legacy v1 imports remain supported with a visible warning, including notes whose old page-key lists are empty. This is a forward fix, not recovery of bytes absent from an older file.
+
+Settings now states the JSON/legacy limitations in both languages. A new full backup or separately exported scanned PDF is needed for those images; ordinary JSON is still useful for progress, text notes and settings.
+
+## Defects reproduced and fixed
+
+| Area | Measured correction |
+|---|---|
+| Local snapshot writes | Timestamp failure no longer replaces the profile. Payload failure restores the preceding marker, or removes a newly created one. Unsafe non-scan cache references are rejected during import |
+| JSON restore | The replacement must save successfully before state or either clock is changed. Quota rejection keeps the old profile/clocks. Success replaces a dirty Settings draft and start anchor |
+| Full restore | Clears the unrelated study/exam clocks, selects the restored start and synchronises Settings. New progress during staging cancels the transaction; failure rolls staged files back. Once metadata is durably committed, a later UI error must **not** erase its image/file bytes |
+| Scanned library | Uses the actual AppData metadata, not a stale separate localStorage list; ISO creation timestamps display the Bangladesh date. Newly saved/restored entries appear and profile replacements remove stale entries |
+| Scan persistence | An unavailable/later failed image write fails visibly and cleans earlier staged pages. Saving metadata is durable before success/clearing the editor; rejection preserves editable pages. Deleting requires confirmation and saves metadata before removing image bytes |
+| Image helpers | Contrast uses the slider's linear multiplier; expanded, centred rotation avoids source-sized clipping. Perspective reads source pixels once instead of sampling the blank destination per pixel. Uploaded-file object URLs are released on success and failure, including canvas exceptions |
+| Scanner editing | Total edits start from original pixels, with per-page settings and latest-request-wins handling. Zero-valued sliders work. Crop/corner controls are usable; out-of-bounds or crossing geometry and pending edits block save. Reset preserves the source. Uploading from the library opens the editor; removing a page leaves its neighbour reachable |
+| Scanner export/limits | All pages must load before PDF export, which uses the existing browser/native-compatible exporter and awaits its result. Invalid/missing images or a rejected destination do not report a complete PDF. Title 300 / pages 50 / notes 200 limits match backup validation. Controls have labels and fit narrow screens |
+| Measured time vs completion | An early finish records actual minutes, not full task completion. Full-duration completion still works between display ticks. Changing subject/chapter/duration detaches the original task; unchanged subject/chapter preserves it. A legacy stopwatch association cannot mark a preset complete. The tooltip now explains this distinction |
+
+Failing-before-fix logs include `focused-initial`, `focused-after-restore`, `scanner-red`, `scanner-ui-edit-red`, `scanner-pdf-red`, `perspective-stopwatch-red`, `commit-navigation-red` and `safety-copy-red` under `.cache/post-release/`. Independent fault injection also demonstrated every selected new guard's named regression failing; passing tests alone were not treated as sufficient proof.
+
+## Final measured gates for this working tree
+
+| Gate | Observed result |
+|---|---|
+| TypeScript | `npx tsc --noEmit` passed |
+| Full unit/jsdom UI suite | **763/763 tests, 86 files**, **189.88s**, zero reported unhandled errors; includes three additional release-policy tests after the 760-test application audit |
+| New targeted fault injection | **100 unmodified controls; 76/76 mutations caught** by the intended named test assertions; source bytes restored exactly |
+| Date/history targeted fault injection | **117 unmodified controls; 55/55 mutations caught** in this audit; original bytes restored. This includes the prior capacity, malformed-reference, history and undo guards |
+| Release-policy fault injection | **3 unmodified controls; 6/6 mutations caught**: Android/web/lockfile versions, Android code, draft upload and emulator dependency; originals restored |
+| Production build | Passed, **6.99s**; the existing large-chunk performance warning remains |
+| New production browser runner | Real two-page images: edit/navigation/save/reload → two-page PDF → full backup → restore in an isolated fresh profile with **byte-identical images under fresh keys** → another two-page PDF. Also dirty draft/old-clock replacement, retained journal/session history, completion → reload → undo → reload, early two-minute finish without task completion, and simulated JSON quota failure followed by successful retry |
+| Populated scanner | Production controls checked at **320/360/390/768px**, large text; no detected horizontal overflow/out-of-viewport controls or page errors |
+| Date browser runner | Final production Settings save/cancel/reload, linked/fixed targets, history, partial evidence, Markdown/ICS downloads and recovery/dedup checks passed in **Asia/Dhaka and America/New_York** |
+| Responsive runner | **23 source-Vite views**, 320–768px, large text, English/dark, selected dialogs and running timer; content/page-error/width/sibling-overlap checks passed |
+| Study browser runner | Actual WebM save/playback/resume, notes, full media restore, collector and mobile tabs passed; its separate **production PWA offline reload/playback** check also passed |
+| Live preview | Production Vite preview bound to **0.0.0.0:3000**, accepting the Arena-shaped Host with HTTP 200 |
+
+The control sets overlap the full suite and each other; their totals are not additional independent features. **76/76 and 55/55 are targeted fault injection, not exhaustive mutation coverage or proof of zero bugs.** A deliberate un-awaited failed PDF-export mutation also produces a rejected promise; it only counts because the intended metadata assertion independently fails. Unmodified controls and the final full suite report no unhandled errors.
+
+### Previous CI UI-timeout investigation
+
+The original YouTube integration test passed locally in **3582.71ms**, already near its unchanged 5-second timeout. It unnecessarily mounted another route and scanned the complete class archive for repeated role queries. It now mounts Library directly and scopes toolbar/dialog queries, retaining rendered-result, URL and channel-persistence checks. Final local observations were **2149.00ms** in mutation controls and **2032.58ms** in the full suite. No timeout was raised and no assertion was removed. These measurements reduce unnecessary test work; they do **not** guarantee all future CI runs will be flake-free. Remote results for this release are recorded on its release page rather than inferred from these local timings.
+
+### Reproduction and evidence
+
+Run `npm run test:post-release-guards` and `npm run test:date-guards` **without another test run or HMR dev server**; each captures the current source before mutating and restores it in `finally`. Never restore a stale cached original over later work.
+
+After `npm run build` and `npm run preview`, use an installed Chromium:
+
+```bash
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:post-release-browser
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:date-browser
+CHROMIUM_PATH=/path/to/chrome npm run test:responsive
+CHROMIUM_PATH=/path/to/chrome npm run test:study-browser
+```
+
+New reproducible sources: `backupRestore.ui.test.tsx`, `postRelease.storage.test.ts`, `postRelease.timer.test.tsx`, `scanner.persistence.test.ts`, `scanner.processing.test.ts`, `scanner.ui.test.tsx`, expanded media/concurrent-restore tests, `scripts/check-post-release-guards.mjs`, and `scripts/check-post-release.ts`.
+
+The v2.43.0 candidate was rechecked after the version bump: clean typecheck, the full 763-test suite, build, both production browser runners, responsive and study/offline checks. Its latest logs are under `.cache/release-v2.43.0/` (`tests.log/json`, `build.log`, `policy-red.log`, `policy-green.log`, `policy-mutations.log`, and the four browser logs). Filtered release-policy proof is in `.cache/post-release/mutations/filtered-release-/report.md`. The initial application recheck evidence is under ignored `.cache/post-release/`: `typecheck-final.log`, `mutation-run-final.log`, `mutations/report.md`, `full-tests-final.log/json`, `build-final.log`, `post-release-browser-final.log`, `browser/report.json`, `date-browser-final.log`, `responsive-final.log`, `study-browser-final.log`. Date mutations additionally use `.cache/date-mutations/report.md`. Generated PDFs, synthetic images, Chromium/runtime libraries and logs are not Git deliverables; the scripts regenerate them.
+
+## Publication safety
+
+The APK upload step runs before its dependent API 35 emulator job. It now explicitly sets `draft: true`, so successful upload cannot make an unchecked release public. Manual publication must follow successful Android and Pages verification of the intended source commit. `releasePolicy.test.ts` checks version alignment, a code greater than the prior published 22, draft upload and the device-job dependency. Six deliberate configuration mutations failed those named tests; this is configuration-policy proof, not a substitute for running CI.
+
+## Remaining limits
+
+- No physical-phone check was performed; Java/adb were unavailable locally. Current APK/emulator verification uses CI, with its exact run recorded on the current release page. The previous release's CI is not evidence for this version. Camera permissions, actual mobile storage pressure, battery/background alarms and vendor-specific behavior remain physical-device checks.
+- A simulated browser quota error proves that failure path, not every hardware/storage failure mode. A web export/PDF download is not evidence that a user has copied it somewhere safe. Test a backup before uninstalling or clearing storage.
+- Perspective correction is approximate bilinear mapping, not document OCR or calibrated camera rectification. Large photos/media can still consume considerable memory/storage. The large production bundle is an unresolved performance warning.
+- Default start stays **20 November 2026**; existing profiles are not silently reset. **1 February / 6 June remain personal targets, not verified official examination dates.** No new official-date claim, syllabus certification, preparation or GPA guarantee is made.
+
+---
+
+# Published v2.42.0 date/time audit — historical release baseline
 
 **Local verification recorded: 16 November 2026.** Publication is tracked on the [v2.42.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); this audit is not physical-device certification.
 Base: `0fa77ce` (v2.41.0) · branch: `arena/9745ddec-hsc-27` · Android metadata: `2.42.0` / `versionCode 22`.
