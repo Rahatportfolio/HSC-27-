@@ -244,7 +244,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: read
+      # A read-only token cannot see drafts (verified in CI). All inspection
+      # requests are still GET-only: no asset replacement or publication.
+      contents: write
     steps:
       - name: Checkout inspection tooling
         uses: actions/checkout@v4
