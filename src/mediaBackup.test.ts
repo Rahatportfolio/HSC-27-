@@ -10,6 +10,17 @@ import {
 import type { StoredFile } from "./files";
 const store = vi.hoisted(() => new Map<string, StoredFile>());
 const fail = vi.hoisted(() => ({ after: Infinity }));
+const scanStore = vi.hoisted(() => new Map<string, string>());
+const scanFail = vi.hoisted(() => ({ after: Infinity }));
+vi.mock('./storage-manager', () => ({
+  idbGet: vi.fn(async (key: string) => scanStore.get(key)),
+  idbSet: vi.fn(async (key: string, value: string) => {
+    if (--scanFail.after < 0) return null;
+    scanStore.set(key, value);
+    return new TextEncoder().encode(value).length;
+  }),
+  idbDelete: vi.fn(async (key: string) => scanStore.delete(key)),
+}));
 vi.mock("./files", () => ({
   getFile: vi.fn(async (id: string) => store.get(id) || null),
   putFile: vi.fn(async (f: StoredFile) => {
@@ -69,6 +80,8 @@ const setup = () => {
 beforeEach(() => {
   store.clear();
   fail.after = Infinity;
+  scanStore.clear();
+  scanFail.after = Infinity;
 });
 describe("full media backup and safe staged restore", () => {
   it("round-trips actual PDF/video bytes plus metadata and leaves originals untouched", async () => {
@@ -125,5 +138,70 @@ describe("full media backup and safe staged restore", () => {
     fail.after = 1;
     await expect(stageMediaRestore(parsed)).rejects.toThrow(/restore failed/);
     expect([...store.keys()]).toEqual(["pdf", "video"]);
+  });
+});
+
+const scanImage = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aX1sAAAAASUVORK5CYII=';
+const withScans = () => {
+  const data = setup();
+  data.scannedNotes = [{ id: 'scan-note', title: 'Handwritten physics', subject: 'physics', createdAt: '2026-11-20T08:00:00Z', pageCount: 2, sizeBytes: scanImage.length * 2, pdfExported: false, pageKeys: ['scan:one', 'scan:two'] }];
+  scanStore.set('scan:one', scanImage); scanStore.set('scan:two', scanImage);
+  return data;
+};
+describe('full backup includes the actual handwritten pages, not just their titles', () => {
+  it('restores scan image bytes under fresh keys, updates metadata and rolls both stores back', async () => {
+    const data = withScans();
+    const full = await createMediaBackup(data);
+    scanStore.clear(); // A fresh install has no old image store.
+    const parsed = await inspectMediaBackup(full);
+    const staged = await stageMediaRestore(parsed);
+    const keys = staged.data.scannedNotes[0].pageKeys;
+    expect(keys).toHaveLength(2);
+    expect(keys.every(key => !data.scannedNotes[0].pageKeys.includes(key))).toBe(true);
+    expect(keys.map(key => scanStore.get(key))).toEqual([scanImage, scanImage]);
+    expect(data.scannedNotes[0].pageKeys).toEqual(['scan:one', 'scan:two']);
+    await staged.rollback();
+    expect(scanStore.size).toBe(0);
+    expect([...store.keys()]).toEqual(['pdf', 'video']);
+  });
+  it('rejects scan metadata that promises more pages than its export references', async () => {
+    const data = withScans(); data.scannedNotes[0].pageKeys = [];
+    await expect(createMediaBackup(data)).rejects.toThrow(/scan|missing/i);
+  });
+  it('refuses a supposedly full export when a scanned page is missing', async () => {
+    const data = withScans(); scanStore.delete('scan:two');
+    await expect(createMediaBackup(data)).rejects.toThrow(/scan.*missing|missing.*scan/i);
+  });
+  it('rolls back PDF, video and earlier scanned pages when a later scan write fails', async () => {
+    const data = withScans();
+    const parsed = await inspectMediaBackup(await createMediaBackup(data));
+    scanFail.after = 1;
+    await expect(stageMediaRestore(parsed)).rejects.toThrow(/scan|stor|restore/i);
+    expect([...store.keys()]).toEqual(['pdf', 'video']);
+    expect([...scanStore.keys()]).toEqual(['scan:one', 'scan:two']);
+  });
+  it.each([{ pageKeys: ['scan:one', 'scan:two'] }, { pageKeys: [] }])('warns that a legacy v1 archive cannot supply missing scanned image bytes (%j)', async ({ pageKeys }) => {
+    const data = freshData();
+    data.scannedNotes = withScans().scannedNotes.map(note => ({ ...note, pageKeys }));
+    const json = new TextEncoder().encode(JSON.stringify({ version: 1, data, files: [] }));
+    const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, json.length);
+    const legacy = new Blob(['PROSTUTI-MEDIA-1\n', length, json]);
+    const parsed = await inspectMediaBackup(legacy);
+    expect(parsed.data.scannedNotes).toEqual(data.scannedNotes);
+    expect(parsed.warnings!.join(' ')).toMatch(/scan/i);
+  });
+  it('rejects a v2 manifest that promises scanned pages but contains no image references', async () => {
+    const data = freshData();
+    data.scannedNotes = withScans().scannedNotes.map(note => ({ ...note, pageKeys: [] }));
+    const json = new TextEncoder().encode(JSON.stringify({ version: 2, data, files: [], scans: [] }));
+    const length = new Uint8Array(4); new DataView(length.buffer).setUint32(0, json.length);
+    await expect(inspectMediaBackup(new Blob(['PROSTUTI-MEDIA-1\n', length, json]))).rejects.toThrow(/scan|missing/i);
+  });
+  it('detects damaged scanned-image bytes before writing any restored file', async () => {
+    const bytes = new Uint8Array(await (await createMediaBackup(withScans())).arrayBuffer());
+    bytes[bytes.length - 1] ^= 1;
+    await expect(inspectMediaBackup(new Blob([bytes]))).rejects.toThrow(/checksum|damaged/i);
+    expect([...store.keys()]).toEqual(['pdf', 'video']);
+    expect([...scanStore.keys()]).toEqual(['scan:one', 'scan:two']);
   });
 });

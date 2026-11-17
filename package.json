@@ -1,7 +1,7 @@
 {
   "name": "hsc-27-prostuti",
   "private": true,
-  "version": "2.42.0",
+  "version": "2.43.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
@@ -18,6 +18,8 @@
     "test:responsive": "node scripts/check-responsive.mjs",
     "test:study-browser": "tsx scripts/check-study-system.ts",
     "test:date-guards": "node scripts/check-date-guards.mjs",
+    "test:post-release-guards": "node scripts/check-post-release-guards.mjs",
+    "test:post-release-browser": "tsx scripts/check-post-release.ts",
     "test:date-browser": "tsx scripts/check-date-cascade.ts"
   },
   "dependencies": {

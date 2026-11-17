@@ -74,3 +74,23 @@ it("keeps new study progress and removes staged media when data changes during a
     "error",
   );
 });
+it('does not erase staged images after a durable restore commit even if updating the UI fails', async () => {
+  const rollback = vi.fn(async () => {});
+  state.save.mockReturnValue(true);
+  state.stage.mockResolvedValueOnce({ data: freshData(), rollback });
+  state.ctx = {
+    data: freshData(),
+    setData: () => { throw new Error('UI unavailable after commit'); },
+    confirm: state.confirm, notify: state.notify,
+    timer: { reset: vi.fn() },
+  } as unknown as PlannerContextValue;
+  const view = render(<FullBackup />);
+  fireEvent.change(view.container.querySelector('input[type=file]')!, {
+    target: { files: [new File(['archive'], 'backup.prostuti')] },
+  });
+  await waitFor(() => expect(state.confirm).toHaveBeenCalled());
+  await act(async () => { state.confirm.mock.calls[0][0].action(); });
+  await waitFor(() => expect(state.save).toHaveBeenCalled());
+  expect(rollback).not.toHaveBeenCalled();
+  expect(state.notify).toHaveBeenCalledWith('UI unavailable after commit', 'error');
+});

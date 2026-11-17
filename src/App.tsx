@@ -587,7 +587,7 @@ export default function App() {
                   <PictureInPicture2 size={13} />
                   <span>{pipActive ? t('ভাসমান বন্ধ', 'Close PiP') : t('ভাসমান ঘড়ি', 'Float')}</span>
                 </button>
-                <button type="button" className="live-btn done" onClick={finishActiveTimer} title={t('পড়া সেভ করে সম্পন্ন দাও', 'Save session & mark done')}>
+                <button type="button" className="live-btn done" onClick={finishActiveTimer} title={t('পড়া সময় সেভ করো; পুরো সময় পূর্ণ হলেই কাজ সম্পন্ন হবে', 'Save measured time; only a fully finished task is marked done')}>
                   <Check size={13} />
                   <span>{timer.logging ? t('সম্পন্ন ও সেভ', 'Finish & save') : t('বিরতি শেষ', 'End break')}</span>
                 </button>

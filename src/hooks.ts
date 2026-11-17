@@ -177,9 +177,9 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     const minutes = mode === 'pomodoro' ? settingsRef.current.pomodoroFocus : mode === 'countdown' ? 25 : 0;
     return { ...current, mode, phase: mode === 'pomodoro' ? 'focus' : 'none', durationMin: minutes, accumulatedMs: 0, running: false, startedAt: null, logging: true, label: '', taskId: '' };
   });
-  const setDuration = (minutes: number) => setState(current => ({ ...current, durationMin: Math.max(1, Math.min(720, Math.round(minutes))), accumulatedMs: 0, running: false, startedAt: null }));
-  const setSubject = (subject: SubjectId) => setState(current => ({ ...current, subject, chapterId: '' }));
-  const setChapter = (chapterId: string) => setState(current => ({ ...current, chapterId }));
+  const setDuration = (minutes: number) => setState(current => ({ ...current, durationMin: Math.max(1, Math.min(720, Math.round(minutes))), accumulatedMs: 0, running: false, startedAt: null, taskId: '' }));
+  const setSubject = (subject: SubjectId) => setState(current => subject === current.subject ? current : ({ ...current, subject, chapterId: '', taskId: '' }));
+  const setChapter = (chapterId: string) => setState(current => chapterId === current.chapterId ? current : ({ ...current, chapterId, taskId: '' }));
   const setLabel = (label: string) => setState(current => ({ ...current, label: label.slice(0, 120) }));
   const startPreset = (preset: PresetTimerInput) => {
     const mins = Math.max(1, Math.min(720, Math.round(preset.durationMin)));
@@ -204,7 +204,9 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     const actualMinutes = Math.max(1, Math.round(currentElapsed / 60_000));
     const minutes = Math.min(720, actualMinutes);
     if (currentElapsed >= 15_000 && state.logging) {
-      doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: state.mode, label: state.label, taskId: state.taskId });
+      // Saving real minutes is not evidence that an unfinished preset was completed.
+      const taskId = state.mode !== 'stopwatch' && currentElapsed >= state.durationMin * 60_000 ? state.taskId : '';
+      doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: state.mode, label: state.label, taskId });
       notifyRef.current(actualMinutes > 720 ? 'সর্বোচ্চ ৭২০ মিনিটের সেশন সেভ হয়েছে; বাকি সময় আলাদা করে যোগ করো।' : `${minutes} মিনিটের সেশন সেভ হয়েছে!`, actualMinutes > 720 ? 'info' : 'success');
     }
     setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null, taskId: '' }));
@@ -216,7 +218,7 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     const actualMinutes = Math.floor(currentElapsed / 60_000);
     const minutes = Math.min(720, actualMinutes);
     if (!minutes) { notifyRef.current('কমপক্ষে ১ মিনিট সময় হলে সেভ করা যাবে।', 'info'); return 0; }
-    doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: 'stopwatch', label: state.label, taskId: state.taskId });
+    doneRef.current({ minutes, subject: state.subject, chapterId: state.chapterId, mode: 'stopwatch', label: state.label, taskId: '' });
     setState(current => ({ ...current, accumulatedMs: 0, running: false, startedAt: null, taskId: '' }));
     notifyRef.current(actualMinutes > 720 ? 'সর্বোচ্চ ৭২০ মিনিট সেভ হয়েছে; বাকি সময় আলাদা করে যোগ করো।' : `${minutes} মিনিটের স্টপওয়াচ সেশন সেভ হয়েছে।`, actualMinutes > 720 ? 'info' : 'success');
     return minutes;

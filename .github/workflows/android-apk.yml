@@ -130,6 +130,9 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
+          # Asset upload finishes before the dependent emulator job. Keep it
+          # private until device + Pages checks have explicitly been verified.
+          draft: true
           files: |
             artifacts/*.apk
             artifacts/*.aab
@@ -137,7 +140,9 @@ jobs:
           body: |
             প্রস্তুতি · HSC 27 — Android APK
 
-            ইনস্টল করার নিয়ম: APK ডাউনলোড করে ফোনে খুলুন, "Install unknown apps" অনুমতি দিন, তারপর ইনস্টল করুন। সব পড়ার তথ্য ফোনেই (offline) থাকে; কোনো অ্যাকাউন্ট বা সার্ভার লাগে না।
+            প্রকাশের আগে Android device ও Pages checks-এর ফল যাচাই করতে হবে। APK asset আসা মানেই প্রকাশের অনুমতি নয়।
+
+            আপডেটের আগে backup যাচাই করুন। JSON ও পুরোনো Full backup-এ স্ক্যানের আসল ছবির bytes নেই; আলাদা PDF/ছবি বা মূল ডিভাইস রাখুন। signing mismatch হলে যাচাইকৃত backup ছাড়া পুরোনো অ্যাপ uninstall করবেন না। কোনো অ্যাকাউন্ট বা cloud sync নেই।
 
   device-checks:
     name: Android WebView device checks

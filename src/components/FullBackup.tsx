@@ -9,9 +9,10 @@ import {
 import { saveData } from "../storage";
 import { markBackup } from "../backup";
 import { t } from "../i18n";
+import type { Settings } from '../planner';
 
-export default function FullBackup() {
-  const { data, setData, notify, confirm, timer } = usePlanner();
+export default function FullBackup({ onRestored }: { onRestored?: (settings: Settings) => void }) {
+  const { data, setData, notify, confirm, timer, setSelectedDate } = usePlanner();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -48,13 +49,14 @@ export default function FullBackup() {
         message: t(
           "বর্তমান metadata এই backup দিয়ে বদলাবে। পুরোনো file overwrite হবে না। আগে বর্তমান backup রাখো।",
           "Current metadata will be replaced. Existing files are never overwritten. Keep a backup first.",
-        ),
+        ) + (backup.warnings?.length ? `\n${backup.warnings.join(' ')}` : ''),
         action: () => {
           void (async () => {
             setBusy(true);
             let staged:
               Awaited<ReturnType<typeof stageMediaRestore>> | undefined;
             const expected = latestData.current;
+            let committed = false;
             try {
               staged = await stageMediaRestore(backup, progress);
               if (latestData.current !== expected)
@@ -65,16 +67,21 @@ export default function FullBackup() {
                 throw new Error(
                   "Metadata could not be saved. Existing data is unchanged.",
                 );
+              committed = true;
               timer.reset();
+              try { localStorage.removeItem('hsc27-exam-clock-v1'); } catch { /* storage unavailable */ }
               setData(staged.data);
+              setSelectedDate(staged.data.settings.startDate);
+              onRestored?.(staged.data.settings);
+              const warnings = backup.warnings || [];
               notify(
-                t(
-                  "ফাইল ও progress restore হয়েছে।",
-                  "Files and progress restored.",
-                ),
+                t("ফাইল ও progress restore হয়েছে।", "Files and progress restored.") + (warnings.length ? ` ${warnings.join(' ')}` : ''),
+                warnings.length ? 'info' : 'success',
               );
             } catch (e) {
-              await staged?.rollback();
+              // Once metadata refers to staged files, rolling them back would corrupt
+              // the saved profile. A later UI failure must leave those bytes intact.
+              if (!committed) await staged?.rollback();
               notify((e as Error).message, "error");
             } finally {
               setBusy(false);
@@ -95,9 +102,12 @@ export default function FullBackup() {
       <h2>{t("ফাইল-সহ সম্পূর্ণ ব্যাকআপ", "Full backup including files")}</h2>
       <p>
         {t(
-          "JSON backup আগের মতোই থাকে। এই আলাদা binary backup-এ offline video, স্থানীয় PDF, notes ও সব progress একসঙ্গে থাকে। বড় ভিডিও থাকলে export/import-এ সময় ও অতিরিক্ত খালি storage প্রয়োজন।",
-          "JSON backups still work. This binary backup includes offline videos, local PDFs, notes and all progress. Large media needs time and additional free storage.",
+          "এই binary backup-এ offline video, স্থানীয় PDF, হস্তলিখিত নোটের ছবি ও সব progress একসঙ্গে থাকে। বড় মিডিয়া থাকলে export/import-এ সময় ও অতিরিক্ত খালি storage প্রয়োজন।",
+          "This binary backup includes offline videos, local PDFs, handwritten image pages and all progress. Large media needs time and additional free storage.",
         )}
+      </p>
+      <p className="notice-box" role="note" aria-label={t('স্ক্যানের ব্যাকআপের সীমা', 'Scan backup limitations')}>
+        {t('শুধু নতুন Full backup-এ হস্তলিখিত ছবির bytes থাকে। JSON ও পুরোনো Full backup-এ স্ক্যানের নাম-তথ্য থাকে, ছবি নয়। মূল ডিভাইস বা আলাদা PDF রাখো; ওই পুরোনো ফাইল থেকে অনুপস্থিত ছবি উদ্ধার করা যায় না।', 'Only new full backups include handwritten image bytes. JSON and legacy full backups contain scan metadata, not images. Keep the original device or separate PDFs; missing images cannot be recovered from those files.')}
       </p>
       <div className="study-actions">
         <button
