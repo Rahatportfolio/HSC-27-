@@ -11,7 +11,7 @@ const fixture = () => ({
   asset: { name: 'prostuti-hsc27-v2.43.0.apk', state: 'uploaded', size: 100, digest: `sha256:${digest}` },
   actualSize: 100, actualDigest: digest,
   badging: "package: name='com.prostuti.hsc27' versionCode='23' versionName='2.43.0' platformBuildVersionName='16'",
-  signature: `Verifies\nSigner #1 certificate DN: CN=Android Debug\nSigner #1 certificate SHA-256 digest: ${certificate}\n`,
+  signature: `Verifies\nNumber of signers: 1\nSigner #1 certificate DN: CN=Android Debug\nSigner #1 certificate SHA-256 digest: ${certificate}\n`,
 });
 
 test('accepts the exact independently inspected release facts', () => {
@@ -45,5 +45,21 @@ for (const [name, mutate] of [
 
 test('normalises the certificate digest for an exact previous-release comparison', () => {
   const colonDigest = certificate.toUpperCase().match(/../g).join(':');
-  assert.equal(signingFingerprint(`Verifies\nSigner #1 certificate SHA-256 digest: ${colonDigest}\n`), certificate);
+  assert.equal(signingFingerprint(`Verifies\nNumber of signers: 1\nSigner #1 certificate SHA-256 digest: ${colonDigest}\n`), certificate);
+});
+
+test('accepts the actual new Android SDK V2 Signer format', () => {
+  assert.equal(signingFingerprint(`Verifies\nNumber of signers: 1\nV2 Signer: certificate SHA-256 digest: ${certificate}\n`), certificate);
+});
+
+test('accepts repeated certification of the same signer across APK schemes', () => {
+  assert.equal(signingFingerprint(`Verifies\nNumber of signers: 1\nV1 Signer #1: certificate SHA-256 digest: ${certificate}\nV2 Signer: certificate SHA-256 digest: ${certificate}\n`), certificate);
+});
+
+test('rejects a multi-signer count even if certificate lines repeat the same key', () => {
+  assert.throws(() => signingFingerprint(fixture().signature.replace('Number of signers: 1', 'Number of signers: 2')));
+});
+
+test('rejects missing signer count instead of assuming a single signer', () => {
+  assert.throws(() => signingFingerprint(fixture().signature.replace('Number of signers: 1\n', '')));
 });

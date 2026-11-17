@@ -10,9 +10,14 @@ import { pathToFileURL } from 'node:url';
 
 export function signingFingerprint(output) {
   assert.match(output, /^Verifies\s*$/m, 'APK signature must verify');
-  const fingerprints = [...output.matchAll(/^Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9:]+)\s*$/gm)];
-  assert.equal(fingerprints.length, 1, `Exactly one signing certificate is required for this comparison. Tool output: ${output.slice(0, 2200)}`);
-  const fingerprint = fingerprints[0][1].replaceAll(':', '').toLowerCase();
+  assert.equal(Number(output.match(/^Number of signers: (\d+)\s*$/m)?.[1]), 1, 'APK must report one signer');
+  // New SDKs use "V2 Signer:" instead of "Signer #1". Several verified
+  // schemes may repeat the same certificate; different certificates are unsafe
+  // to collapse into an in-place-update compatibility claim.
+  const fingerprints = [...output.matchAll(/^(?:Signer #\d+|V\d+(?:\.\d+)? Signer(?: #\d+)?):? certificate SHA-256 digest: ([a-fA-F0-9:]+)\s*$/gm)]
+    .map(match => match[1].replaceAll(':', '').toLowerCase());
+  assert.equal(new Set(fingerprints).size, 1, `Exactly one signing certificate is required for this comparison. Tool output: ${output.slice(0, 2200)}`);
+  const fingerprint = fingerprints[0];
   assert.match(fingerprint, /^[a-f0-9]{64}$/, 'Invalid signing certificate digest');
   return fingerprint;
 }
