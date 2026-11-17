@@ -2,6 +2,19 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      audit_release:
+        description: 'Read-only inspection of an existing release tag; leave empty to build'
+        type: string
+        default: ''
+      audit_sha:
+        description: 'Exact source commit expected for the inspected release'
+        type: string
+        default: ''
+      audit_previous:
+        description: 'Optional previous published tag for signing-certificate comparison'
+        type: string
+        default: ''
   push:
     branches: [main, 'arena/**']
     tags: ['v*']
@@ -16,6 +29,7 @@ concurrency:
 jobs:
   apk:
     name: Build installable APK
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
     runs-on: ubuntu-24.04
     env:
       # Optional release signing. Nothing here is required: without the secrets the
@@ -223,3 +237,33 @@ jobs:
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
           if-no-files-found: ignore
+
+  artifact-audit:
+    name: Inspect uploaded release APK
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_release != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout inspection tooling
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test inspection guards
+        run: node --test scripts/verify-release-asset.node-test.mjs
+      - name: Verify existing APK bytes, version and signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_RELEASE_TAG: ${{ inputs.audit_release }}
+          AUDIT_EXPECTED_SHA: ${{ inputs.audit_sha }}
+          AUDIT_PREVIOUS_TAG: ${{ inputs.audit_previous }}
+        run: node scripts/verify-release-asset.mjs
+      - name: Save inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-verification
+          path: release-asset-verification.json
+          if-no-files-found: error
