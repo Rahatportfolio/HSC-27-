@@ -38,7 +38,7 @@ The supplied screenshots show clipped Bengali dashboard text/counts, a permanent
 | Check | Observed result |
 |---|---|
 | Local TypeScript and relevant regressions | `npx tsc --noEmit`; timer/mobile/release-policy tests passed |
-| Full local application suite | **770/770 tests in 87 files**; includes seven new shell regressions |
+| Full local application suite | **772/772 tests in 87 files** after the requested-start follow-up; includes seven shell regressions and two existing-profile shortcut cases |
 | Production build | Passed; existing large-bundle warning remains |
 | Production mobile geometry/touch | **41 probes** across 320×760, 360×797, 393×852, 412×915 and 797×393 touch/coarse-pointer contexts; large saved text, Bengali/English, light/dark, simulated 36px status/24px gesture insets, hour-bearing clocks, real Start/Pause/Resume, scroll/navigation, paused stopwatch, no page errors and retained data |
 | Existing responsive coverage | All **23 views**, 320–768px, large text, English/dark, dialogs and running timer passed; these are complementary smoke tests, not substitutes for the new occlusion tests |
