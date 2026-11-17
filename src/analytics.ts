@@ -179,15 +179,15 @@ export function badgeList(data: AppData, plan: Day[], today: string) {
   const completedChapters = CHAPTERS.filter(chapter => chapterCompletionDate(plan, chapter.id, data.completed)).length;
   const attempts = attemptStats(data.attempts);
   return [
-    { id: 'first-day', title: 'প্রথম পদক্ষেপ', detail: 'প্রথম পড়ার দিন', earned: streak > 0 || Object.keys(data.completed).length > 0 },
-    { id: 'streak-7', title: 'সাত দিনের ছন্দ', detail: '৭ দিন টানা পড়া', earned: streak >= 7 },
-    { id: 'streak-30', title: 'এক মাসের অভ্যাস', detail: '৩০ দিন টানা পড়া', earned: streak >= 30 },
-    { id: 'hours-50', title: '৫০ ঘণ্টা', detail: 'টাইমারে ৫০ ঘণ্টা', earned: totalMinutes >= 3000 },
-    { id: 'hours-200', title: '২০০ ঘণ্টা', detail: 'টাইমারে ২০০ ঘণ্টা', earned: totalMinutes >= 12000 },
-    { id: 'chapter-10', title: '১০ অধ্যায়', detail: '১০টি অধ্যায় সম্পন্ন', earned: completedChapters >= 10 },
-    { id: 'mcq-100', title: '১০০ MCQ', detail: '১০০টি MCQ অনুশীলন', earned: attempts.total >= 100 },
-    { id: 'accuracy-80', title: 'নির্ভুলতা ৮০%', detail: 'কমপক্ষে ৫০টি MCQ-তে ৮০%', earned: attempts.total >= 50 && attempts.accuracy >= 80 },
-    { id: 'test-5', title: '৫টি পরীক্ষা', detail: '৫টি টেস্ট/মডেল টেস্ট', earned: testCount >= 5 },
-    { id: 'notes-20', title: 'নোট সংগ্রহের অভ্যাস', detail: '২০টি ব্যক্তিগত নোট', earned: data.libraryNotes.length >= 20 },
+    { id: 'first-day', title: 'প্রথম পদক্ষেপ', titleEn: 'First step', detail: 'প্রথম পড়ার দিন', detailEn: 'Your first study day', earned: streak > 0 || Object.keys(data.completed).length > 0 },
+    { id: 'streak-7', title: 'সাত দিনের ছন্দ', titleEn: 'Seven-day rhythm', detail: '৭ দিন টানা পড়া', detailEn: '7 days studied in a row', earned: streak >= 7 },
+    { id: 'streak-30', title: 'এক মাসের অভ্যাস', titleEn: 'A month of habit', detail: '৩০ দিন টানা পড়া', detailEn: '30 days studied in a row', earned: streak >= 30 },
+    { id: 'hours-50', title: '৫০ ঘণ্টা', titleEn: '50 hours', detail: 'টাইমারে ৫০ ঘণ্টা', detailEn: '50 hours on the timer', earned: totalMinutes >= 3000 },
+    { id: 'hours-200', title: '২০০ ঘণ্টা', titleEn: '200 hours', detail: 'টাইমারে ২০০ ঘণ্টা', detailEn: '200 hours on the timer', earned: totalMinutes >= 12000 },
+    { id: 'chapter-10', title: '১০ অধ্যায়', titleEn: '10 chapters', detail: '১০টি অধ্যায় সম্পন্ন', detailEn: '10 chapters completed', earned: completedChapters >= 10 },
+    { id: 'mcq-100', title: '১০০ MCQ', titleEn: '100 MCQs', detail: '১০০টি MCQ অনুশীলন', detailEn: '100 MCQs practised', earned: attempts.total >= 100 },
+    { id: 'accuracy-80', title: 'নির্ভুলতা ৮০%', titleEn: '80% accuracy', detail: 'কমপক্ষে ৫০টি MCQ-তে ৮০%', detailEn: '80% across at least 50 MCQs', earned: attempts.total >= 50 && attempts.accuracy >= 80 },
+    { id: 'test-5', title: '৫টি পরীক্ষা', titleEn: '5 tests', detail: '৫টি টেস্ট/মডেল টেস্ট', detailEn: '5 tests or model tests', earned: testCount >= 5 },
+    { id: 'notes-20', title: 'নোট সংগ্রহের অভ্যাস', titleEn: 'Note-taking habit', detail: '২০টি ব্যক্তিগত নোট', detailEn: '20 personal notes', earned: data.libraryNotes.length >= 20 },
   ];
 }

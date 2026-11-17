@@ -1,7 +1,7 @@
 import { integrateStudyPlan } from './smartSchedule';
 import StudySystem from './views/StudySystem';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, Command, Download, FileText, FolderOpen, HardDrive, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
+import { ArrowUpRight, BadgeCheck, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, Grid3x3, HardDrive, Layers, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
@@ -15,7 +15,9 @@ import { exportCalendar } from './exports';
 import { canNotify, clearLiveTimerNotification, notifySessionDone, showNotification, syncDailyProgressNotification, syncLiveTimerNotification, useFontScale, useNow, useReminders, useRevisionReminder, useStudyTimer, useTheme, useWakeLock } from './hooks';
 import type { PresetTimerInput } from './hooks';
 import { cancelTimerAlarm, isNativeApp, nativeNotify, openNativeTimerPictureInPicture, prepareNativeNotifications, requestNativeNotifications, scheduleTimerAlarm, startStudyTimerService, stopStudyTimerService, syncNativeReminders } from './native';
-import { buildDailyNotificationDigest, buildDailyStatusNotification } from './notifications';
+import { buildDailyNotificationDigest, buildDailyStatusNotification, buildExamRoutineLine } from './notifications';
+import { applyAdaptivePlan } from './adaptive';
+import { weaknessReport } from './weakness';
 import { ensureRevisions, revisionDueCount } from './revision';
 import { addStudySession, autoCarryover, setTaskCompletion } from './study';
 import { PlannerContext } from './context';
@@ -33,6 +35,11 @@ import RevisionView from './views/Revision';
 import TimerView from './views/Timer';
 import PracticeView from './views/Practice';
 import ExamsView from './views/Exams';
+import ExamSimView from './views/ExamSim';
+import WeaknessView from './views/Weakness';
+import HeatmapView from './views/Heatmap';
+import BacklogView from './views/Backlog';
+import AuditView from './views/Audit';
 import AnalyticsView from './views/Analytics';
 import LibraryView from './views/Library';
 import RemindersView from './views/Reminders';
@@ -57,6 +64,10 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
     { id: 'practice' as const, label: 'অনুশীলন', labelEn: 'Practice', short: 'অনুশীলন', shortEn: 'Practice', icon: PenLine },
     { id: 'flashcards' as const, label: 'ফ্ল্যাশকার্ড', labelEn: 'Flashcards', short: 'ফ্ল্যাশ', shortEn: 'Cards', icon: List },
     { id: 'revision' as const, label: 'স্মার্ট রিভিশন', labelEn: 'Smart revision', short: 'রিভিশন', shortEn: 'Revision', icon: RotateCcw },
+    { id: 'examsim' as const, label: 'পরীক্ষা সিমুলেটর', labelEn: 'Exam simulator', short: 'সিমুলেটর', shortEn: 'Simulator', icon: ClipboardList },
+    { id: 'weakness' as const, label: 'দুর্বলতা ডিটেক্টর', labelEn: 'Weakness detector', short: 'দুর্বলতা', shortEn: 'Weak spots', icon: Crosshair },
+    { id: 'heatmap' as const, label: 'সিলেবাস হিটম্যাপ', labelEn: 'Syllabus heatmap', short: 'হিটম্যাপ', shortEn: 'Heatmap', icon: Grid3x3 },
+    { id: 'backlog' as const, label: 'ব্যাকলগ ম্যানেজার', labelEn: 'Backlog manager', short: 'ব্যাকলগ', shortEn: 'Backlog', icon: Layers },
     { id: 'exams' as const, label: 'পরীক্ষা ও GPA', labelEn: 'Exams & GPA', short: 'পরীক্ষা', shortEn: 'Exams', icon: ClipboardCheck },
     { id: 'timer' as const, label: 'স্টাডি টাইমার', labelEn: 'Study timer', short: 'টাইমার', shortEn: 'Timer', icon: Timer },
     { id: 'analytics' as const, label: 'অগ্রগতি ও বিশ্লেষণ', labelEn: 'Progress & analytics', short: 'প্রগতি', shortEn: 'Progress', icon: ChartNoAxesCombined },
@@ -64,6 +75,7 @@ const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
   { label: 'সহায়তা', labelEn: 'Support', items: [
     { id: 'library' as const, label: 'লাইব্রেরি', labelEn: 'Library', short: 'লাইব্রেরি', shortEn: 'Library', icon: FolderOpen },
     { id: 'reminders' as const, label: 'রিমাইন্ডার', labelEn: 'Reminders', short: 'রিমাইন্ডার', shortEn: 'Reminders', icon: Bell },
+    { id: 'audit' as const, label: 'অ্যাপ অডিট', labelEn: 'App audit', short: 'অডিট', shortEn: 'Audit', icon: BadgeCheck },
     { id: 'storage' as const, label: 'স্টোরেজ', labelEn: 'Storage', short: 'স্টোরেজ', shortEn: 'Storage', icon: HardDrive },
   ] },
 ];
@@ -101,7 +113,21 @@ export default function App() {
   // settings-driven regeneration never silently drops the student's own schedule changes.
   const planEdited = useMemo(() => applyManualSchedule(planWithRoutine, data), [planWithRoutine, data]);
   const ordinaryPlan = useMemo(() => applyDayOverrides(planEdited, data.dayOverrides, data.settings), [planEdited, data.dayOverrides, data.settings]);
-  const plan = useMemo(() => integrateStudyPlan(ordinaryPlan, data, today), [ordinaryPlan, data, today]);
+  const planIntegrated = useMemo(() => integrateStudyPlan(ordinaryPlan, data, today), [ordinaryPlan, data, today]);
+  /**
+   * The adaptive planner is a presentation layer, exactly like the manual edits above:
+   * the stored routine is never rewritten, so switching it off restores the original plan.
+   */
+  const plan = useMemo(() => {
+    if (!data.settings.adaptiveEnabled) return planIntegrated;
+    const rows = weaknessReport(planIntegrated, data, today);
+    if (!rows.length) return planIntegrated;
+    return applyAdaptivePlan(planIntegrated, rows, data, today, {
+      horizonDays: 3,
+      minBlockMinutes: 45,
+      bufferMinutes: data.settings.adaptiveBuffer,
+    }).plan;
+  }, [planIntegrated, data, today]);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
@@ -272,7 +298,7 @@ export default function App() {
       }
       const capture = (canvas as HTMLCanvasElement & { captureStream?: (fps?: number) => MediaStream }).captureStream;
       if (!capture || !document.pictureInPictureEnabled) {
-        notify('এই ব্রাউজারে ভাসমান মিনি ঘড়ি সাপোর্ট নেই — তবে উপরের লাইভ টাইমার বার সবসময় চালু থাকবে!', 'info');
+        notify(t('এই ব্রাউজারে ভাসমান মিনি ঘড়ি সাপোর্ট নেই — তবে উপরের লাইভ টাইমার বার সবসময় চালু থাকবে!', 'This browser has no floating mini clock — the live timer bar on top stays available!'), 'info');
         return;
       }
       let video = pipVideoRef.current;
@@ -309,7 +335,7 @@ export default function App() {
       window.clearTimeout(timer);
       if (snapshot === 'timeout') {
         setDbMirrorSafe(false);
-        notify('ডাটাবেস লোডে দেরি হচ্ছে; বর্তমান তথ্য রাখা হয়েছে। পরের বার আবার চেষ্টা হবে।', 'info');
+        notify(t('ডাটাবেস লোডে দেরি হচ্ছে; বর্তমান তথ্য রাখা হয়েছে। পরের বার আবার চেষ্টা হবে।', 'Loading the database is slow; your current data was kept. It will try again next time.'), 'info');
       } else if (snapshot) {
         const preserveSnapshot = () => {
           setDbMirrorSafe(false);
@@ -318,14 +344,14 @@ export default function App() {
         // A completion or user edit during the database read must not be overwritten.
         if (currentData.current !== initial.data) {
           preserveSnapshot();
-          notify('ডাটাবেস লোডের সময় পরিবর্তন হয়েছে; বর্তমান তথ্য রাখা হয়েছে। আগের কপি Settings-এ রিকভারি ফাইলে দেখো।', 'info');
+          notify(t('ডাটাবেস লোডের সময় পরিবর্তন হয়েছে; বর্তমান তথ্য রাখা হয়েছে। আগের কপি Settings-এ রিকভারি ফাইলে দেখো।', 'The database changed while loading; your current data was kept. Find the earlier copy in the Settings recovery file.'), 'info');
         } else {
-          try { setData(parseBackup(snapshot.payload)); notify('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'info'); }
-          catch { preserveSnapshot(); notify('ডাটাবেসের তথ্য পড়া যায়নি; Settings থেকে রিকভারি ফাইল রাখো।', 'error'); }
+          try { setData(parseBackup(snapshot.payload)); notify(t('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'Loaded the latest data from this device’s local database.'), 'info'); }
+          catch { preserveSnapshot(); notify(t('ডাটাবেসের তথ্য পড়া যায়নি; Settings থেকে রিকভারি ফাইল রাখো।', 'The database could not be read; save a recovery file from Settings.'), 'error'); }
         }
       }
       setDbReady(true);
-    }).catch(() => { if (active) { setDbMirrorSafe(false); setDbReady(true); notify('ডাটাবেস পড়া যায়নি; বর্তমান তথ্য রাখা হয়েছে।', 'error'); } });
+    }).catch(() => { if (active) { setDbMirrorSafe(false); setDbReady(true); notify(t('ডাটাবেস পড়া যায়নি; বর্তমান তথ্য রাখা হয়েছে।', 'The database could not be read; your current data was kept.'), 'error'); } });
     return () => { active = false; window.clearTimeout(timer); };
   }, [notify, initial.data]);
   useEffect(() => { if (dbReady) setStorageOk(saveData(data)); }, [data, dbReady]);
@@ -397,10 +423,10 @@ export default function App() {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [confirmRequest, modal]);
-  useEffect(() => { const onStorage = (e: StorageEvent) => { if (e.key !== STORAGE_KEY || !e.newValue) return; try { setData(parseBackup(e.newValue)); notify('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'info'); } catch { notify('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'error'); } }; window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage); }, [notify]);
+  useEffect(() => { const onStorage = (e: StorageEvent) => { if (e.key !== STORAGE_KEY || !e.newValue) return; try { setData(parseBackup(e.newValue)); notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info'); } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); } }; window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage); }, [notify]);
   const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !d.completed[id])), []);
   const logSession = useCallback((session: Parameters<typeof addStudySession>[1]) => setData(d => addStudySession(d, session)), []);
-  const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch { notify('ক্যালেন্ডার ফাইল তৈরি হয়নি। আবার চেষ্টা করো।', 'error'); } }, [plan, data, today, notify]);
+  const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify(t('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'No unfinished session in this period.'), 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch { notify(t('ক্যালেন্ডার ফাইল তৈরি হয়নি। আবার চেষ্টা করো।', 'The calendar file was not created. Try again.'), 'error'); } }, [plan, data, today, notify]);
   /**
    * Android's gesture back (and the predictive-back arrow in 14/15/16) should close an
    * open sheet instead of leaving the screen, so an open sheet pushes one history entry
@@ -475,7 +501,9 @@ export default function App() {
     const nextData: AppData = data.settings.reminderEnabled
       ? data
       : { ...data, settings: { ...data.settings, reminderEnabled: true } };
-    const payload = buildDailyStatusNotification(plan, nextData, dateKey);
+    const base = buildDailyStatusNotification(plan, nextData, dateKey);
+    const examLine = buildExamRoutineLine(nextData, dateKey);
+    const payload = examLine ? { title: base.title, body: `${base.body}\n${examLine}` } : base;
 
     if (isNativeApp()) {
       const perm = await requestNativeNotifications();
@@ -527,7 +555,7 @@ export default function App() {
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
+  const ViewComponent = { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, heatmap: HeatmapView, backlog: BacklogView, audit: AuditView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');

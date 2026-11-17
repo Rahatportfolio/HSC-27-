@@ -3,9 +3,11 @@ import { CHAPTERS, SUBJECTS } from './data';
 import type { SubjectId } from './data';
 import {
   buildDailyStatusNotification,
+  buildExamRoutineLine,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
 } from './notifications';
+import { t } from './i18n';
 import { addDays, dhakaMinutes, todayKey } from './planner';
 import type { AppData, Day, Settings } from './planner';
 import type { FontScale, StudyMode, ThemeMode } from './types';
@@ -131,15 +133,15 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
         const focusCount = snapshot.focusCount + 1;
         const long = focusCount % 4 === 0;
         const nextMinutes = long ? settingsNow.pomodoroLongBreak : settingsNow.pomodoroBreak;
-        notifyRef.current(`${snapshot.durationMin} মিনিট ফোকাস শেষ! ${nextMinutes} মিনিটের ${long ? 'লম্বা ' : ''}বিরতি।`, 'success');
+        notifyRef.current(t(`${snapshot.durationMin} মিনিট ফোকাস শেষ! ${nextMinutes} মিনিটের ${long ? 'লম্বা ' : ''}বিরতি।`, `${snapshot.durationMin}-minute focus done! Take a ${nextMinutes}-minute ${long ? 'long ' : ''}break.`), 'success');
         setState(current => ({ ...current, phase: long ? 'long' : 'short', durationMin: nextMinutes, accumulatedMs: 0, running: true, startedAt: Date.now(), logging: false, taskId: '', focusCount }));
       } else {
-        notifyRef.current('বিরতি শেষ। পরের ফোকাস সেশনের জন্য তৈরি হও।', 'info');
+        notifyRef.current(t('বিরতি শেষ। পরের ফোকাস সেশনের জন্য তৈরি হও।', 'Break over. Ready for the next focus session.'), 'info');
         setState(current => ({ ...current, phase: 'focus', durationMin: settingsNow.pomodoroFocus, accumulatedMs: 0, running: false, startedAt: null, logging: true }));
       }
       return;
     }
-    notifyRef.current(shouldLog ? `${snapshot.durationMin} মিনিটের সেশন সেভ হয়েছে। দারুণ!` : 'বিরতি শেষ! আবার পড়ায় ফেরো।', shouldLog ? 'success' : 'info');
+    notifyRef.current(shouldLog ? t(`${snapshot.durationMin} মিনিটের সেশন সেভ হয়েছে। দারুণ!`, `${snapshot.durationMin}-minute session saved. Well done!`) : t('বিরতি শেষ! আবার পড়ায় ফেরো।', 'Break over! Back to study.'), shouldLog ? 'success' : 'info');
     setState(current => ({ ...current, running: false, accumulatedMs: 0, startedAt: null, taskId: '', logging: true, label: shouldLog ? current.label : '' }));
   }, [elapsedMs, state, targetMs]);
 
@@ -333,7 +335,9 @@ export async function showNotification(
 export async function syncDailyProgressNotification(plan: Day[], data: AppData, date: string, silent = true): Promise<boolean> {
   if (!canNotify()) return false;
   try {
-    const payload = buildDailyStatusNotification(plan, data, date);
+    const base = buildDailyStatusNotification(plan, data, date);
+    const examLine = buildExamRoutineLine(data, date);
+    const payload = examLine ? { title: base.title, body: `${base.body}\n${examLine}` } : base;
     await showNotification(payload.title, payload.body, { tag: 'prostuti-daily-progress', silent });
     return true;
   } catch {

@@ -74,7 +74,7 @@ export default function FlashcardsView() {
   const duePercent = total ? Math.round((due / total) * 100) : 0;
 
   return (
-    <div className="page">
+    <div className="view flashcards-view">
       <PageHeading
         eyebrow={t('স্মার্ট ফ্ল্যাশকার্ড', 'Smart flashcards')}
         title={t('ফ্ল্যাশকার্ড রিভিশন', 'Flashcard revision')}
@@ -135,7 +135,7 @@ export default function FlashcardsView() {
                   <button type="button" className="text-button danger" onClick={() => removeCard(card.id)}>{t('মুছো', 'Delete')}</button>
                 </>
               ) : (
-                <button type="button" className="button secondary answer-btn" onClick={() => setCardOpen(card.id)}>{t('উত্তর দিয়ে রেটিং দাও', 'Answer & rate')}</button>
+                <button type="button" className="button secondary answer-btn" onClick={() => setCardOpen(card.id)}>{t('উত্তর দিয়ে রেটিং দাও', 'Answer & rate')}</button>
               )}
             </div>
           </div>
@@ -159,7 +159,7 @@ function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; c
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!form.front.trim() || !form.back.trim()) { setError('সামনা ও উত্তর দুটিই লিখলেই কার্ড তৈরি হবে।'); return; }
+    if (!form.front.trim() || !form.back.trim()) { setError(t('সামনা ও উত্তর দুটিই লিখলেই কার্ড তৈরি হবে।', 'Write both the front and the back to create a card.')); return; }
     onAdd({ subject: form.subject, chapterId: form.chapterId || undefined, front: form.front.trim(), back: form.back.trim(), category: form.category });
     onClose();
   };
@@ -172,7 +172,7 @@ function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; c
         {chaptersBySubject[form.subject].map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}</select></label>
       <label className="form-label">{t('সামনা (প্রশ্ন)', 'Front / question')}<textarea data-autofocus rows={3} value={form.front} onChange={e => { setForm({ ...form, front: e.target.value }); setError(''); }} placeholder={t('যেমন: বৃত্তের ক্ষেত্রফলের সূত্র', 'e.g. Area of a circle')}/></label>
       <label className="form-label">{t('উত্তর (পেছন)', 'Back / answer')}<textarea rows={4} value={form.back} onChange={e => setForm({ ...form, back: e.target.value })} placeholder={t('যেমন: πr²', 'e.g. πr²')}/></label>
-      <label className="form-label">{t('কার드의 ধরন', 'Card type')}<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value as FlashcardCategory })}>
+      <label className="form-label">{t('কার্ডের ধরন', 'Card type')}<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value as FlashcardCategory })}>
         <option value="definition">{FLASHCARD_CATEGORY_LABEL.definition}</option>
         <option value="formula">{FLASHCARD_CATEGORY_LABEL.formula}</option>
         <option value="reaction">{FLASHCARD_CATEGORY_LABEL.reaction}</option>

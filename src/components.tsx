@@ -48,8 +48,8 @@ export function Modal({ title, children, onClose, wide = false }: { title: strin
 export function PageHeading({ eyebrow, title, titleEn, description, descriptionEn, action }: { eyebrow?: string; title: string; titleEn?: string; description: string; descriptionEn?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{t(title, titleEn || title)}</h1><p>{t(description, descriptionEn || description)}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>;
 }
-export function EmptyState({ title, description, action }: { title: string; description: string; action?: ReactNode }) {
-  return <div className="empty-state"><div className="empty-icon"><CheckCheck size={28} strokeWidth={1.5} /></div><h3>{title}</h3><p>{description}</p>{action}</div>;
+export function EmptyState({ title, description, titleEn, descriptionEn, action }: { title: string; description: string; titleEn?: string; descriptionEn?: string; action?: ReactNode }) {
+  return <div className="empty-state"><div className="empty-icon"><CheckCheck size={28} strokeWidth={1.5} /></div><h3>{t(title, titleEn || title)}</h3><p>{t(description, descriptionEn || description)}</p>{action}</div>;
 }
 export function PhaseJourney({ startDate, activeDate }: { startDate: string; activeDate: string }) {
   const { navigate } = usePlanner();
@@ -405,7 +405,7 @@ export function BackupNudge() {
       const name = downloadBackup(data, today);
       notify(`${name} সেভ হয়েছে। নিরাপদ জায়গায় রাখো।`);
       setHidden(true);
-    } catch { notify('ব্যাকআপ ফাইল তৈরি হয়নি। সেটিংস থেকে আবার চেষ্টা করো।', 'error'); }
+    } catch { notify(t('ব্যাকআপ ফাইল তৈরি হয়নি। সেটিংস থেকে আবার চেষ্টা করো।', 'The backup file was not created. Try again from Settings.'), 'error'); }
   };
   const share = async () => {
     setBusy(true);
@@ -414,7 +414,7 @@ export function BackupNudge() {
       if (outcome === 'cancelled') return;
       notify(outcome === 'shared' ? 'ব্যাকআপ শেয়ার শিটে পাঠানো হয়েছে।' : outcome === 'copied' ? 'ব্যাকআপ JSON কপি হয়েছে — যেখানে খুশি পেস্ট করো।' : 'ব্যাকআপ ফাইল ডাউনলোড হয়েছে।');
       setHidden(true);
-    } catch { notify('শেয়ার করা যায়নি। ডাউনলোড করে নাও।', 'error'); }
+    } catch { notify(t('শেয়ার করা যায়নি। ডাউনলোড করে নাও।', 'Sharing failed. Download it instead.'), 'error'); }
     finally { setBusy(false); }
   };
   return <div className="backup-nudge" role="note">

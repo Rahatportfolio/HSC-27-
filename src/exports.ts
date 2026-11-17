@@ -1,4 +1,4 @@
-import { CHAPTERS, PAPERS, SOURCES, SUBJECTS, SYLLABUS_NOTE, subjectById } from './data';
+import { CHAPTERS, PAPERS, SOURCES, SUBJECTS, syllabusNote, subjectById } from './data';
 import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, getPhases, getStats, isChapterDone, phaseName, taskStart, todayKey } from './planner';
 import type { AppData, Day, Task } from './planner';
 
@@ -57,7 +57,7 @@ export function makeMarkdown(plan: Day[], data: AppData): string {
     `**শুরু:** ${settings.startDate} · **শেষ:** ${plan[plan.length - 1].date} · **সময়:** ${bn(plan.length)} দিন (শেষ দিনসহ)`,
     `**দৈনিক পড়ার লক্ষ্য:** ${bn(settings.dailyHours)} ঘণ্টা পড়া; বিরতি আলাদা। **সময় অঞ্চল:** Asia/Dhaka (UTC+6)।`,
     '**লক্ষ্য:** A+ / GPA 5.00 / Golden — এটি লক্ষ্য, ফলের নিশ্চয়তা নয়।', '',
-    '## আগে এটা পড়ো', '', SYLLABUS_NOTE, '',
+    '## আগে এটা পড়ো', '', syllabusNote(), '',
     '- কোনো অধ্যায় থেকে প্রশ্ন আসা ১০০% নিশ্চিত নয়। পুরোনো প্রশ্ন অনুশীলনের সহায়ক, ভবিষ্যৎ প্রশ্নের ভবিষ্যদ্বাণী নয়।',
     '- শেষ মাসের ১৩টি পরীক্ষা ব্যক্তিগত মডেল টেস্ট। বোর্ড পরীক্ষার প্রকৃত তারিখ/সময় আলাদাভাবে যাচাই করো।',
     '- তারিখ বদলালে অ্যাপের পুরো রুটিন নতুন করে তৈরি হয়। কাজের ID একই থাকায় অগ্রগতি মুছে যায় না; Calendar ফাইল আবার ইমপোর্ট করতে হয়।',

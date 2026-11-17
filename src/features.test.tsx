@@ -332,3 +332,222 @@ it('calculates exam-clock pause from the wall clock even if the UI tick was dela
   fireEvent.click(within(card).getByRole('button', { name: 'বিরতি' }));
   expect(JSON.parse(localStorage.getItem('hsc27-exam-clock-v1') || '{}')).toMatchObject({ remaining: 1790, deadline: null });
 });
+
+describe('exam simulator screen', () => {
+  it('runs a timed paper, marks it, and stores the result plus the mistake loop', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    // Ten questions, one minute each, from the shipped sample bank.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /পরীক্ষা শুরু করো/ })); });
+    expect(await screen.findByText('চলমান পরীক্ষা')).toBeTruthy();
+    expect(document.querySelectorAll('.exam-palette-cell')).toHaveLength(10);
+
+    // Answer every question with the first option, then submit.
+    for (let index = 0; index < 10; index++) {
+      const options = document.querySelectorAll('.quiz-option');
+      await act(async () => { fireEvent.click(options[0]); });
+      const next = screen.queryByRole('button', { name: /পরের প্রশ্ন/ });
+      if (next) await act(async () => { fireEvent.click(next); });
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+
+    expect(await screen.findByText('ফলাফল')).toBeTruthy();
+    const saved = stored();
+    expect(saved.examSessions).toHaveLength(1);
+    expect(saved.examSessions[0]).toMatchObject({ mode: 'subject', total: 10, durationMin: 10 });
+    expect(saved.examSessions[0].answers).toBeTruthy();
+    expect(saved.examSessions[0].breakdown.length).toBeGreaterThan(0);
+    // The paper is also part of the GPA tracker, and the attempt history drove the mistake loop.
+    expect(saved.tests).toHaveLength(1);
+    expect(saved.attempts).toHaveLength(10);
+    expect(saved.examSessions[0].score).toBe(saved.attempts.filter((item: { correct: boolean }) => item.correct).length);
+    expect(saved.mistakes.length).toBe(10 - saved.examSessions[0].score);
+    // Every wrong answer queued a revision card for tomorrow.
+    if (saved.mistakes.length) expect(saved.revisions.length).toBe(saved.mistakes.length);
+    expect(screen.getByText(/ভুল প্রশ্নগুলো আবার/)).toBeTruthy();
+  });
+
+  it('marks unanswered questions as wrong and shows them in the analysis', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /পরীক্ষা শুরু করো/ })); });
+    await screen.findByText('চলমান পরীক্ষা');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /শেষ করো/ })); });
+    const dialog = await screen.findByRole('dialog');
+    await act(async () => { fireEvent.click(within(dialog).getByRole('button', { name: 'জমা দাও' })); });
+    expect(await screen.findByText('ফলাফল')).toBeTruthy();
+    const saved = stored();
+    expect(saved.examSessions[0]).toMatchObject({ score: 0, total: 10 });
+    // Unanswered questions are not guesses: they never enter the attempt history.
+    expect(saved.attempts).toHaveLength(0);
+    expect(document.querySelectorAll('.exam-wrong-row.unanswered')).toHaveLength(10);
+  });
+
+  it('keeps the stored paper through a reload', async () => {
+    const { freshData, todayKey } = await import('./planner');
+    const { nowIso } = await import('./storage');
+    const data = freshData();
+    const chapter = CHAPTERS.find(item => item.subject === 'physics')!;
+    data.examSessions.push({
+      id: 'sim-1', mode: 'chapter', title: 'ভেক্টর · অধ্যায় পরীক্ষা', chapterIds: [chapter.id],
+      questionIds: ['seed-001', 'seed-002'], answers: { 'seed-001': 0 }, score: 1, total: 2,
+      durationMin: 5, timeTakenSec: 84, date: todayKey(), at: nowIso(),
+      breakdown: [{ chapterId: chapter.id, subject: 'physics', correct: 1, total: 2 }],
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('examsim');
+    expect(await screen.findByText('ভেক্টর · অধ্যায় পরীক্ষা')).toBeTruthy();
+    // 1/2 correct is 50% — the history line shows it and the weakness rail ranks the chapter.
+    expect(document.querySelector('.exam-history-score')?.textContent).toContain('৫০%');
+    expect(document.querySelector('.exam-weak-card')?.textContent).toContain(chapter.title);
+    expect(stored().examSessions).toHaveLength(1);
+  });
+});
+
+describe('wrong-question retry queue', () => {
+  it('queues exam mistakes, shows them in the revision centre and runs a due retry paper', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /পরীক্ষা শুরু করো/ })); });
+    await screen.findByText('চলমান পরীক্ষা');
+    // Answer everything with option 3 so at least some answers are wrong, then submit.
+    for (let index = 0; index < 10; index++) {
+      const options = document.querySelectorAll('.quiz-option');
+      await act(async () => { fireEvent.click(options[3]); });
+      const next = screen.queryByRole('button', { name: /পরের প্রশ্ন/ });
+      if (next) await act(async () => { fireEvent.click(next); });
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+    await screen.findByText('ফলাফল');
+    const saved = stored();
+    const wrongCount = saved.examSessions[0].total - saved.examSessions[0].score;
+    if (!wrongCount) return; // every answer happened to be right; nothing to queue.
+    expect(saved.retries).toHaveLength(wrongCount);
+    expect(saved.retries.every((item: { date: string; schedule: string }) => item.schedule === '1,3,7,14,30')).toBe(true);
+    // Back on the setup screen the retry rail counts the same queue.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /নতুন পরীক্ষা/ })); });
+    await screen.findByText('নতুন পরীক্ষা তৈরি করো');
+    const rail = document.querySelector('.exam-retry-card')?.textContent || '';
+    expect(rail).toContain('পুনরায় পরীক্ষার তালিকা');
+
+    // The revision centre carries the same queue.
+    go('revision');
+    expect(await screen.findByText('ভুল প্রশ্নের পুনরায় তালিকা')).toBeTruthy();
+    const retryStats = document.querySelector('.revision-retry-stats')?.textContent || '';
+    expect(retryStats).not.toContain('০০');
+  });
+
+  it('settles a due retry and clears a question answered correctly', async () => {
+    const { freshData, todayKey } = await import('./planner');
+    const { nowIso } = await import('./storage');
+    const data = freshData();
+    const seed = data.questions[0] ?? { id: 'seed-001', subject: 'physics', chapterId: CHAPTERS[0].id, question: 'প্রশ্ন', options: ['ক', 'খ', 'গ', 'ঘ'], answer: 0 };
+    data.retries.push({
+      id: seed.id, questionId: seed.id, subject: seed.subject, chapterId: seed.chapterId,
+      source: 'আগের পরীক্ষা', schedule: '1,3,7,14,30', replayed: 0, cleared: false,
+      date: todayKey(), at: nowIso(), lastAt: nowIso(),
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('examsim');
+    // The rail offers the due paper.
+    const start = await screen.findByRole('button', { name: /ফেরত পাওয়া প্রশ্ন দাও/ });
+    await act(async () => { fireEvent.click(start); });
+    await screen.findByText('চলমান পরীক্ষা');
+    expect(document.querySelectorAll('.exam-palette-cell')).toHaveLength(1);
+    const correct = (seed as { answer?: number }).answer ?? 0;
+    await act(async () => { fireEvent.click(document.querySelectorAll('.quiz-option')[correct]); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+    await screen.findByText('ফলাফল');
+    const after = stored();
+    const item = after.retries.find((row: { questionId: string }) => row.questionId === seed.id);
+    // One rung cleared: it moves to day three rather than disappearing.
+    expect(item).toMatchObject({ replayed: 1, cleared: false, schedule: '3,7,14,30' });
+    expect(item.date > todayKey()).toBe(true);
+  });
+});
+
+describe('weakness detector screen', () => {
+  it('lists a chapter with low MCQ accuracy and explains the reason', async () => {
+    const { freshData, todayKey } = await import('./planner');
+    const data = freshData();
+    const chapter = CHAPTERS.find(item => item.priority === 'A')!;
+    const seedTheme = { id: 'weak-q', subject: chapter.subject, chapterId: chapter.id, question: 'দুর্বলতার প্রশ্ন', options: ['ক', 'খ', 'গ', 'ঘ'], answer: 0, explanation: 'ব্যাখ্যা', source: 'টেস্ট', createdAt: '2026-01-01T00:00:00.000Z' };
+    data.questions.push(seedTheme);
+    data.attempts.push(
+      { id: 'w1', questionId: 'weak-q', subject: chapter.subject, chosen: 3, correct: false, date: todayKey(), at: new Date().toISOString() },
+      { id: 'w2', questionId: 'weak-q', subject: chapter.subject, chosen: 3, correct: false, date: todayKey(), at: new Date().toISOString() },
+      { id: 'w3', questionId: 'weak-q', subject: chapter.subject, chosen: 3, correct: false, date: todayKey(), at: new Date().toISOString() },
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('weakness');
+    expect(await screen.findByText('সব দুর্বল অধ্যায়')).toBeTruthy();
+    const list = document.querySelector('.weakness-list')?.textContent || '';
+    expect(list).toContain(chapter.title);
+    expect(list).toContain('MCQ');
+    // The home dashboard nudges towards the same finding.
+    go('today');
+    expect(await screen.findByText(/অধ্যায়ে দুর্বলতা ধরা পড়েছে/)).toBeTruthy();
+  });
+});
+
+describe('exam routine cadence', () => {
+  it('shows the three slots and runs the daily test from its card', async () => {
+    render(<App />);
+    go('examsim');
+    await screen.findByText('পরীক্ষার রুটিন');
+    const slots = document.querySelectorAll('.exam-routine-slot');
+    expect(slots).toHaveLength(3);
+    expect(document.querySelectorAll('.exam-cadence-dot.daily').length).toBeGreaterThan(0);
+    // A brand-new profile has every slot due.
+    expect(document.querySelectorAll('.exam-routine-slot.due')).toHaveLength(3);
+    // Run the daily short test (10 MCQs).
+    await act(async () => { fireEvent.click(within(slots[0] as HTMLElement).getByRole('button', { name: /এখনই দাও/ })); });
+    await screen.findByText('চলমান পরীক্ষা');
+    expect(document.querySelectorAll('.exam-palette-cell')).toHaveLength(10);
+    for (let index = 0; index < 10; index++) {
+      await act(async () => { fireEvent.click(document.querySelectorAll('.quiz-option')[0]); });
+      const next = screen.queryByRole('button', { name: /পরের প্রশ্ন/ });
+      if (next) await act(async () => { fireEvent.click(next); });
+    }
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /জমা দাও/ })); });
+    await screen.findByText('ফলাফল');
+    expect(stored().examSessions[0].cadence).toBe('daily');
+    // The result screen confirms the routine slot was closed.
+    expect(document.body.textContent).toContain('রুটিন স্লট সম্পন্ন');
+    // Back on setup, the daily slot is no longer due.
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /নতুন পরীক্ষা/ })); });
+    await screen.findByText('পরীক্ষার রুটিন');
+    expect(document.querySelectorAll('.exam-routine-slot.due')).toHaveLength(2);
+  });
+
+  it('mirrors the routine on the Exams screen and links into it', async () => {
+    render(<App />);
+    go('exams');
+    expect(await screen.findByText('পরীক্ষার রুটিন')).toBeTruthy();
+    expect(document.querySelectorAll('.exams-routine-item')).toHaveLength(3);
+    expect(document.querySelectorAll('.exams-routine-item.due')).toHaveLength(3);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /এখনই দাও/ })); });
+    expect(await screen.findByText('নতুন পরীক্ষা তৈরি করো')).toBeTruthy();
+  });
+
+  it('nudges when two clear days passed without a paper', async () => {
+    const { freshData, addDays, todayKey } = await import('./planner');
+    const data = freshData();
+    const today = todayKey();
+    data.examSessions.push({
+      id: 'old', mode: 'chapter', title: 'পুরোনো দৈনিক', chapterIds: [], questionIds: ['seed-001'], answers: {}, score: 5, total: 10,
+      durationMin: 10, timeTakenSec: 200, date: addDays(today, -3), at: `${addDays(today, -3)}T10:00:00.000Z`, breakdown: [], cadence: 'daily',
+    });
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    render(<App />);
+    go('examsim');
+    await screen.findByText('পরীক্ষার রুটিন');
+    expect(document.querySelector('.exam-missed')?.textContent).toContain('দিনে কোনো পরীক্ষা দেওয়া হয়নি');
+  });
+});

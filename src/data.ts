@@ -1,3 +1,5 @@
+import { t } from './i18n';
+
 export type SubjectId = 'physics' | 'chemistry' | 'biology' | 'math' | 'bangla' | 'english' | 'ict';
 export type Priority = 'A' | 'B' | 'C';
 export interface Chapter {
@@ -182,7 +184,16 @@ export const PAPERS = SUBJECTS.flatMap(s => (s.id === 'ict' ? [1] : [1, 2]).map(
 export const sortChapters = (list: Chapter[]) => [...list].sort((a, b) => SUBJECTS.findIndex(s => s.id === a.subject) - SUBJECTS.findIndex(s => s.id === b.subject) || a.paper - b.paper || unitOrder(a.number) - unitOrder(b.number));
 
 export const chapterById = Object.fromEntries(CHAPTERS.map(c => [c.id, c])) as Record<string, Chapter>;
-export const SYLLABUS_NOTE = 'এটি পাঠ্যবইভিত্তিক পরিকল্পনা, বোর্ডের অনুমোদিত সিলেবাস বা কমন প্রশ্নের নিশ্চয়তা নয়। A মানে আগে পড়বে, B মানে এরপর—কোনো অধ্যায় বাদ নয়। বাংলা/ইংরেজিতে দক্ষতাভিত্তিক ইউনিট রাখা হয়েছে; পাঠ নম্বর তোমার HSC 2027 সংস্করণের বইয়ের সঙ্গে মিলাও। নতুন একাদশের ভিন্ন পাঠ্যতালিকা এখানে চাপিয়ে দেওয়া হয়নি।';
+
+const SYLLABUS_NOTE_EN =
+  'A planning aid based on the textbook, not a guarantee of the board-approved syllabus or common questions. A means read first, B means next — no chapter is dropped. The Bangla/English skill-based units are kept; match the lesson numbers with your own HSC 2027 books. A different curriculum for the new eleventh grade has not been forced in here.';
+
+export const syllabusNote = (): string =>
+  t(
+    'এটি পাঠ্যবইভিত্তিক পরিকল্পনা, বোর্ডের অনুমোদিত সিলেবাস বা কমন প্রশ্নের নিশ্চয়তা নয়। A মানে আগে পড়বে, B মানে এরপর—কোনো অধ্যায় বাদ নয়। বাংলা/ইংরেজিতে দক্ষতাভিত্তিক ইউনিট রাখা হয়েছে; পাঠ নম্বর তোমার HSC 2027 সংস্করণের বইয়ের সঙ্গে মিলাও। নতুন একাদশের ভিন্ন পাঠ্যতালিকা এখানে চাপিয়ে দেওয়া হয়নি।',
+    SYLLABUS_NOTE_EN,
+  );
+
 export const SOURCES = [
   { name: 'NCTB — একাদশ–দ্বাদশ পাঠ্যপুস্তক', url: 'https://nctb.gov.bd/pages/static-pages/6ae03d7be0cf994829342115', note: 'মূল পাঠ্যবই ও সংস্করণ যাচাইয়ের প্রাথমিক উৎস।' },
   { name: 'NCTB — পাঠ্যসূচি ও নমুনা প্রশ্ন', url: 'https://nctb.gov.bd/pages/static-pages/6922dff5933eb65569e24d31', note: 'তোমার পরীক্ষার বছরের সর্বশেষ নির্দেশনা এখান থেকে যাচাই করো।' },

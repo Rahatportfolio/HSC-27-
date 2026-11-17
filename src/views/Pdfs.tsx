@@ -12,7 +12,7 @@ import { bn, formatDate } from '../planner';
 import { newId, nowIso } from '../storage';
 import { deleteFile, downloadToFile, filesAvailable, getFile, putFile, storageEstimate } from '../files';
 import { EmptyState, Modal, PageHeading, SubjectBadge } from '../components';
-import { t } from '../i18n';
+import { isEnglish, t } from '../i18n';
 import {
   OFFICIAL_SOURCES, PDF_MATERIALS, PDF_MATERIAL_LABEL, formatBytes, materialSlots, totalPdfBytes,
 } from '../pdfCatalog';
@@ -72,7 +72,7 @@ function PdfViewer({ pdf, onClose }: { pdf: PdfResource; onClose: () => void }) 
     <Modal title={pdf.title} onClose={onClose} wide>
       <div className="chapter-modal-meta">
         <SubjectBadge subject={pdf.subject || 'physics'} />
-        <span>{PDF_MATERIAL_LABEL(pdf.material)}</span>
+        <span>{PDF_MATERIAL_LABEL(pdf.material, isEnglish())}</span>
         {pdf.sizeBytes ? <span>{formatBytes(pdf.sizeBytes)}</span> : null}
         {pdf.lastOpenedAt ? <span>{t('শেষ খোলা', 'Last opened')} {formatDate(pdf.lastOpenedAt.slice(0, 10))}</span> : null}
       </div>
@@ -150,7 +150,7 @@ export default function PdfsView() {
       .filter(pdf => materialFilter === 'all' || pdf.material === materialFilter)
       .filter(pdf => !chapterFilter || pdf.chapterId === chapterFilter)
       .filter(pdf => !bookmarkedOnly || data.pdfBookmarks.includes(pdf.id))
-      .filter(pdf => !q || `${pdf.title} ${pdf.teacher || ''} ${pdf.className || ''} ${pdf.chapterId ? chapterById[pdf.chapterId]?.title : ''} ${PDF_MATERIAL_LABEL(pdf.material)}`.toLowerCase().includes(q))
+      .filter(pdf => !q || `${pdf.title} ${pdf.teacher || ''} ${pdf.className || ''} ${pdf.chapterId ? chapterById[pdf.chapterId]?.title : ''} ${PDF_MATERIAL_LABEL(pdf.material, isEnglish())}`.toLowerCase().includes(q))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   }, [data.pdfs, data.pdfBookmarks, query, subjectFilter, materialFilter, bookmarkedOnly, chapterFilter]);
 
@@ -159,8 +159,8 @@ export default function PdfsView() {
   const addPdf = (event: FormEvent) => {
     event.preventDefault();
     let cleanUrl: string;
-    try { cleanUrl = canonicalUrl(url); if(sourceUrl) canonicalUrl(sourceUrl); } catch { notify('সঠিক public HTTP/HTTPS লিংক দাও', 'error'); return; }
-    if(data.pdfs.some(p => p.url && resourceKey(p.url) === resourceKey(cleanUrl))) { notify('এই resource আগেই যোগ করা আছে', 'info'); return; }
+    try { cleanUrl = canonicalUrl(url); if(sourceUrl) canonicalUrl(sourceUrl); } catch { notify(t('সঠিক public HTTP/HTTPS লিংক দাও', 'Provide a valid public HTTP/HTTPS link'), 'error'); return; }
+    if(data.pdfs.some(p => p.url && resourceKey(p.url) === resourceKey(cleanUrl))) { notify(t('এই resource আগেই যোগ করা আছে', 'This resource was already added'), 'info'); return; }
     if (!title.trim()) { notify(t('ফাইলের নাম লেখো।', 'Give the file a title.'), 'error'); return; }
     if (cleanUrl && !/^https?:\/\//i.test(cleanUrl)) { notify(t('লিংক http/https দিয়ে শুরু হতে হবে।', 'The link must start with http/https.'), 'error'); return; }
     if (!cleanUrl) { notify(t('একটি পিডিএফ লিংক দাও অথবা নিচ থেকে ফাইল বাছো।', 'Paste a PDF link or pick a file below.'), 'error'); return; }
@@ -175,7 +175,7 @@ export default function PdfsView() {
   };
 
   const importFile = async (file: File) => {
-    try{if(sourceUrl)canonicalUrl(sourceUrl);}catch{notify('সঠিক source HTTP/HTTPS link দাও','error');return;}
+    try{if(sourceUrl)canonicalUrl(sourceUrl);}catch{notify(t('সঠিক source HTTP/HTTPS link দাও', 'Provide a valid public source HTTP/HTTPS link'),'error');return;}
     if (file.type && file.type !== 'application/pdf' && !file.name.toLowerCase().endsWith('.pdf')) {
       notify(t('শুধু PDF ফাইল বাছো।', 'Choose a PDF file only.'), 'error');
       return;
@@ -188,8 +188,8 @@ export default function PdfsView() {
     try {
       if(!(await file.slice(0,5).text()).startsWith('%PDF-')) throw new Error('Not a PDF');
       fingerprint = Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await file.arrayBuffer()))).map(b=>b.toString(16).padStart(2,'0')).join('');
-    } catch { setImporting(false); notify('PDF যাচাই করা যায়নি', 'error'); return; }
-    if(data.pdfs.some(p=>p.fingerprint===fingerprint)){setImporting(false);notify('একই PDF আগেই আছে','info');return;}
+    } catch { setImporting(false); notify(t('PDF যাচাই করা যায়নি', 'The PDF could not be verified'), 'error'); return; }
+    if(data.pdfs.some(p=>p.fingerprint===fingerprint)){setImporting(false);notify(t('একই PDF আগেই আছে', 'The same PDF is already added'),'info');return;}
     const id = newId();
     const ok = await putFile({ id, blob: new Blob([file],{type:'application/pdf'}), name: file.name, size: file.size, createdAt: nowIso() });
     setImporting(false);
@@ -286,7 +286,7 @@ export default function PdfsView() {
             <label>Source link<input type="url" value={sourceUrl} maxLength={2000} onChange={e=>setSourceUrl(e.target.value)}/></label>
             <label>{t('ধরন', 'Type')}
               <select value={material} onChange={e => setMaterial(e.target.value as PdfMaterialType)}>
-                {PDF_MATERIALS.map(item => <option key={item.id} value={item.id}>{item.bn}</option>)}
+                {PDF_MATERIALS.map(item => <option key={item.id} value={item.id}>{isEnglish() ? item.en : item.bn}</option>)}
               </select>
             </label>
             <div className="pdf-add-actions">
@@ -316,7 +316,7 @@ export default function PdfsView() {
         </select>
         <select aria-label={t('ধরন ফিল্টার', 'Type filter')} value={materialFilter} onChange={e => setMaterialFilter(e.target.value as PdfMaterialType | 'all')}>
           <option value="all">{t('সব ধরন', 'All types')}</option>
-          {PDF_MATERIALS.map(item => <option key={item.id} value={item.id}>{item.bn}</option>)}
+          {PDF_MATERIALS.map(item => <option key={item.id} value={item.id}>{isEnglish() ? item.en : item.bn}</option>)}
         </select>
         <button className={`button small ${bookmarkedOnly ? 'primary' : 'secondary'}`} aria-pressed={bookmarkedOnly} onClick={() => setBookmarkedOnly(v => !v)}>
           <Bookmark size={14} />{t('বুকমার্ক', 'Bookmarked')}
@@ -339,7 +339,7 @@ export default function PdfsView() {
                   <div className="pdf-row-main">
                     <strong>{pdf.title}</strong><span>{pdf.teacher} · {pdf.className} · {pdf.linkStatus || 'unverified'}</span>
                     <span>
-                      {pdf.subject ? subjectById[pdf.subject]?.short : t('সাধারণ', 'General')} · {PDF_MATERIAL_LABEL(pdf.material)}
+                      {pdf.subject ? subjectById[pdf.subject]?.short : t('সাধারণ', 'General')} · {PDF_MATERIAL_LABEL(pdf.material, isEnglish())}
                       {pdf.chapterId && chapterById[pdf.chapterId] ? ` · ${chapterById[pdf.chapterId].title}` : ''}
                     </span>
                     <small>
@@ -390,7 +390,7 @@ export default function PdfsView() {
           {visibleSlots.map(slot => (
             <div className={`pdf-slot s-${slot.status}`} key={slot.key}>
               <span className="pdf-slot-subject" style={{ color: subjectById[slot.subject].color }}>{subjectById[slot.subject].short}</span>
-              <strong>{PDF_MATERIAL_LABEL(slot.material)}</strong>
+              <strong>{PDF_MATERIAL_LABEL(slot.material, isEnglish())}</strong>
               <em className={`pdf-slot-status ${slot.status}`}>{t(STATUS_LABEL[slot.status].bn, STATUS_LABEL[slot.status].en)}</em>
               {slot.status === 'inApp' && (
                 <button className="text-button" onClick={() => navigate(slot.inAppTarget === 'practice' ? 'practice' : 'library')}>

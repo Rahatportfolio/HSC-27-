@@ -11,10 +11,12 @@ describe('starter MCQ bank', () => {
     expect(BANK_QUESTIONS.length).toBeGreaterThanOrEqual(350);
   });
 
-  it('uses unique ids and a seed- prefix so “only mine” filtering stays correct', () => {
+  it('uses unique ids and marks every shipped question as banked', () => {
     const ids = STARTER_QUESTIONS.map(question => question.id);
     expect(new Set(ids).size).toBe(ids.length);
-    expect(ids.every(id => id.startsWith('seed-'))).toBe(true);
+    // The "only my questions" filter reads `bank`, not an id prefix, so adding a new
+    // bank range can never make a shipped question look like the student's own.
+    expect(STARTER_QUESTIONS.every(question => question.bank === true)).toBe(true);
   });
 
   it('points every question at a real chapter of the same subject', () => {
@@ -47,5 +49,25 @@ describe('starter MCQ bank', () => {
   it('explains the trickier additions so a wrong answer still teaches something', () => {
     const explained = BANK_QUESTIONS.filter(question => (question.explanation || '').trim().length > 0).length;
     expect(explained).toBeGreaterThanOrEqual(25);
+  });
+});
+
+/**
+ * A stray non-Bengali character inside a question or an option is not cosmetic:
+ * 'সেলুলোজ만' shipped as the CORRECT answer to a biology MCQ, so a student reading
+ * it was taught a misspelt fact. This scans the whole bank.
+ */
+describe('no foreign character sneaks into the question bank', () => {
+  it('keeps every question and option in Bengali or plain ASCII', () => {
+    const foreign = /[\u0600-\u06FF\u0900-\u097F\u0400-\u04FF\uAC00-\uD7A3\u3040-\u30FF\u4E00-\u9FFF]/;
+    const offenders: string[] = [];
+    for (const question of [...STARTER_QUESTIONS, ...BANK_QUESTIONS]) {
+      const fields: [string, string][] = [['question', question.question]];
+      question.options.forEach((option, index) => fields.push([`option ${index}`, option]));
+      for (const [where, text] of fields) {
+        if (typeof text === 'string' && foreign.test(text)) offenders.push(`${question.id} ${where}: ${text.slice(0, 50)}`);
+      }
+    }
+    expect(offenders).toEqual([]);
   });
 });

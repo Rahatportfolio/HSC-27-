@@ -119,6 +119,7 @@ export default function FullBackup() {
           type="file"
           accept=".prostuti,application/vnd.prostuti.backup"
           hidden
+          aria-label={t("সম্পূর্ণ ব্যাকআপ ফাইল", "Full backup file")}
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = "";

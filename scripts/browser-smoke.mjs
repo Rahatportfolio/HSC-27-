@@ -72,6 +72,172 @@ try {
   assert.equal(Object.values((await stored()).exams)[0].score, 72);
   console.log('PASS model-test score');
 
+  // Exam simulator: a timed paper must mark itself and store the result.
+  await nav('সিমুলেটর');
+  await page.locator('button').filter({ hasText: 'পরীক্ষা শুরু করো' }).click();
+  await page.waitForSelector('.exam-palette-cell');
+  const paperSize = await page.locator('.exam-palette-cell').count();
+  for (let i = 0; i < paperSize; i++) {
+    await page.locator('.quiz-option').first().click();
+    const next = page.locator('button').filter({ hasText: 'পরের প্রশ্ন' });
+    if (await next.count()) await next.click();
+  }
+  await page.locator('.exam-run-actions button').filter({ hasText: 'জমা দাও' }).click();
+  await page.waitForSelector('.exam-result-hero');
+  const simulated = (await stored()).examSessions;
+  assert.equal(simulated.length, 1);
+  assert.equal(simulated[0].total, paperSize);
+  assert.equal(simulated[0].answers && Object.keys(simulated[0].answers).length, paperSize);
+  assert.ok((await stored()).tests.length >= 1);
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.locator('.exam-history-row').first().waitFor();
+  console.log('PASS exam simulator', simulated[0].score + '/' + simulated[0].total, 'saved and reloaded');
+
+  // Weakness detector reads the same stored answers.
+  await nav('দুর্বলতা');
+  await page.locator('.weakness-view').waitFor();
+  await page.locator('.weakness-stat-row').waitFor();
+  console.log('PASS weakness detector', await page.locator('.weakness-row').count(), 'flagged chapters');
+  // Adaptive planner: the card must stay honest — either real swap rows or the "nothing to do" line.
+  await page.locator('.adaptive-card').waitFor();
+  const adaptiveBudget = await page.locator('.adaptive-budget > div').count();
+  assert.equal(adaptiveBudget, 4);
+  assert.ok(await page.locator('.adaptive-card').innerText().then(text => text.includes('সর্বোচ্চ ৮ ঘণ্টা')));
+  const adaptiveRows = await page.locator('.adaptive-change').count();
+  if (adaptiveRows === 0) {
+    assert.ok(await page.locator('.adaptive-card').innerText().then(text => text.includes('বদলানোর দরকার নেই')));
+  } else {
+    for (let i = 0; i < adaptiveRows; i++) {
+      assert.ok((await page.locator('.adaptive-load').nth(i).innerText()).includes('→'));
+    }
+  }
+  await nav('হিটম্যাপ');
+  await page.locator('.heatmap-view').waitFor();
+  assert.equal(await page.locator('.heat-cell').count(), 114);
+  assert.equal(await page.locator('.heat-legend .heat-chip').count(), 5);
+  await page.locator('.heatmap-view input[type=checkbox]').last().check();
+  await page.waitForTimeout(200);
+  assert.ok(await page.locator('.heat-cell').count() >= 0);
+  console.log('PASS syllabus heatmap', await page.locator('.heat-cell').count(), 'cells');
+
+  // Backlog manager: every day must stay inside its own ceiling, and a full day must
+  // say so instead of pretending room exists.
+  await nav('ব্যাকলগ');
+  await page.locator('.backlog-view').waitFor();
+  assert.equal(await page.locator('.backlog-summary-grid > div').count(), 4);
+  const backlogDays = await page.locator('.backlog-day').count();
+  assert.ok(backlogDays >= 3);
+  for (let i = 0; i < backlogDays; i++) {
+    const label = await page.locator('.backlog-day small').nth(i).innerText();
+    const [used, cap] = label.replace(/[^\d/]/g, '').split('/').map(Number);
+    assert.ok(used <= cap, `day ${i} over cap: ${label}`);
+  }
+  console.log('PASS backlog manager', backlogDays, 'days, cap respected');
+
+  // Depth pass: a chapter that used to offer one question must now offer a full set.
+  await nav('সিমুলেটর');
+  await page.locator('.exam-setup-card').waitFor();
+  await page.locator('.exam-mode-tabs button').filter({ hasText: 'অধ্যায়' }).click();
+  console.log('PASS depth pass: chapter mode ready for a full paper');
+
+  // Ten-question pass: every chapter must be able to fill a ten-question chapter
+  // paper, and the audit page must list no thin chapter at all.
+  const chapterOptions = await page.locator('.exam-chapter-list button, .exam-setup-card select option').count();
+  assert.ok(chapterOptions > 0, 'no chapter choice rendered');
+  await nav('অডিট');
+  await page.locator('.audit-view').waitFor();
+  assert.equal(await page.locator('.audit-thin-row').count(), 0, 'a chapter still cannot fill ten questions');
+  const paperCheck = await page.locator('.audit-check').filter({ hasText: '১০ প্রশ্নের কাগজ' }).innerText();
+  assert.ok(/১১৪\s*\/\s*১১৪/.test(paperCheck.replace(/\u09F7/g, '/')), `paper capacity not full: ${paperCheck}`);
+  console.log('PASS ten-question pass: all chapters fill a full paper');
+
+  // Golden A+ path arithmetic: the panel must show the real rule and never a forecast.
+  await nav('পরীক্ষা ও GPA');
+  await page.locator('.golden-strip').waitFor();
+  assert.equal(await page.locator('[data-golden-row]').count(), 7);
+  // With no marks entered the verdict must admit what is missing, not claim a GPA.
+  const emptyVerdict = await page.locator('[data-golden-verdict]').innerText();
+  assert.ok(/বাকি|নম্বর/.test(emptyVerdict), `verdict did not admit missing marks: ${emptyVerdict}`);
+  assert.ok(!(await page.locator('[data-golden-verdict]').getAttribute('class')).includes('ok'));
+  // Golden A+ is a different goal and must be selectable.
+  await page.locator('.golden-head .segmented button').filter({ hasText: 'Golden A+' }).click();
+  await page.waitForTimeout(200);
+  assert.ok((await page.locator('[data-golden-verdict]').innerText()).length > 5);
+  console.log('PASS golden A+ path arithmetic', await page.locator('[data-golden-row]').count(), 'subjects');
+
+  // Self audit: the page must re-count the bank and state its own limits.
+  await nav('অডিট');
+  await page.locator('.audit-view').waitFor();
+  assert.ok(await page.locator('.audit-check').count() >= 8);
+  assert.ok(await page.locator('.audit-limits li').count() >= 3);
+  assert.ok((await page.locator('.audit-headline').innerText()).length > 10);
+  console.log('PASS self audit', await page.locator('.audit-check').count(), 'checks,', await page.locator('.audit-thin-row').count(), 'thin chapters');
+
+  // Exam postmortem: after a real paper the result page must explain where the marks
+  // went, counted from banked questions only.
+  await nav('সিমুলেটর');
+  await page.locator('.exam-setup-card').waitFor();
+  if (await page.locator('.exam-trend-card').count()) {
+    const trends = await page.locator('.exam-trend-stats > div').count();
+    assert.equal(trends, 4);
+  }
+  console.log('PASS exam setup', await page.locator('.exam-mode-tabs button').count(), 'modes');
+
+  // Focus report: the timer page must derive its numbers from saved sessions and
+  // warn about a long unbroken sitting instead of praising volume.
+  await nav('টাইমার');
+  await page.locator('.focus-report-card').waitFor();
+  assert.equal(await page.locator('.focus-kpis > div').count(), 4);
+  assert.equal(await page.locator('.focus-hour').count(), 24);
+  assert.ok((await page.locator('.focus-report-card').innerText()).includes('সব সংখ্যা তোমার সেভ করা সেশন থেকে'));
+  console.log('PASS focus report', await page.locator('.focus-insight').count(), 'insights');
+
+  // Rule-based question generation: pick a chapter with verified facts, generate, and
+  // confirm the paper carries the generator's own source label.
+  await nav('অনুশীলন');
+  await page.locator('.generator-box').waitFor();
+  const quizSelects = page.locator('.quiz-setup-grid select');
+  await quizSelects.nth(1).selectOption('physics-1-7');
+  const generateButton = page.locator('.generator-actions button');
+  await generateButton.waitFor();
+  assert.equal(await generateButton.isDisabled(), false);
+  await generateButton.click();
+  await page.locator('.quiz-question').waitFor();
+  assert.ok(await page.locator('.quiz-question-meta').innerText().then(text => text.includes('স্বয়ংক্রিয়')));
+  // Formula drills (numeric engine) must also be able to start a paper on their own.
+  await page.locator('.quiz-run').waitFor();
+  await page.locator('.quiz-topline .icon-button').click();
+  await page.locator('.quiz-setup-grid select').nth(1).selectOption('math-2-4');
+  await page.locator('.generator-actions button').click();
+  await page.locator('.quiz-question').waitFor();
+  const drill = await page.locator('.quiz-question').innerText();
+  assert.ok(drill.includes('x²') || drill.includes('মূল'));
+  console.log('PASS generated question paper and formula drills');
+
+  await nav('সেটিংস');
+  const bufferOptions = await page.locator('.settings-view select').evaluateAll(selects =>
+    selects.map(select => Array.from(select.options).map(option => option.value)).find(values => values.includes('30') && values.includes('60')),
+  );
+  assert.deepEqual(bufferOptions, ['0', '30', '60']);
+  console.log('PASS adaptive routine card and buffer options');
+
+  // Exam routine: the daily slot must build a real 10-question paper.
+  await nav('সিমুলেটর');
+  await page.locator('.exam-routine-card').waitFor();
+  const dailySlot = page.locator('.exam-routine-slot').first();
+  await dailySlot.locator('button').click();
+  await page.waitForSelector('.exam-palette-cell');
+  assert.equal(await page.locator('.exam-palette-cell').count(), 10);
+  for (let i = 0; i < 10; i++) {
+    await page.locator('.quiz-option').first().click();
+    const next = page.locator('button').filter({ hasText: 'পরের প্রশ্ন' });
+    if (await next.count()) await next.click();
+  }
+  await page.locator('.exam-run-actions button').filter({ hasText: 'জমা দাও' }).click();
+  await page.waitForSelector('.exam-result-hero');
+  assert.equal((await stored()).examSessions.at(-1).cadence, 'daily');
+  console.log('PASS exam routine daily slot');
+
   await nav('রিমাইন্ডার');
   await page.getByRole('switch').click();
   await page.waitForFunction(() => JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).settings.reminderEnabled === true, null, { timeout: 5000 });

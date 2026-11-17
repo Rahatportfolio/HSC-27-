@@ -68,7 +68,7 @@ export default function NotesScannerView() {
       setActivePage(pages.length);
       setPageEdit({ rotate: 0, brightness: 100, contrast: 100, crop: null, perspective: null });
       notify(`${bn(pages.length + 1)} নম্বর পৃষ্ঠা যোগ করা হয়েছে।`, 'info');
-    } catch { notify('চিত্র লোড করা যায়নি।', 'error'); }
+    } catch { notify(t('চিত্র লোড করা যায়নি।', 'The image could not be loaded.'), 'error'); }
     finally { setCapturing(false); }
   };
 
@@ -115,8 +115,8 @@ export default function NotesScannerView() {
   };
 
   const saveNote = async () => {
-    if (!form.title.trim()) { notify('নোটের শিরোনাম লিখুন।'); return; }
-    if (pages.length === 0) { notify('একটি পৃষ্ঠা স্ক্যান করুন।'); return; }
+    if (!form.title.trim()) { notify(t('নোটের শিরোনাম লিখুন।', 'Write a title for the note.')); return; }
+    if (pages.length === 0) { notify(t('একটি পৃষ্ঠা স্ক্যান করুন।', 'Scan at least one page.')); return; }
     setSaving(true);
     try {
       const pageData = pages.map(p => ({ dataUrl: p.dataUrl, width: p.width, height: p.height }));
@@ -144,13 +144,13 @@ export default function NotesScannerView() {
       setActivePage(null);
       setPageEdit(null);
       setForm({ subject: 'physics', chapterId: '', title: '' });
-    } catch { notify('নোট সেভ করা যায়নি।', 'error'); }
+    } catch { notify(t('নোট সেভ করা যায়নি।', 'The note could not be saved.'), 'error'); }
     finally { setSaving(false); }
   };
 
   const exportPdf = async (note: import('../types').ScannedNoteMeta) => {
     const urls = await loadPagesFromDb(note.pageKeys);
-    if (!urls.length) { notify('পৃষ্ঠা পাওয়া যায়নি।', 'error'); return; }
+    if (!urls.length) { notify(t('পৃষ্ঠা পাওয়া যায়নি।', 'Page not found.'), 'error'); return; }
     const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
     const pageW = pdf.internal.pageSize.getWidth();
     const pageH = pdf.internal.pageSize.getHeight();
@@ -172,14 +172,14 @@ export default function NotesScannerView() {
       return { ...d, scannedNotes: next };
     });
     writeScannedMeta(readScannedMeta().map(n => n.id === note.id ? { ...n, pdfExported: true } : n));
-    notify('পিডিএফ রপ্তানি করা হয়েছে।', 'success');
+    notify(t('পিডিএফ রপ্তানি করা হয়েছে।', 'PDF exported.'), 'success');
   };
 
   const deleteNote = async (note: import('../types').ScannedNoteMeta) => {
     await deletePagesFromDb(note.pageKeys);
     setData(d => ({ ...d, scannedNotes: d.scannedNotes.filter(n => n.id !== note.id) }));
     writeScannedMeta(readScannedMeta().filter(n => n.id !== note.id));
-    notify('নোট মুছে ফেলা হয়েছে।', 'success');
+    notify(t('নোট মুছে ফেলা হয়েছে।', 'Note deleted.'), 'success');
   };
 
   const notesByChapter = useMemo(() => {
@@ -194,13 +194,15 @@ export default function NotesScannerView() {
   }, [meta]);
 
   return (
-    <div className="page">
+    <div className="view scanner-view">
       <input
         ref={cameraRef}
         type="file"
         accept="image/*"
         capture="environment"
         onChange={handleFiles}
+        aria-label={t('ক্যামেরায় নোটের ছবি তোলো', 'Capture note with camera')}
+        tabIndex={-1}
         className="sr-only"
       />
       <input
@@ -209,6 +211,8 @@ export default function NotesScannerView() {
         accept="image/*"
         multiple
         onChange={handleFiles}
+        aria-label={t('নোটের ছবি ফাইল থেকে বেছে নাও', 'Choose note images from files')}
+        tabIndex={-1}
         className="sr-only"
       />
       <PageHeading

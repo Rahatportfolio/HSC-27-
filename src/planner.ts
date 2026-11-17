@@ -5,7 +5,7 @@ import type {
   BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
   ImportantDate, PersonalNote, PdfResource, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
   SettingsExtras, StudySession, SubjectMarks, TaskEdit, TestRecord, VideoLink, Flashcard,
-  ScannedNoteMeta,
+  ScannedNoteMeta, ExamSession, RetryItem,
 } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
@@ -34,6 +34,8 @@ export const DEFAULT_SETTINGS: Settings = {
   boostEnabled: true,
   boostStartDate: '2026-12-01',
   boostDailyHours: 16,
+  adaptiveEnabled: true,
+  adaptiveBuffer: 30,
   board: 'সিলেট',
   name: '',
   reminderEnabled: false,
@@ -111,6 +113,10 @@ export interface AppData {
   attempts: QuizAttempt[];
   cq: CqEntry[];
   tests: TestRecord[];
+  /** Auto-marked MCQ exams from the exam simulator (newest last). */
+  examSessions: ExamSession[];
+  /** Questions that are owed another attempt, on a spaced ladder. */
+  retries: RetryItem[];
   libraryNotes: PersonalNote[];
   videos: VideoLink[];
   boardQuestions: BoardQuestion[];
@@ -160,6 +166,8 @@ export const freshData = (): AppData => ({
   attempts: [],
   cq: [],
   tests: [],
+  examSessions: [],
+  retries: [],
   libraryNotes: [],
   videos: [],
   boardQuestions: [],
@@ -389,15 +397,15 @@ function learnDetail(c: Chapter, part: number, totalPartsToday: number): string 
       'রূপান্তর ও শনাক্তকরণ না দেখে লিখে অনুশীলন',
       'বিগত বোর্ডের বাছাইকৃত CQ ও MCQ সমাধান',
     ];
-    return `${topics[part - 1]}। শেষে না দেখে ২টি CQ ও ১৫টি MCQ সমাধান করো।`;
+    return isEnglish() ? `${topics[part - 1]}. Then solve 2 CQs and 15 MCQs without looking.` : `${topics[part - 1]}। শেষে না দেখে ২টি CQ ও ১৫টি MCQ সমাধান করো।`;
   }
   if (part === 1) {
-    return `${c.focus}। আগে ওয়ান শট ক্লাস দেখে নাও, এরপর মূল বই থেকে সূত্র ও সংজ্ঞা নিজের খাতায় গুছিয়ে লেখো।`;
+    return isEnglish() ? `${c.focus}. Watch the one-shot class first, then write the formulas and definitions from the main book into your own notes.` : `${c.focus}। আগে ওয়ান শট ক্লাস দেখে নাও, এরপর মূল বই থেকে সূত্র ও সংজ্ঞা নিজের খাতায় গুছিয়ে লেখো।`;
   }
   if (part === c.effort) {
-    return `${c.focus}। সলভিং ক্লাস দেখে বিগত বোর্ডের অন্তত ৩টি CQ ও ২৫টি MCQ ঘড়ি ধরে সমাধান করো।`;
+    return isEnglish() ? `${c.focus}. After the solving class, do at least 3 board CQs and 25 MCQs against the clock.` : `${c.focus}। সলভিং ক্লাস দেখে বিগত বোর্ডের অন্তত ৩টি CQ ও ২৫টি MCQ ঘড়ি ধরে সমাধান করো।`;
   }
-  return `${c.focus}। পাঠ্যবইয়ের উদাহরণ, গাণিতিক সমস্যা ও চিত্র হাতে-কলমে অনুশীলন করো (${bn(totalPartsToday)} ধাপের সেশন)।`;
+  return isEnglish() ? `${c.focus}. Work through the textbook examples, numericals and diagrams by hand (a ${totalPartsToday}-step session).` : `${c.focus}। পাঠ্যবইয়ের উদাহরণ, গাণিতিক সমস্যা ও চিত্র হাতে-কলমে অনুশীলন করো (${bn(totalPartsToday)} ধাপের সেশন)।`;
 }
 
 type RawEntry = Omit<Task, 'date' | 'dayIndex' | 'phase' | 'startMinute' | 'endMinute'> & { weight?: number };

@@ -12,6 +12,9 @@ import { INTERVAL_LABEL } from './revision';
 import { dueFlashcards } from './flashcards';
 import { usePlanner } from './context';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, Modal, ProgressBar, SubjectBadge } from './components';
+import { STARTER_QUESTIONS } from './quiz-data';
+import { CLASS_CATALOG } from './videoCatalog';
+import { bnNum } from './selfAudit';
 import { t } from './i18n';
 import { chapterPriority, chapterStage, isLearningComplete, STAGES, STEPS } from './learning';
 import type { ChapterStage, MistakeCategory } from './types';
@@ -43,19 +46,37 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
     {c.note && <div className="notice-box"><BookOpen size={18} /><p>{c.note}</p></div>}
     <div className="chapter-modal-progress"><span>{bn(done)}/{bn(tasks.length)} ধাপ শেষ · {isLearningComplete(stage) ? 'অধ্যায় সম্পন্ন' : 'প্রতিটি ধাপ আলাদাভাবে টিক দাও'}</span><ProgressBar value={percent(done, tasks.length)} /></div>
     <div className="chapter-session-list">{tasks.map((t, index) => <div key={t.id} className="chapter-session"><button className={`task-check ${data.completed[t.id] ? 'checked' : ''}`} aria-pressed={!!data.completed[t.id]} aria-label={`${formatDate(t.date)} ধাপ সম্পন্ন`} onClick={() => toggleTask(t.id)}>{data.completed[t.id] && <Check size={16} />}</button><div><strong>{formatDate(t.date, 'long')} · ধাপ {bn(index + 1)}</strong><span>{formatTime(t.startMinute)}{formatDayOffset(t.startMinute)} – {formatTime(t.endMinute)}{formatDayOffset(t.endMinute)}</span><p>{t.detail}</p></div></div>)}</div>
-    {!tasks.length && <EmptyState title={t("এই ইউনিটের তারিখ পাওয়া যায়নি", "No date found for this unit")} description="সেটিংস থেকে শুরুর তারিখ যাচাই করো।" />}
+    {!tasks.length && <EmptyState title={t("এই ইউনিটের তারিখ পাওয়া যায়নি", "No date found for this unit")} description={t('সেটিংস থেকে শুরুর তারিখ যাচাই করো।', 'Check the start date in Settings.')} />}
     <div className="chapter-tool-row">
       {tasks.length > 0 && <button className="button secondary" onClick={() => setData(d => { const finish = !isLearningComplete(chapterStage(c, d, plan)); return updateChapterMeta(setTaskCompletion(d, tasks.map(task => task.id), finish), c.id, { stage: finish ? 'completed' : 'inProgress' }); })}><Check size={16} />{isLearningComplete(stage) ? t('অধ্যায় অসম্পূর্ণ করো', 'Mark chapter incomplete') : t('পুরো অধ্যায় সম্পন্ন করো', 'Mark chapter complete')}</button>}
       <button className="button secondary" onClick={() => { startTimer(c.subject, c.id); onClose(); }}><Timer size={16} />{t("এই অধ্যায়ে টাইমার", "Timer for this chapter")}</button>
       <button className={`button secondary ${meta.weak ? 'selected' : ''}`} aria-pressed={meta.weak} onClick={() => setData(d => updateChapterMeta(d, c.id, { weak: !meta.weak }))}><NotebookPen size={16} />{meta.weak ? 'দুর্বল তালিকা থেকে সরাও' : 'দুর্বল হিসেবে রাখো'}</button>
       {tasks[0] && <button className="button secondary" onClick={() => { navigate('today', tasks[0].date); onClose(); }}>{t("রুটিনে দেখো", "See it in the routine")}<ArrowRight size={16} /></button>}
     </div>
+    {(() => {
+      // The student asked whether these are real board questions. They are not,
+      // and this line says so per chapter, with the real counts behind it.
+      // The class block above reads the older per-chapter list, which has no board
+      // group; the verified catalog does, so the board count comes from there.
+      const boardLinks = CLASS_CATALOG.filter(item => item.chapterId === c.id && item.classType === 'board').length;
+      const bank = STARTER_QUESTIONS.filter(question => question.chapterId === c.id).length;
+      return <div className="chapter-source-note">
+        <p><strong>{t('প্রশ্নের উৎস', 'Where the questions come from')}</strong>{' '}
+          {t(
+            `এই অধ্যায়ের ${bnNum(bank)}টি MCQ অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে—বোর্ডের মূল প্রশ্নপত্র থেকে নয়।`,
+            `This chapter's ${bank} MCQs come from the app's own textbook-checked bank, not an original board paper.`,
+          )}</p>
+        <p className="tiny-muted">{boardLinks > 0
+          ? t(`এই অধ্যায়ে ${bnNum(boardLinks)}টি বোর্ড-প্রশ্নের ভিডিও লিংক যাচাই করা আছে।`, `${boardLinks} board-question video link(s) are verified for this chapter.`)
+          : t('এই অধ্যায়ে বোর্ড-প্রশ্নের যাচাই করা ভিডিও নেই—তাই অ্যাপ কোনো বোর্ড প্রশ্নের দাবি করে না।', 'No verified board-question video exists for this chapter, so the app makes no board-paper claim here.')}</p>
+      </div>;
+    })()}
     <div className="prep-grid">
       {(['mcq', 'cq'] as const).map(kind => <div className="prep-row" key={kind}><strong>{kind === 'mcq' ? 'MCQ প্রস্তুতি' : 'CQ প্রস্তুতি'}</strong><div className="segmented small">{(['none', 'practicing', 'ready'] as const).map(level => <button key={level} className={meta[kind] === level ? 'active' : ''} aria-pressed={meta[kind] === level} onClick={() => setData(d => updateChapterMeta(d, c.id, { [kind]: level }))}>{PREP_LABEL[level]}</button>)}</div></div>)}
     </div>
     <label className="form-label">{t("অধ্যায়ের নিজের নোট", "Your notes on this chapter")}<textarea rows={4} maxLength={5000} value={meta.note} onChange={e => setData(d => updateChapterMeta(d, c.id, { note: e.target.value }))} placeholder={t("মূল সূত্র, বোঝার কৌশল, যেখানে আটকাও…", "Main formula, how to grasp it, where you get stuck…")} /></label>
     {revisions.length > 0 && <div className="chapter-revisions"><strong>{t("এই অধ্যায়ের রিভিশন", "Revision for this chapter")}</strong>{revisions.map(item => <span key={item.id}>{INTERVAL_LABEL[item.interval]} · {formatDate(item.dueDate)}</span>)}</div>}
-    <div className="confidence-section"><strong>{t("এই অধ্যায়ে কতটা আত্মবিশ্বাসী?", "How confident are you in this chapter?")}</strong><div>{(['weak', 'okay', 'confident'] as const).map((level, i) => <button key={level} className={`button secondary ${data.confidence[c.id] === level ? 'selected' : ''}`} aria-pressed={data.confidence[c.id] === level} onClick={() => setData(d => ({ ...d, confidence: { ...d.confidence, [c.id]: level } }))}>{['আবার দেখব', 'মোটামুটি বুঝি', 'আত্মবিশ্বাসী'][i]}</button>)}</div><small>এটি নিজের মূল্যায়ন; সম্পন্ন ধাপ বা MCQ স্কোর বদলায় না।</small></div>
+    <div className="confidence-section"><strong>{t("এই অধ্যায়ে কতটা আত্মবিশ্বাসী?", "How confident are you in this chapter?")}</strong><div>{(['weak', 'okay', 'confident'] as const).map((level, i) => <button key={level} className={`button secondary ${data.confidence[c.id] === level ? 'selected' : ''}`} aria-pressed={data.confidence[c.id] === level} onClick={() => setData(d => ({ ...d, confidence: { ...d.confidence, [c.id]: level } }))}>{['আবার দেখব', 'মোটামুটি বুঝি', 'আত্মবিশ্বাসী'][i]}</button>)}</div><small>{t('এটি নিজের মূল্যায়ন; সম্পন্ন ধাপ বা MCQ স্কোর বদলায় না।', 'This is your own assessment; it does not change completed steps or MCQ scores.')}</small></div>
     <div className="modal-actions"><button className="button secondary" onClick={onClose}>{t("বন্ধ করো", "Close")}</button></div>
   </Modal>;
 }
@@ -72,9 +93,9 @@ export function ExamModal({ paperId, onClose }: { paperId: string; onClose: () =
     e.preventDefault(); const n = Number(score);
     if (!score.trim() || !Number.isFinite(n) || n < 0 || n > paper.maxScore) { setError(`০ থেকে ${bn(paper.maxScore)}-এর মধ্যে নম্বর লেখো।`); return; }
     setData(d => { const updated = { ...d, exams: { ...d.exams, [paperId]: { score: n, total: paper.maxScore, at: nowIso(), mistakes: mistakes.trim() } } }; return task ? setTaskCompletion(updated, [task.id], true) : updated; });
-    notify('মডেল টেস্টের নম্বর সেভ হয়েছে। ভুলগুলো থেকে শেখা চালিয়ে যাও।'); onClose();
+    notify(t('মডেল টেস্টের নম্বর সেভ হয়েছে। ভুলগুলো থেকে শেখা চালিয়ে যাও।', 'Model test score saved. Keep learning from the mistakes.')); onClose();
   };
-  return <Modal title={`${paper.name} · নম্বর`} onClose={onClose}><div className="chapter-modal-meta"><SubjectBadge subject={paper.subject} /><span>{task && formatDate(task.date, 'long')}</span></div><p className="modal-description">নিজে মূল্যায়ন করা তত্ত্বীয় নম্বর লেখো। এটি বোর্ডের ফল বা GPA হিসাব নয়।</p><form onSubmit={submit}><div className="score-input-row"><label>{t("তোমার নম্বর", "Your marks")}<input data-autofocus type="number" min={0} max={paper.maxScore} step="0.5" required value={score} onChange={e => { setScore(e.target.value); setError(''); }} placeholder={t("যেমন ৭২", "e.g. 72")} /></label><span>/ {bn(paper.maxScore)}</span></div>{error && <p className="field-error" role="alert">{error}</p>}<label className="form-label">{t("কোথায় নম্বর হারালে?", "Where did you lose marks?")}<textarea value={mistakes} maxLength={5000} rows={5} onChange={e => setMistakes(e.target.value)} placeholder={t("অধ্যায়/টপিক, ভুলের কারণ, পরেরবার কী করবে…", "Chapter/topic, why it went wrong, what to do next…")} /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button type="submit" className="button primary"><Check size={16} />{t("নম্বর সেভ করো", "Save marks")}</button></div></form></Modal>;
+  return <Modal title={`${paper.name} · নম্বর`} onClose={onClose}><div className="chapter-modal-meta"><SubjectBadge subject={paper.subject} /><span>{task && formatDate(task.date, 'long')}</span></div><p className="modal-description">{t('নিজে মূল্যায়ন করা তত্ত্বীয় নম্বর লেখো। এটি বোর্ডের ফল বা GPA হিসাব নয়।', 'Enter the theory mark you assessed yourself. This is not a board result or GPA calculation.')}</p><form onSubmit={submit}><div className="score-input-row"><label>{t("তোমার নম্বর", "Your marks")}<input data-autofocus type="number" min={0} max={paper.maxScore} step="0.5" required value={score} onChange={e => { setScore(e.target.value); setError(''); }} placeholder={t("যেমন ৭২", "e.g. 72")} /></label><span>/ {bn(paper.maxScore)}</span></div>{error && <p className="field-error" role="alert">{error}</p>}<label className="form-label">{t("কোথায় নম্বর হারালে?", "Where did you lose marks?")}<textarea value={mistakes} maxLength={5000} rows={5} onChange={e => setMistakes(e.target.value)} placeholder={t("অধ্যায়/টপিক, ভুলের কারণ, পরেরবার কী করবে…", "Chapter/topic, why it went wrong, what to do next…")} /></label><div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button type="submit" className="button primary"><Check size={16} />{t("নম্বর সেভ করো", "Save marks")}</button></div></form></Modal>;
 }
 
 const MISTAKE_CATEGORY_LABEL: Record<MistakeCategory, string> = {
@@ -90,12 +111,12 @@ export function MistakeModal({ subject, initialText, onClose }: { subject: Subje
   const [s, setS] = useState(subject), [textValue, setTextValue] = useState(initialText), [category, setCategory] = useState<MistakeCategory>('careless'), [error, setError] = useState('');
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!textValue.trim()) { setError('কী ভুল হয়েছে, ছোট করে লেখো।'); return; }
+    if (!textValue.trim()) { setError(t('কী ভুল হয়েছে, ছোট করে লেখো।', 'Describe what went wrong, briefly.')); return; }
     if (data.mistakes.length >= MISTAKE_LIMIT) { setError(`ভুলের খাতায় সর্বোচ্চ ${MISTAKE_LIMIT}টি নোট রাখা যায়। আগে কিছু নোট মুছে নাও।`); return; }
     setData(d => ({ ...d, mistakes: [...d.mistakes, { id: newId(), subject: s, text: textValue.trim(), date: today, category, retryStatus: 'pending', resolved: false }] }));
-    notify('ভুলের খাতায় যোগ হয়েছে। পরে শুধরে নিও।'); onClose();
+    notify(t('ভুলের খাতায় যোগ হয়েছে। পরে শুধরে নিও।', 'Added to the mistake book. Fix it later.')); onClose();
   };
-  return <Modal title={t("ভুল থেকেই শেখা", "Learning from mistakes")} onClose={onClose}><p className="modal-description">একটি ভুল, তার কারণ, বিভাগ আর পরেরবার কী করবে—লিখে রাখো। পরীক্ষার আগে এটি পুনরায় সমাধান করো।</p><form onSubmit={submit}><label className="form-label">{t("বিষয়", "Subject")}<select value={s} onChange={e => setS(e.target.value as SubjectId)}>{SUBJECTS.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}</select></label><label className="form-label">{t("ভুলের বিভাগ", "Mistake category")}<select value={category} onChange={e => setCategory(e.target.value as MistakeCategory)}>{(['conceptual', 'calculation', 'memory', 'misunderstood', 'careless'] as const).map(cat => <option key={cat} value={cat}>{MISTAKE_CATEGORY_LABEL[cat]}</option>)}</select></label><label className="form-label">{t("আমার নোট", "My notes")}<textarea data-autofocus rows={5} maxLength={5000} value={textValue} onChange={e => { setTextValue(e.target.value); setError(''); }} placeholder={t("যেমন: ভেক্টরের ক্রস গুণে দিক ভুল করেছি। ডান হাতের নিয়ম আবার অনুশীলন করব।", "e.g. I got the cross-product direction wrong. Practise the right-hand rule again.")} /></label>{error && <p className="field-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button className="button primary" type="submit"><NotebookPen size={16} />{t("যোগ করো", "Add")}</button></div></form></Modal>;
+  return <Modal title={t("ভুল থেকেই শেখা", "Learning from mistakes")} onClose={onClose}><p className="modal-description">{t('একটি ভুল, তার কারণ, বিভাগ আর পরেরবার কী করবে—লিখে রাখো। পরীক্ষার আগে এটি পুনরায়', 'Record a mistake, its cause, the topic and what you will do next time. Review it again before')} সমাধান করো।</p><form onSubmit={submit}><label className="form-label">{t("বিষয়", "Subject")}<select value={s} onChange={e => setS(e.target.value as SubjectId)}>{SUBJECTS.map(sub => <option key={sub.id} value={sub.id}>{sub.name}</option>)}</select></label><label className="form-label">{t("ভুলের বিভাগ", "Mistake category")}<select value={category} onChange={e => setCategory(e.target.value as MistakeCategory)}>{(['conceptual', 'calculation', 'memory', 'misunderstood', 'careless'] as const).map(cat => <option key={cat} value={cat}>{MISTAKE_CATEGORY_LABEL[cat]}</option>)}</select></label><label className="form-label">{t("আমার নোট", "My notes")}<textarea data-autofocus rows={5} maxLength={5000} value={textValue} onChange={e => { setTextValue(e.target.value); setError(''); }} placeholder={t("যেমন: ভেক্টরের ক্রস গুণে দিক ভুল করেছি। ডান হাতের নিয়ম আবার অনুশীলন করব।", "e.g. I got the cross-product direction wrong. Practise the right-hand rule again.")} /></label>{error && <p className="field-error" role="alert">{error}</p>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>{t("বাতিল", "Cancel")}</button><button className="button primary" type="submit"><NotebookPen size={16} />{t("যোগ করো", "Add")}</button></div></form></Modal>;
 }
 
 export function SearchModal({ onClose, onChapter }: { onClose: () => void; onChapter: (c: Chapter) => void }) {
@@ -181,7 +202,7 @@ export function SearchModal({ onClose, onChapter }: { onClose: () => void; onCha
       {videos.length > 0 && <><div className="search-group-label">{t("ভিডিও", "Video")}</div>{videos.map(video => <a className="search-result" key={video.id} href={video.url} target="_blank" rel="noreferrer"><span className="search-result-icon"><Clock3 size={18} /></span><span><strong>{video.title}</strong><small>{video.channel || 'YouTube'} · {subjectById[video.subject].name}</small></span><ArrowUpRight size={17} /></a>)}</>}
       {formulas.length > 0 && <><div className="search-group-label">{t("সূত্র", "Formulas")}</div>{formulas.map(formula => <button className="search-result" key={formula.id} onClick={() => { navigate('library'); onClose(); }}><span className="search-result-icon"><BookOpen size={18} /></span><span><strong>{formula.title}</strong><small>{subjectById[formula.subject].name}</small></span><ChevronRight size={17} /></button>)}</>}
       {flashcardsResult.length > 0 && <><div className="search-group-label">{t("ফ্ল্যাশকার্ড", "Flashcards")}</div>{flashcardsResult.map(card => <button className="search-result" key={card.id} onClick={() => { navigate('flashcards'); onClose(); }}><span className="search-result-icon"><List size={18} /></span><span><strong>{card.front}</strong><small>{subjectById[card.subject].name}</small></span><ChevronRight size={17} /></button>)}</>}
-      {nothing && <EmptyState title={t("কিছু পাওয়া যায়নি", "Nothing found")} description="বিষয়ের নাম, শিক্ষকের নাম, অধ্যায়ের শব্দ বা তারিখ দিয়ে আবার খুঁজো।" />}
+      {nothing && <EmptyState title={t("কিছু পাওয়া যায়নি", "Nothing found")} description={t('বিষয়ের নাম, শিক্ষকের নাম, অধ্যায়ের শব্দ বা তারিখ দিয়ে আবার খুঁজো।', 'Search again by subject, teacher, chapter word or date.')} />}
     </div>
     <div className="search-footer"><span>{bn(CHAPTERS.length)} {t('অধ্যায়/ইউনিট', 'chapters')} · {bn(plan.length)} {t('দিন', 'days')} · <kbd>/</kbd> {t('বা', 'or')} <kbd>Ctrl+K</kbd></span><button className="text-button" onClick={() => { navigate('calendar', today); onClose(); }}>{t("ক্যালেন্ডার দেখো", "Open the calendar")}<ArrowRight size={14} /></button></div>
   </Modal>;

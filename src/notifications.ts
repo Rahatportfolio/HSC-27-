@@ -10,6 +10,7 @@ import {
   phaseName,
 } from './planner';
 import type { AppData, Day, Task } from './planner';
+import { nextCadenceSlot } from './cadence';
 
 export interface DailyNotificationDigest {
   date: string;
@@ -191,6 +192,19 @@ export function buildDailyStatusNotification(plan: Day[], data: AppData, date: s
     title: `📚 আজকের পড়া · কমপ্লিট করতে বাকি ${formatDurationBn(digest.remainingMinutes)} (${bn(digest.remainingTasks)}/${bn(digest.totalTasks)} সেশন)`,
     body: `আজ কী পড়া: ${digest.whatToStudy}\nমোট পড়া: ${digest.totalSummary} · সম্পন্ন: ${digest.completedSummary}\nকমপ্লিট করা লাগবে: ${digest.remainingSummary}${nextRemainingText ? ` — ${nextRemainingText}` : ''}${pastLineBn}`,
   };
+}
+
+/**
+ * Morning briefing line for the exam routine: which paper is owed today.
+ * Returns null when every slot is already closed, so the briefing never nags for nothing.
+ */
+export function buildExamRoutineLine(data: AppData, date: string): string | null {
+  const slot = nextCadenceSlot(data, date);
+  if (!slot) return null;
+  const late = slot.lateDays > 0 ? (isEnglish() ? ` · ${slot.lateDays} day(s) late` : ` · ${bn(slot.lateDays)} দিন দেরি`) : '';
+  return isEnglish()
+    ? `📝 Today's paper: ${slot.labelEn} · ${slot.questions} MCQs · ${slot.questions} min${late}`
+    : `📝 আজকের পরীক্ষা: ${slot.label} · ${bn(slot.questions)}টি MCQ · ${bn(slot.questions)} মিনিট${late}`;
 }
 
 /**

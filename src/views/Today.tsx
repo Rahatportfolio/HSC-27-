@@ -1,13 +1,14 @@
 import DailyGoals from '../components/DailyGoals';
 import { StudyOverview } from './StudySystem';
 import { learningDashboard } from '../learning';
+import { weaknessSummary } from '../weakness';
 import { classProgress } from '../classes';
 import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import {
   ArrowRight, ArrowUpRight, Bell, BellRing, BookOpen, CalendarDays, Check, CheckCheck, ChevronDown,
-  ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, FolderOpen, HeartPulse, ListChecks, Minus,
-  NotebookPen, Pause, Play, Plus, RotateCcw, Sparkles, Timer, Trash2, Zap,
+  ChevronLeft, ChevronRight, ClipboardCheck, Clock3, Flame, FolderOpen, HeartPulse, Layers, ListChecks, Minus,
+  NotebookPen, Pause, Play, Plus, RotateCcw, ShieldAlert, Sparkles, Timer, Trash2, Zap,
 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { chapterById, subjectById, SUBJECTS } from '../data';
@@ -25,6 +26,7 @@ import { revisionBuckets, INTERVAL_LABEL } from '../revision';
 import { t } from '../i18n';
 import { newId } from '../storage';
 import { motivationFor } from '../motivation';
+import { planBacklog } from '../backlog';
 import { dueCount as flashcardDueCount } from '../flashcards';
 import { unresolvedMistakeCount } from '../study';
 import { testPrepStats } from '../testPrep';
@@ -135,6 +137,9 @@ export default function TodayView() {
   const buckets = revisionBuckets(data.revisions, today);
   const due = [...buckets.overdue, ...buckets.today];
   const carryovers = carryoversOn(data, selectedDate);
+  const backlog = planBacklog(plan, data, today);
+  const backlogCount = backlog.items.length;
+  const backlogHours = Math.round(backlog.totalMinutes / 6) / 10;
   const motivation = motivationFor(today);
 
   const filteredTasks = day?.tasks.filter(task => (taskSubject === 'all' || task.subject === taskSubject) && (taskStatus === 'all' || (taskStatus === 'done') === !!data.completed[task.id])) || [];
@@ -211,7 +216,7 @@ export default function TodayView() {
       delete copy[selectedDate];
       return { ...d, dayOverrides: copy };
     });
-    notify('এই দিনের সময়সূচি ডিফল্ট অবস্থায় ফিরে গেছে।', 'info');
+    notify(t('এই দিনের সময়সূচি ডিফল্ট অবস্থায় ফিরে গেছে।', 'This day’s schedule is back to the default.'), 'info');
   };
 
   const markTasksComplete = (tasksToMark: Task[]) => {
@@ -320,7 +325,7 @@ export default function TodayView() {
                       type="button"
                       className={`task-check small ${tkDone ? 'checked' : ''}`}
                       aria-pressed={tkDone}
-                      aria-label={`${tk.title} সম্পন্ন`}
+                      aria-label={t(`${tk.title} সম্পন্ন`, `Mark ${tk.title} complete`)}
                       onClick={() => toggleTask(tk.id)}
                     >
                       {tkDone && <Check size={13} strokeWidth={2.6} />}
@@ -378,6 +383,7 @@ export default function TodayView() {
   );
 
   const learning = learningDashboard(data, plan);
+  const weakness = weaknessSummary(plan, data, today);
   const watchedClasses = classProgress(data);
   const prep = testPrepStats(data, plan, today);
   const dueCount = flashcardDueCount(data, today);
@@ -392,6 +398,18 @@ export default function TodayView() {
   const mcqPart = mcqAcc * 0.2;
   const examReadiness = Math.round(syllabusPart + mockPart + mcqPart);
   return <div className="view today-view"><StudyOverview /><DailyGoals key={today}/>
+    {weakness.total > 0 && <div className="home-weakness-alert" role="status">
+      <ShieldAlert size={20} />
+      <div>
+        <strong>{weakness.dueRetries > 0
+          ? t(`${bn(weakness.dueRetries)}টি ভুল প্রশ্ন ফেরত পাওয়ার অপেক্ষায়`, `${weakness.dueRetries} wrong question(s) waiting for a retry`)
+          : t(`${bn(weakness.total)}টি অধ্যায়ে দুর্বলতা ধরা পড়েছে`, `${weakness.total} chapter(s) flagged as weak`)}</strong>
+        <span>{weakness.focus[0]
+          ? t(`আজ আগে: ${chapterById[weakness.focus[0].chapterId]?.title || ''}`, `Start with: ${chapterById[weakness.focus[0].chapterId]?.title || ''}`)
+          : t('বিশ্লেষণে দেখো কোন অধ্যায়ে নম্বর কমছে।', 'See which chapters are losing marks.')}</span>
+      </div>
+      <button className="button secondary small" onClick={() => navigate('weakness')}>{t('দুর্বলতা দেখো', 'Open weak spots')}<ChevronRight size={15} /></button>
+    </div>}
     <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
       <ProgressBar value={learning.overall.percent} />
@@ -671,9 +689,10 @@ export default function TodayView() {
 
     <div className="stats-grid">
       <button className="stat-card stat-link" onClick={() => navigate('syllabus')}><span className="stat-icon green"><BookOpen size={19} /></span><div><span>{t('সিলেবাস সম্পন্ন', 'Syllabus progress')}</span><strong>{bn(learning.overall.percent)}<small>%</small></strong><p>{bn(learning.overall.completed)} / {bn(learning.overall.total)} {t('অধ্যায় ও ইউনিট', 'chapters & units')}</p></div><ProgressBar value={learning.overall.percent} className="stat-progress" /></button>
-      <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> ঘণ্টা {bn(weekMinutes % 60)} মি.</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
+      <button className="stat-card stat-link" onClick={() => navigate('timer')}><span className="stat-icon peach"><Clock3 size={19} /></span><div><span>{t('এ সপ্তাহের পড়া', 'Studied this week')}</span><strong>{bn(Math.floor(weekMinutes / 60))}<small> {t('ঘণ্টা', 'h')} {bn(weekMinutes % 60)} {t('মি.', 'm')}</small></strong><p>{t('মোট', 'Total')} {bn(totalHours)} {t('ঘণ্টা টাইমারে', 'hours on timer')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => navigate('analytics')}><span className="stat-icon lavender"><Flame size={19} /></span><div><span>{t('টানা পড়ার ধারা', 'Active streak')}</span><strong>{bn(stats.streak)}<small> {t('দিন', 'days')}</small></strong><p>{stats.streak ? t('ধারাবাহিকতা বজায় রাখো', 'Keep this streak going') : t('আজ থেকেই শুরু হোক', 'Start your streak today')}</p></div></button>
       <button className="stat-card stat-link" onClick={() => { setSelectedDate(today); scrollToSection('today-pending'); }}><span className="stat-icon blue"><ListChecks size={19} /></span><div><span>{t('বাকি কাজ ও রিভিশন', 'Pending & revision')}</span><strong>{bn(pending)}<small> {t('টি কাজ', ' tasks')}</small></strong><p>{due.length ? `${bn(due.length)} ${t('টি রিভিশন বাকি', 'revisions due')}` : t('আজ কোনো রিভিশন বাকি নেই', 'No revision due')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
+      <button className="stat-card stat-link" onClick={() => navigate('backlog')}><span className="stat-icon lavender"><Layers size={19} /></span><div><span>{t('জমে থাকা কাজ', 'Backlog')}</span><strong>{bn(backlogHours)}<small>{t(' ঘণ্টা', ' h')}</small></strong><p>{backlogCount ? t(`${bn(backlogCount)}টি সেশন · ৮ ঘণ্টার সীমায় ভাগ হবে`, `${backlogCount} sessions · spread under the 8-hour cap`) : t('কিছু জমে নেই', 'Nothing pending')}</p></div><ArrowUpRight size={15} className="stat-arrow" /></button>
     </div>
 
     {due.length > 0 && <div className="recall-banner"><span><RotateCcw size={17} /><strong>{bn(due.length)} {t('টি অধ্যায়ের রিভিশন বাকি আছে।', 'chapter revisions are due.')}</strong> {t('অল্প সময় নিয়ে একবার দেখে নাও।', 'Take a few minutes to review them.')}</span><button className="text-button" onClick={() => navigate('revision')}>{t('রিভিশনে যাও', 'Open revision')} <ArrowRight size={15} /></button></div>}
@@ -692,7 +711,7 @@ export default function TodayView() {
         </div>
         {!isToday && <div className="selected-date-bar"><span>{formatDate(selectedDate, 'long')}</span><button className="text-button" onClick={() => setSelectedDate(today)}>{t('আজকে ফেরো', 'Back to today')} <ArrowRight size={14} /></button></div>}
         {day?.isCatchup && <div className="catchup-note"><RotateCcw size={16} />{t('সাপ্তাহিক গোছানো ও রিভিশন দিন (২টি বিষয়) — জমে থাকা পড়া ও বোর্ড প্রশ্ন ঝালাই করো।', 'Weekly 2-subject catch-up & revision day.')}</div>}
-        {carryovers.length > 0 && <div className="carryover-list"><div className="carryover-heading"><strong><ListChecks size={15} />{t('এই দিনের ব্যাকলগ', 'Backlog for this day')}</strong><span>{bn(carryovers.filter(item => !item.completedAt).length)} {t('টি বাকি', 'left')}</span></div>{carryovers.map(item => <div key={item.id} className={`carryover-row ${item.completedAt ? 'done' : ''}`}><button className={`task-check ${item.completedAt ? 'checked' : ''}`} aria-pressed={!!item.completedAt} aria-label={`${item.title} সম্পন্ন`} onClick={() => setData(d => toggleCarryover(d, item.id))}>{item.completedAt && <span>✓</span>}</button><div><strong>{item.title}</strong><span>{phaseName(plan.find(d => d.date === item.fromDate)?.phase || 'learn')} · {t('থেকে', 'from')} {formatDate(item.fromDate)} · {bn(item.minutes)} {t('মি.', 'min')}</span></div><button className="icon-button" aria-label={t('ব্যাকলগ থেকে সরাও', 'Remove from backlog')} onClick={() => setData(d => removeCarryover(d, item.id))}><Trash2 size={15} /></button></div>)}</div>}
+        {carryovers.length > 0 && <div className="carryover-list"><div className="carryover-heading"><strong><ListChecks size={15} />{t('এই দিনের ব্যাকলগ', 'Backlog for this day')}</strong><span>{bn(carryovers.filter(item => !item.completedAt).length)} {t('টি বাকি', 'left')}</span></div>{carryovers.map(item => <div key={item.id} className={`carryover-row ${item.completedAt ? 'done' : ''}`}><button className={`task-check ${item.completedAt ? 'checked' : ''}`} aria-pressed={!!item.completedAt} aria-label={t(`${item.title} সম্পন্ন`, `Mark ${item.title} complete`)} onClick={() => setData(d => toggleCarryover(d, item.id))}>{item.completedAt && <span>✓</span>}</button><div><strong>{item.title}</strong><span>{phaseName(plan.find(d => d.date === item.fromDate)?.phase || 'learn')} · {t('থেকে', 'from')} {formatDate(item.fromDate)} · {bn(item.minutes)} {t('মি.', 'min')}</span></div><button className="icon-button" aria-label={t('ব্যাকলগ থেকে সরাও', 'Remove from backlog')} onClick={() => setData(d => removeCarryover(d, item.id))}><Trash2 size={15} /></button></div>)}</div>}
         {day ? <><div className="filter-bar task-filter-bar"><select aria-label={t('কাজের বিষয়', 'Task subject')} value={taskSubject} onChange={e => setTaskSubject(e.target.value as SubjectId | 'all')}><option value="all">{t('সব বিষয়', 'All subjects')}</option>{SUBJECTS.map(subject => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select><select aria-label={t('কাজের অবস্থা', 'Task status')} value={taskStatus} onChange={e => setTaskStatus(e.target.value as 'all' | 'pending' | 'done')}><option value="all">{t('সব কাজ', 'All tasks')}</option><option value="pending">{t('বাকি', 'Pending')}</option><option value="done">{t('সম্পন্ন', 'Done')}</option></select><button className="button secondary small" onClick={() => setShowTaskForm(v => !v)}><Plus size={15} />{t('নতুন কাজ', 'New task')}</button></div>
         {showTaskForm && <form className="personal-task-form" onSubmit={addPersonalTask}><input aria-label={t('কাজের নাম', 'Task title')} placeholder={t('কাজের নাম', 'Task title')} maxLength={120} required value={newTaskTitle} onChange={e => setNewTaskTitle(e.target.value)} /><select aria-label={t('নতুন কাজের বিষয়', 'New task subject')} value={newTaskSubject} onChange={e => setNewTaskSubject(e.target.value as SubjectId)}>{SUBJECTS.map(subject => <option value={subject.id} key={subject.id}>{subject.name}</option>)}</select><input aria-label={t('কাজের সময়', 'Task time')} type="time" required value={newTaskTime} onChange={e => setNewTaskTime(e.target.value)} /><input aria-label={t('কাজের সময়কাল মিনিট', 'Task duration minutes')} type="number" min="15" max="480" required value={newTaskMinutes} onChange={e => setNewTaskMinutes(e.target.value)} /><button className="button primary small" type="submit">{t('যোগ করো', 'Add task')}</button></form>}
         <div className="task-list">{filteredTasks.map(task => { const custom = data.routineBlocks.find(block => block.date === selectedDate && task.id === `custom-${selectedDate}-${block.id}`); return <div key={task.id}><TaskCard task={task} compact />{custom && <button className="text-button" onClick={() => confirm({ title: t('নিজের কাজ মুছবে?', 'Delete this task?'), message: task.title, danger: true, label: t('মুছে ফেলো', 'Delete'), action: () => setData(d => { const completed = { ...d.completed }; delete completed[task.id]; return { ...d, completed, routineBlocks: d.routineBlocks.filter(block => block.id !== custom.id), carryovers: d.carryovers.filter(item => item.taskId !== task.id) }; }) })}><Trash2 size={14} />{t('নিজের কাজ মুছো', 'Delete personal task')}</button>}</div>; })}{!filteredTasks.length && <p className="tiny-muted">{t('এই ফিল্টারে কোনো কাজ নেই।', 'No tasks match these filters.')}</p>}</div><DaySummary day={day} /><div className="schedule-footer"><span>{t(`বিরতি বাদে মোট ${bn(activeHours)} ঘণ্টা পড়ার লক্ষ্য · বাংলাদেশ সময়`, `Total ${activeHours}h net study time · Bangladesh time`)}</span><button className="text-button" onClick={() => navigate('calendar', selectedDate)}><CalendarDays size={15} />{t('মাসিক রুটিন দেখো', 'Open monthly calendar')}</button></div></> : <EmptyState title={t('এই তারিখে কোনো সেশন নেই', 'No session on this date')} description={t(`তোমার পরিকল্পনা ${formatDate(plan[0].date)} থেকে ${formatDate(plan[plan.length - 1].date)} পর্যন্ত।`, `Your plan runs from ${formatDate(plan[0].date)} to ${formatDate(plan[plan.length - 1].date)}.`)} action={<button className="button primary" onClick={() => setSelectedDate(today)}>{t('আজকের পড়ায় ফিরে যাও', 'Back to today’s study')}</button>} />}
@@ -700,7 +719,7 @@ export default function TodayView() {
 
       <aside className="dashboard-rail">
         <section className="focus-card">
-          <div className="focus-heading"><span><span className="live-dot" />{timer.mode === 'pomodoro' ? 'পোমোডোরো' : timer.mode === 'countdown' ? 'কাউন্টডাউন' : 'স্টপওয়াচ'}</span><button className="mini-link" onClick={() => navigate('timer')}>{t('পূর্ণ টাইমার', 'Full timer')}<ArrowUpRight size={13} /></button></div>
+          <div className="focus-heading"><span><span className="live-dot" />{timer.mode === 'pomodoro' ? t('পোমোডোরো', 'Pomodoro') : timer.mode === 'countdown' ? t('কাউন্টডাউন', 'Countdown') : t('স্টপওয়াচ', 'Stopwatch')}</span><button className="mini-link" onClick={() => navigate('timer')}>{t('পূর্ণ টাইমার', 'Full timer')}<ArrowUpRight size={13} /></button></div>
           <div className="timer-mini-display"><strong className="timer-digits">{timerText}</strong><span>{chapterById[timer.chapterId]?.title || timer.label || subjectById[timer.subject].name}</span></div>
           <div className="timer-mini-actions"><button className="timer-start" onClick={timer.running ? timer.pause : timer.start}>{timer.running ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" />}{timer.running ? t('বিরতি', 'Pause') : t('শুরু', 'Start')}</button><button className="timer-reset" onClick={() => navigate('timer')} aria-label={t('টাইমার পেজ', 'Timer page')}><Timer size={16} /></button></div>
           <p>{t('মোট', 'Total')} {bn(data.focus.sessions)}{t('টি সেশন', ' sessions')} · {bn(totalHours)} {t('ঘণ্টা', 'hrs')}</p>
@@ -741,7 +760,7 @@ export default function TodayView() {
     </div>
     <SyllabusNotice />
     <BackupNudge />
-    <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? 'সব তথ্য এই ডিভাইসে সেভ হচ্ছে' : 'সেভ হয়নি — ব্যাকআপ রাখো'}</span><button className="text-button" onClick={() => navigate('settings')}>{t('ব্যাকআপ রাখো', 'Keep a backup')}<ArrowUpRight size={13} /></button></div>
+    <div className="view-footer"><span><span className={`status-dot ${storageOk ? 'ok' : ''}`} />{storageOk ? t('সব তথ্য এই ডিভাইসে সেভ হচ্ছে', 'Everything is saved on this device') : t('সেভ হয়নি — ব্যাকআপ রাখো', 'Not saved — take a backup')}</span><button className="text-button" onClick={() => navigate('settings')}>{t('ব্যাকআপ রাখো', 'Keep a backup')}<ArrowUpRight size={13} /></button></div>
   </div>;
 }
 

@@ -61,7 +61,6 @@ describe('language setting persistence', () => {
 
 // --- every interface shell string should follow the selected language ---------
 
-const BANGLA = /[\u0980-\u09FF]/;
 const views = readdirSync('src/views')
   .filter(name => name.endsWith('.tsx'))
   .map(name => 'src/views/' + name);
@@ -99,9 +98,16 @@ describe('bilingual interface coverage', () => {
     expect(left).toEqual([]);
   });
 
-  it('keeps the long-form study copy in Bangla', () => {
-    const paragraphs = bareTextNodes(readFileSync('src/views/Revision.tsx', 'utf8')).filter(text => text.length > 40);
-    expect(paragraphs.length).toBeGreaterThan(0);
-    expect(BANGLA.test(paragraphs[0])).toBe(true);
+  it('translates the long-form study copy too, not only the short labels', () => {
+    // Long explanations used to stay Bangla-only, which leaked Bangla paragraphs into
+    // English mode. Every screen's bare text must now be translatable at any length.
+    const untranslated: string[] = [];
+    for (const file of screens) {
+      const source = readFileSync(file, 'utf8');
+      for (const text of bareTextNodes(source)) {
+        if (text.length > 40) untranslated.push(file + ': ' + text.slice(0, 60));
+      }
+    }
+    expect(untranslated).toEqual([]);
   });
 });
