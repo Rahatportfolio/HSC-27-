@@ -101,6 +101,27 @@ export default function App() {
   const [dbReady, setDbReady] = useState(() => !isNativeApp());
   const [dbMirrorSafe, setDbMirrorSafe] = useState(true);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const chromeRef = useRef<HTMLDivElement>(null);
+  const bottomNavRef = useRef<HTMLElement>(null);
+  useEffect(() => {
+    // scrollIntoView (including keyboard/browser focus) must use the actual
+    // reading area, not the centre hidden under a tall/translated timer banner.
+    const update = () => {
+      document.documentElement.style.setProperty('--top-chrome-height', `${chromeRef.current?.getBoundingClientRect().height ?? 0}px`);
+      document.documentElement.style.setProperty('--bottom-chrome-height', `${bottomNavRef.current?.getBoundingClientRect().height ?? 0}px`);
+    };
+    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    if (chromeRef.current) observer?.observe(chromeRef.current);
+    if (bottomNavRef.current) observer?.observe(bottomNavRef.current);
+    update();
+    window.addEventListener('resize', update);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', update);
+      document.documentElement.style.removeProperty('--top-chrome-height');
+      document.documentElement.style.removeProperty('--bottom-chrome-height');
+    };
+  }, []);
   const [modal, setModal] = useState<OpenModal>(null);
   const [confirmRequest, setConfirmRequest] = useState<ConfirmRequest | null>(null);
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info'; id: number } | null>(initial.warning ? { message: initial.warning, type: 'info', id: 0 } : null);
@@ -558,14 +579,14 @@ export default function App() {
         </div>
       </aside>
       <div className="main-shell">
-        <div className="top-chrome-stack">
+        <div ref={chromeRef} className={`top-chrome-stack${timer.running || timer.accumulatedMs > 0 ? ' has-live-timer' : ''}`}>
           {(timer.running || timer.accumulatedMs > 0) && (
-            <div className={`live-timer-topbar ${timer.running ? 'running' : 'paused'}`} role="status" aria-live="off">
-              <div className="live-timer-indicator" onClick={() => navigate('timer')} role="button" tabIndex={0} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigate('timer'); } }}>
+            <div className={`live-timer-topbar ${timer.running ? 'running' : 'paused'}`} role="status" aria-label={t('সক্রিয় পড়ার টাইমার', 'Active study timer')} aria-live="off">
+              <button type="button" className="live-timer-indicator" onClick={() => navigate('timer')} aria-label={t('পড়ার টাইমার খুলো', 'Open study timer')} title={timerTitleText}>
                 <span className={`live-rec-dot ${timer.running ? 'pulse' : ''}`} aria-hidden="true" />
                 <span className="live-rec-badge">{timer.running ? t('লাইভ চলছে', 'LIVE') : t('বিরতি', 'PAUSED')}</span>
                 <strong className="live-timer-subject">{subjectById[timer.subject]?.short} · {timerTitleText}</strong>
-              </div>
+              </button>
               <div className="live-timer-clocks">
                 <span className="live-clock-chip elapsed" title={t('কতক্ষণ ধরে চলছে', 'Elapsed time')}>
                   <small>{t('অতিবাহিত', 'Elapsed')}</small>
@@ -682,7 +703,7 @@ export default function App() {
         </div>
         <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}{health.warnings.length > 0 && <section className="schedule-warning" role="alert" aria-label={t('রুটিনের সময়সীমার সতর্কতা', 'Schedule capacity warning')}><strong>{t('সময়সীমা মিলিয়ে নাও', 'Check your schedule capacity')}</strong><ul>{health.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul><button type="button" className="text-button" onClick={() => navigate('settings')}>{t('তারিখ ও সময় ঠিক করো', 'Review dates and times')}</button></section>}<ViewComponent /></main>
       </div>
-      <nav className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>
+      <nav ref={bottomNavRef} className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>
         {(['today', 'calendar', 'syllabus', 'videos'] as const).map(id => NAV.find(n => n.id === id)!).map(n => (
           <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}>
             <span className="mobile-nav-icon-wrap">

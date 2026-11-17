@@ -410,7 +410,7 @@ export default function TodayView() {
       </div>
       <button className="button secondary small" onClick={() => navigate('weakness')}>{t('দুর্বলতা দেখো', 'Open weak spots')}<ChevronRight size={15} /></button>
     </div>}
-    <section className="card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
+    <section className="card home-progress-card" aria-label={t('সিলেবাসের অগ্রগতি', 'Syllabus progress')}>
       <div className="card-heading"><div><h2>{t('অধ্যায়ের অগ্রগতি', 'Chapter progress')}</h2><p>{t('ব্যক্তিগত অবস্থা বা সম্পন্ন সেশনের হিসাবে; ক্লাস দেখা একা অধ্যায় সম্পন্ন করে না।', 'Based on personal status or completed sessions; watching a class alone does not complete a chapter.')}</p></div><strong>{bn(learning.overall.percent)}%</strong></div>
       <ProgressBar value={learning.overall.percent} />
       <p>{t('সম্পন্ন', 'Completed')} {bn(learning.overall.completed)} / {bn(learning.overall.total)} · {t('চলছে', 'In progress')} {bn(learning.overall.inProgress)} · {t('বাকি', 'Remaining')} {bn(learning.overall.remaining)}</p>

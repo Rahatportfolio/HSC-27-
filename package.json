@@ -16,6 +16,7 @@
     "android:apk": "npm run android:assets && npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:open": "cap open android",
     "test:responsive": "node scripts/check-responsive.mjs",
+    "test:mobile-shell": "tsx scripts/check-mobile-shell.ts",
     "test:study-browser": "tsx scripts/check-study-system.ts",
     "test:date-guards": "node scripts/check-date-guards.mjs",
     "test:post-release-guards": "node scripts/check-post-release-guards.mjs",

@@ -68,6 +68,7 @@ jobs:
           CHROMIUM_PATH: /usr/bin/google-chrome
         run: |
           npm run test:responsive
+          npm run test:mobile-shell
           npm run test:study-browser
 
       - name: Sync Capacitor
@@ -159,10 +160,14 @@ jobs:
             আপডেটের আগে backup যাচাই করুন। JSON ও পুরোনো Full backup-এ স্ক্যানের আসল ছবির bytes নেই; আলাদা PDF/ছবি বা মূল ডিভাইস রাখুন। signing mismatch হলে যাচাইকৃত backup ছাড়া পুরোনো অ্যাপ uninstall করবেন না। কোনো অ্যাকাউন্ট বা cloud sync নেই।
 
   device-checks:
-    name: Android WebView device checks
+    name: Android WebView device checks (API ${{ matrix.api }})
     needs: apk
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [34, 35]
     permissions:
       contents: read
     steps:
@@ -194,7 +199,7 @@ jobs:
       - name: Native storage, restart, playback and reset on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           disable-animations: true
@@ -227,11 +232,29 @@ jobs:
               }
             }
             inspect(root);
+      - name: Surface native shell evidence
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const sharp = require('sharp');
+            const dir = 'android-shell-evidence';
+            if (!fs.existsSync(dir)) return;
+            const measurements = `${dir}/measurements.jsonl`;
+            if (fs.existsSync(measurements)) core.notice(fs.readFileSync(measurements, 'utf8'), {title: 'Android shell measurements'});
+            for (const name of ['startup', 'scrolled-130', 'paused-130']) {
+              const path = `${dir}/${name}.png`;
+              if (!fs.existsSync(path)) continue;
+              const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();
+              const data = image.toString('base64');
+              if (data.length < 56000) core.notice(JSON.stringify({name: `${name}.webp`, encoding: 'base64', data}), {title: `Android shell image ${name}`});
+            }
       - name: Save Android test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-device-results
+          name: android-device-results-api-${{ matrix.api }}
           path: |
             android-device.log
             android/app/build/reports/androidTests/
