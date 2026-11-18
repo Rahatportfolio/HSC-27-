@@ -30,7 +30,8 @@ export const CADENCE_SPECS: CadenceSpec[] = [
   { cadence: 'monthly', label: 'মাসিক পূর্ণ মক', labelEn: 'Monthly full mock', hint: 'সব বিষয় মিলিয়ে ৫০টি MCQ, ৫০ মিনিট।', hintEn: 'Fifty mixed MCQs, fifty minutes.', questions: 50, everyDays: 30 },
 ];
 
-/** Weekly papers land on Friday in Bangladesh; the school week starts on Sunday. */
+/** Suggested weekly practice day, expressed as a JavaScript weekday (Sunday = 0).
+ * Due cards still use elapsed days since the last paper, not a fixed board date. */
 export const WEEKLY_TEST_WEEKDAY = 5;
 
 export interface CadenceSlot extends CadenceSpec {
@@ -107,11 +108,13 @@ export function cadenceWeek(data: AppData, today: string): CadenceDay[] {
   }
   return Array.from({ length: 7 }, (_, index) => {
     const date = addDays(start, index);
-    const weekday: ExamCadence | null = index === WEEKLY_TEST_WEEKDAY ? 'weekly' : 'daily';
+    // A Monday-first array index is not a JavaScript weekday. Keep this
+    // suggested calendar strip separate from the overdue-slot recommendation.
+    const cadence = new Date(`${date}T00:00:00Z`).getUTCDay() === WEEKLY_TEST_WEEKDAY ? 'weekly' : 'daily';
     return {
       date,
       weekday: weekdays[index],
-      cadence: date === today ? (nextCadenceSlot(data, today)?.cadence ?? weekday) : weekday,
+      cadence,
       done: takenOn.has(date),
     };
   });

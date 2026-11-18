@@ -76,17 +76,17 @@ describe('the postmortem tells the truth', () => {
     const mixed = session({ questionIds: [...ten.map(question => question.id), 'gen|fake|1'], answers: answersWith(5) });
     const result = examPostmortem([mixed]);
     expect(result.questions).toBe(10);
-    expect(result.caveats.join(' ')).toContain('১টি প্রশ্ন তৈরি হওয়া');
+    expect(result.caveats.join(' ')).toContain('১টি প্রশ্নের সংরক্ষিত সংজ্ঞা পাওয়া যায়নি');
   });
 
-  it('blames time only when a paper really was rushed', () => {
+  it('reports short recorded time only when the measured average crosses its threshold', () => {
     const slow = session({ answers: answersWith(7), timeTakenSec: 600 });
     const fast = session({ answers: answersWith(7), timeTakenSec: ten.length * (RUSHED_SECONDS - 5) });
     expect(examPostmortem([slow]).patterns.some(pattern => pattern.key === 'rushed')).toBe(false);
     expect(examPostmortem([fast]).patterns.some(pattern => pattern.key === 'rushed')).toBe(true);
   });
 
-  it('calls a blank tail a pacing problem only when it is long enough', () => {
+  it('reports a blank tail for review only when it is long enough', () => {
     const short = session({ answers: answersWith(10 - (TAIL_BLANK_MIN - 1)) });
     const long = session({ answers: answersWith(10 - TAIL_BLANK_MIN) });
     expect(examPostmortem([short]).patterns.some(pattern => pattern.key === 'unfinished' && pattern.titleBn.includes('শেষের'))).toBe(false);
@@ -137,9 +137,9 @@ describe('the postmortem tells the truth', () => {
 
   it('gives one next step that matches the biggest measured problem', () => {
     const blankHeavy = examPostmortem([session({ answers: answersWith(5) })]);
-    expect(blankHeavy.nextBn).toContain('সময় শেষে প্রশ্ন বাকি');
+    expect(blankHeavy.nextBn).toContain('কিছু প্রশ্ন উত্তরহীন');
     const knowledge = examPostmortem([session({ answers: answersWith(10, [0, 1, 2, 3]) })]);
-    expect(knowledge.nextBn).toContain('সবচেয়ে দুর্বল');
+    expect(knowledge.nextBn).toContain('এই নমুনায় সর্বনিম্ন নির্ভুলতা');
   });
 
   it('always says what the numbers cannot say', () => {

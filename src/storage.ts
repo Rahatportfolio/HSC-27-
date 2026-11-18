@@ -4,6 +4,7 @@ import { addDays, isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
 import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta, ExamMode, ExamCadence } from './types';
+import { STARTER_QUESTIONS } from './quiz-data';
 import { PDF_MATERIAL_IDS } from './pdfCatalog';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -14,6 +15,9 @@ const int = (v: unknown, min: number, max: number) => Number.isSafeInteger(v) &&
 const num = (v: unknown, min: number, max: number) => typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max;
 const ISO_AT = /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/;
 const validAt = (v: unknown): v is string => text(v, 40) && ISO_AT.test(v) && isValidDate(v.slice(0, 10)) && Number.isFinite(Date.parse(v));
+// Flashcard reviews store a Bangladesh calendar day. Older imports may carry a
+// full timestamp instead; retain that evidence rather than replacing the profile.
+const validReviewDate = (v: unknown): v is string => (text(v, 10) && isValidDate(v)) || validAt(v);
 const subjectIds = new Set<string>(SUBJECTS.map(s => s.id));
 const chapterIds = new Set<string>(CHAPTERS.map(c => c.id));
 const paperIds = new Set<string>(PAPERS.map(p => p.id));
@@ -223,6 +227,15 @@ export function parseBackup(rawText: string): AppData {
     return { id: item.id, subject: item.subject, chapterId: item.chapterId, question: item.question, options: item.options as string[], answer: Number(item.answer), explanation: optionalText(item.explanation, 2000, 'ব্যাখ্যা সঠিক নয়।'), source: optionalText(item.source, 200, 'সূত্র সঠিক নয়।'), createdAt: item.createdAt };
   });
 
+  if (raw.activeExam !== undefined) {
+    const exam = raw.activeExam;
+    const known = new Set([...STARTER_QUESTIONS, ...result.questions].map(q => q.id));
+    if (!object(exam) || !nonEmpty(exam.id, 180) || !nonEmpty(exam.title, 200) || !examModes.has(exam.mode as ExamMode) || (exam.subject !== undefined && !isSubject(exam.subject)) || (exam.cadence !== undefined && !examCadences.has(exam.cadence as ExamCadence)) || !Array.isArray(exam.questionIds) || exam.questionIds.length < 1 || exam.questionIds.length > 50 || exam.questionIds.some(id => !nonEmpty(id, 180) || !known.has(id)) || new Set(exam.questionIds).size !== exam.questionIds.length || !int(exam.index, 0, exam.questionIds.length - 1) || !int(exam.startedAt, 1, 8_640_000_000_000_000) || !int(exam.deadline, 1, 8_640_000_000_000_000) || Number(exam.deadline) - Number(exam.startedAt) !== Math.max(5, exam.questionIds.length) * 60_000 || !object(exam.answers) || Object.entries(exam.answers).some(([id, answer]) => !(exam.questionIds as unknown[]).includes(id) || !int(answer, 0, 3))) throw new Error('চলমান পরীক্ষার উত্তরপত্র সঠিক নয়।');
+    const answers: Record<string, number> = {};
+    for (const [id, answer] of Object.entries(exam.answers)) put(answers, id, Number(answer));
+    result.activeExam = { id: exam.id, title: exam.title, mode: exam.mode as ExamMode, ...(exam.subject ? { subject: exam.subject as import('./data').SubjectId } : {}), questionIds: exam.questionIds as string[], answers, index: Number(exam.index), startedAt: Number(exam.startedAt), deadline: Number(exam.deadline), ...(exam.cadence ? { cadence: exam.cadence as ExamCadence } : {}) };
+  }
+
   result.attempts = listOf(raw.attempts, LIMITS.attempts, 'উত্তরের রেকর্ড', item => {
     if (!object(item) || !nonEmpty(item.id, 180) || !nonEmpty(item.questionId, 180) || !isSubject(item.subject) || !int(item.chosen, 0, 3) || !bool(item.correct) || !text(item.date, 10) || !isValidDate(item.date) || !validAt(item.at)) throw new Error('উত্তরের রেকর্ড সঠিক নয়।');
     return { id: item.id, questionId: item.questionId, subject: item.subject, chosen: Number(item.chosen), correct: item.correct, date: item.date, at: item.at };
@@ -304,7 +317,7 @@ export function parseBackup(rawText: string): AppData {
   const flashcardCategories = new Set<FlashcardCategory>(['formula', 'definition', 'reaction', 'terminology', 'identity', 'vocabulary', 'other']);
   if (raw.flashcards !== undefined) {
     result.flashcards = listOf(raw.flashcards, LIMITS.flashcards, 'ফ্ল্যাশকার্ড', item => {
-      if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.front, 2000) || !nonEmpty(item.back, 5000) || !flashcardCategories.has(item.category as FlashcardCategory) || !int(Number(item.interval), 0, 365) || !text(item.dueDate, 10) || !isValidDate(item.dueDate) || (item.lastReviewed !== undefined && !validAt(item.lastReviewed)) || !int(Number(item.repetitions), 0, 100000) || !num(item.easeFactor, 1.3, 10) || !validAt(item.createdAt)) throw new Error('ফ্ল্যাশকার্ডের তথ্য সঠিক নয়।');
+      if (!object(item) || !nonEmpty(item.id, 180) || !isSubject(item.subject) || !optionalChapter(item.chapterId) || !nonEmpty(item.front, 2000) || !nonEmpty(item.back, 5000) || !flashcardCategories.has(item.category as FlashcardCategory) || !int(Number(item.interval), 0, 365) || !text(item.dueDate, 10) || !isValidDate(item.dueDate) || (item.lastReviewed !== undefined && !validReviewDate(item.lastReviewed)) || !int(Number(item.repetitions), 0, 100000) || !num(item.easeFactor, 1.3, 10) || !validAt(item.createdAt)) throw new Error('ফ্ল্যাশকার্ডের তথ্য সঠিক নয়।');
       if (item.chapterId && chapterById[item.chapterId].subject !== item.subject) throw new Error('ফ্ল্যাশকার্ডের অধ্যায় ও বিষয় মিলছে না।');
       return { id: item.id, subject: item.subject, chapterId: item.chapterId, front: item.front, back: item.back, category: item.category as Flashcard['category'], interval: Number(item.interval), dueDate: item.dueDate, ...(item.lastReviewed ? { lastReviewed: item.lastReviewed } : {}), repetitions: Number(item.repetitions), easeFactor: Number(item.easeFactor), createdAt: item.createdAt };
     });

@@ -155,7 +155,7 @@ export default function CalendarView() {
         <p>{t('ক্যাটাগরি শেষ হওয়ার তারিখ, টেস্ট কাউন্টডাউন ও তোমার আসল গতি থেকে পূর্বাভাস — নিশ্চয়তা নয়।', 'Category finish dates, test countdown and a forecast from your actual pace — not a guarantee.')}</p></div>
         <button className="button secondary small" onClick={rebalancePlan}><RefreshCw size={14} />{t('বাকি কাজ সরাও', 'Rebalance')}</button>
       </div>
-      <div className="plan-timeline">
+      <div className="plan-timeline" role="region" aria-label={t('পরিকল্পনার মাইলফলক', 'Plan milestones')} tabIndex={0}>
         {([
           { key: 'A', label: t('A ক্যাটাগরি শেষ', 'Category A done'), date: categoryDates.A, color: '#236149' },
           { key: 'B', label: t('B ক্যাটাগরি শেষ', 'Category B done'), date: categoryDates.B, color: '#9a6722' },
@@ -189,10 +189,10 @@ export default function CalendarView() {
               const done = d?.tasks.filter(task => data.completed[task.id] && (subject === 'all' || task.subject === subject)).length || 0;
               const total = d?.tasks.filter(task => subject === 'all' || task.subject === subject).length || 0;
               const p = phases.find(phaseItem => date >= phaseItem.start && date <= phaseItem.end);
-              return <button key={date} className={`calendar-cell ${!inMonth ? 'outside' : ''} ${date === today ? 'is-today' : ''} ${date === selectedDate ? 'selected' : ''} ${!matches ? 'filtered' : ''}`} onClick={() => setSelectedDate(date)} aria-label={t(
+              return <button key={date} className={`calendar-cell ${!inMonth ? 'outside' : ''} ${date === today ? 'is-today' : ''} ${date === selectedDate ? 'selected' : ''} ${!matches ? 'filtered' : ''}`} onClick={() => setSelectedDate(date)} aria-label={`${bn(Number(date.slice(8)))}${d && matches ? ` ${d.isCatchup ? t('ব্যাকলগ দিন', 'Backlog day') : phaseName(d.phase)}` : ''} — ${t(
                 `${formatDate(date, 'long')}${isDateLocked(data, date) ? ', লক করা' : ''}${d ? `, ${phaseName(d.phase)}, ${bn(done)}/${bn(total)} কাজ শেষ` : ', কোনো সেশন নেই'}`,
                 `${formatDate(date, 'long')}${isDateLocked(data, date) ? ', locked' : ''}${d ? `, ${phaseName(d.phase)}, ${done}/${total} tasks done` : ', no session'}`,
-              )} aria-pressed={date === selectedDate}><span className="cell-date">{bn(Number(date.slice(8)))}</span>{isDateLocked(data, date) && <Lock size={11} className="cell-lock" aria-hidden="true" />}{d && matches && <><span className="cell-phase" style={{ background: p?.color }} /><span className="cell-label">{d.isCatchup ? t('ব্যাকলগ দিন','Backlog day') : phaseName(d.phase)}</span><ProgressBar value={percent(done, total)} color={p?.color} /></>}{date === today && <span className="today-dot" />}</button>;
+              )}`} aria-pressed={date === selectedDate}><span className="cell-date">{bn(Number(date.slice(8)))}</span>{isDateLocked(data, date) && <Lock size={11} className="cell-lock" aria-hidden="true" />}{d && matches && <>{' '}<span className="cell-phase" style={{ background: p?.color }} /><span className="cell-label">{d.isCatchup ? t('ব্যাকলগ দিন','Backlog day') : phaseName(d.phase)}</span><ProgressBar value={percent(done, total)} color={p?.color} /></>}{date === today && <span className="today-dot" />}</button>;
             })}</div>
             <div className="calendar-bottom"><span>{t("তারিখ বেছে নাও, ডানদিকে কাজ দেখো।", "Pick a date and read the work on the right.")}</span><span>{bn(plan.length)} {t('দিনের পরিকল্পনা','day plan')}</span></div>
           </> : <>

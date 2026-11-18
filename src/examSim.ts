@@ -86,7 +86,14 @@ export function wrongQuestionIds(data: AppData): Set<string> {
  * through `verifyGenerated` before they are used (see `generatedPool`).
  */
 export function examPool(data: AppData, options: ExamOptions): QuizQuestion[] {
-  const all = [...STARTER_QUESTIONS, ...data.questions, ...(options.generate ? generatedPool(options) : [])];
+  const existing = [...STARTER_QUESTIONS, ...data.questions];
+  const known = new Set(existing.map(question => question.id));
+  const room = Math.max(0, LIMITS.questions - data.questions.length);
+  const generated = options.generate ? generatedPool(options).filter(question => {
+    if (known.has(question.id)) return false;
+    known.add(question.id); return true;
+  }).slice(0, room) : [];
+  const all = [...existing, ...generated];
   switch (options.mode) {
     case 'chapter':
       return options.chapterId ? all.filter(question => question.chapterId === options.chapterId) : [];
@@ -239,6 +246,8 @@ export function examGradeLetter(percent: number): 'A+' | 'A' | 'A-' | 'B' | 'C' 
 }
 
 export interface SaveExamInput {
+  /** Stable live-paper identity makes replaying a restored submission idempotent. */
+  id?: string;
   mode: ExamMode;
   title: string;
   subject?: SubjectId;
@@ -254,19 +263,26 @@ export interface SaveExamInput {
 const TEST_KIND: Record<ExamMode, TestKind> = { chapter: 'chapter', subject: 'subject', full: 'model', mistakes: 'model', retry: 'chapter' };
 
 /**
- * Stores the result and folds every answered question into the existing study loop
- * (attempt history → mistake book → weak chapter → tomorrow's revision card).
+ * Stores the result and folds answered and blank questions into the study loop.
+ * Blank questions create mistakes/revision/retries without inventing a selected
+ * option or adding a fake answer to attempt history.
  * Returns the data unchanged when there is nothing to save.
  */
 export function saveExamSession(data: AppData, input: SaveExamInput): AppData {
-  if (!input.questions.length) return data;
+  if (!input.questions.length || (input.id && data.examSessions.some(session => session.id === input.id))) return data;
   const grade = gradeExam(input.questions, input.answers);
   const at = nowIso();
-  let afterAnswers = data;
+  const known = new Set([...STARTER_QUESTIONS, ...data.questions].map(question => question.id));
+  const fresh = input.questions.filter(question => { if (known.has(question.id)) return false; known.add(question.id); return true; }).slice(0, Math.max(0, LIMITS.questions - data.questions.length));
+  let afterAnswers = fresh.length ? { ...data, questions: [...data.questions, ...fresh] } : data;
   const paperAnswers: { questionId: string; correct: boolean }[] = [];
   for (const question of input.questions) {
-    const chosen = input.answers[question.id];
-    if (!Number.isInteger(chosen) || chosen < 0 || chosen > 3) continue;
+    const chosen = Object.hasOwn(input.answers, question.id) ? input.answers[question.id] : undefined;
+    if (typeof chosen !== 'number' || !Number.isInteger(chosen) || chosen < 0 || chosen > 3) {
+      afterAnswers = recordMcqAnswer(afterAnswers, question, null, input.date);
+      paperAnswers.push({ questionId: question.id, correct: false });
+      continue;
+    }
     afterAnswers = recordMcqAnswer(afterAnswers, question, chosen, input.date);
     paperAnswers.push({ questionId: question.id, correct: chosen === question.answer });
   }
@@ -281,7 +297,7 @@ export function saveExamSession(data: AppData, input: SaveExamInput): AppData {
     unanswered: grade.unanswered.map(question => ({ id: question.id, subject: question.subject, ...(question.chapterId ? { chapterId: question.chapterId } : {}) })),
   });
   const session: ExamSession = {
-    id: newId(),
+    id: input.id || newId(),
     mode: input.mode,
     title: input.title.slice(0, 200),
     ...(input.subject ? { subject: input.subject } : {}),
@@ -326,6 +342,28 @@ export function saveExamSession(data: AppData, input: SaveExamInput): AppData {
     examSessions: [...settled.examSessions, session].slice(-LIMITS.examSessions),
     tests: [...settled.tests, record].slice(-LIMITS.tests),
   };
+}
+
+/** Start only questions whose definitions fit. No active paper is overwritten. */
+export function beginExam(data: AppData, input: Pick<SaveExamInput, 'mode' | 'title' | 'subject' | 'questions' | 'cadence'>, now = Date.now()): AppData {
+  if (data.activeExam) return data;
+  const known = new Set([...STARTER_QUESTIONS, ...data.questions].map(q => q.id));
+  const added: QuizQuestion[] = [], paper: QuizQuestion[] = [];
+  const selected = new Set<string>();
+  for (const question of input.questions.slice(0, 50)) {
+    if (selected.has(question.id)) continue;
+    if (!known.has(question.id)) {
+      if (data.questions.length + added.length >= LIMITS.questions) continue;
+      added.push(question); known.add(question.id);
+    }
+    selected.add(question.id); paper.push(question);
+  }
+  if (!paper.length) return data;
+  return { ...data, questions: [...data.questions, ...added], activeExam: {
+    id: newId(), mode: input.mode, title: input.title.slice(0, 200), ...(input.subject ? { subject: input.subject } : {}),
+    questionIds: paper.map(q => q.id), answers: {}, index: 0, startedAt: now,
+    deadline: now + examDurationMin(paper.length) * 60_000, ...(input.cadence ? { cadence: input.cadence } : {}),
+  } };
 }
 
 export interface ExamHistoryStats {

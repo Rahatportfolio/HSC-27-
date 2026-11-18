@@ -172,12 +172,14 @@ describe('saving a paper', () => {
     expect(next.tests).toHaveLength(1);
     expect(next.tests[0]).toMatchObject({ kind: 'subject', score: 1, total: 3, date: '2026-03-02' });
     expect(next.tests[0].notes).toContain('সিমুলেটর');
-    // answered questions become attempts, and the wrong one becomes a mistake + revision card.
+    // Only real selections become attempts; wrong AND blank questions create
+    // learning gaps, exactly as the incomplete-paper confirmation promises.
     expect(next.attempts.map(item => item.questionId).sort()).toEqual(['tfixture-0', 'tfixture-1']);
     const mistake = next.mistakes.find(item => item.id === 'auto-mcq:tfixture-1');
     expect(mistake).toMatchObject({ subject: 'physics', chapterId: 'physics-1-2', resolved: false, retryStatus: 'pending' });
     expect(mistake?.text).toContain('সঠিক:');
-    expect(next.revisions).toHaveLength(1);
+    expect(next.mistakes.find(item => item.id === 'auto-mcq:tfixture-2')).toMatchObject({ resolved: false, retryStatus: 'pending' });
+    expect(next.revisions.map(item => item.sourceTaskId).sort()).toEqual(['auto-mcq:tfixture-1', 'auto-mcq:tfixture-2']);
   });
 
   it('does not save anything for an empty paper', () => {

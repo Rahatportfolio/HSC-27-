@@ -122,7 +122,7 @@ const P: FactPair[] = [
   { chapterId: 'biology-2-5', prompt: 'কোষের শক্তির মুদ্রা কোনটি?', promptEn: 'What is the energy currency of the cell?', value: 'ATP', valueEn: 'ATP', origin: 'ATP → ADP + শক্তি', originEn: 'ATP → ADP + energy' },
   { chapterId: 'biology-2-5', prompt: 'ফুসফুসের ভেতরের ছোট ছোট থলিকে কী বলে?', promptEn: 'The tiny air sacs inside the lungs are—', value: 'অ্যালভিওলাই', valueEn: 'alveoli', origin: 'গ্যাস বিনিময় অ্যালভিওলাই-তে', originEn: 'gas exchange happens in alveoli' },
   { chapterId: 'biology-2-6', prompt: 'বৃক্কের গঠনগত একক কোনটি?', promptEn: 'What is the structural unit of the kidney?', value: 'নেফ্রন', valueEn: 'nephron', origin: 'প্রতিটি বৃক্কে লক্ষাধিক নেফ্রন', originEn: 'each kidney has ~a million nephrons' },
-  { chapterId: 'biology-2-7', prompt: 'পেশি ও অস্থির সংযোগস্থলকে কী বলে?', promptEn: 'Where a muscle meets a bone is called—', value: 'সন্ধি', valueEn: 'a joint', origin: 'অস্থি–অস্থি বা অস্থি–পেশি সংযোগ', originEn: 'bone–bone or bone–muscle junction' },
+  { chapterId: 'biology-2-7', prompt: 'পেশি ও অস্থিকে যুক্ত করে কোনটি?', promptEn: 'What connects a muscle to a bone?', value: 'টেন্ডন', valueEn: 'a tendon', origin: 'টেন্ডন পেশি ও অস্থি যুক্ত করে; লিগামেন্ট অস্থি ও অস্থি যুক্ত করে', originEn: 'Tendons connect muscle to bone; ligaments connect bone to bone' },
   { chapterId: 'biology-2-8', prompt: 'রক্তে সুগার কমায় কোন হরমোন?', promptEn: 'Which hormone lowers blood sugar?', value: 'ইনসুলিন', valueEn: 'insulin', origin: 'অগ্ন্যাশয়ের ইনসুলিন', originEn: 'insulin from the pancreas' },
   { chapterId: 'biology-2-8', prompt: 'চোখের আলোক-সংবেদনশীল অংশ কোনটি?', promptEn: 'Which part of the eye is light-sensitive?', value: 'রেটিনা', valueEn: 'the retina', origin: 'রেটিনার রড ও কোন কোষ', originEn: 'rods and cones in the retina' },
   { chapterId: 'biology-2-9', prompt: 'মানুষের পুরুষ গ্যামেট কোনটি?', promptEn: 'The human male gamete is the—', value: 'শুক্রাণু', valueEn: 'sperm', origin: 'শুক্রাণু + ডিম্বাণু → জাইগোট', originEn: 'sperm + ovum → zygote' },
@@ -267,7 +267,7 @@ const D: Record<string, Distractor[]> = {
   'biology-2-3': [{ value: 'মুখগহ্বরে', valueEn: 'the mouth' }, { value: 'ক্ষুদ্রান্ত্রে', valueEn: 'the small intestine' }, { value: 'বৃহদান্ত্রে', valueEn: 'the large intestine' }],
   'biology-2-5': [{ value: 'ADP', valueEn: 'ADP' }, { value: 'DNA', valueEn: 'DNA' }, { value: 'NADH', valueEn: 'NADH' }],
   'biology-2-6': [{ value: 'নিউরন', valueEn: 'neuron' }, { value: 'অ্যালভিওলাস', valueEn: 'alveolus' }, { value: 'নেফ্রিডিয়া', valueEn: 'nephridia' }],
-  'biology-2-7': [{ value: 'টেন্ডন', valueEn: 'tendon' }, { value: 'লিগামেন্ট', valueEn: 'ligament' }, { value: 'তন্ত্রী', valueEn: 'fascia' }],
+  'biology-2-7': [{ value: 'সন্ধি', valueEn: 'a joint' }, { value: 'লিগামেন্ট', valueEn: 'ligament' }, { value: 'তন্ত্রী', valueEn: 'fascia' }],
   'biology-2-8': [{ value: 'গ্লুকাগন', valueEn: 'glucagon' }, { value: 'অ্যাড্রেনালিন', valueEn: 'adrenaline' }, { value: 'থাইরক্সিন', valueEn: 'thyroxine' }],
   'biology-2-9': [{ value: 'ডিম্বাণু', valueEn: 'ovum' }, { value: 'জাইগোট', valueEn: 'zygote' }, { value: 'ভ্রূণ', valueEn: 'embryo' }],
   'biology-2-10': [{ value: 'টি-লিম্ফোসাইট', valueEn: 'T-lymphocytes' }, { value: 'অণুচক্রিকা', valueEn: 'platelets' }, { value: 'লোহিত রক্তকণিকা', valueEn: 'red blood cells' }],
@@ -480,10 +480,10 @@ export function buildQuestion(fact: FactPair, seed: string): QuizQuestion | null
     ? `${fact.whyEn ?? ''} Source: ${fact.originEn}.`.replace(/^\s+/, '')
     : `${fact.why ?? ''} সূত্র: ${fact.origin}।`.replace(/^\s+/, '');
   return {
-    // The chapter and the Bengali bank answer are encoded in the id, so the
-    // verifier can follow an English option back to the exact shipped answer it
-    // translates without ever accepting a value the bank does not contain.
-    id: `${GENERATED_PREFIX}${fact.chapterId}|${hash(seed).toString(36)}|${encodeURIComponent(fact.value).replace(/\|/g, '%7C')}`,
+    // Long percent-encoded Bengali answers used to exceed the 180-character
+    // question/reference boundary and made a valid saved paper un-restorable.
+    // The bounded id still resolves to the same shipped fact in both languages.
+    id: generatedIdFor(fact, hash(seed).toString(36)),
     subject: chapterById[fact.chapterId].subject,
     chapterId: fact.chapterId,
     question: english ? fact.promptEn! : fact.prompt,
@@ -570,20 +570,36 @@ function tracesToShippedFact(question: QuizQuestion): boolean {
   // this, pointing at a real fact while showing some other packed string would pass.
   const correct = question.options[question.answer];
   if (correct !== fact.value && (!fact.valueEn || fact.valueEn !== correct)) return false;
-  return generatedIdFor(fact, hashPart) === question.id;
+  return generatedIdFor(fact, hashPart) === question.id || legacyGeneratedIdFor(fact, hashPart) === question.id;
 }
 
-/** Rebuilds the id from a fact and a hash, so a hand-edited id cannot match. */
-function generatedIdFor(fact: FactPair, hashPart: string): string {
+/** A stable bank lookup token, not a security hash. Resolve only unambiguous
+ * matches against the shipped facts; never decode arbitrary text as an answer. */
+function compactAnswerToken(value: string): string {
+  return `~${hash(value).toString(36)}.${hash([...value].reverse().join('')).toString(36)}.${value.length.toString(36)}`;
+}
+function legacyGeneratedIdFor(fact: FactPair, hashPart: string): string {
   return `${GENERATED_PREFIX}${fact.chapterId}|${hashPart}|${encodeURIComponent(fact.value).replace(/\|/g, '%7C')}`;
 }
 
-/** `gen|<chapter>|<hash>|<encoded bank answer>` → the shipped Bengali answer. */
+/** Keep existing short identities stable and every newly generated id within
+ * the same storage bound as question ids, attempts and retry references. */
+function generatedIdFor(fact: FactPair, hashPart: string): string {
+  const legacy = legacyGeneratedIdFor(fact, hashPart);
+  return legacy.length <= 180 ? legacy : `${GENERATED_PREFIX}${fact.chapterId}|${hashPart}|${compactAnswerToken(fact.value)}`;
+}
+
+/** Resolve both legacy encoded answers and new bounded bank references. This
+ * never rewrites a saved id or unrelated history during validation. */
 export function sourceAnswerOf(questionId: string): string | null {
   const parts = questionId.split('|');
-  if (parts.length < 4 || !parts[0].startsWith('gen')) return null;
+  if (parts.length !== 4 || parts[0] !== 'gen') return null;
+  if (parts[3].startsWith('~')) {
+    const matches = [...new Set(factsFor(parts[1]).filter(fact => compactAnswerToken(fact.value) === parts[3]).map(fact => fact.value))];
+    return matches.length === 1 ? matches[0] : null;
+  }
   try {
-    return decodeURIComponent(parts[parts.length - 1]);
+    return decodeURIComponent(parts[3]);
   } catch {
     return null;
   }

@@ -21,7 +21,14 @@
     "test:date-guards": "node scripts/check-date-guards.mjs",
     "test:post-release-guards": "node scripts/check-post-release-guards.mjs",
     "test:post-release-browser": "tsx scripts/check-post-release.ts",
-    "test:date-browser": "tsx scripts/check-date-cascade.ts"
+    "test:date-browser": "tsx scripts/check-date-cascade.ts",
+    "test:accessibility": "tsx scripts/check-accessibility.ts",
+    "test:az-guards": "node scripts/check-az-integrity-guards.mjs",
+    "test:accessibility-guards": "node scripts/check-accessibility-guards.mjs",
+    "test:followup-browser": "tsx scripts/check-followup-browser.ts",
+    "test:followup-guards": "node scripts/check-followup-guards.mjs",
+    "test:input-accessibility": "tsx scripts/check-input-accessibility.ts",
+    "test:input-guards": "node scripts/check-input-accessibility-guards.mjs"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
@@ -43,6 +50,7 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.1.1",
+    "axe-core": "4.14.1",
     "jsdom": "^31.0.1",
     "playwright-core": "^1.65.1",
     "sharp": "^0.35.5",

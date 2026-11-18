@@ -39,7 +39,7 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
     <p className="tiny-muted">{t('অগ্রাধিকার পড়ার ক্রমের পরামর্শ, পরীক্ষার পূর্বাভাস নয়। C অধ্যায়ও পড়তে হবে। অগ্রাধিকার বদলালে বর্তমান রুটিনের ক্রম বদলায় না। নিজে অবস্থা বাছলে সেশন টিক তার বদলে গণনা হবে না।', 'Priority suggests study order, not exam predictions. C chapters remain in the syllabus. Changing priority does not reorder the current plan. A chosen status overrides session-derived completion.')}</p>
     <div className="prep-grid">{STEPS.map(step => <label className="check-line" key={step.id}><input type="checkbox" checked={!!meta.steps?.[step.id]} onChange={e => { const checked = e.target.checked; setData(d => updateChapterMeta(d, c.id, { steps: { ...chapterMeta(d, c.id).steps, [step.id]: checked } })); }} />{t(step.bn, step.en)}</label>)}</div>
     {(() => { const sch = scheduleFor(c.id, plan); const links = classLinksFor(c.id); const lastDate = sch?.end; return <>
-      {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} aria-label={`গুরুত্ব ${sch.star} স্টার`}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span>{lastDate && <span>{t("রুটিনে শেষ", "Target finish")} <strong>{formatDate(lastDate)}</strong></span>}</div>}
+      {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} role="img" aria-label={t(`গুরুত্ব: ${bn(sch.star)}/৫ স্টার`, `Importance: ${sch.star} of 5 stars`)}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span>{lastDate && <span>{t("রুটিনে শেষ", "Target finish")} <strong>{formatDate(lastDate)}</strong></span>}</div>}
       {links && <ClassBlock classes={links} hint={t("প্রতিটি অংশে সরাসরি ক্লাস ও প্লেলিস্টের পাশাপাশি শিক্ষকদের চ্যানেলে খোঁজার লিংক সাজানো আছে।", "Direct classes and playlists are paired with quick searches on favourite teachers’ channels.")} />}
     {BANGLA_LESSONS[c.id] && <LessonList lessons={BANGLA_LESSONS[c.id]} />}
     </>; })()}
@@ -155,12 +155,12 @@ export function SearchModal({ onClose, onChapter }: { onClose: () => void; onCha
       <kbd>ESC</kbd>
     </label>
 
-    <div className="search-subject-pills" role="tablist" aria-label={t('বিষয় ফিল্টার', 'Filter by subject')}>
-      <button type="button" className={`search-sub-pill ${subjectFilter === 'all' ? 'active' : ''}`} onClick={() => setSubjectFilter('all')}>
+    <div className="search-subject-pills" role="group" aria-label={t('বিষয় ফিল্টার', 'Filter by subject')}>
+      <button type="button" className={`search-sub-pill ${subjectFilter === 'all' ? 'active' : ''}`} aria-pressed={subjectFilter === 'all'} onClick={() => setSubjectFilter('all')}>
         {t('সব বিষয়', 'All')}
       </button>
       {SUBJECTS.map(sub => (
-        <button key={sub.id} type="button" className={`search-sub-pill ${subjectFilter === sub.id ? 'active' : ''}`} onClick={() => setSubjectFilter(sub.id)}>
+        <button key={sub.id} type="button" className={`search-sub-pill ${subjectFilter === sub.id ? 'active' : ''}`} aria-pressed={subjectFilter === sub.id} onClick={() => setSubjectFilter(sub.id)}>
           {sub.short}
         </button>
       ))}

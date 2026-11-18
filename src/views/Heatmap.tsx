@@ -69,9 +69,9 @@ export default function HeatmapView() {
             className={`heat-cell l${cell.level}`}
             onClick={() => open(cell)}
             title={`${cell.chapter.title} — ${t(cell.reason, cell.reasonEn)}`}
-            aria-label={`${cell.chapter.title} — ${t(HEAT_LABEL[cell.level].bn, HEAT_LABEL[cell.level].en)} ${cell.readiness}%`}
+            aria-label={`${cell.chapter.number} ${cell.chapter.title} — ${t(HEAT_LABEL[cell.level].bn, HEAT_LABEL[cell.level].en)} ${cell.readiness}%`}
           >
-            <strong>{cell.chapter.number}</strong>
+            <strong>{cell.chapter.number}</strong>{' '}
             <span>{cell.chapter.title}</span>
             <i />
           </button>)}</div> : <p className="tiny-muted padded">{t('এই বিষয়ে ঠান্ডা অধ্যায় নেই।', 'No cold chapters in this subject.')}</p>}

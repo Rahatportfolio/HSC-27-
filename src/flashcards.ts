@@ -1,6 +1,7 @@
 import { chapterById, SUBJECTS } from './data';
 import type { AppData } from './planner';
 import { addDays, todayKey } from './planner';
+import { t } from './i18n';
 import type { Flashcard, FlashcardRating, FlashcardCategory } from './types';
 import { LIMITS, newId, nowIso } from './storage';
 
@@ -43,7 +44,7 @@ export function dueFlashcards(data: AppData, today: string): Flashcard[] {
 
 /** Cards reviewed today (already due and dealt with). */
 export function reviewedToday(data: AppData, today: string): Flashcard[] {
-  return data.flashcards.filter(card => card.lastReviewed === today);
+  return data.flashcards.filter(card => card.lastReviewed === today || !!card.lastReviewed && card.lastReviewed.includes('T') && Number.isFinite(Date.parse(card.lastReviewed)) && todayKey(new Date(card.lastReviewed)) === today);
 }
 
 /** Count of cards due right now. */
@@ -64,12 +65,22 @@ export function subjectFlashcardStats(data: AppData, today: string) {
   ) as Record<(typeof SUBJECTS)[number]['id'], { total: number; due: number }>;
 }
 
+export const FLASHCARD_TEXT_LIMITS = { front: 2000, back: 5000 } as const;
+type CardContent = Pick<Flashcard, 'subject' | 'chapterId' | 'front' | 'back' | 'category'>;
+/** Keep every UI/core write compatible with the backup schema. */
+export function flashcardContentError(input: CardContent): string | null {
+  if (!SUBJECTS.some(subject => subject.id === input.subject) || !Object.hasOwn(FLASHCARD_CATEGORY_LABEL, input.category) || (input.chapterId && chapterById[input.chapterId]?.subject !== input.subject)) return t('কার্ডের বিষয় ও অধ্যায় মিলিয়ে নাও।', 'Check that the card subject and chapter match.');
+  if (!input.front.trim() || !input.back.trim()) return t('সামনা ও উত্তর দুটিই লিখলেই কার্ড তৈরি হবে।', 'Write both the front and the back to create a card.');
+  if (input.front.trim().length > FLASHCARD_TEXT_LIMITS.front || input.back.trim().length > FLASHCARD_TEXT_LIMITS.back) return t('প্রশ্ন সর্বোচ্চ ২০০০ এবং উত্তর সর্বোচ্চ ৫০০০ অক্ষরের হতে পারে।', 'The front can have at most 2000 characters and the back 5000.');
+  return null;
+}
+
 /** Create a new card: due immediately (interval 1), ease 2.5. */
 export function createFlashcard(
   data: AppData,
   input: { subject: Flashcard['subject']; chapterId?: Flashcard['chapterId']; front: string; back: string; category: FlashcardCategory },
 ): AppData {
-  if (data.flashcards.length >= LIMITS.flashcards) return data;
+  if (data.flashcards.length >= LIMITS.flashcards || flashcardContentError(input)) return data;
   const card: Flashcard = {
     id: newId(),
     subject: input.subject,
@@ -103,6 +114,7 @@ export function editFlashcard(
     ...(patch.chapterId !== undefined ? { chapterId: patch.chapterId } : {}),
     ...(patch.subject !== undefined ? { subject: patch.subject } : {}),
   };
+  if (flashcardContentError(next)) return data;
   return { ...data, flashcards: data.flashcards.map(item => (item.id === id ? next : item)) };
 }
 

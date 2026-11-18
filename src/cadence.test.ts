@@ -7,6 +7,8 @@ import { saveExamSession } from './examSim';
 import { freshData } from './planner';
 import type { AppData } from './planner';
 import type { ExamCadence, ExamSession } from './types';
+import { STARTER_QUESTIONS } from './quiz-data';
+import { setLanguage } from './i18n';
 
 const TODAY = '2026-03-13'; // a Friday
 const session = (date: string, score: number, total: number, extra: Partial<ExamSession> = {}): ExamSession => ({
@@ -78,9 +80,26 @@ describe('the week strip', () => {
     expect(week).toHaveLength(7);
     expect(week[0].date).toBe('2026-03-09');
     expect(week[6].date).toBe('2026-03-15');
-    expect(week[WEEKLY_TEST_WEEKDAY].cadence).toBe('weekly');
+    expect(new Date('2026-03-13T00:00:00Z').getUTCDay()).toBe(WEEKLY_TEST_WEEKDAY);
+    expect(week.find(day => day.date === '2026-03-13')?.cadence).toBe('weekly');
+    expect(week.find(day => day.date === '2026-03-14')?.cadence).toBe('daily');
     expect(week[0].cadence).toBe('daily');
     expect(week.every(day => !day.done)).toBe(true);
+  });
+
+  it.each(['2026-11-16', '2026-11-20', '2026-11-22', '2027-01-01', '2028-03-01'])('marks only the actual Friday, not Saturday or today’s most overdue slot (%s)', today => {
+    for (const language of ['bn', 'en'] as const) {
+      setLanguage(language);
+      try {
+        const week = cadenceWeek(freshData(), today);
+        expect(week.filter(day => day.cadence === 'weekly')).toHaveLength(1);
+        for (const day of week) {
+          const isFriday = new Date(`${day.date}T00:00:00Z`).getUTCDay() === 5;
+          expect(day.cadence, day.date).toBe(isFriday ? 'weekly' : 'daily');
+          if (isFriday) expect(day.weekday).toBe(language === 'en' ? 'Fri' : 'শুক্র');
+        }
+      } finally { setLanguage('bn'); }
+    }
   });
 
   it('marks days that already have a paper', () => {
@@ -128,8 +147,8 @@ describe('missed daily nudge', () => {
 describe('storing the cadence', () => {
   it('saves which routine slot a paper closed', () => {
     const data = freshData();
-    const questions = data.questions.slice(0, 2);
-    if (!questions.length) return;
+    const questions = STARTER_QUESTIONS.slice(0, 2);
+    expect(questions).toHaveLength(2);
     const next = saveExamSession(data, {
       mode: 'chapter', title: 'দৈনিক', questions, answers: {}, durationMin: 5, timeTakenSec: 30,
       date: TODAY, cadence: 'daily' as ExamCadence,
@@ -140,8 +159,8 @@ describe('storing the cadence', () => {
 
   it('leaves the cadence off when a paper was taken from the free setup', () => {
     const data = freshData();
-    const questions = data.questions.slice(0, 2);
-    if (!questions.length) return;
+    const questions = STARTER_QUESTIONS.slice(0, 2);
+    expect(questions).toHaveLength(2);
     const next = saveExamSession(data, { mode: 'chapter', title: 'নিজের', questions, answers: {}, durationMin: 5, timeTakenSec: 30, date: TODAY });
     expect(next.examSessions[0].cadence).toBeUndefined();
   });

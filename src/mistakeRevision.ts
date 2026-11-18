@@ -66,15 +66,16 @@ export function queueMistakeRevision(
 export function recordMcqAnswer(
   data: AppData,
   question: QuizQuestion,
-  chosen: number,
+  chosen: number | null,
   date: string,
 ): AppData {
-  const correct = chosen === question.answer;
+  // A blank exam answer is a learning gap, not a fabricated option selection.
+  const correct = chosen !== null && chosen === question.answer;
   const at = nowIso();
   const source = sourceId("auto-mcq:", question.id);
   let next: AppData = {
     ...data,
-    attempts: [
+    attempts: chosen === null ? data.attempts : [
       ...data.attempts,
       {
         id: newId(),

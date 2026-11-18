@@ -1,4 +1,250 @@
-# v2.44.0 — PWA deployed; APK held; fail-closed release continuation
+# Latest A-Z recheck
+
+> **Subsequent delivery request:** the user has now requested a PR, merge and an Android build. All “local/unpublished/no publication” statements in the audit below describe the **completed pre-delivery verification snapshot**. Track subsequent actual outcomes in the [delivery PR](https://github.com/Rahatportfolio/HSC-27-/pulls?q=is%3Apr+head%3Aarena%2F0e629171-hsc-27), [Pages workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/static.yml) and [Android workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/android-apk.yml). Workflow scheduling is not success. Non-tag APKs remain explicitly development/debug artifacts, not compatible production-release approval; no new version tag, original-key recovery, historical asset replacement, alternate identity, installation or personal-data migration is implied.
+
+## Renewed request: native-field and keyboard repairs — local/unpublished
+
+The user renewed the request with “100% bug mukto koro”. No zero-bug promise was made. This round independently checked real native fields rather than treating generic CSS tests or earlier axe results as exhaustive. Work stays on `arena/0e629171-hsc-27`, base `a2076d38fcb15f85049fa0e16fff698570d737c1`. No installation, personal-phone-data access, profile reset, silent migration, publication, tag change or remote workflow dispatch occurred. Identity remains **2.44.0 / Android code 24**. The running workspace production Live Preview contains the repairs; the last-verified public PWA and held APK do not.
+
+### New failures reproduced before repair
+
+| Measured defect | Repair and verification |
+|---|---|
+| Day-note placeholder | Its more-specific light CSS override measured **2.4834:1**, although the generic placeholder test passed. It now uses the theme’s muted token with explicit opacity: approximately **6.4397:1 light / 6.4297:1 dark** in Chromium |
+| Native-field and search focus | The later native `:focus` rule removed the earlier keyboard outline; the remaining pale shadow was not a distinguishable replacement. Native fields now have a 2px themed outline; search wrappers expose their own outline instead of relying on the transparent input |
+| Transparent study-date input | The native input intentionally has opacity zero, so its own outline is invisible. A visible wrapper outline now follows focus. Real Tab navigation reaches the date; changing the viewed day does not move the saved plan start |
+| Shared button/anchor keyboard outline | The old pale ring measured **2.2946:1** on white. The shared outline now uses the themed green token; 2px minimum / 3:1 contrast guards are independently fault-proven |
+| Flashcard search name | Placeholder-only search had no permanent accessible name in the independent role query. Explicit Bengali/English names now remain after typing; filtering and clearing preserve stored cards |
+| JSON backup keyboard path | A visually clipped, focusable proxy file input created an invisible Tab stop before the visible button. It is now hidden; Tab reaches the visible button and a real chooser opens/cancels without changing data |
+| Narrow backup actions | Screenshot review exposed nested button groups auto-placed in the mobile grid’s icon column: **44.52px** wide despite **306.22px** available at 393px. The group now spans the available row. Both groups’ text ranges stay inside their buttons in the declared mobile/desktop scenarios |
+| Native control theme | Final screenshot review independently reproduced black clock icons on dark fields and white icons on white fields when app/OS themes disagreed; computed native scheme was `normal`. Explicit light/dark CSS schemes now follow the selected app theme. The eight-scenario native-field gate deliberately forces the OS preference opposite; all four app/OS combinations also have selected time-input screenshots |
+
+The new unit/UI contrast/name/keyboard tests first reported **6 genuine failures among 28 selected tests**. Six isolated browser checks independently reproduced note contrast, shared-button focus, transparent-date focus, general native-field focus, flashcard naming and the invisible JSON stop. A seventh isolated browser check reproduced the squeezed mobile button group. The first integrated attempt passed **908 tests** and its initial browser gates but was **intentionally stopped** during the expanded accessibility stage after independent native-clock screenshots exposed the app/OS theme mismatch. The two additional scheme tests passed **0/2 before the fix**, and opposite-OS light/dark browser checks failed the intended scheme assertion. That partial run is archived as `interrupted-native-scheme/`, not substituted for final acceptance. This is separate from earlier MCQ red evidence. No harness/startup error or global axe exclusion was counted as an application defect.
+
+### Fresh final gates after all of these repairs
+
+The serial integrated driver exited **0 after all 15 stages**. All figures below refer to this repaired snapshot, not the preceding 900-test round.
+
+| Gate | Observed result |
+|---|---|
+| TypeScript / full suite | `tsc --noEmit`; **910/910 tests / 97 files**, zero failing/skipped/todo, **217.47s** |
+| Production build | Passed in **6.59s**; existing >500kB main-chunk warning remains |
+| New native-field browser matrix | **224/224 probes**, **688 repeated native-field states**, all **23 initial routes / 8 large-text viewport/theme/language scenarios**, plus five targeted journeys. Includes actual text/pseudo-placeholder colour composition, opaque focus outlines, explicit native schemes under opposite OS preferences, note typing/reload, date navigation, search/filter, real file chooser and action-label bounds |
+| New native-field fault proof | **9/9 source faults**, **30 passing controls before / 30 after**, three restored source files; **15/15 browser faults**, each with its own passing control and intended assertion |
+| Repeated earlier follow-up fault proof | **43/43 source faults**, **117 passing controls before / 117 after**; **16/16 paired browser faults**; all 10 mutated files restored |
+| Repeated expanded accessibility | **410 route/dialog/populated-state scans**, **23 actual routes / 8 scenarios / 17 dialog types where applicable**, **0 rows with confirmed axe violations or runtime page errors** |
+| Repeated interaction/mobile flows | **56/56 follow-up probes**, **46/46 mobile probes**; 23-view responsive, Dhaka/New York date/cancel/save/reload/history, actual scan/image/two-page-PDF/full-restore/quota/undo, playable local media/resume/notes/full-backup and production-PWA offline gates passed |
+| Release inspector controls | **57/57 separate Node tests**, not part of the 910 Vitest count and not an APK-signing/publication pass |
+| Restoration/delivery | **287 non-document source/config/native/public hashes** unchanged after all faults; whitespace check passed; Arena-shaped Host **HTTP 200** and exact served production entry-asset SHA-256 verified |
+
+These are overlapping selected synthetic controls, not independent feature counts or exhaustive coverage. Axe still reports **26,913 repeated incomplete/manual-review node checks** (26,369 contrast; 544 label/name), **neither passes nor automatically confirmed bugs**. This native-field review does not clear every incomplete node. Portrait light/date focus, dark backup-button/action layout and short-landscape date-focus screenshots were visually reviewed; this is not exhaustive manual screen-reader, WCAG, physical-phone or OEM-keyboard certification.
+
+Current **unpublished** production entry assets, verified on disk and served:
+
+- `./assets/index-DzJ057x4.js`: SHA-256 **`9c83e73874ba39d334cf234a844a7ab2011ae4c0003e54d7932972f3ef0e4849`**.
+- `./assets/index-CIwvfQGt.css`: SHA-256 **`a85e88df7b01b2559554420b25bf70f7f23b7442f48fb5c680b73751ae2e16e4`**.
+
+### Dependency-feed change is not a code security fix
+
+Fresh `npm audit --omit=dev` and full `npm audit` both return **0 known vulnerability entries**. The earlier full-audit count of five high development-tool entries is historical: GitHub’s [primary advisory](https://github.com/advisories/GHSA-fc5q-39xc-vjpf) now labels it withdrawn. Picomatch is still **4.0.7**; the dependency lockfile is unchanged from the prior round. No dependency upgrade, suppression, forced downgrade or vendored patch caused the count to disappear. The API returns withdrawal metadata dated **2026-11-18**, later than this session’s supplied date; that discrepancy is retained as source metadata, not used to advance the session date or infer a patched release. The linked [upstream comment](https://github.com/micromatch/picomatch/pull/235#issuecomment-6315749381) rejects the security classification and advises against untrusted glob/regex patterns. Zero registry entries is not a general security certification.
+
+### Unchanged safety/release limits
+
+- New-profile start: **20 November 2026, 06:30 Dhaka**. Existing different dates still require Settings shortcut/manual date → preview → Save → confirmation, **not Reset**. Cancel is unchanged; linked/fixed policies, identity/custom hours and actual study history keep their meaning.
+- **1 February / 6 June 2027 are personal preparation targets**, not verified official HSC/college-test dates. No fresh official-date confirmation, complete board-policy/textbook-content certification or exam-result/readiness guarantee was obtained.
+- Last-verified remote PWA is **a2076d3**. The draft v2.44.0 APK’s previously measured wrong signer/debuggable blockers remain unresolved; no original key or alternate identity/migration was selected. No fresh native build/installation/release inspection is implied. **Do not uninstall/Clear data.**
+- PWA/APK private storage is separate. JSON/legacy full backups omit scanned-image bytes and cannot restore absent pages; retain the original device and independently verify original images/PDFs. This round’s browser profiles/media were synthetic, never the student’s phone data.
+
+### Reproduce this additional guard family
+
+```bash
+npx tsc --noEmit
+npm test
+npm run build
+npm run preview # separate terminal; 0.0.0.0:3000
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:input-accessibility
+# Serial source faults: no HMR, app-source edits, builds or other source tests:
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:input-guards
+# The earlier follow-up, accessibility, date, mobile, data/offline and release
+# commands below were rerun normally, with the two specified fresh fault families.
+```
+
+`INPUT_A11Y_SCENARIOS`, `INPUT_A11Y_ROUTES` and `INPUT_A11Y_CHECKS` select declared subsets; scope is kept in each report. Fault variables must be absent for acceptance. Internal localhost URLs are test-driver endpoints; use Arena Live Preview in the user’s browser. Latest ignored evidence: `.cache/a11y-review/final/summary.json`, selected pre-repair failures under `red/`, independent diagnostic under `diagnostic/`, dependency feed responses under `dependencies/`, paired faults, normal-flow logs and exact delivery proof. Durable scripts/tests are in Git; generated browser/fixture/build artifacts are not.
+
+**No finite test run honestly establishes “100% bug-free”.** The previous completed round below is explicitly historical; its 900/284/5-high figures must not be substituted for the fresh results above.
+
+---
+
+# Previous completed A-Z round — 900-test snapshot
+
+**Historical snapshot, superseded by the renewed native-field review above.** All “latest/current/fresh” counts, asset identities and dependency-feed status in this section describe that preceding round, not the new final result.
+
+**Local/unpublished; no installation or new release.** Work remains on `arena/0e629171-hsc-27`, based on `a2076d38fcb15f85049fa0e16fff698570d737c1`. The user requested another A–Z check **and repairs**, without installing now. No personal phone data was accessed, no saved profile was reset or silently migrated, and no APK/PWA publication, tag change or remote workflow dispatch occurred. The running workspace Live Preview serves the repaired production build, **not** the public PWA or held APK. Identity stays **2.44.0 / Android code 24**.
+
+## Reproduced defects and repairs
+
+| Area | Correction and scope |
+|---|---|
+| Live exam | Stable persisted paper identity, retained definitions, selected answers/index and an absolute deadline. Reload does not restart time; late answers are rejected; elapsed time is bounded; submission is exact-once. History cannot overwrite the live paper, and live definitions cannot be deleted |
+| Generated persistence | Some percent-encoded Bengali answers produced IDs beyond the shared 180-character schema/reference limit. Long IDs now use compact, unambiguous bank references, retaining short IDs and legacy lookup/verifier support. Definitions and chapter/subject papers round-trip in both languages; this does not recover lost historical data |
+| Result/history analysis | Use the actual saved session and retained generated/custom definitions. Reused papers do not borrow the first attempt’s timing; ambiguous id-less timing is not guessed. Missing definitions do not inflate average time; invalid selections count as blank; 50% does not print as 0.5% |
+| Evidence-bounded guidance | A quick submission with blanks does not establish time pressure or careless reading. Wrong answers do not establish their cognitive cause. Scores/lowest accuracy refer to the measured sample, not readiness guarantees; a missing custom definition is not falsely labelled generated |
+| Missing saved questions | History visibly discloses unavailable definitions and preserves original scores. Partial retry states the missing/retained counts and asks for consent; Cancel changes neither saved data nor setup. Entirely missing papers do not start empty exams. Zero retained definitions show an unknown blank rate and no unsupported advice |
+| Deletion/retry loop | Deleting a custom question warns when saved papers use it and explains effects on analysis/retry. The confirmed deletion remains allowed without erasing saved scores. Unanswered questions enter mistake/revision/retry queues without inventing a chosen answer or fake attempt |
+| Actual weekday | Weekly strip uses the actual date’s Friday, independently of localized labels and Monday-first display indices. Elapsed-day due recommendations remain separate from calendar weekdays; year/leap boundaries are tested |
+| Library/form integrity | Generated/manual questions respect retained capacity and content/schema limits. Full libraries keep typed forms and explain failure. Flashcard writes/reviews stay restorable; legacy instants use the actual Bangladesh review day |
+| GPA/Golden | Raw grade thresholds never promote a below-threshold mark by rounding; optional-subject F is not compulsory failure and missing compulsory marks remain unknown. Arithmetic has 1,000 deterministic independent reference samples. `markGapLabel` formats **display only**: 159.99 → `≈0.01`, 159.999999 → `<0.01`, while both raw marks stay below A+. Saved marks/calculations are not rounded. Golden remains a personal planning convention, not a certified board result |
+| Accessibility/UX | Named/clamped progress, compatible visible/accessibility names, named completion-filter group, localized rating image, decorative profile initial, labelled selectors, focusable scroll regions, announced exam state and distinguishable source links. Result/hover/wrong/unanswered surfaces, short summary/profile text, wide-screen breadcrumb/sidebar/Golden/mistake-tip/library badges now use readable themed pairs. Navigation respects reduced motion; occupied-chrome, scroll-padding, inert SVG and border-box guards remain |
+| MCQ option form | Transparent inputs no longer inherit light text over hard-coded pale rows in dark mode. Selected/unselected rows, short letters and placeholders follow theme tokens. Every option and answer radio has an explicit localized name, not just a placeholder. Radios have 24px CSS boxes; the row has a visible focus outline. Real taps select the third answer; typed options and that answer persist when saving with the keyboard |
+| Content contradiction | Both bank and generator now identify muscle-to-bone connector as **tendon**, distinguishing it from ligament/bone-to-bone. This specific correction is not independent certification of every textbook fact or the official syllabus |
+| Restore safety | Successful JSON/full restore clears imported live-paper clocks; rejected/durability-failed restore preserves the current profile/clocks. Staging does not mutate imported source metadata |
+
+### Red evidence was not discarded
+
+- The preceding completed baseline was **858 tests / 95 files and 186 scans in four scenarios**. It did not cover the additional weekday/history/form/desktop cases. Earlier genuine red proofs included generated persistence **0/6**, analysis core **0/5**, dark wrong-answer contrast **1.0757:1**, and unsupported advice/reduced-motion failures.
+- The first **expanded 410-state** diagnostic genuinely failed **49 states / 141 repeated violation instances** before the wide-shell, sidebar, Golden, mistake-tip and library-count repairs. The library badge alone measured **2.2650:1**; sidebar paragraph **2.4383:1**. This is retained as pre-repair evidence, not presented as the final outcome.
+- An intermediate integrated run passed **898 tests**, but was **deliberately interrupted**, not counted as a completed final gate: visual inspection of its reduced-height form screenshot exposed dark MCQ typed-text contrast of **1.2617:1**. The independent computed-colour guard reproduced that failure; light selected-row placeholder contrast also failed at **4.2285:1**. Both-language explicit option-name tests first failed **0/2**.
+- After repair, sampled selected-row typed text is approximately **12.74:1 light / 10.36:1 dark**; option placeholders/letters clear **5.78:1** in the declared scenarios. Large-text radio boxes measure about **26.95px** and the painted focus ring about **2px**. The final gate checks empty, typed, focused and reselected states rather than relying only on axe or token-level contrast.
+- Fixture/runner failures are **not** application red proofs: the initial Bengali heading typo, a tsx callback-serialization error and an outline measurement that omitted CSS zoom were repaired in the harness. The corrected outline guard retains computed width, effective zoom and painted width; its independent invisible-focus fault is caught. No rule or failing element was globally excluded.
+
+## Final measured gates
+
+The integrated final driver **exited 0 after all stages** on the repaired source. The earlier interrupted run is not substituted for any result below.
+
+| Gate | Observed result |
+|---|---|
+| TypeScript | `tsc --noEmit` passed after serial fault restoration; production build also typechecked |
+| Full application suite | **900/900 tests, 96 files**, about **209.70s**; zero failing/skipped/todo tests |
+| Production build | Passed in **6.57s**; main JS **2,337.72kB / 601.74kB gzip**. Existing >500kB chunk warning remains |
+| Expanded Chromium accessibility/state matrix | **410 scans, 8 declared viewport/theme/language/profile scenarios, all 23 actual routes, 17 dialog types where applicable; 0 rows with confirmed axe violations or runtime page errors**. Includes populated flashcard/quiz/CQ/library/running/reloaded/submitted/hovered/history states |
+| Follow-up interaction matrix | **56/56 probes across 8 scenarios**: large text, short-text contrast/names, filter/rating semantics, dialog keyboard loops/focus return, reduced-height MCQ typing/touch/keyboard save, actual Friday, missing-history consent and persisted retry/reload |
+| New follow-up source faults | **43/43 caught** by intended assertions; **111 passing controls before / 111 after** across five files; all 10 deliberately mutated source files restored |
+| New follow-up browser faults | **16/16 caught**, each with its own passing control and intended failure. Includes selected/unselected pale dark rows, faint placeholders/letters, missing/wrong-language names, invisible focus, small radio targets, covered Save and broken dialog containment/geometry. Startup/import/page errors do not count as catches |
+| Mobile production | **46/46** real-touch/occlusion/inset/contrast/clock/history probes, portrait/landscape, 320–797px, large text, both themes/languages; first-study-day toolbar included |
+| Responsive | **23 rendered source-Vite views**, 320–768px, large text, English/dark and selected dialogs passed; complements the production browser matrices |
+| Date/history production | Dhaka and New York save/cancel/confirm/reload/history/export flows passed, including the real-touch 320px 20 November shortcut and linked/fixed target policies |
+| Scanner/backup/timer production | Actual synthetic image upload and edits, per-page navigation/removal/save/reload, complete two-page PDFs, exact scan-byte full restore into fresh keys, dirty Settings/old clocks, quota failure/retry, early measured finish and complete → reload → undo → reload passed |
+| Media/offline production | Actual playable local media, resume, notes, full backup/restore, shared collector, mobile tabs and production-PWA offline reload passed. No third-party YouTube-playback certification |
+| Release inspector controls | **57/57 separate Node tests**, no failures/skips; not part of the 900 Vitest total and not a compatible-APK publication pass |
+| Restoration/delivery | **284 non-document source/config/native/public-asset hashes** match the pre-fault snapshot; `git diff --check` passed. Arena-shaped Host returns **HTTP 200** and both served production entry assets match local SHA-256 |
+
+These are overlapping **selected synthetic controls**, not independent feature counts or exhaustive mutation coverage. Axe still returned **26,933 repeated incomplete/manual-review node checks**: **26,389 colour-contrast**, **544 label-content-name-mismatch**. They are **neither passes nor automatically confirmed defects**. The one-character decorative profile initial is checked independently; this does not turn all other incomplete checks green. No manual screen-reader/WCAG certification is claimed. Reduced-height viewports simulate keyboard-occupied space, **not an OEM keyboard**.
+
+Fresh portrait light/dark and short-landscape clock screenshots, plus light/dark reduced-height MCQ screenshots, were visually inspected. That selected visual review is not exhaustive physical-device testing.
+
+### Earlier fault proofs in this same A–Z recheck
+
+These refer to earlier source snapshots and were **not relabelled as freshly rerun mutation sets**. Final normal tests and production flows above were rerun after the latest repairs:
+
+- **91/91 A–Z source faults**, with **95 passing controls before / 95 after**; restored originals.
+- **57/57 date/history faults**, **31/31 mobile faults**, **12/12 accessibility browser fault/control pairs** and **13/13 release-inspector module faults**; restored originals.
+- **108 backup/scanner/timer/workflow controls / 93 caught faults**; that earlier stage also verified 271 then-captured source hashes. The preceding completed final snapshot verified 281; **the current snapshot is 284**, not a restoration of either stale snapshot.
+- One earlier short-landscape clean touch control failed once. Production and eight isolated repeats passed even before the separately established reduced-motion repair; its exact cause remains **unestablished**. Failed evidence is retained. Latest mobile passes do not create a flake-free guarantee.
+
+Current **unpublished** production entry assets (verified both on disk and served):
+
+- `assets/index-C-FfaVRk.js`: SHA-256 **`b076e83c8431a5f863af7f1aa49446ef827daf430209ce0995923526b5ae3ee0`**.
+- `assets/index-N5EDpIqU.css`: SHA-256 **`06da4f1424a4edefe0a3f571992e42bd5cfb3b2b8a995b794282b71d26cc54ac`**.
+
+## Open limits and release/data boundaries
+
+- Fresh `npm audit --omit=dev`: **0 known production-dependency vulnerabilities**. Full audit: **5 high development-tool dependency entries**, from picomatch [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf). Fresh registry lookup still returns **4.0.7**, within the affected range; no first patched version was established. No forced downgrade, suppression or unreviewed vendored patch was applied. Pinned development-only `axe-core@4.14.1` does not fix that advisory. This is **not** a clean full security audit.
+- Official HSC 2027/this student’s college-test dates remain **unverified**; no fresh official-date confirmation was obtained in this follow-up. **1 February / 6 June 2027 are personal preparation targets**, not official routines. The official [Sylhet form-fill notice](https://sylhetboard.gov.bd/notices/1770) and [PDF](https://sylhetboard.gov.bd/public/attachment/2026/2/Pdf_01-03-2026_1305.pdf) establish the grade scale (§17) and fourth-subject-benefit citation (§7), not every optional-F/formula/Golden/component-pass rule. Arithmetic consistency is not independent board-policy or content certification.
+- New-profile start remains **20 November 2026, 06:30 Dhaka**. Existing different dates require Settings shortcut → preview → Save → confirmation; Cancel changes nothing. Older APKs without the shortcut use the manual date field through the same transaction, **not Reset**. Linked/fixed policy, identity/custom hours and actual notes/completions/sessions retain their meaning.
+- No physical-phone/OEM/battery/background-alarm/native-picker or every-accessibility-setting certification. Existing API 34/35 evidence is for base **`a2076d3`**, before these local repairs; no fresh native installation/build/deployment is implied.
+- **Last verified remote baseline**, not a new inspection/publication: public PWA `a2076d3`; draft release **449690511**, **v2.44.0**, target/tag **`98b949f1936c2ab754ddf4123949156640dbb058`**, asset **762550392 / 15,231,160 bytes / SHA-256 `6bc0b311fabda582b9f9a4c67c1e873ecb7cbf216e1d1060943e69ab90dbfec0`**. Previously measured **wrong signer / debuggable APK** blockers remain unresolved. No confirmed original key or alternate identity/migration was selected. **Do not uninstall/Clear data** to bypass the conflict.
+- None of these local repairs was deployed. PWA/APK private storage is separate. JSON/legacy full backups omit scanned-image bytes and cannot recover absent pages after erasure; retain and independently open/verify original images/PDFs.
+
+## Reproduce
+
+```bash
+npx tsc --noEmit
+npm test
+npm run build
+npm run preview # separate terminal; 0.0.0.0:3000
+# Against the running repaired production preview:
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:followup-browser
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:accessibility
+# Source mutations MUST be serial, without HMR, builds or other source tests:
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:followup-guards
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:accessibility-guards
+npm run test:az-guards
+npm run test:post-release-guards
+npm run test:date-guards
+CHROMIUM_PATH=/path/to/chrome node scripts/check-mobile-shell-guards.mjs
+node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs
+node scripts/check-android-release-guards.mjs
+# Normal production flows:
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:date-browser
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:post-release-browser
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:mobile-shell
+CHROMIUM_PATH=/path/to/chrome npm run test:responsive
+CHROMIUM_PATH=/path/to/chrome npm run test:study-browser
+npm audit --omit=dev
+npm audit # Open development advisory: NOT a passing full audit.
+```
+
+Localhost URLs above are internal test commands, **not browser-facing service URLs**; use Arena’s provided Live Preview. Accessibility `A11Y_ROUTES`, `A11Y_SCENARIOS`, `A11Y_DIALOGS`, `A11Y_EXTRA_STATES=1` and `A11Y_EXAM_STATES_ONLY=1` select declared subsets. Follow-up `FOLLOWUP_SCENARIOS` / `FOLLOWUP_REVIEW_ONLY=1` likewise narrow scope; reports retain scope so subsets cannot masquerade as complete matrices. Fault environment variables intentionally break checks and must be absent for acceptance runs.
+
+Latest ignored evidence: `.cache/az-followup/final/summary.json`, full tests, paired source/browser faults, eight-scenario follow-up, expanded accessibility, mobile reports, normal-flow logs and `source-and-preview.json`; fresh dependency audit is under `.cache/az-followup/audit/`. Earlier red/interrupted evidence remains separately labelled under `.cache/az-followup/`; earlier complete proofs use `.cache/az-recheck/`, `.cache/date-mutations/`, `.cache/post-release/mutations/` and `.cache/mobile-shell/mutations/`. Scripts/tests are durable; generated binaries, screenshots, fixture media and student data are not Git deliverables.
+
+**Passing these checks is not a 100%-bug-free, official-date, GPA, content, physical-device or readiness guarantee.**
+
+---
+
+# Historical audits
+
+All reports below describe earlier source snapshots. Their old test counts, assets, publication wording and “current working tree” references are historical; the A–Z status above takes precedence.
+
+# Latest no-install recheck — local navigation-contrast repair
+
+**Scope:** `arena/0e629171-hsc-27`, based on main **`a2076d38fcb15f85049fa0e16fff698570d737c1`**. The user asked for another thorough check without installing now. No APK installation, release publication, tag change, workflow dispatch, phone-data access or profile migration was performed. The following CSS repair is **local/unpublished**, available in the workspace production preview; it is not in the already deployed PWA or the held APK. Version/package identity remains **2.44.0 / Android code 24**.
+
+## New defect reproduced and repaired
+
+The previous mobile checks verified geometry/touch but did not measure bottom-tab text contrast. Native API 34/35 screenshots from the existing main run exposed pale labels. The original inactive text was approximately **2.2:1**, below the **4.5:1** AA threshold for these small labels; the active text also failed. Dark mode inherited the same nearly white translucent tab bar and pale colors.
+
+- Use an **opaque `--surface`** background, `--muted` inactive text, and the `--mint` / `--green` active pair. This follows both themes and avoids contrast changing with scrolled content underneath. Insets, touch sizes, scroll-clearance observation and all planning/storage code are unchanged.
+- Actual computed foreground/background measurements after the fix: **light active 6.36:1 / inactive 6.64:1; dark active 6.05:1 / inactive 7.60:1**. Bengali/English, large text and portrait/landscape contexts are covered. Final 360px light / 393px dark scrolled screenshots were visually inspected.
+- **Red → green:** the added browser guard rejected the original bar at its named surface assertion, then passed in both themes after repair. A preliminary tsx callback-serialization error was corrected before recording that red proof; it is not counted as a detected UI fault.
+- **Six new independent browser faults caught:** faint inactive/active labels in each theme, wrong dark surface, and faded tab opacity. Each failed its intended assertion, not browser startup or a runtime error. The expanded mobile fault suite caught **31/31** (**13 source + 18 browser**) with passing light/dark controls and byte-for-byte source restoration. Existing independent occupied-chrome/scroll-padding and border-box guards were preserved.
+
+## Fresh measured gates
+
+The initial unmodified-main recheck passed **777 tests / 87 files (184.57s)** and reproduced the original main-asset SHA-256 `969b360834b6f3888a4b7ae0f4c8a8f9ac85f27bf65304618851031a0c95020f`. That green baseline did **not** establish bottom-label accessibility. The following were rerun **after** the CSS repair:
+
+| Gate | Observed result |
+|---|---|
+| TypeScript / focused Vitest | `npx tsc --noEmit`; **128/128 tests / 11 files** including contrast/mobile/date/timer/restore/release controls |
+| Full application suite | **777/777 tests / 87 files, 191.10s** |
+| Production build | **6.73s**, successful; existing large-chunk warning remains |
+| Release inspector controls | **57/57 Node tests**; separate from Vitest totals |
+| Date transaction | Dhaka + New York; 320px real-touch 20 November shortcut, preview/cancel/save/confirm/reload, linked/fixed targets, actual history and download flows passed; covered/cramped shortcut faults both rejected |
+| Backup/scanner/timer | Actual scan-image bytes, complete PDF downloads before/after fresh-profile full restore, dirty Settings, old clocks, quota failure/retry, early finish and completion → reload → undo → reload passed |
+| Mobile UI | **46/46 production browser probes** across five touch/coarse-pointer contexts, 320–797px, including the five new themed-contrast probes, retained data, insets, clocks and real taps |
+| Responsive / offline | **23 views**, large text, English/dark and dialogs; actual media/resume/notes/full restore and production PWA offline reload passed |
+| Restoration / delivery | All tested source files match their pre-fault hashes; `git diff --check` passed. Preview returns HTTP 200 with an Arena-shaped Host header and the new entry assets |
+
+Earlier **in this same recheck**, the complete date/history proof caught **57/57**, backup/scanner/timer/workflow proof **93/93**, and release-inspector module proof **13/13** intentional faults with restored originals. After the CSS-only repair, all normal tests/browser flows and the expanded **31/31 mobile faults** were rerun. These are targeted, overlapping controls, not exhaustive mutation coverage or a zero-bug claim.
+
+Final **unpublished** production identities (do not compare them to the held APK as if a release occurred):
+
+- `assets/index-EN6XNgDk.js`: SHA-256 **`b720aefc36259fe0c88dba383755e3898fe535493131e4c548dcbc1d34f214aa`**.
+- `assets/index-qSf1mm-o.css`: SHA-256 **`8b1c17ea89edb4b977c71b3fbc74a5bdbb9adbb7b0236357319c15554051beab`**.
+
+## Native, release and security limits
+
+- The **already-running main** [Android run 44277894826](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44277894826), source **`a2076d3`**, is now explicitly **SUCCESS**: build **134710609073**, API 34 **134712970797**, API 35 **134712971393**. Both APIs retain 12 native shell stages; their reconstructed scrolled 130% images were visually inspected. This checks the **base source before the new CSS repair**, not a newly built APK containing it. No new native run was dispatched and no physical phone was certified.
+- The last deployed main is **`a2076d3`**, [Pages 44277894932](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44277894932), deployment **7879585964**. Deployment success is distinct from a direct public-host byte inspection, which remains network-restricted. The local contrast repair has **not** been deployed.
+- Fresh GETs reconfirmed release **449690511** is still `draft: true`, `published_at: null`, tag **v2.44.0**, target **`98b949f1936c2ab754ddf4123949156640dbb058`**. Asset **762550392**, **15,231,160 bytes**, digest **`6bc0b311fabda582b9f9a4c67c1e873ecb7cbf216e1d1060943e69ab90dbfec0`** and the historical git tag are unchanged. The prior exact-byte inspection's **wrong signer / debuggable APK** blockers therefore remain; this was not a new cryptographic inspection or a release-eligibility pass. Do not uninstall/Clear data to work around them.
+- **New unresolved development-tool advisory:** registry `npm audit --omit=dev` reports **0** known production-dependency vulnerabilities. Full `npm audit` reports **5 high-severity dependency entries**, all stemming from **picomatch** [GHSA-fc5q-39xc-vjpf](https://github.com/advisories/GHSA-fc5q-39xc-vjpf), through fdir/tinyglobby/Vite/Vitest. The registry's latest is **4.0.7**, within the affected range; the advisory lists **no first patched version**. `npm ls picomatch --omit=dev --all` is empty. This is an **open build/development-tool risk**, not five independently discovered application vulnerabilities and not a clean full security audit. No unreviewed vendor patch, audit suppression or forced Vite/Vitest major downgrade was applied merely to make the count disappear; package/lockfile stayed unchanged. Recheck upstream before accepting untrusted glob inputs or treating that toolchain as security-cleared.
+- Official HSC 2027/college-test dates, physical-phone alarms/background/battery behavior and every OEM/accessibility setting remain unverified. The default is still **20 November 2026**; existing saved profiles require explicit preview/Save/confirmation. Real history is not redated. Legacy backups still cannot recreate absent scan bytes, and PWA/APK storage remains separate.
+
+Reproduce: run the commands in the section below, plus `npm audit --omit=dev` and `npm audit` (the latter is expected to report the unresolved development advisory). `scripts/check-mobile-shell.ts` includes the new computed-contrast checks, and `scripts/check-mobile-shell-guards.mjs` includes all six corresponding faults. Source mutation checks must run serially without HMR/other source tests. Ignored logs, native annotations/images and before/after asset identities: `.cache/recheck-a2076d3/`; final gates: `.cache/recheck-a2076d3/final/`. Broad fault reports also use `.cache/date-mutations/`, `.cache/post-release/mutations/` and `.cache/mobile-shell/mutations/`. These are synthetic test profiles, never the student's phone data.
+
+---
+
+# Prior v2.44.0 — PWA deployed; APK held; fail-closed release continuation
 
 **Scope:** UI/date publication [PR #16](https://github.com/Rahatportfolio/HSC-27-/pull/16) merged at **`98b949f1936c2ab754ddf4123949156640dbb058`**; continuation branch **`arena/28642f62-hsc-27`** adds release safety and truthful status documentation. Source stays **2.44.0 / code 24**. No bundled application, Android package identity, saved profile or historical tag/asset is changed by this continuation.
 

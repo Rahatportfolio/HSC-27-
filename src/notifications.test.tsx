@@ -167,7 +167,7 @@ describe('smart study notifications (what to study, total study, and remaining t
     // Pressing "/" opens the upgraded SearchModal with subject filter pills & quick actions
     fireEvent.keyDown(window, { key: '/' });
     expect(await screen.findByLabelText('অধ্যায় ও রুটিন খুঁজো')).toBeTruthy();
-    expect(screen.getByRole('tablist', { name: 'বিষয় ফিল্টার' })).toBeTruthy();
+    expect(screen.getByRole('group', { name: 'বিষয় ফিল্টার' })).toBeTruthy();
     expect(screen.getByRole('button', { name: /২৫ মি\. কুইক টাইমার/i })).toBeTruthy();
   });
 });

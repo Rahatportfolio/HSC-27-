@@ -44,7 +44,10 @@ export interface GpaResult {
 /**
  * HSC GPA: six compulsory subjects + 4th subject bonus.
  * GPA = (sum of six grade points + max(0, optional point - 2)) / 6, capped at 5.00.
- * Any F makes the GPA 0.00. Golden A+ means A+ in every subject.
+ * A compulsory-subject F makes a complete result 0.00; an optional F only loses
+ * the bonus. Missing compulsory marks keep GPA unknown. This combined-mark
+ * estimate cannot check separate theory/MCQ/practical pass requirements.
+ * Golden A+ here is the personal target of A+ in every subject.
  */
 export function calculateGpa(marks: SubjectMarks): GpaResult {
   const compulsory = SUBJECTS.filter(subject => !subject.optional);
@@ -53,7 +56,7 @@ export function calculateGpa(marks: SubjectMarks): GpaResult {
     const full = SUBJECT_FULL_MARKS[subject.id];
     const raw = marks[subject.id];
     const obtained = typeof raw === 'number' && Number.isFinite(raw) ? Math.max(0, Math.min(full, raw)) : null;
-    const percentage = obtained === null ? null : Math.round(obtained / full * 10000) / 100;
+    const percentage = obtained === null ? null : obtained / full * 100;
     const rule = percentage === null ? null : gradeFor(percentage);
     return { subject: subject.id, full, obtained, percentage, grade: rule?.grade ?? null, point: rule?.point ?? null, optional: !!subject.optional };
   });
@@ -63,12 +66,12 @@ export function calculateGpa(marks: SubjectMarks): GpaResult {
   const complete = missing.length === 0;
   const mainPoints = mainRows.reduce((sum, row) => sum + (row.point ?? 0), 0);
   const bonus = optionalRow.point !== null ? Math.max(0, optionalRow.point - 2) : 0;
-  const failed = rows.some(row => row.point === 0);
-  const gpa = complete ? Math.min(5, Math.max(0, Number(((mainPoints + bonus) / 6).toFixed(2)))) : null;
+  const failed = mainRows.some(row => row.point === 0);
+  const gpa = complete ? (failed ? 0 : Math.min(5, Math.max(0, Number(((mainPoints + bonus) / 6).toFixed(2))))) : null;
   const golden = complete && rows.every(row => row.point === 5);
   const totalObtained = rows.reduce((sum, row) => sum + (row.obtained ?? 0), 0);
   const totalFull = rows.reduce((sum, row) => sum + row.full, 0);
-  return { rows, gpa: failed ? 0 : gpa, complete, golden: golden && !failed, failed, missing, bonus, totalObtained, totalFull };
+  return { rows, gpa, complete, golden: golden && !failed, failed, missing, bonus, totalObtained, totalFull };
 }
 export function gpaTargetLabel(gpa: number | null, golden: boolean): string {
   if (gpa === null) return t('নম্বর যোগ করলে GPA দেখা যাবে', 'GPA appears once marks are added');
