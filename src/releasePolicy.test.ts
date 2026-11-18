@@ -86,6 +86,8 @@ describe('release metadata and publication safety', () => {
   });
 
   it('requires exact-asset signing continuity after both native jobs and retains failed audit evidence', () => {
+    const concurrency = workflow().split('\nconcurrency:\n')[1]?.split('\njobs:\n')[0];
+    expect(concurrency).toContain("github.event_name == 'workflow_dispatch' && inputs.audit_release != '' && 'audit' || 'build'");
     const audit = workflow().split('\n  artifact-audit:\n')[1];
     expect(audit).toBeTruthy();
     const trigger = audit.split('\n    runs-on:')[0];

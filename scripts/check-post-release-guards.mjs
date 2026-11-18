@@ -33,6 +33,7 @@ const cases = [
   ['release-audit-failure-evidence', '.github/workflows/android-apk.yml', '      - name: Save inspection evidence\n        if: always()\n', '      - name: Save inspection evidence\n', release, 'requires exact-asset signing continuity'],
   ['release-audit-device-success', '.github/workflows/android-apk.yml', "needs['device-checks'].result == 'success'", 'true', release, 'requires exact-asset signing continuity'],
   ['release-audit-skipped-dependencies', '.github/workflows/android-apk.yml', '${{ always() && (', '${{ success() && (', release, 'requires exact-asset signing continuity'],
+  ['release-audit-build-concurrency', '.github/workflows/android-apk.yml', "  group: android-apk-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.audit_release != '' && 'audit' || 'build' }}", '  group: android-apk-${{ github.ref }}', release, 'requires exact-asset signing continuity'],
   ['timer-completion-copy', 'src/App.tsx', 'পড়া সময় সেভ করো; পুরো সময় পূর্ণ হলেই কাজ সম্পন্ন হবে', 'পড়া সেভ করে সম্পন্ন দাও', 'src/features.test.tsx', 'asks before replacing a paused preset'],
   ['backup-image-limits-copy', 'src/components/FullBackup.tsx', 'JSON and legacy full backups contain scan metadata, not images', 'Every backup includes every image', restore, 'explains that JSON and legacy'],
   ['json-image-limits-copy', 'src/views/Settings.tsx', 'Scanned images and offline PDF/video bytes are not included', 'All image and media bytes are included', restore, 'explains that JSON and legacy'],

@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-apk-${{ github.ref }}
+  group: android-apk-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.audit_release != '' && 'audit' || 'build' }}
   cancel-in-progress: true
 
 jobs:
