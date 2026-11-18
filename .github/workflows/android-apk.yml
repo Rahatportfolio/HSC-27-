@@ -2,6 +2,19 @@ name: Android APK
 
 on:
   workflow_dispatch:
+    inputs:
+      audit_release:
+        description: 'Read-only inspection of an existing release tag; leave empty to build'
+        type: string
+        default: ''
+      audit_sha:
+        description: 'Exact source commit expected for the inspected release'
+        type: string
+        default: ''
+      audit_previous:
+        description: 'Optional previous published tag for signing-certificate comparison'
+        type: string
+        default: ''
   push:
     branches: [main, 'arena/**']
     tags: ['v*']
@@ -16,6 +29,7 @@ concurrency:
 jobs:
   apk:
     name: Build installable APK
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
     runs-on: ubuntu-24.04
     env:
       # Optional release signing. Nothing here is required: without the secrets the
@@ -54,6 +68,7 @@ jobs:
           CHROMIUM_PATH: /usr/bin/google-chrome
         run: |
           npm run test:responsive
+          npm run test:mobile-shell
           npm run test:study-browser
 
       - name: Sync Capacitor
@@ -145,10 +160,14 @@ jobs:
             আপডেটের আগে backup যাচাই করুন। JSON ও পুরোনো Full backup-এ স্ক্যানের আসল ছবির bytes নেই; আলাদা PDF/ছবি বা মূল ডিভাইস রাখুন। signing mismatch হলে যাচাইকৃত backup ছাড়া পুরোনো অ্যাপ uninstall করবেন না। কোনো অ্যাকাউন্ট বা cloud sync নেই।
 
   device-checks:
-    name: Android WebView device checks
+    name: Android WebView device checks (API ${{ matrix.api }})
     needs: apk
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [34, 35]
     permissions:
       contents: read
     steps:
@@ -180,7 +199,7 @@ jobs:
       - name: Native storage, restart, playback and reset on Android
         uses: reactivecircus/android-emulator-runner@v2
         with:
-          api-level: 35
+          api-level: ${{ matrix.api }}
           target: google_apis
           arch: x86_64
           disable-animations: true
@@ -188,7 +207,7 @@ jobs:
           script: |
             adb shell svc wifi disable
             adb shell svc data disable
-            cd android && bash -o pipefail -c './gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log'
+            bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log) || status=$?; adb pull /sdcard/Download/prostuti-instrumented-shell ./android-shell-evidence || true; exit "$status"'
       - name: Surface device failure details
         if: failure()
         uses: actions/github-script@v7
@@ -213,13 +232,70 @@ jobs:
               }
             }
             inspect(root);
+      - name: Surface native shell evidence
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const sharp = require('sharp');
+            const dir = 'android-shell-evidence';
+            if (!fs.existsSync(dir)) { core.warning('Native shell evidence directory is missing'); return; }
+            const measurements = `${dir}/measurements.jsonl`;
+            if (fs.existsSync(measurements)) core.notice(fs.readFileSync(measurements, 'utf8'), {title: 'Android shell measurements'});
+            // The check API truncates each annotation message at 4096 chars.
+            // Keep the running/scrolled visual proof in numbered small chunks;
+            // full-resolution startup/paused images remain in the test artifact.
+            for (const name of ['scrolled-130']) {
+              const path = `${dir}/${name}.png`;
+              if (!fs.existsSync(path)) continue;
+              const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();
+              const data = image.toString('base64');
+              const total = Math.ceil(data.length / 3000);
+              for (let part = 0; part < total; part++) {
+                core.notice(JSON.stringify({name: `${name}.webp`, encoding: 'base64', part, total, data: data.slice(part * 3000, (part + 1) * 3000)}), {title: `Android shell image ${name} part ${part + 1}/${total}`});
+              }
+            }
       - name: Save Android test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: android-device-results
+          name: android-device-results-api-${{ matrix.api }}
           path: |
             android-device.log
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
+            android-shell-evidence/
           if-no-files-found: ignore
+
+  artifact-audit:
+    name: Inspect uploaded release APK
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_release != '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      # A read-only token cannot see drafts (verified in CI). All inspection
+      # requests are still GET-only: no asset replacement or publication.
+      contents: write
+    steps:
+      - name: Checkout inspection tooling
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Test inspection guards
+        run: node --test scripts/verify-release-asset.node-test.mjs
+      - name: Verify existing APK bytes, version and signing
+        env:
+          GH_TOKEN: ${{ github.token }}
+          AUDIT_RELEASE_TAG: ${{ inputs.audit_release }}
+          AUDIT_EXPECTED_SHA: ${{ inputs.audit_sha }}
+          AUDIT_PREVIOUS_TAG: ${{ inputs.audit_previous }}
+        run: node scripts/verify-release-asset.mjs
+      - name: Save inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-asset-verification
+          path: release-asset-verification.json
+          if-no-files-found: error

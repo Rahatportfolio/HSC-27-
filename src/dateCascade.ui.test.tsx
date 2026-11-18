@@ -89,6 +89,41 @@ describe('real Settings date cascade', () => {
     expect(stored().settings.calendarRevision).toBe(1);
   }, 30000);
 
+  it.each(['shift', 'fixed'] as const)('moves an existing profile to the requested 20 November start only after confirmation (%s)', async policy => {
+    const data = freshData();
+    data.settings = { ...data.settings, name: 'Keep my profile', startDate: '2026-11-14', boostStartDate: '2026-12-01', dailyHours: 6, examDatePolicy: policy };
+    data.notes['2026-11-15'] = 'Keep my actual study note';
+    data.completed['physics-1-2:part-1'] = '2026-11-15T08:00:00Z';
+    data.studySessions = [{ id: 'old-session', date: '2026-11-15', at: '2026-11-15T08:00:00Z', minutes: 17, subject: 'physics', mode: 'stopwatch' }];
+    const app = await open(data);
+    expect(stored().settings.startDate).toBe('2026-11-14');
+    fireEvent.click(screen.getByRole('button', { name: 'Use 20 November 2026' }));
+    expect((screen.getByLabelText(/^Routine start date/) as HTMLInputElement).value).toBe('2026-11-20');
+    expect((screen.getByLabelText(/^Boost start date/) as HTMLInputElement).value).toBe('2026-12-07');
+    expect((screen.getByLabelText(/^Test exam target date/) as HTMLInputElement).value).toBe(policy === 'shift' ? '2027-02-07' : '2027-02-01');
+    expect((screen.getByLabelText(/^HSC '27 exam target date/) as HTMLInputElement).value).toBe(policy === 'shift' ? '2027-06-12' : '2027-06-06');
+    // A shortcut is a draft edit, not permission to reset or auto-save a profile.
+    expect(stored().settings.startDate).toBe('2026-11-14');
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Update routine dates and times?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(stored().settings.startDate).toBe('2026-11-14');
+    expect(stored().settings.calendarRevision).toBe(0);
+    await saveConfirmed();
+    await waitFor(() => {
+      expect(stored().settings).toMatchObject({ startDate: '2026-11-20', boostStartDate: '2026-12-07', name: 'Keep my profile', dailyHours: 6, examDatePolicy: policy, calendarRevision: 1 });
+      expect(stored().notes).toEqual(data.notes);
+      expect(stored().completed).toEqual(data.completed);
+      expect(stored().studySessions).toEqual(data.studySessions);
+    });
+    app.unmount(); render(<App />);
+    await screen.findByRole('heading', { name: 'Your study, your rhythm.' });
+    expect((screen.getByLabelText(/^Routine start date/) as HTMLInputElement).value).toBe('2026-11-20');
+    expect((screen.getByLabelText(/^Boost start date/) as HTMLInputElement).value).toBe('2026-12-07');
+    expect(stored().settings.calendarRevision).toBe(1);
+    expect(screen.queryByRole('button', { name: 'Use 20 November 2026' })).toBeNull();
+  }, 30000);
+
   it('uses the final customised video plan in the preview and shows the same capacity warnings after applying it', async () => {
     const data = freshData();
     data.removedTasks = [buildPlan()[0].tasks[0].id];

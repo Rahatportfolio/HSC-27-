@@ -1,7 +1,7 @@
 {
   "name": "hsc-27-prostuti",
   "private": true,
-  "version": "2.43.0",
+  "version": "2.44.0",
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0 --port 3000",
@@ -16,6 +16,7 @@
     "android:apk": "npm run android:assets && npm run android:sync && cd android && ./gradlew assembleDebug",
     "android:open": "cap open android",
     "test:responsive": "node scripts/check-responsive.mjs",
+    "test:mobile-shell": "tsx scripts/check-mobile-shell.ts",
     "test:study-browser": "tsx scripts/check-study-system.ts",
     "test:date-guards": "node scripts/check-date-guards.mjs",
     "test:post-release-guards": "node scripts/check-post-release-guards.mjs",

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowDownToLine, ArrowUpFromLine, CalendarDays, CheckCircle2, Database, Download, ExternalLink, FileText, Info, Languages, Monitor, Moon, Palette, RotateCcw, Save, Share2, ShieldCheck, Sun, Timer, Play, ArrowUpRight, Type } from 'lucide-react';
 import { usePlanner } from '../context';
 import { SOURCES, syllabusNote, chapterById, subjectById } from '../data';
-import { bn, EXAM_DATE_INFORMATION, formatDate, freshData, getPhases, isValidDate, shiftPlanStart, todayKey } from '../planner';
+import { bn, DEFAULT_SETTINGS, EXAM_DATE_INFORMATION, formatDate, freshData, getPhases, isValidDate, shiftPlanStart, todayKey } from '../planner';
 import { planHealth } from '../planHealth';
 import { buildStudyPlan } from '../studyPlan';
 import { applyScheduleSettings, scheduleChanged } from '../reschedule';
@@ -119,6 +119,10 @@ export default function SettingsView() {
     <PageHeading eyebrow="MAKE IT YOURS" title="তোমার পড়া, তোমার ছন্দে।" titleEn="Your study, your rhythm." description="শুরুর তারিখ, লক্ষ্য, থিম, রিভিশন আর ডেটা—সব এক জায়গায়। সব পরিবর্তন এই ডিভাইসেই থাকে।" descriptionEn="Start date, targets, theme, revision and data — all local to this device." />
     <form className="card settings-form" onSubmit={save}>
       <div className="card-heading"><h2>{t("পরিকল্পনা ও পরিচয়", "Plan & identity")}</h2><span className="local-badge"><ShieldCheck size={14} />{t("শুধু এই ডিভাইসে", "This device only")}</span></div>
+      {draft.startDate !== DEFAULT_SETTINGS.startDate && <section className="routine-start-shortcut" aria-label={t('শুরুর তারিখের শর্টকাট', 'Start date shortcut')}>
+        <p>{t('শুরুর তারিখ বদলাতে Reset করার দরকার নেই। এই বোতাম শুধু পূর্বরূপ বদলাবে; তারিখগুলো দেখে সেভ ও নিশ্চিত করো।', 'No reset is needed to change the start date. This only updates the preview; review the dates, then Save and confirm.')}</p>
+        <button type="button" className="button secondary small" onClick={() => changeStart(DEFAULT_SETTINGS.startDate)}>{t(`${formatDate(DEFAULT_SETTINGS.startDate, 'long')} থেকে শুরু`, `Use ${formatDate(DEFAULT_SETTINGS.startDate, 'long')}`)}</button>
+      </section>}
       <div className="form-grid">
         <label>{t("তোমার নাম", "Your name")}<span className="optional">{t("(ইচ্ছামতো)", "(custom)")}</span><input value={draft.name} maxLength={60} placeholder={t("কী নামে ডাকব?", "What should I call you?")} onChange={e => update('name', e.target.value)} /></label>
         <label>{t("শিক্ষা বোর্ড", "Education board")}<select value={draft.board} onChange={e => update('board', e.target.value)}>{!BOARDS.includes(draft.board) && <option value={draft.board}>{draft.board}</option>}{BOARDS.map(board => <option key={board}>{board}</option>)}</select></label>

@@ -2,11 +2,23 @@
 
 A Bengali-first, offline study companion for HSC 2027 science preparation (Sylhet board), with Higher Mathematics as the fourth subject. React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API.
 
-**Version 2.43.0 — backup, scanner and timer safety.** For the installable APK and publication status, use the [v2.43.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). A repository version alone is not a publication claim. The previous APK is [v2.42.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); the public PWA has a separate deployment workflow.
+**Source version 2.44.0 / Android code 24 — mobile UI and 20 November start.** APK/PWA publication and upgrade safety must be verified separately: see the [v2.44.0 notes](RELEASE-NOTES-v2.44.0.md), [release status](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.44.0) and CI checks. A repository version or draft APK is not a publication/safe-update claim. Historical APKs remain at [v2.43.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0) and [v2.42.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); the public PWA has a separate deployment workflow.
+
+## v2.44.0 Android mobile UI repair — PR #16
+
+The source fixes the supplied Android screenshots and preserves **20 November 2026** as the default start, with a safe Settings shortcut for an existing profile. The historical v2.43.0 APK does not contain the repair. [PR #16](https://github.com/Rahatportfolio/HSC-27-/pull/16) and the release/deployment checks record the exact source tested and published; no existing phone's private saved date can be changed remotely by editing this repository.
+
+- Install the Android splash/post-launch theme before edge-to-edge inflates window decor; remove the persistent framework ActionBar and stretched splash background covering the timer.
+- Give home progress/test-prep cards real padding and separation; allow labels/counts to fit without touching rounded borders.
+- Show larger, unbroken elapsed/remaining digits with one owner of status-bar insets, preserved gesture-bar padding, and actual measured scroll/focus clearance.
+- Scale the decorative timer SVG with its resized mobile container so it cannot block Start/Pause taps. The active banner is a named status region with a proper Open timer button; idle sessions do not reserve it.
+- No schedule defaults, completion/history, notes, scanned files or stored profile migrations change. Existing profiles must not be reset to install a UI repair.
+
+Measured checks and native-device results are recorded in the new top section of [AUDIT.md](AUDIT.md). Browser checks use touch/coarse-pointer contexts and inspect text ranges, clipping ancestors and hit testing, not only `.isVisible()`.
 
 ## v2.43.0 changes and release gates
 
-These fixes follow the v2.42.0 base. Package/lockfile/Android metadata are **2.43.0 / versionCode 23**. Tagged APK uploads stay **draft** until the Android emulator and Pages results have explicitly been checked; asset appearance alone is not publication. Check the release page for the published artifact and its exact CI evidence. The workspace preview serves the local production build.
+These fixes follow the v2.42.0 base. **v2.43.0 / versionCode 23 is published**, with APK/API 35 and Pages success for source `64ac7c99fcf635a7703bf6fb23fbc6020be318e5`. [Release notes and exact evidence](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). Tagged uploads stay **draft** until checks are explicitly verified; asset appearance alone is not publication. The uploaded APK's size/hash, embedded version and signature were inspected on an Android CI runner before promotion. That release evidence applies to its published bundle; the workspace preview now follows the unreleased UI-repair branch above.
 
 - Restore must save durably before replacing a profile or clearing clocks; dirty Settings and concurrent progress are protected.
 - Scanned-note persistence, image edits, per-page navigation, limits and complete PDF export are corrected. New scan-bearing full backups include checksummed image bytes and restore them under fresh keys.
@@ -60,6 +72,8 @@ Total: **198 planning dates, 827 tasks**. Initial chapter allocation ends on **2
 2. Keep **Move personal targets with the start**, or choose **Keep college/board deadlines fixed** for a confirmed external date.
 3. Review the phase preview and capacity warnings, then **Save → Update routine**.
 
+If an existing profile still has a different start, Settings now offers **“Use 20 November 2026”** (বাংলা: **“২০ নভেম্বর, ২০২৬ থেকে শুরু”**). This is a draft-only shortcut through the same date-cascade transaction, not a profile reset. Review the resulting linked/fixed target dates, then Save and confirm; cancelling leaves the saved date unchanged. It does not remotely change an already installed app's local data.
+
 For example, **20 → 26 November** moves the boost to **13 December**, the personal test target to **7 February**, and the personal board target to **12 June**. With the fixed policy the two exam targets do not move. A routine change cannot postpone a real exam.
 
 **Explicit day/task start times keep priority** over the default session time. Weekly classes remain tied to their weekday/clock time; real appointments and actual study history are not redated. Existing saved profiles are **not silently reset to the new defaults**: choose the new start in Settings and inspect all target dates before applying it. Invalid legacy profiles remain available for repair rather than being replaced with empty data.
@@ -106,13 +120,16 @@ Real-browser regressions require an installed Chromium/Chrome (not downloaded by
 
 ```bash
 CHROMIUM_PATH=/path/to/chrome npm run test:responsive
+CHROMIUM_PATH=/path/to/chrome npm run test:mobile-shell
 CHROMIUM_PATH=/path/to/chrome npm run test:study-browser
+# Targeted UI fault proof (not alongside HMR or other source tests):
+CHROMIUM_PATH=/path/to/chrome node scripts/check-mobile-shell-guards.mjs
 # Against the running production preview:
 CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:date-browser
 CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:post-release-browser
 ```
 
-Responsive checks cover all 23 source-Vite views at 320/360/390/768px, large text, English/dark mode, selected dialogs and the running timer. Study-browser checks use a real generated WebM and production-PWA offline reload. Date-browser checks exercise actual production Settings save/cancel/reload and Markdown/ICS downloads in Dhaka and New York device timezones. Post-release browser checks use real synthetic image pages, per-page edits, two-page PDFs, exact scan-byte restoration into a fresh isolated profile, complete/undo/reload, early measured timer finish, dirty Settings and a simulated JSON quota failure/retry. They never modify an existing student's profile.
+Responsive checks cover all 23 source-Vite views at 320/360/390/768px, large text, English/dark mode, selected dialogs and the running timer. The separate mobile-shell runner covers 320/360/393/412px phones plus 797×393 landscape with real touch, large saved text, simulated 36px status/24px gesture insets, long hour-bearing clocks, scrolling/navigation, paused stopwatch and retained data. A separate first-study-day probe includes the daily progress pill and PWA install control at 320px so before-start fixtures cannot hide toolbar collisions. Android instrumentation separately detects framework/native toolbars, recreates the Activity, waits for compositor readiness, measures visible clock glyphs at 100%/130% WebView text zoom and sends real screen-coordinate taps. Study-browser checks use a real generated WebM and production-PWA offline reload. Date-browser checks exercise actual production Settings save/cancel/reload and Markdown/ICS downloads in Dhaka and New York device timezones. Post-release browser checks use real synthetic image pages, per-page edits, two-page PDFs, exact scan-byte restoration into a fresh isolated profile, complete/undo/reload, early measured timer finish, dirty Settings and a simulated JSON quota failure/retry. They never modify an existing student's profile.
 
 The mutation runner changes one guard at a time, requires an unmodified passing control and assertion failures, then restores source bytes. Logs, backups, screenshots and generated reports stay under ignored `.cache/`. Targeted fault injection is not exhaustive coverage or proof of zero bugs. Native notification tests mock Capacitor; a physical Android device remains a separate verification step.
 
@@ -122,7 +139,7 @@ The mutation runner changes one guard at a time, requires an unmodified passing 
 - **Public PWA:** https://rahatportfolio.github.io/HSC-27-/ — deployment status is tracked by the [Pages workflow](https://github.com/Rahatportfolio/HSC-27-/actions/workflows/static.yml). An APK release and a Pages deployment are separate operations.
 - `.github/workflows/android-apk.yml` builds on `main` and `arena/**` pushes and on `v*` tags. It runs unit/UI and browser checks, builds a debug APK, and attaches tagged builds to a **draft** release. Publication requires an explicit post-verification action. Optional signing secrets also enable signed release APK/AAB output.
 - `.github/workflows/static.yml` tests/builds and deploys `dist/` to GitHub Pages from `main` (or workflow dispatch). Pages must use **GitHub Actions** as its build source.
-- Android metadata: **versionName 2.43.0 / versionCode 23**. The Android workflow contains API 35 WebView storage/playback/restart/reset gates. Exact run results belong to the current release page, not to an earlier version's CI run. Emulator success is not physical-phone alarm certification.
+- Android metadata: **versionName 2.43.0 / versionCode 23**. The working Android workflow now contains API 34/35 WebView shell/touch/text-zoom and storage/playback/restart/reset gates (the published v2.43.0 gate was API 35). Exact run results belong to the current release page, not to an earlier version's CI run. Emulator success is not physical-phone alarm certification.
 
 Local Android builds need JDK 21 and Android SDK 36:
 
@@ -131,7 +148,9 @@ npm run android:apk
 # android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-An APK signed with the same key/app id normally updates in place. Different signatures can require uninstalling the old app, which loses local data; take a JSON/full-media backup first.
+**Known signing incompatibility:** the published v2.42.0 and v2.43.0 debug APKs have **different verified certificates**, so normal Android in-place update is not supported. **Do not uninstall/clear the old app to resolve the conflict** until progress exports and every scanned PDF/image are independently opened and verified elsewhere. JSON and legacy full backups omitted scan bytes; they alone do not make uninstall safe. Keep the original app/device. PWA data is separate and does not automatically sync with the APK.
+
+The existing Android workflow also supports **GET-only uploaded-APK inspection** without rebuilding or publishing: set dispatch inputs `audit_release` (tag), `audit_sha` (exact source SHA), and optionally `audit_previous` (previous published tag). The inspected source/asset stays unchanged; package/version, ZIP/signature, size/hash and signing compatibility are checked on the runner. Inspect mode skips build/device jobs. GitHub hides drafts from read-only tokens, so that isolated job needs content-write permission for visibility, not for a write operation. Run `node --test scripts/verify-release-asset.node-test.mjs` for its 24 independent Node tests. [Measured inspection and signing evidence](AUDIT.md#publication-completed--v2430).
 
 ## Reminders, data and privacy
 

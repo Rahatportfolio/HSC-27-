@@ -1,8 +1,111 @@
+# v2.44.0 candidate — Android mobile shell and requested 20 November start
+
+**Scope:** [PR #16](https://github.com/Rahatportfolio/HSC-27-/pull/16), branch `arena/34a32742-hsc-27`. The user has approved publishing the date/UI changes to APK/PWA. Source metadata is **2.44.0 / code 24**; a source version is not proof of publication. The historical v2.43.0 tag/APK must not be overwritten. Current publication/upgrade status is tracked in the [v2.44.0 release notes](RELEASE-NOTES-v2.44.0.md), release page and CI checks. Branch/draft APK artifacts are not a safe in-place upgrade recommendation.
+
+## v2.44.0 publication preflight
+
+- Local source gates: TypeScript and **76 relevant date/mobile/release tests**, then **772/772 tests / 87 files (173.47s)** and production build **6.76s** passed. The existing large-bundle warning remains. Production date and scanner/image/PDF/full-backup/restore/undo/quota browser flows also passed; all final remote run identities are recorded on PR #16 / the release instead of inferred from local results.
+- A repeated scroll-clearance mutation survived a lucky centre tap. Strengthening the browser guard to compare computed scroll padding with actual fixed-chrome bounds exposed a real missed case: after late 36px/24px safe-inset changes, landscape chrome occupied **205px / 85px** while scroll padding was only **181px / 81px**. The observer was watching content-box changes, which excludes padding. It now watches **border-box** for both chrome regions. The new observer assertions failed before the fix; the unmodified real-browser control passed after it, and a forced zero-padding fault failed the named clearance assertion. Full candidate gates and 13 source / 12 browser fault controls are rerun before release; do not infer them from the earlier luck-dependent tap.
+- Android code 23 was explicitly rejected by the strengthened version guard before bumping to 24. **3 release-policy controls / 6 intentional faults** were caught with originals restored, including publishing a draft too early and detaching the API matrix dependency. The dependency mutation now targets the current matrix workflow rather than a stale pre-matrix title.
+- [Candidate run 44197774509](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44197774509) is **not** an all-green result: API 34 passed, but API 35 refused the first preset's `sendPointerSync` because the input target was not an app-owned window. A compositor-ready frame was insufficient. The instrumentation now additionally waits for a visible/attached WebView to hold native window focus across consecutive checks, sends an explicitly touchscreen-sourced event, and preserves diagnostics on failure. It does not force focus, dismiss system dialogs, use JS clicks as acceptance or swallow a failed injection. A fresh API 34/35 run is required before tagging.
+- The existing CI build skipped both release-keystore steps, so it used a debug signer. Reading repository signing-secret metadata is denied to this integration (HTTP 403); no key material was requested in chat, guessed, logged or committed. The uploaded-asset audit must compare a new draft APK against v2.43.0. **If certificates differ, do not present or publish it as a safe in-place update, and never require uninstall/Clear data to obtain the UI fix.** PWA deployment is a separate gate and cannot modify APK-private storage.
+
+## Follow-up — requested 20 November start for an existing profile
+
+The default was already **20 November 2026**, but changing a repository default cannot safely overwrite an installed profile's saved start date. Settings now provides an explicit **“Use 20 November 2026”** shortcut whenever the draft has another start. It uses `changeStart` / `shiftPlanStart` and the existing complete schedule preview/save/confirmation transaction, not a reset, storage-key change or silent migration. A linked policy shifts personal targets by the actual offset; fixed external deadlines stay fixed. For example, an old 14 November profile with 1 December boost and 1 February / 6 June personal targets moves to **20 November / 7 December / 7 February / 12 June** when linked, not to invented official exam dates.
+
+Measured follow-up: typecheck and **66 relevant date tests**, then **772/772 tests / 87 files (164.25s)**, production build **5.84s**, **41 production mobile probes**, and the **23-view responsive runner** all passed. The production date runner also exercised real 320px touch, large text, Bengali/Dhaka and English/New York: shortcut → draft only → cancel → Save/confirm → reload once, while preserving profile name, custom hours, real-dated notes and completion. Unit/UI cases additionally preserve measured sessions and cover both linked/fixed policies. Two new UI cases first failed without the shortcut. With 16 unmodified UI controls, **2/2 source faults** (dead shortcut; reset custom hours) were caught and source restored byte-for-byte. Independent **2/2 browser faults** (covered target; 20px target) failed the intended geometry assertions, not a browser startup error.
+
+Reproduce: `node scripts/check-date-guards.mjs start-shortcut`; after build/preview, `CHROMIUM_PATH=/path/to/chrome npm run test:date-browser`. `DATE_SHORTCUT_ONLY=1` selects the new touch flow; `DATE_SHORTCUT_FAULT=covered` or `cramped` intentionally fails it. Reports/screenshots use ignored `.cache/start-date-fix`, `.cache/date-browser` and `.cache/date-mutations`. Published APK/PWA files remain unchanged; an existing phone's private storage was not accessed or remotely edited.
+
+## Reproduction: what the old checks missed
+
+The supplied screenshots show clipped Bengali dashboard text/counts, a permanent white strip with distorted branding and an obscured running timer. The previous responsive runner used desktop pointer contexts at phone widths; `.isVisible()` established a box existed, not that digits were unobscured. Storage/playback emulator checks did not inspect native window chrome.
+
+- **Native red proof:** [run 44167554212](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44167554212), source `c37d8ff`, failed the added shell tests with `frameworkActionBar=true, visibleNativeToolbar=true` and **0px progress padding / approximately 0px card gap**. This was an actual framework ActionBar, not an invented diagnosis or a DOM logo. `BridgeActivity` does not use the application's `activity_main.xml`; that unused layout was not patched.
+- `EdgeToEdge.enable` touched window decor while the launch theme was still active. `BridgeActivity` applied its NoActionBar theme too late for that decor. The launch theme also assigned the full splash image to **every native View's `android:background`**, producing the stretched artwork in the retained bar.
+- **Touch-browser red proof at 360px:** seven probes failed: unpadded card text, unsafe toolbar/gesture padding, blocked Start, 13px running/scrolled/navigated clocks and paused stopwatch readability. The 270px decorative SVG extended outside its 230px mobile container and intercepted the Start button; ordinary DOM clicks in jsdom had missed this.
+- A first-study-day check (20 November, 320px, conditional PWA install control present) also reproduced a **12px menu/progress-pill overlap** and a search control squeezed to 16px. On the narrowest phones the redundant progress pill now yields to menu/search; full daily progress remains on the dashboard. The named regression failed before the fix and with a reintroduced pill.
+- A later real-tap check exposed a short-landscape issue: scrolling to the viewport centre could place the main timer control under fixed chrome. The final layout measures the real reading area rather than assuming a fixed 132px header.
+- The first red shell test also left the timer's notification permission dialog on top of a subsequent storage Activity recreation. The isolated emulator shell test now grants that precondition and pauses its own timer in cleanup. No production permission prompt or student profile is bypassed/reset.
+
+## Corrections
+
+| Area | Implemented correction |
+|---|---|
+| Android launch | Install `SplashScreen` **before** edge-to-edge/super; explicitly disable framework/AppCompat bars in the launch theme; use a splash icon/background, not a full-picture View background. Base theme is NoActionBar as well |
+| Home progress/snapshot | Dedicated padding and 18px card separation, flexible header/description, shrinkable progress columns and unbroken counts; test-prep heading/actions wrap within their own padded card |
+| Timer art and taps | An explicit SVG viewBox plus container-sized, non-interactive decorative SVG; Start/Pause remain actual touch targets |
+| Pinned clock | 18px unbroken elapsed/remaining digits, tabular numeric styling, separate mobile clock columns and usable wrapped action buttons; named status region and semantic Open timer button |
+| System insets | Only the sticky stack owns the status-bar inset. The inset background follows the selected app theme so native status icons keep contrast; the recording panel begins below it. Capacitor's gesture inset is not replaced by a later env-only rule |
+| Scroll/focus | `ResizeObserver` measures top/bottom chrome into scroll-padding variables, updates when the timer/font/orientation changes and disconnects on unmount. Short landscape controls can scroll into the real unobscured reading area |
+| Data safety | No schedule, timer arithmetic, backup format, migration, storage key or saved profile default changes. The tests preserve real-dated notes, settings, completion records and measured sessions |
+
+## Measured gates
+
+| Check | Observed result |
+|---|---|
+| Local TypeScript and relevant regressions | `npx tsc --noEmit`; timer/mobile/release-policy tests passed |
+| Full local application suite | **772/772 tests in 87 files** after the requested-start follow-up; includes seven shell regressions and two existing-profile shortcut cases |
+| Production build | Passed; existing large-bundle warning remains |
+| Production mobile geometry/touch | **41 probes** across 320×760, 360×797, 393×852, 412×915 and 797×393 touch/coarse-pointer contexts; large saved text, Bengali/English, light/dark, simulated 36px status/24px gesture insets, hour-bearing clocks, real Start/Pause/Resume, scroll/navigation, paused stopwatch, no page errors and retained data |
+| Existing responsive coverage | All **23 views**, 320–768px, large text, English/dark, dialogs and running timer passed; these are complementary smoke tests, not substitutes for the new occlusion tests |
+| First fixed native source | [run 44170486656](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44170486656), `b6ff929618daa53e7448347b81768caa9e1940ad`: APK build **5m11s**, API 34 **4m4s**, API 35 **4m8s**, all successful |
+| Native shell assertions | Cold launch and Activity recreation have no visible native toolbar; both clock boxes/text ranges stay within safe viewport bounds and pass multi-point hit testing. Actual injected screen-coordinate taps start the 180-minute preset, pause/resume while scrolled, navigate and reopen the timer; 100% and 130% Android WebView text zoom plus large app text are covered. Existing offline file/playback/restart/reset tests remain enabled |
+| Targeted source proof | **7 unmodified controls / 12 intentional source faults caught**, originals restored byte-for-byte. Includes padded-card hook, unwanted idle banner, frozen digits, broken open/pause, lost saved note, wrong/ignored resize clearance, missing SVG viewBox, missing/late splash installation and persistent splash background |
+| Targeted browser proof | **10 unmodified control probes / 12 injected layout faults caught by the intended assertion**: missing padding/gap, overlapping ring, unsafe top/bottom, nonsticky clocks, tiny digits, covering layer, clipped digits, lost landscape scroll clearance wrong status-background contrast and first-study-day toolbar collision |
+
+A subsequent evidence-retention run [44173985744](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44173985744) passed API 35 and exposed its actual 320×592 WebView measurements: **18px digits at 100% zoom, 23.4px at 130% zoom, 16px card insets, approximately 18px card gap, no native ActionBar, no clipped/occluded clock points**. Its API 34 job failed at a null JavaScript measurement callback and teardown also reported `device offline`; that job is **not** counted as a pass or silently dismissed as an app-independent flake. The harness now waits for WebView visual-state presentation and target readiness, and reports JS/null measurement errors explicitly instead of a ClassCastException. The final PR checks rerun the full native gate. Screenshot annotations are numbered sub-4096-character chunks because the check API truncated the earlier single-message previews; full images remain in artifacts.
+
+The root-cause native red run and fixed native run are independent of the jsdom/static-source assertions. Browser faults additionally exercise padding/gap, overlapping SVG, safe top/bottom, sticky positioning, font size, clipping/occlusion, landscape scroll clearance and status-background contrast. Their reproducible report is `.cache/mobile-shell/mutations/browser-report.json`; exact final run/guard results are also recorded in PR #16.
+
+## Reproduce and inspect
+
+```bash
+npx tsc --noEmit
+npx vitest run src/mobileShell.test.tsx src/ui.timer.test.tsx src/releasePolicy.test.ts
+npm test
+npm run build
+CHROMIUM_PATH=/path/to/chrome npm run test:mobile-shell
+# Optional built preview instead of the runner's temporary source server:
+CHROMIUM_PATH=/path/to/chrome BASE_URL=http://127.0.0.1:3000 npm run test:mobile-shell
+# Never alongside HMR or another source test: includes 12 temporary source edits.
+CHROMIUM_PATH=/path/to/chrome node scripts/check-mobile-shell-guards.mjs
+```
+
+The Android workflow now runs the shell regression plus existing storage tests on **API 34 and API 35** and collects emulator screenshots/measurements as `android-device-results-api-*` artifacts. The evidence-retention harness copies its own test images out of scoped external files before Gradle teardown can remove the installed test app; check annotations expose compact measurement/image previews. It does not copy or upload a student's device data. Local Java/SDK/adb were unavailable, so native verification is on GitHub CI, not a claimed local/physical-device run.
+
+Browser logs/reports/images and mutation controls live under ignored `.cache/mobile-shell/`; scripts regenerate them. Source `.ts/.tsx`, Java/XML and workflow changes are durable; generated browser binaries/runtime libraries, APKs and synthetic images are not Git deliverables. The production workspace preview binds `0.0.0.0:3000` and accepts Arena-shaped hosts.
+
+**Limits:** no physical/OEM-phone, battery/background-alarm or all-accessibility-setting certification; the native tests exercise isolated x86 emulators. Targeted faults are not exhaustive mutation coverage or zero-bug proof. Earlier green tests did not cover the user's native overlay and should not be cited as proof it never existed. Default start remains **20 November 2026**; personal targets are not official examination dates. The published APK signing mismatch and legacy scan-byte warning below still apply: **do not uninstall/clear an existing app merely to try this UI repair**.
+
+---
+
+## Historical published v2.43.0 audit (not the current branch's UI bundle)
+
 # Backup/scanner/timer release audit — v2.43.0
 
 **Scope:** `arena/d8039a21-hsc-27`, based on release/main `12cae9421fcb6e1f3719c16545c09d14b322bbfa`. Source/lockfile/Android metadata are **2.43.0 / code 23**. Publication and exact CI/deployment evidence are tracked on the [v2.43.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). A source version or an uploaded draft asset is not a publication claim. The workspace preview serves the release candidate's production build.
 
 This section supersedes the release-baseline counts below for the current working tree. The date derivation, personal-target policy and official-date uncertainty are unchanged.
+
+## Publication completed — v2.43.0
+
+Publication was completed from continuation branch `arena/34a32742-hsc-27` after Arena blocked remote access on the merged source branch. The release/tag remains **`64ac7c99fcf635a7703bf6fb23fbc6020be318e5`**, tree **`8067d012a29f71ebc54e882374f1aed35ad4de35`**, from [PR #15](https://github.com/Rahatportfolio/HSC-27-/pull/15). No application code, tag or existing APK was replaced during this continuation; only inspection tooling and documentation changed.
+
+- **Public release:** [v2.43.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0), ID `449052328`, non-draft/non-prerelease; publication and latest status independently confirmed through the unauthenticated public API.
+- **APK:** [prostuti-hsc27-v2.43.0.apk](https://github.com/Rahatportfolio/HSC-27-/releases/download/v2.43.0/prostuti-hsc27-v2.43.0.apk), asset `760227469`, **15,229,928 bytes**, `com.prostuti.hsc27`, **versionName 2.43.0 / versionCode 23**.
+- **APK SHA-256:** `38992c88d72797dac9c57d8100555f52d8b8e239e28696f7b6f516e94fb7653d`.
+- [Tagged Android run 44151291901](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44151291901): APK **5m11s**, API 35 storage/playback/restart/reset emulator checks **4m35s**, both successful. Release-keystore steps were skipped; this is a **debug-signed APK**, not a production-keystore APK/AAB.
+- [Pages run 44151187101](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44151187101): same release SHA, build **2m31s**, deploy **11s**, successful deployment **7862887230** for **https://rahatportfolio.github.io/HSC-27-/**. Deployment success is observed; direct public-site inspection was restricted by the sandbox's outbound-host allowlist.
+- [Uploaded-APK inspection run 44159411468](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44159411468): **28s, success**, using tooling commit `31ae1f267e9104a94b4168d9e082a44722937ce9`. The runner downloaded the exact release asset and checked its bytes against GitHub's size/digest, ZIP integrity, embedded Android version/package, cryptographic signature and previous-release certificate. It did not rebuild or replace either APK. Local direct downloads failed at the restricted asset CDN; verification happened on the GitHub runner, not locally.
+- APK's `assets/index-BIn-0ZZw.js` SHA-256 **`8eebadfbe76a83fa8a87987eb948d85389cd575724dd161d13e6009509aae545`** matches the locally tested production bundle **byte-for-byte**.
+
+**Measured upgrade incompatibility:** v2.43.0 certificate SHA-256 is `30c33e6e24b125db7291e3fb6f3ea746054532b2c016bb3f24d79023cac5ab72`; published v2.42.0 is `fa69e88eb5d49174e02ae91b5b711b192a1e0698c108b8a1015b8eda6c77e8f7`. They differ. Normal Android in-place update from that APK is **not supported**. Do not uninstall/clear the original app to resolve the conflict without independently opening and verifying progress exports **and every scanned PDF/image**. Legacy JSON/full archives omitted those image bytes. PWA and APK data do not automatically sync.
+
+Continuation gates: clean typecheck, **763/763 Vitest tests / 86 files** and a **6.13s** build reran successfully; large-chunk warning remains. The separate artifact checker has **24 passing Node tests** and **19 targeted auditor mutations caught**, with original source unchanged. This is additional tooling evidence, not a fresh combined application/date/release mutation run. New Android SDK signer-format handling first failed four added tests, then passed. Failed inspection attempts exposed draft visibility and the SDK's new `V2 Signer:` format; no release was published until inspection succeeded.
+
+Inspection is opt-in via the existing Android workflow's `audit_release`, `audit_sha`, `audit_previous` dispatch inputs; build/device jobs are skipped in that mode. It makes GET requests only. GitHub's read-only token omitted draft releases in an observed failed run, so the isolated inspection job needs `contents: write` for draft visibility; it still never publishes, replaces assets or builds an APK. Results/failures are exposed through check annotations and an uploaded JSON report. Reproduction: `node --test scripts/verify-release-asset.node-test.mjs`. The source date/history contracts and physical-phone limitations below remain unchanged.
 
 ## Important backup safety finding
 
