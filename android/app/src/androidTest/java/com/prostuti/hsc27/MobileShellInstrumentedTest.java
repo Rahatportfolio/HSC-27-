@@ -7,6 +7,7 @@ import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.SystemClock;
+import android.view.InputDevice;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -137,8 +138,28 @@ public class MobileShellInstrumentedTest {
     return false;
   }
 
+  private void waitForFocusedWindow(WebView web) throws Exception {
+    // A presented WebView frame does not imply that Android's input dispatcher
+    // has focused its window after Activity launch/recreation (notably API 35).
+    // Do not bypass a system dialog or inject into another app's window.
+    long until = SystemClock.elapsedRealtime() + 15000;
+    int stable = 0;
+    while (SystemClock.elapsedRealtime() < until) {
+      boolean[] ready = new boolean[1];
+      InstrumentationRegistry.getInstrumentation().runOnMainSync(() ->
+        ready[0] = web.isAttachedToWindow() && web.isShown() && web.hasWindowFocus()
+      );
+      stable = ready[0] ? stable + 1 : 0;
+      if (stable >= 2) return;
+      SystemClock.sleep(100);
+    }
+    screenshot("unfocused-input");
+    fail("App window never gained input focus; refusing an unowned screen tap");
+  }
+
   private void tap(WebView web, String selector) throws Exception {
     waitFor(web, "!!document.querySelector(" + JSONObject.quote(selector) + ")");
+    waitForFocusedWindow(web);
     evaluate(web, "document.querySelector(" + JSONObject.quote(selector) + ").scrollIntoView({block:'center',behavior:'instant'});true");
     SystemClock.sleep(150);
     JSONObject point = object(web,
@@ -155,9 +176,14 @@ public class MobileShellInstrumentedTest {
     long at = SystemClock.uptimeMillis();
     MotionEvent down = MotionEvent.obtain(at, at, MotionEvent.ACTION_DOWN, coordinates[0], coordinates[1], 0);
     MotionEvent up = MotionEvent.obtain(at, at + 80, MotionEvent.ACTION_UP, coordinates[0], coordinates[1], 0);
+    down.setSource(InputDevice.SOURCE_TOUCHSCREEN);
+    up.setSource(InputDevice.SOURCE_TOUCHSCREEN);
     try {
       InstrumentationRegistry.getInstrumentation().sendPointerSync(down);
       InstrumentationRegistry.getInstrumentation().sendPointerSync(up);
+    } catch (RuntimeException error) {
+      screenshot("failed-input");
+      throw new AssertionError("Real tap failed for " + selector + " at screen (" + coordinates[0] + "," + coordinates[1] + "), DOM=" + point, error);
     } finally { down.recycle(); up.recycle(); }
   }
 

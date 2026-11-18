@@ -1,8 +1,10 @@
 # প্রস্তুতি · HSC 27 — current feature status
 
-## Unreleased — Android screenshot/UI repair in PR #16
+## v2.44.0 — Android screenshot/UI repair and 20 November start
 
-**Not yet published to the APK or public PWA.** The current working preview differs from the released v2.43.0 bundle. The screenshot complaint exposed gaps in the earlier desktop-pointer responsive checks and storage-only emulator tests; those green results did not establish native clock visibility.
+**Source version 2.44.0 / Android code 24; publication is gated, not implied by metadata.** The historical v2.43.0 bundle does not include this repair. APK and PWA status are separate: see the [v2.44.0 notes](RELEASE-NOTES-v2.44.0.md), release page and current PR checks. The user has approved publishing both, but a draft APK must stay held if its signer cannot safely update the previous app. No uninstall/Clear data recommendation is allowed without independently verified progress and every PDF/image.
+
+The screenshot complaint exposed gaps in the earlier desktop-pointer responsive checks and storage-only emulator tests; those green results did not establish native clock visibility. A later API 35 input-focus failure is recorded in the audit and must pass a fresh native rerun before tagging.
 
 - Reproduced in Android CI before the fix: `frameworkActionBar=true`, `visibleNativeToolbar=true`; the persistent splash-painted bar hid the clock. The same red run measured **0px card padding / 0px card gap**.
 - Reproduced with coarse-pointer mobile Chromium: a **270px SVG over a 230px timer container blocked Start**, small 13px banner clocks, status-bar overlap and overridden gesture padding.

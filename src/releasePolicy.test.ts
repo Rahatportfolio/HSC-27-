@@ -13,10 +13,10 @@ describe('release metadata and publication safety', () => {
     expect(lock.packages[''].version).toBe(pkg.version);
   });
 
-  it('increments the Android version code beyond the published v2.42.0 code', () => {
+  it('increments the Android version code beyond the published v2.43.0 code', () => {
     const code = Number(read('android/app/build.gradle').match(/versionCode\s+(\d+)/)?.[1]);
     expect(Number.isSafeInteger(code)).toBe(true);
-    expect(code).toBeGreaterThan(22);
+    expect(code).toBeGreaterThan(23);
   });
 
   it('attaches tagged APKs as drafts rather than publishing before dependent device checks', () => {

@@ -2,11 +2,11 @@
 
 A Bengali-first, offline study companion for HSC 2027 science preparation (Sylhet board), with Higher Mathematics as the fourth subject. React, TypeScript, Vite and Capacitor; no account, backend, cloud database or paid API.
 
-**Version 2.43.0 — backup, scanner and timer safety.** For the installable APK and publication status, use the [v2.43.0 release page](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0). A repository version alone is not a publication claim. The previous APK is [v2.42.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); the public PWA has a separate deployment workflow.
+**Source version 2.44.0 / Android code 24 — mobile UI and 20 November start.** APK/PWA publication and upgrade safety must be verified separately: see the [v2.44.0 notes](RELEASE-NOTES-v2.44.0.md), [release status](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.44.0) and CI checks. A repository version or draft APK is not a publication/safe-update claim. Historical APKs remain at [v2.43.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.43.0) and [v2.42.0](https://github.com/Rahatportfolio/HSC-27-/releases/tag/v2.42.0); the public PWA has a separate deployment workflow.
 
-## Unreleased Android mobile UI repair — PR #16
+## v2.44.0 Android mobile UI repair — PR #16
 
-The current branch now also fixes the supplied Android screenshots. These changes are **not in the published v2.43.0 APK/PWA**; the working preview and [PR #16](https://github.com/Rahatportfolio/HSC-27-/pull/16) contain the repair.
+The source fixes the supplied Android screenshots and preserves **20 November 2026** as the default start, with a safe Settings shortcut for an existing profile. The historical v2.43.0 APK does not contain the repair. [PR #16](https://github.com/Rahatportfolio/HSC-27-/pull/16) and the release/deployment checks record the exact source tested and published; no existing phone's private saved date can be changed remotely by editing this repository.
 
 - Install the Android splash/post-launch theme before edge-to-edge inflates window decor; remove the persistent framework ActionBar and stretched splash background covering the timer.
 - Give home progress/test-prep cards real padding and separation; allow labels/counts to fit without touching rounded borders.
