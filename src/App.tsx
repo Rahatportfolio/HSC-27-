@@ -111,8 +111,10 @@ export default function App() {
       document.documentElement.style.setProperty('--bottom-chrome-height', `${bottomNavRef.current?.getBoundingClientRect().height ?? 0}px`);
     };
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
-    if (chromeRef.current) observer?.observe(chromeRef.current);
-    if (bottomNavRef.current) observer?.observe(bottomNavRef.current);
+    // Insets change padding without changing the content box. Observe the
+    // occupied border box so late native/simulated insets refresh clearance too.
+    if (chromeRef.current) observer?.observe(chromeRef.current, { box: 'border-box' });
+    if (bottomNavRef.current) observer?.observe(bottomNavRef.current, { box: 'border-box' });
     update();
     window.addEventListener('resize', update);
     return () => {

@@ -82,6 +82,8 @@ describe('reported mobile clipping and missing clock regressions', () => {
     });
     const app = render(<App />);
     expect(observe).toHaveBeenCalledTimes(2);
+    expect(observe).toHaveBeenCalledWith(document.querySelector('.top-chrome-stack'), { box: 'border-box' });
+    expect(observe).toHaveBeenCalledWith(document.querySelector('.mobile-bottom-nav'), { box: 'border-box' });
     expect(document.documentElement.style.getPropertyValue('--top-chrome-height')).toBe('180px');
     expect(document.documentElement.style.getPropertyValue('--bottom-chrome-height')).toBe('92px');
     height = 220;

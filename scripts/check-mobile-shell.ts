@@ -188,9 +188,19 @@ try {
       const m = await checkClock(page, `${key} syllabus`);
       await page.locator('.live-timer-indicator').tap({ timeout: 2200 });
       await page.waitForSelector('.timer-view', { timeout: 2200 });
+      // A lucky centre scroll can leave this button tappable even with no scroll
+      // padding. Independently verify clearance against actual occupied chrome.
+      await page.clock.runFor(100);
+      const clearance = await page.evaluate(() => ({
+        top: document.querySelector('.top-chrome-stack')!.getBoundingClientRect().height,
+        bottom: document.querySelector('.mobile-bottom-nav')!.getBoundingClientRect().height,
+        topPadding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingTop),
+        bottomPadding: parseFloat(getComputedStyle(document.documentElement).scrollPaddingBottom),
+      }));
+      assert.ok(clearance.topPadding >= clearance.top - 1 && clearance.bottomPadding >= clearance.bottom - 1, `Measured scroll clearance is smaller than fixed chrome: ${JSON.stringify(clearance)}`);
       await tapVisible(page, '.timer-main-button');
       assert.equal(await page.locator('.live-timer-topbar.paused').count(), 1, 'Main Pause was blocked by the SVG');
-      return m;
+      return { ...m, clearance };
     });
     const stopwatch = { ...timer, mode: 'stopwatch' as const, running: false, startedAt: null };
     await page.evaluate(({ timer, key }) => localStorage.setItem(key, JSON.stringify(timer)), { timer: stopwatch, key: TIMER_KEY });

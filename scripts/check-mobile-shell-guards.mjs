@@ -48,7 +48,7 @@ if (mode !== 'source') {
     ['covered-clock', 'running-clock', 'covered or cut off'],
     ['clipped-clock', 'running-clock', 'covered or cut off'],
     ['unsafe-bottom', 'safe-toolbar-and-bottom-nav', 'Gesture bar padding'],
-    ['no-scroll-clearance', 'navigated-and-open-clock', 'covered by', '797'],
+    ['no-scroll-clearance', 'navigated-and-open-clock', 'Measured scroll clearance', '797'],
     ['wrong-status-background', 'running-clock', 'Status-bar background'],
     ['colliding-toolbar', 'first-study-day-toolbar', 'Toolbar buttons overlap'],
   ]) {
@@ -74,6 +74,7 @@ if (mode !== 'browser') {
     ['lost-saved-note', 'src/App.tsx', 'setStorageOk(saveData(data))', 'setStorageOk(saveData({ ...data, notes: {} }))', ticking],
     ['wrong-scroll-clearance', 'src/App.tsx', 'chromeRef.current?.getBoundingClientRect().height ?? 0', '0', clearance],
     ['ignored-banner-resize', 'src/App.tsx', 'new ResizeObserver(update)', 'new ResizeObserver(() => {})', clearance],
+    ['content-box-insets', 'src/App.tsx', "if (chromeRef.current) observer?.observe(chromeRef.current, { box: 'border-box' });\n    if (bottomNavRef.current) observer?.observe(bottomNavRef.current, { box: 'border-box' });", 'if (chromeRef.current) observer?.observe(chromeRef.current);\n    if (bottomNavRef.current) observer?.observe(bottomNavRef.current);', clearance],
     ['unscaled-svg', 'src/components.tsx', ' viewBox={`0 0 ${size} ${size}`}', '', 'scales the decorative ring'],
     ['missing-splash-install', 'android/app/src/main/java/com/prostuti/hsc27/MainActivity.java', 'SplashScreen.installSplashScreen(this);', '/* fault: no splash theme installation */', native],
     ['late-splash-install', 'android/app/src/main/java/com/prostuti/hsc27/MainActivity.java', 'SplashScreen.installSplashScreen(this);', '/* fault: install after edge-to-edge */', native, true],

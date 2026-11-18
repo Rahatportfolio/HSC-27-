@@ -17,6 +17,7 @@ This is the release preparation record, **not a claim that an APK is already pub
 - Show unbroken 18px running/paused timer digits, safe status/gesture insets and measured sticky-chrome scroll clearance.
 - Stop the decorative timer SVG blocking real Start/Pause taps. Keep clocks usable after scrolling/navigation and at large text sizes.
 - Prevent the 320px first-study-day toolbar collision when progress and optional PWA install controls coexist.
+- Observe chrome border-box sizes, not just content-box changes, so late status/gesture padding updates the true scroll clearance. A repeated mutation run exposed the old guard's lucky centre tap; independent computed-padding versus occupied-chrome assertions now cover it.
 - Keep the default routine start **20 November 2026, 06:30 Bangladesh time**. An existing profile with another date gets **Settings → “২০ নভেম্বর, ২০২৬ থেকে শুরু” → সেভ → রুটিন আপডেট**. The shortcut edits a draft; cancellation keeps the saved date. Linked personal targets move by the actual date offset; fixed external deadlines stay fixed. No profile reset, history redating or silent migration.
 - Actual completion times, measured sessions, notes, marks, recalls and files retain their meaning. College/HSC 2027 official examination dates remain unverified; 1 February / 6 June defaults are personal targets, not notices.
 
