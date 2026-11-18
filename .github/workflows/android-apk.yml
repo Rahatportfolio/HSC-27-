@@ -12,9 +12,9 @@ on:
         type: string
         default: ''
       audit_previous:
-        description: 'Optional previous published tag for signing-certificate comparison'
+        description: 'Published signing baseline; continuity is required, not just a valid signature'
         type: string
-        default: ''
+        default: 'v2.43.0'
   push:
     branches: [main, 'arena/**']
     tags: ['v*']
@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: android-apk-${{ github.ref }}
+  group: android-apk-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && inputs.audit_release != '' && 'audit' || 'build' }}
   cancel-in-progress: true
 
 jobs:
@@ -32,8 +32,8 @@ jobs:
     if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
     runs-on: ubuntu-24.04
     env:
-      # Optional release signing. Nothing here is required: without the secrets the
-      # workflow still produces an installable (debug-signed) APK.
+      # Contributor debug builds do not need secrets. A version tag must have
+      # complete signing inputs; only the release APK may become a draft asset.
       KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
       KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
       KEYSTORE_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -48,6 +48,10 @@ jobs:
           node-version: 22
           cache: npm
 
+      - name: Require original signing key for tags
+        if: startsWith(github.ref, 'refs/tags/v') || env.KEYSTORE_BASE64 != ''
+        run: node scripts/check-android-release.mjs signing-inputs
+
       - name: Install dependencies
         run: npm ci
 
@@ -56,6 +60,9 @@ jobs:
 
       - name: Unit and UI tests
         run: npm test
+
+      - name: Release safety guard tests
+        run: node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs
 
       - name: Generate Android icons and splash screens
         run: npm run android:assets
@@ -100,14 +107,15 @@ jobs:
       - name: Write release keystore
         if: env.KEYSTORE_BASE64 != ''
         run: |
-          echo "$KEYSTORE_BASE64" | base64 -d > android/prostuti-release.jks
+          umask 077
+          printf '%s' "$KEYSTORE_BASE64" | base64 -d > android/prostuti-release.jks
           cat > android/keystore.properties <<PROPS
           storeFile=prostuti-release.jks
           storePassword=$KEYSTORE_PASSWORD
           keyAlias=$KEYSTORE_KEY_ALIAS
           keyPassword=$KEYSTORE_KEY_PASSWORD
           PROPS
-          echo "Release keystore written for alias $KEYSTORE_KEY_ALIAS"
+          echo "Release keystore prepared; signing values are not logged."
 
       - name: Build signed release APK and AAB
         if: env.KEYSTORE_BASE64 != ''
@@ -122,9 +130,15 @@ jobs:
         run: |
           mkdir -p artifacts
           suffix="${GITHUB_REF_NAME//\//-}"
-          cp android/app/build/outputs/apk/debug/app-debug.apk "artifacts/prostuti-hsc27-${suffix}.apk"
-          if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
-            cp android/app/build/outputs/apk/release/app-release.apk "artifacts/prostuti-hsc27-${suffix}-release.apk"
+          if [[ "${GITHUB_REF:-}" == refs/tags/v* ]]; then
+            # Missing release output is an error, never a debug fallback.
+            test -f android/app/build/outputs/apk/release/app-release.apk
+            cp android/app/build/outputs/apk/release/app-release.apk "artifacts/prostuti-hsc27-${suffix}.apk"
+          else
+            cp android/app/build/outputs/apk/debug/app-debug.apk "artifacts/prostuti-hsc27-${suffix}-debug.apk"
+            if [ -f android/app/build/outputs/apk/release/app-release.apk ]; then
+              cp android/app/build/outputs/apk/release/app-release.apk "artifacts/prostuti-hsc27-${suffix}-release.apk"
+            fi
           fi
           if [ -f android/app/build/outputs/bundle/release/app-release.aab ]; then
             cp android/app/build/outputs/bundle/release/app-release.aab "artifacts/prostuti-hsc27-${suffix}.aab"
@@ -157,7 +171,7 @@ jobs:
 
             প্রকাশের আগে Android device ও Pages checks-এর ফল যাচাই করতে হবে। APK asset আসা মানেই প্রকাশের অনুমতি নয়।
 
-            আপডেটের আগে backup যাচাই করুন। JSON ও পুরোনো Full backup-এ স্ক্যানের আসল ছবির bytes নেই; আলাদা PDF/ছবি বা মূল ডিভাইস রাখুন। signing mismatch হলে যাচাইকৃত backup ছাড়া পুরোনো অ্যাপ uninstall করবেন না। কোনো অ্যাকাউন্ট বা cloud sync নেই।
+            signing key বা certificate না মিললে APK প্রকাশ বন্ধ থাকবে। পুরোনো অ্যাপ uninstall বা Clear data করে বাধা কাটাবেন না। JSON ও পুরোনো Full backup-এ স্ক্যানের আসল ছবির bytes নেই; মূল অ্যাপ/ডিভাইস এবং আলাদা PDF/ছবি রাখুন। PWA ও APK-এর ডেটা আলাদা; কোনো অ্যাকাউন্ট বা cloud sync নেই।
 
   device-checks:
     name: Android WebView device checks (API ${{ matrix.api }})
@@ -270,7 +284,12 @@ jobs:
 
   artifact-audit:
     name: Inspect uploaded release APK
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_release != '' }}
+    needs: [apk, device-checks]
+    if: >-
+      ${{ always() && (
+        (github.event_name == 'workflow_dispatch' && inputs.audit_release != '') ||
+        (startsWith(github.ref, 'refs/tags/v') && needs.apk.result == 'success' && needs['device-checks'].result == 'success')
+      ) }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -285,15 +304,18 @@ jobs:
         with:
           node-version: 22
       - name: Test inspection guards
-        run: node --test scripts/verify-release-asset.node-test.mjs
+        run: node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs
       - name: Verify existing APK bytes, version and signing
         env:
           GH_TOKEN: ${{ github.token }}
-          AUDIT_RELEASE_TAG: ${{ inputs.audit_release }}
-          AUDIT_EXPECTED_SHA: ${{ inputs.audit_sha }}
-          AUDIT_PREVIOUS_TAG: ${{ inputs.audit_previous }}
+          AUDIT_RELEASE_TAG: ${{ inputs.audit_release || github.ref_name }}
+          AUDIT_EXPECTED_SHA: ${{ inputs.audit_sha || github.sha }}
+          AUDIT_PREVIOUS_TAG: ${{ inputs.audit_previous || 'v2.43.0' }}
         run: node scripts/verify-release-asset.mjs
+      - name: Require direct-update signing continuity
+        run: node scripts/check-android-release.mjs compatible-update release-asset-verification.json
       - name: Save inspection evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: release-asset-verification
