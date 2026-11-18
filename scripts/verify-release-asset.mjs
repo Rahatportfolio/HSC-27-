@@ -41,7 +41,14 @@ export function verifyFacts(f) {
   assert.equal(packageName, 'com.prostuti.hsc27', 'APK package mismatch');
   assert.equal(versionCode, f.code, 'APK version code mismatch');
   assert.equal(versionName, f.tag.slice(1), 'APK version name mismatch');
-  return { packageName, versionCode, versionName, certificateSha256: signingFingerprint(f.signature) };
+  return { packageName, versionCode, versionName, certificateSha256: signingFingerprint(f.signature), debuggable: /^application-debuggable\s*$/m.test(f.badging) };
+}
+
+export function verifyPreviousAsset(asset, bytes, signature) {
+  assert.equal(bytes.length, asset.size, 'Previous APK size mismatch');
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  assert.equal(`sha256:${digest}`, asset.digest, 'Previous APK SHA-256 mismatch');
+  return { assetId: asset.id, sha256: digest, certificateSha256: signingFingerprint(signature) };
 }
 
 function main() {
@@ -105,11 +112,10 @@ function main() {
     assert.ok(previousAsset, 'Previous APK is required for a signing comparison');
     const oldApk = download(previousAsset, 'previous.apk');
     const oldBytes = readFileSync(oldApk);
-    assert.equal(oldBytes.length, previousAsset.size);
-    const oldCertificate = signingFingerprint(execFileSync(apksigner, ['verify', '--verbose', '--print-certs', oldApk], { encoding: 'utf8' }));
+    const oldFacts = verifyPreviousAsset(previousAsset, oldBytes, execFileSync(apksigner, ['verify', '--verbose', '--print-certs', oldApk], { encoding: 'utf8' }));
     previous = {
-      tag: previousTag, assetId: previousAsset.id, certificateSha256: oldCertificate,
-      sameSigningCertificate: oldCertificate === checked.certificateSha256,
+      tag: previousTag, ...oldFacts,
+      sameSigningCertificate: oldFacts.certificateSha256 === checked.certificateSha256,
     };
   }
   const report = {

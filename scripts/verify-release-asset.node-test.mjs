@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { createHash } from 'node:crypto';
 
-const { verifyFacts, signingFingerprint } = await import(process.env.RELEASE_AUDITOR_MODULE || './verify-release-asset.mjs');
+const { verifyFacts, signingFingerprint, verifyPreviousAsset } = await import(process.env.RELEASE_AUDITOR_MODULE || './verify-release-asset.mjs');
 const sha = 'a'.repeat(40);
 const digest = 'b'.repeat(64);
 const certificate = 'c'.repeat(64);
@@ -15,7 +16,7 @@ const fixture = () => ({
 });
 
 test('accepts the exact independently inspected release facts', () => {
-  assert.deepEqual(verifyFacts(fixture()), { packageName: 'com.prostuti.hsc27', versionCode: 23, versionName: '2.43.0', certificateSha256: certificate });
+  assert.deepEqual(verifyFacts(fixture()), { packageName: 'com.prostuti.hsc27', versionCode: 23, versionName: '2.43.0', certificateSha256: certificate, debuggable: false });
 });
 
 for (const [name, mutate] of [
@@ -42,6 +43,33 @@ for (const [name, mutate] of [
     const f = fixture(); mutate(f); assert.throws(() => verifyFacts(f));
   });
 }
+
+test('verifies previous-release size, digest and certificate together', () => {
+  const bytes = Buffer.from('synthetic previous APK bytes');
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  assert.deepEqual(verifyPreviousAsset({ id: 123, size: bytes.length, digest: `sha256:${sha256}` }, bytes, fixture().signature), { assetId: 123, sha256, certificateSha256: certificate });
+});
+
+test('rejects incorrect previous APK size even when its digest matches', () => {
+  const bytes = Buffer.from('synthetic previous APK bytes');
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  assert.throws(() => verifyPreviousAsset({ size: bytes.length + 1, digest: `sha256:${sha256}` }, bytes, fixture().signature), /Previous APK size mismatch/);
+});
+
+test('rejects incorrect previous APK digest even when its size matches', () => {
+  const bytes = Buffer.from('synthetic previous APK bytes');
+  assert.throws(() => verifyPreviousAsset({ size: bytes.length, digest: `sha256:${'0'.repeat(64)}` }, bytes, fixture().signature), /Previous APK SHA-256 mismatch/);
+});
+
+test('reports the actual debuggable flag rather than mistaking a valid signature for a production build', () => {
+  const f = fixture(); f.badging += '\napplication-debuggable\n';
+  assert.equal(verifyFacts(f).debuggable, true);
+});
+
+test('does not infer debuggability from an application label', () => {
+  const f = fixture(); f.badging += "\napplication-label:'application-debuggable'\n";
+  assert.equal(verifyFacts(f).debuggable, false);
+});
 
 test('normalises the certificate digest for an exact previous-release comparison', () => {
   const colonDigest = certificate.toUpperCase().match(/../g).join(':');
