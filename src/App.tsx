@@ -322,7 +322,12 @@ export default function App() {
       notify(t('এই ব্রাউজারে ভাসমান ঘড়ি চালু করা যায়নি। অ্যাপের ভেতরের টাইমার বার দেখো।', 'Floating clock is unavailable in this browser. Use the timer bar inside the app.'), 'info');
     }
   }, [formatClock, notify, timer.elapsedSec, timer.mode, timer.remainingSec, timer.running, timerTitleText, clockReference]);
-  const navigate = useCallback((next: View, date?: string) => { if (date) setSelectedDate(date); setView(next); setMobileMenu(false); window.location.hash = next; window.scrollTo({ top: 0, behavior: 'smooth' }); }, [setSelectedDate]);
+  const navigate = useCallback((next: View, date?: string) => {
+    if (date) setSelectedDate(date);
+    setView(next); setMobileMenu(false); window.location.hash = next;
+    // An explicit JS smooth scroll overrides the reduced-motion CSS rule.
+    window.scrollTo({ top: 0, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  }, [setSelectedDate]);
   useTheme(data.settings.theme);
   const isDarkTheme = data.settings.theme === 'dark' || (data.settings.theme === 'system' && typeof window !== 'undefined' && Boolean(window.matchMedia?.('(prefers-color-scheme: dark)').matches));
   useFontScale(data.settings.fontScale);
@@ -569,7 +574,7 @@ export default function App() {
     <div className="app-shell">
       {mobileMenu && <button className="sidebar-overlay" aria-label={t('মেনু বন্ধ করো', 'Close menu')} onClick={() => setMobileMenu(false)} />}
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}>
-        <button className="brand" onClick={() => navigate('today', today)} aria-label={t('প্রস্তুতি হোম', 'Prostuti home')}><span className="brand-mark"><BookOpen size={25} strokeWidth={1.8} /><Check size={12} className="brand-check" /></span><span><strong>{t("প্রস্তুতি", "Preparation")}<span className="brand-period">.</span></strong><small>HSC 27 · SCIENCE</small></span></button>
+        <button className="brand" onClick={() => navigate('today', today)} aria-label={`${t('প্রস্তুতি', 'Preparation')}. HSC 27 · SCIENCE`}><span className="brand-mark"><BookOpen size={25} strokeWidth={1.8} /><Check size={12} className="brand-check" /></span><span><strong>{t("প্রস্তুতি", "Preparation")}<span className="brand-period">.</span></strong>{' '}<small>HSC 27 · SCIENCE</small></span></button>
         <button className="sidebar-close icon-button" onClick={() => setMobileMenu(false)} aria-label={t('মেনু বন্ধ করো', 'Close menu')}><X size={20} /></button>
         <div className="sidebar-nav-scroll">
           {NAV_GROUPS.map(group => <div key={group.label}><div className="nav-section-label">{t(group.label, group.labelEn)}</div><nav aria-label={t('মূল নেভিগেশন', 'Main navigation')}>{group.items.map(n => <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => navigate(n.id)} aria-current={view === n.id ? 'page' : undefined}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.label, n.labelEn)}</span>{n.id === 'today' && <span className="nav-today-dot" />}{n.id === 'revision' && dueRevisions > 0 && <span className="nav-count alert">{bn(dueRevisions)}</span>}{n.id === 'exams' && <span className="nav-count">{bn(Object.keys(data.exams).length + data.tests.length)}</span>}</button>)}</nav></div>)}
@@ -635,7 +640,7 @@ export default function App() {
                   <strong>{bn(todayDigest.percentDone)}%</strong>
                 </button>
               )}
-              <button className="global-search" aria-label={t('সব কিছু খুঁজো', 'Search everything')} onClick={() => setModal({ type: 'search' })}><Search size={16} /><span>{t('অধ্যায়, ক্লাস বা রুটিন খুঁজো…', 'Search chapters, classes or routine…')}</span><kbd><Command size={11} /> K</kbd></button>
+              <button className="global-search" aria-label={`${t('অধ্যায়, ক্লাস বা রুটিন খুঁজো…', 'Search chapters, classes or routine…')} K`} onClick={() => setModal({ type: 'search' })}><Search size={16} /><span>{t('অধ্যায়, ক্লাস বা রুটিন খুঁজো…', 'Search chapters, classes or routine…')}</span><kbd><Command size={11} /> K</kbd></button>
               <div className="topbar-quick-tools">
                 <button
                   type="button"
@@ -681,13 +686,13 @@ export default function App() {
                   className="lang-toggle-chip"
                   onClick={toggleQuickLanguage}
                   title={t('বাংলা / EN ভাষা পরিবর্তন', 'Switch language')}
-                  aria-label={t('ভাষা পরিবর্তন করো', 'Switch language')}
+                  aria-label={`${data.settings.language === 'en' ? 'বাং' : 'EN'} — ${t('ভাষা পরিবর্তন করো', 'Switch language')}`}
                 >
                   {data.settings.language === 'en' ? 'বাং' : 'EN'}
                 </button>
                 <button className="icon-button notification-button" onClick={() => navigate('reminders')} aria-label={t('রিমাইন্ডার', 'Reminders')}><Bell size={18} strokeWidth={1.75} />{data.settings.reminderEnabled && <span />}</button>
               </div>
-              <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label={t('প্রোফাইল ও সেটিংস', 'Profile & settings')}>{data.settings.name.trim().slice(0, 1) || 'প'}</button>
+              <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label={t('প্রোফাইল ও সেটিংস', 'Profile & settings')}><span aria-hidden="true">{data.settings.name.trim().slice(0, 1) || 'প'}</span></button>
             </div>
           </header>
         </div>
@@ -715,7 +720,7 @@ export default function App() {
             <span>{t(n.short, n.shortEn)}</span>
           </button>
         ))}
-        <button type="button" className={mobileMenu ? 'active' : ''} onClick={() => setMobileMenu(v => !v)} aria-label={t('সব মেনু দেখো', 'More pages')}>
+        <button type="button" className={mobileMenu ? 'active' : ''} onClick={() => setMobileMenu(v => !v)} aria-label={t('আরও — সব মেনু দেখো', 'More pages')}>
           <span className="mobile-nav-icon-wrap">
             <Menu size={19} strokeWidth={1.7} />
             {dueRevisions > 0 && <i className="mobile-nav-badge-dot" />}

@@ -15,10 +15,10 @@ beforeAll(() => {
 beforeEach(() => { localStorage.clear(); localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); window.location.hash = ''; });
 afterEach(cleanup);
 
-const ROUTES = ['today','calendar','syllabus','videos','scanner','pdfs','testprep','practice','flashcards','revision','examsim','weakness','heatmap','backlog','exams','timer','analytics','library','reminders','audit','storage','settings'];
+const ROUTES = ['today','calendar','syllabus','videos','studySystem','scanner','pdfs','testprep','practice','flashcards','revision','examsim','weakness','heatmap','backlog','exams','timer','analytics','library','reminders','audit','storage','settings'];
 
 describe('every screen is usable without a mouse or with a screen reader', () => {
-  it('names all controls and descriptions on all 22 routes', { timeout: 180000 }, async () => {
+  it('names all controls and descriptions on all 23 routes', { timeout: 180000 }, async () => {
     const unnamed: string[] = [];
     const undescribed: string[] = [];
     render(<App />);

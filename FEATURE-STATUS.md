@@ -1,6 +1,54 @@
 # প্রস্তুতি · HSC 27 — current feature status
 
-## v2.44.0 — Android screenshot/UI repair and 20 November start
+> **Delivery checkpoint:** PR creation, merge and an Android build are now requested. The “local/unpublished” results below are the **pre-delivery audit snapshot**. Subsequent merge, deployment and artifact outcomes belong to the [delivery PR](https://github.com/Rahatportfolio/HSC-27-/pulls?q=is%3Apr+head%3Aarena%2F0e629171-hsc-27) and [Actions](https://github.com/Rahatportfolio/HSC-27-/actions), not assumptions based on that snapshot. Non-tag builds produce development/debug APK artifacts; the missing-original-key/signing-continuity blocker still prevents representing them as compatible production updates. No new tag, historical release replacement or data migration is authorized by this build step.
+
+## Latest A–Z recheck — pre-delivery verification snapshot
+
+The renewed “100% bug mukto koro” request led to additional real repairs: the day-note placeholder (**2.48:1 → 6.44:1 light / 6.43:1 dark**), distinguishable native/search/button focus, a visible wrapper ring for the transparent study-date input, permanent bilingual flashcard search names, removal of an invisible JSON-file Tab stop, full-width mobile backup action groups instead of a roughly 44.5px icon-column squeeze, and native clock/picker colour schemes that follow the app rather than an opposite OS theme. Typing/filtering/date selection/file choice preserve saved history and plan-start meaning. These failures were reproduced before repair; generic placeholder/axe-only tests had not exposed all of them.
+
+| Fresh final gate | Measured result |
+|---|---|
+| Full suite / build | TypeScript; **910/910 tests / 97 files**, zero failures/skips/todo; production build **6.59s**, large-chunk warning remains |
+| Native-field browser review | **224/224 probes / 688 repeated field states**, 23 initial routes, 8 large-text theme/language/viewport scenarios and five targeted journeys |
+| New native-field fault proof | **9/9 source faults**, **30 controls before / 30 after**; **15/15 browser fault/control pairs**, intended assertions reached, originals restored |
+| Rerun earlier follow-up faults | **43/43 source faults**, **117 controls before / 117 after**; **16/16 browser fault/control pairs**, originals restored |
+| Repeated wide checks | **410 accessibility/state scans**, 23 actual routes / 8 scenarios / 17 dialog types where applicable, zero rows with confirmed axe violations/runtime errors; **56 follow-up / 46 mobile probes**, 23-view responsive and date/scan/PDF/backup/quota/undo/media/offline flows passed |
+| Release/delivery controls | **57 separate Node tests**; **287 non-document hashes** restored/unchanged; Arena-shaped Host HTTP 200 and exact production asset bytes verified |
+
+**Limits:** 26,913 repeated axe incomplete node checks remain manual-review work, neither passes nor confirmed bugs. The native-field matrix does not certify every dynamic state, screen reader, physical phone, OEM keyboard, board policy/content or official 2027 date. Full/production npm audits now report **0 known entries**; the earlier advisory is marked withdrawn by the feed, not fixed by a code/dependency change. Its future-dated withdrawal metadata is disclosed in the [current audit](AUDIT.md#latest-a-z-recheck).
+
+No installation/publication, personal-phone-data access, reset, silent migration or identity/version change. Live Preview is local/unpublished; public PWA **a2076d3** and the held wrong-signer/debuggable APK are not this build. Do not uninstall/Clear data. Existing dates still require explicit preview → Save → confirmation; default **20 November 2026, 06:30 Dhaka** and personal-target limitations are unchanged. JSON/legacy backup scan-byte and separate PWA/APK storage limits remain.
+
+**Not a 100%-bug-free or readiness guarantee.** Reproduction, red evidence, exact scopes/hashes and historical boundaries: [AUDIT.md](AUDIT.md#latest-a-z-recheck).
+
+## Previous completed A–Z round — 900-test snapshot
+
+**Historical: the fresh renewed-request result above supersedes the 900-test, 284-hash and five-high dependency figures below.**
+
+Fresh verification on `arena/0e629171-hsc-27` repaired actual defects, not just the report: restart-safe/exact-once papers, generated-definition persistence, honest result/history timing and guidance, unanswered mistake/retry handling, capacity-safe forms, restore clocks, raw GPA thresholds and accessible themed controls. The muscle-to-bone connector was corrected to **tendon**, not joint; this is not certification of every fact in the practice bank.
+
+**Latest follow-up repairs:** the weekly strip now identifies the actual Friday across dates/languages, separately from elapsed-day recommendations. Missing saved questions are disclosed without changing original scores; shortened retries require consent, entirely missing papers cannot start empty, and deletion warns about affected papers. Golden shortfalls use bounded display-only formatting without rounding saved marks into a higher grade. Sidebar/breadcrumb/summary/profile/Golden/mistake-tip/library text is readable in its actual theme and wide-screen state.
+
+Visual review caught a further issue **after 898 passing tests**: transparent MCQ inputs had light text over pale rows in dark mode (**1.2617:1**). The intermediate run was stopped, the selected/unselected surfaces, hints and letters were themed, explicit Bengali/English input/radio names added, touch boxes enlarged and a visible focus ring added. Independent guards now check empty/typed/focused/reselected rows and verify that a real tap’s answer is saved with keyboard submission. Sample selected-row typed text is now approximately **12.74:1 light / 10.36:1 dark**. Reduced viewport height is keyboard-space simulation, not a real OEM keyboard.
+
+| Gate | Final observation |
+|---|---|
+| Full unit/UI suite and build | TypeScript; **900/900 tests / 96 files**, zero failing/skipped/todo; production build **6.57s** (large-chunk warning remains) |
+| Expanded Chromium matrix | **410 route/dialog/populated-state scans**, all 23 actual routes, **8 declared scenarios**, 17 dialog types where applicable; **0 rows with confirmed axe violations/runtime page errors**; real dialog keyboard/focus checks included |
+| Follow-up interactions | **56/56 probes in 8 scenarios**: large text, names/short-text contrast, reduced-height typing, real touch, keyboard save, Friday/history disclosure, retry consent/cancel and persisted reload |
+| New fault proof | **43/43 source faults**, **111 passing controls before / 111 after**; **16/16 browser faults**, each with its own passing control and intended failure; source bytes restored |
+| Repeated normal flows | **46/46 mobile probes**, 23-view responsive checks, Dhaka/New York date transactions, actual scan bytes/two-page PDFs/full restore/dirty draft/quota retry/complete–undo/local media/resume/production PWA offline passed |
+| Release/restoration/delivery | **57 separate Node controls**; **284 non-document file hashes** unchanged after faults; Arena-shaped Host HTTP 200 and exact served entry-asset hashes verified |
+
+Earlier in this same recheck, **91 A–Z source / 57 date / 31 mobile / 12 accessibility-browser / 13 release-module faults**, and **108 backup/scanner/timer/workflow controls / 93 faults**, passed with restored originals. They describe earlier source snapshots, **not freshly rerun mutation sets**; their overlapping counts are not independent feature counts. The final normal gates above were rerun after all latest repairs.
+
+**Not a 100%-bug-free or WCAG certification:** the final expanded axe run also returned **26,933 repeated incomplete/manual-review node checks** (26,389 contrast; 544 label/name), neither passes nor automatically confirmed bugs. An earlier expanded diagnostic really failed 49 states before the latest palette repairs; it is not the final result. Exact scopes, red evidence, harness failures excluded from bug counts, restored hashes and reproducible commands: [current audit](AUDIT.md#latest-a-z-recheck).
+
+**Unchanged safety boundaries:** no installation, publication, workflow dispatch, personal phone-data access, reset or silent migration. Live Preview contains local repairs. Last verified remote baseline is public PWA `a2076d3` and the draft v2.44.0 APK with unresolved wrong-signer/debuggability blockers; no fresh native inspection is implied. No original key or alternate identity was established. **Do not uninstall/Clear data.** PWA/APK storage is separate; JSON/legacy full backups cannot recreate absent scanned-image bytes.
+
+**Open:** fresh production dependency audit **0** known vulnerabilities; full audit **5 high development-tool entries** from the unpatched picomatch advisory (latest registry 4.0.7). Physical-device/OEM/background alarms, manual screen-reader review, third-party playback, complete board policy/content and official HSC 2027/college-test dates are not certified. Default **20 November 2026, 06:30 Dhaka** remains; existing dates require preview → Save → confirmation, **not Reset**. **1 February / 6 June 2027 remain personal targets.**
+
+## Prior v2.44.0 — Android screenshot/UI repair and 20 November start
 
 **2.44.0 / Android code 24: PWA deployed; APK held as draft.** [PR #16](https://github.com/Rahatportfolio/HSC-27-/pull/16) merged as `98b949f1936c2ab754ddf4123949156640dbb058`; [Pages run 44265638550](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44265638550) successfully deployed that source to the [public PWA](https://rahatportfolio.github.io/HSC-27-/). The [exact draft-APK audit](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44266592857) matched the tested web bundle but measured **a different certificate from v2.43.0**. The user reports no confirmed original signing keystore. No v2.44.0 APK publication was performed; do not uninstall/Clear data to work around the mismatch. PWA/APK storage is separate. Exact identities and release-hardening limits: [v2.44.0 notes](RELEASE-NOTES-v2.44.0.md).
 

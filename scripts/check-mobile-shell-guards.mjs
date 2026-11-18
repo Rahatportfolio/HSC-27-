@@ -36,8 +36,11 @@ if (mode !== 'source') {
   assert.ok(control.report.results.every(row => row.passed));
   const landscape = run('landscape-control', '', 'navigated-and-open-clock', '797');
   assert.equal(landscape.code, 0, 'Landscape control failed');
+  const darkNavigation = run('dark-navigation-control', '', 'bottom-navigation-contrast', '393');
+  assert.equal(darkNavigation.code, 0, 'Dark navigation control failed');
+  assert.ok(darkNavigation.report.results.some(row => row.name.includes('bottom-navigation-contrast') && row.passed), 'Dark navigation contrast was not exercised');
   assert.ok(control.report.results.some(row => row.name === 'first-study-day-toolbar' && row.passed), 'First study-day control did not pass');
-  console.log(`Browser controls: ${control.report.results.length + landscape.report.results.length} passed`);
+  console.log(`Browser controls: ${control.report.results.length + landscape.report.results.length + darkNavigation.report.results.length} passed`);
   for (const [id, selected, message, width] of [
     ['no-card-inset', 'progress-insets-and-text', 'no breathing room'],
     ['no-card-gap', 'progress-insets-and-text', 'cards touch'],
@@ -50,6 +53,12 @@ if (mode !== 'source') {
     ['unsafe-bottom', 'safe-toolbar-and-bottom-nav', 'Gesture bar padding'],
     ['no-scroll-clearance', 'navigated-and-open-clock', 'Measured scroll clearance', '797'],
     ['wrong-status-background', 'running-clock', 'Status-bar background'],
+    ['faint-nav-label', 'bottom-navigation-contrast', 'Bottom navigation text contrast'],
+    ['faint-active-nav-label', 'bottom-navigation-contrast', 'Bottom navigation text contrast'],
+    ['faint-dark-nav-label', 'bottom-navigation-contrast', 'Bottom navigation text contrast', '393'],
+    ['faint-dark-active-nav-label', 'bottom-navigation-contrast', 'Bottom navigation text contrast', '393'],
+    ['wrong-nav-surface', 'bottom-navigation-contrast', 'Bottom navigation surface', '393'],
+    ['translucent-nav-label', 'bottom-navigation-contrast', 'must not be faded by opacity'],
     ['colliding-toolbar', 'first-study-day-toolbar', 'Toolbar buttons overlap'],
   ]) {
     const { code, report } = run(id, id, selected, width || '360');

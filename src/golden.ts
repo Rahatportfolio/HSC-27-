@@ -8,15 +8,16 @@ import type { SubjectMarks } from './types';
  * Golden A+ / GPA 5.00 arithmetic — deliberately not a prediction.
  *
  * The app cannot know next year's board marks, so it never estimates them. Everything
- * below is exact arithmetic on the official HSC rule that `gpa.ts` already encodes:
+ * below is arithmetic on the combined-mark model encoded in `gpa.ts`:
  * six compulsory subjects, a 4th-subject bonus of (point − 2), GPA capped at 5.00, and
- * any F collapsing the result to 0.00.
+ * a compulsory-subject F collapsing a complete result to 0.00. An optional F
+ * contributes no bonus; it cannot turn six compulsory passes into a failure.
  *
  * What the student gets instead of a forecast:
  *  - the current grade point of every subject (exact, from entered marks),
  *  - the exact grade-point gap to GPA 5.00 and how many points may still be lost,
  *  - how many marks separate each subject from its *next* grade (concrete and checkable),
- *  - Golden A+ as a hard, unambiguous rule: 80% in every subject, and how far each is,
+ *  - Golden A+ as the personal target of 80% in every subject, and the gap to it,
  *  - `whatIf`: change one subject's marks and see the GPA the rule produces.
  *
  * The one judgement call is stated in the UI: a "deficit budget" is shown because the
@@ -27,6 +28,16 @@ import type { SubjectMarks } from './types';
 export const A_PLUS_MIN = 80;
 /** Six compulsory subjects must total this many grade points for GPA 5.00. */
 export const GPA5_POINTS = 30;
+
+/** Display only: suppress binary subtraction noise, never round a stored mark
+ * or a grade boundary. Approximate gaps are marked; a tiny positive deficit
+ * must not be displayed as zero or imply that A+ has already been reached. */
+export function markGapLabel(value: number): string {
+  if (!Number.isFinite(value) || value < 0) return '—';
+  const rounded = Number(value.toFixed(2));
+  if (value > 0 && rounded === 0) return '<0.01';
+  return rounded === value ? String(rounded) : `≈${rounded}`;
+}
 
 export interface SubjectStanding {
   subject: SubjectId;
@@ -65,7 +76,7 @@ export interface GoldenPlan {
   deficitBudget: number | null;
   /** GPA the rule produces right now, or null while marks are missing. */
   gpa: number | null;
-  /** True only when GPA 5.00 is already guaranteed by the entered marks. */
+  /** True when the entered combined marks meet this model’s GPA 5.00 target. */
   gpaFive: boolean;
   /** True when every subject is already at A+ (80% or more). */
   golden: boolean;
@@ -89,7 +100,7 @@ function standingFor(subjectId: SubjectId, optional: boolean, full: number, obta
   if (obtained === null) {
     return { subject: subjectId, optional, full, obtained: null, percentage: null, grade: null, point: null, toNextGrade: null, nextGrade: null, toAPlus: null };
   }
-  const percentage = Math.round(obtained / full * 10000) / 100;
+  const percentage = obtained / full * 100;
   const rule = gradeFor(percentage);
   const betterIndex = GRADE_SCALE.findIndex(entry => entry.grade === rule.grade) - 1;
   const better = betterIndex >= 0 ? GRADE_SCALE[betterIndex] : null;
@@ -126,7 +137,7 @@ export function goldenPlan(marks: SubjectMarks, goal: GoldenPlan['goal'] = 'gpa5
   // Missing marks are unknown, not zero: the gap is only meaningful once everything is in.
   const pointsGap = complete ? Math.max(0, GPA5_POINTS - (compulsoryPoints + bonus)) : null;
   const deficitBudget = complete ? compulsoryPoints + bonus - GPA5_POINTS : null;
-  const failed = rows.some(row => row.point === 0);
+  const failed = compulsory.some(row => row.point === 0);
 
   const golden = complete && rows.every(row => row.point === 5);
   const gpaFive = complete && gpa !== null && gpa >= 5 && !failed;
@@ -142,25 +153,25 @@ export function goldenPlan(marks: SubjectMarks, goal: GoldenPlan['goal'] = 'gpa5
 
   const verdictBn = goal === 'golden'
     ? golden
-      ? 'Golden A+ নিশ্চিত—সব বিষয়েই A+ আছে।'
+      ? 'দেওয়া মোট নম্বরে Golden A+ লক্ষ্য পূরণ—সব বিষয়েই A+ আছে।'
       : `Golden A+-এর জন্য আর কিছু নম্বর দরকার—সব বিষয়ে ৮০% বা তার বেশি লাগবে।`
     : !complete
       ? `${missing.length}টি বিষয়ের নম্বর এখনো বাকি—সেগুলো যোগ করলেই সত্যিকারের হিসাব দেখা যাবে।`
       : gpaFive
         ? 'GPA 5.00 আছে—এখন Golden A+ ধরে রাখার পালা।'
         : failed
-          ? 'কোনো এক বিষয়ে F থাকায় GPA ০—আগে সেটাই ঠিক করতে হবে।'
+          ? 'আবশ্যিক বিষয়ে F থাকায় এই হিসাবে GPA ০—আগে সেটাই ঠিক করতে হবে।'
           : `GPA 5.00-এর জন্য আর কিছু গ্রেড পয়েন্ট দরকার।`;
   const verdictEn = goal === 'golden'
     ? golden
-      ? 'Golden A+ is secure — every subject is already A+.'
-      : `${marksToGolden} marks short of Golden A+ — every subject needs 80% or more.`
+      ? 'Entered combined marks meet the Golden A+ target — every subject is A+.'
+      : `${markGapLabel(marksToGolden)} marks short of Golden A+ — every subject needs 80% or more.`
     : !complete
       ? `${missing.length} subject(s) still have no marks; the real arithmetic appears once they are in.`
       : gpaFive
         ? 'GPA 5.00 is already there — now hold Golden A+.'
         : failed
-          ? 'An F in one subject forces GPA 0 — fix that first.'
+          ? 'A compulsory-subject F makes this GPA estimate 0 — fix that first.'
           : `${pointsGap} more grade points are needed for GPA 5.00.`;
 
   // "Reached" is per goal: GPA 5.00 and Golden A+ are different bars, and the UI must

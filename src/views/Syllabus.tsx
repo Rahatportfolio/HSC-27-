@@ -95,7 +95,7 @@ export default function SyllabusView() {
         <div className="segmented">
           {(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : `${p} · ${priorityLabel(p)}`}</button>)}
         </div>
-        <div className="segmented" aria-label={t('সম্পন্ন অবস্থা', 'Completion status')}>
+        <div className="segmented" role="group" aria-label={t('সম্পন্ন অবস্থা', 'Completion status')}>
           {(['all', 'pending', 'done'] as const).map(value => <button key={value} aria-pressed={status === value} className={status === value ? 'active' : ''} onClick={() => setStatus(value)}>{value === 'all' ? t('সব অবস্থা', 'All statuses') : value === 'pending' ? t('বাকি', 'Pending') : t('সম্পন্ন', 'Done')}</button>)}
         </div>
         <div className="segmented star-filter">

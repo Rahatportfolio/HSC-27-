@@ -10,6 +10,8 @@ vi.mock('./mediaBackup', async importOriginal => ({
   inspectMediaBackup: media.inspect, stageMediaRestore: media.stage,
 }));
 import App from './App';
+import { beginExam } from './examSim';
+import { STARTER_QUESTIONS } from './quiz-data';
 
 let original: AppData, restored: AppData;
 const clockKey = 'hsc27-exam-clock-v1';
@@ -26,6 +28,8 @@ beforeEach(() => {
   restored = freshData();
   restored.settings = { ...shiftPlanStart(restored.settings, '2026-11-26'), name: 'Restored profile', language: 'en', boostEnabled: false, adaptiveEnabled: false };
   restored.notes['2026-11-21'] = 'A backed-up note';
+  const paper = { mode: 'chapter' as const, title: 'Previous live paper', questions: [STARTER_QUESTIONS[0]] };
+  original = beginExam(original, paper); restored = beginExam(restored, { ...paper, title: 'Backup live paper' });
   localStorage.setItem(STORAGE_KEY, JSON.stringify(original));
   localStorage.setItem(clockKey, 'old-exam-clock');
   localStorage.setItem(TIMER_KEY, JSON.stringify({ ...freshTimerState(), mode: 'countdown', phase: 'none', durationMin: 30, accumulatedMs: 60_000, taskId: 'old-task' }));
@@ -67,12 +71,14 @@ describe('replacing a profile is durable and clears unrelated transient state', 
     expect((screen.getByLabelText(/^Your name/) as HTMLInputElement).value).toBe('Current profile');
     expect(stored().notes).toEqual(original.notes);
     expect(localStorage.getItem(clockKey)).toBe('old-exam-clock');
+    expect(stored().activeExam).toEqual(original.activeExam);
     expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(60_000);
   }, 30000);
   it('persists a successful JSON restore and clears the previous exam clock', async () => {
     await open(); const confirm = await jsonImport(); act(confirm);
     await waitFor(() => expect(stored().settings.name).toBe('Restored profile'));
     expect(localStorage.getItem(clockKey)).toBeNull();
+    expect(stored().activeExam).toBeUndefined();
     expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(0);
     expect(stored().notes).toEqual(restored.notes);
   }, 30000);
@@ -90,6 +96,7 @@ describe('replacing a profile is durable and clears unrelated transient state', 
     await open(); const confirm = await fullImport(); act(confirm);
     await waitFor(() => expect(stored().settings.name).toBe('Restored profile'));
     expect(localStorage.getItem(clockKey)).toBeNull();
+    expect(stored().activeExam).toBeUndefined();
     expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(0);
   }, 30000);
   it('replaces a dirty Settings draft and selects the restored routine rather than saving old form values over it', async () => {
@@ -116,6 +123,7 @@ describe('replacing a profile is durable and clears unrelated transient state', 
     await waitFor(() => expect(media.rollback).toHaveBeenCalled());
     expect(stored().settings.name).toBe('Current profile');
     expect(localStorage.getItem(clockKey)).toBe('old-exam-clock');
+    expect(stored().activeExam).toEqual(original.activeExam);
     expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(60_000);
   }, 30000);
   it('makes absent scanned images in an old full backup visible instead of claiming every file was restored', async () => {

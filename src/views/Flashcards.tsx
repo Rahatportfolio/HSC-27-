@@ -8,15 +8,16 @@ import type { SubjectId } from '../data';
 import type { FlashcardCategory } from '../types';
 import { bn } from '../planner';
 import {
-  createFlashcard, deleteFlashcard, dueCount, dueFlashcards, flashcardTotals, reviewFlashcard,
+  createFlashcard, deleteFlashcard, dueCount, dueFlashcards, flashcardContentError, FLASHCARD_TEXT_LIMITS, flashcardTotals, reviewFlashcard,
 } from '../flashcards';
 import { FLASHCARD_CATEGORY_LABEL } from '../flashcards';
 import { EmptyState, Modal, PageHeading, ProgressBar, SubjectBadge } from '../components';
 import { t } from '../i18n';
+import { LIMITS } from '../storage';
 
 type CardRating = 'again' | 'hard' | 'good' | 'easy';
 const RATING_LABEL: Record<CardRating, string> = { again: 'আবার', hard: 'কঠিন', good: 'ভালো', easy: 'সহজ' };
-const RATING_COLOR: Record<CardRating, string> = { again: '#dc2626', hard: '#ca8a04', good: '#15803d', easy: '#15803d' };
+const RATING_COLOR: Record<CardRating, string> = { again: 'var(--rose)', hard: 'var(--amber)', good: 'var(--green)', easy: 'var(--green)' };
 
 function formatInterval(card: { interval: number }): string {
   return bn(card.interval) + ' দিন';
@@ -44,15 +45,14 @@ export default function FlashcardsView() {
   const due = dueCount(data, today);
 
   const addCard = (form: { subject: SubjectId; chapterId?: string; front: string; back: string; category: string }) => {
-    setData(d => createFlashcard(d, {
-      subject: form.subject,
-      chapterId: form.chapterId || undefined,
-      front: form.front,
-      back: form.back,
-      category: form.category as FlashcardCategory,
-    }));
+    if (data.flashcards.length >= LIMITS.flashcards) return t(`সর্বোচ্চ ${bn(LIMITS.flashcards)}টি কার্ড রাখা যায়। আগে ব্যাকআপ রেখে অপ্রয়োজনীয় কার্ড মুছো।`, `You can keep at most ${LIMITS.flashcards} cards. Back up first, then remove an unneeded card.`);
+    const input = { ...form, chapterId: form.chapterId || undefined, category: form.category as FlashcardCategory };
+    const error = flashcardContentError(input);
+    if (error) return error;
+    setData(d => createFlashcard(d, input));
     notify(t('ফ্ল্যাশকার্ড যোগ করা হয়েছে। রিভিশনের দিনে এটি ফেরত আসবে।', 'Flashcard added. It will return on its revision day.'));
     setShowForm(false);
+    return null;
   };
 
   const handleRating = (id: string, rating: CardRating) => {
@@ -84,8 +84,8 @@ export default function FlashcardsView() {
       />
       <div className="stat-row">
         <div className="stat-card"><div className="stat-value">{bn(total)}</div><div className="stat-label">{t('মোট কার্ড', 'Total cards')}</div></div>
-        <div className="stat-card"><div className="stat-value" style={{ color: '#dc2626' }}>{bn(due)}</div><div className="stat-label">{t('আজ রিভিশনের মতো', 'Due today')}</div></div>
-        <div className="stat-card"><div className="stat-value" style={{ color: '#15803d' }}>{bn(learned)}</div><div className="stat-label">{t('অতিবার পর্যালোচিত', 'Reviewed before')}</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ color: 'var(--rose)' }}>{bn(due)}</div><div className="stat-label">{t('আজ রিভিশনের মতো', 'Due today')}</div></div>
+        <div className="stat-card"><div className="stat-value" style={{ color: 'var(--green)' }}>{bn(learned)}</div><div className="stat-label">{t('অতিবার পর্যালোচিত', 'Reviewed before')}</div></div>
         <div className="stat-card"><div className="stat-value">{bn(duePercent)}%</div><div className="stat-label">{t('অগ্রগতি', 'Progress')}</div></div>
       </div>
       <ProgressBar value={duePercent} />
@@ -99,7 +99,7 @@ export default function FlashcardsView() {
         ))}
         <button type="button" className="icon-button" onClick={() => setShowForm(true)}><Plus size={18} />{t('নতুন কার্ড', 'New card')}</button>
       </div>
-      <label className="search-field"><List size={18} /><input value={query} onChange={e => setQuery(e.target.value)} placeholder={t('ফ্ল্যাশকার্ড খুঁজো…', 'Search flashcards…')} /></label>
+      <label className="search-field"><List size={18} /><input value={query} onChange={e => setQuery(e.target.value)} aria-label={t('ফ্ল্যাশকার্ড খুঁজো', 'Search flashcards')} placeholder={t('ফ্ল্যাশকার্ড খুঁজো…', 'Search flashcards…')} /></label>
 
       {cards.length === 0 && (
         <EmptyState
@@ -151,7 +151,7 @@ export default function FlashcardsView() {
   );
 }
 
-function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; chapterId?: string; front: string; back: string; category: string }) => void; onClose: () => void }) {
+function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; chapterId?: string; front: string; back: string; category: string }) => string | null; onClose: () => void }) {
   const [form, setForm] = useState({ subject: 'physics' as SubjectId, chapterId: '', front: '', back: '', category: 'definition' as FlashcardCategory });
   const [error, setError] = useState('');
 
@@ -160,8 +160,8 @@ function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; c
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!form.front.trim() || !form.back.trim()) { setError(t('সামনা ও উত্তর দুটিই লিখলেই কার্ড তৈরি হবে।', 'Write both the front and the back to create a card.')); return; }
-    onAdd({ subject: form.subject, chapterId: form.chapterId || undefined, front: form.front.trim(), back: form.back.trim(), category: form.category });
-    onClose();
+    const error = onAdd({ subject: form.subject, chapterId: form.chapterId || undefined, front: form.front.trim(), back: form.back.trim(), category: form.category });
+    if (error) setError(error);
   };
 
   return (
@@ -170,8 +170,8 @@ function AddCardForm({ onAdd, onClose }: { onAdd: (form: { subject: SubjectId; c
       <label className="form-label">{t('অধ্যায় (ঐচ্ছিক)', 'Chapter (optional)')}<select value={form.chapterId} onChange={e => setForm({ ...form, chapterId: e.target.value })}>
         <option value="">{t('কোনো অধ্যায় নেই', 'No chapter')}</option>
         {chaptersBySubject[form.subject].map(chapter => <option key={chapter.id} value={chapter.id}>{chapter.title}</option>)}</select></label>
-      <label className="form-label">{t('সামনা (প্রশ্ন)', 'Front / question')}<textarea data-autofocus rows={3} value={form.front} onChange={e => { setForm({ ...form, front: e.target.value }); setError(''); }} placeholder={t('যেমন: বৃত্তের ক্ষেত্রফলের সূত্র', 'e.g. Area of a circle')}/></label>
-      <label className="form-label">{t('উত্তর (পেছন)', 'Back / answer')}<textarea rows={4} value={form.back} onChange={e => setForm({ ...form, back: e.target.value })} placeholder={t('যেমন: πr²', 'e.g. πr²')}/></label>
+      <label className="form-label">{t('সামনা (প্রশ্ন)', 'Front / question')}<textarea data-autofocus rows={3} maxLength={FLASHCARD_TEXT_LIMITS.front} value={form.front} onChange={e => { setForm({ ...form, front: e.target.value }); setError(''); }} placeholder={t('যেমন: বৃত্তের ক্ষেত্রফলের সূত্র', 'e.g. Area of a circle')}/></label>
+      <label className="form-label">{t('উত্তর (পেছন)', 'Back / answer')}<textarea rows={4} maxLength={FLASHCARD_TEXT_LIMITS.back} value={form.back} onChange={e => setForm({ ...form, back: e.target.value })} placeholder={t('যেমন: πr²', 'e.g. πr²')}/></label>
       <label className="form-label">{t('কার্ডের ধরন', 'Card type')}<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value as FlashcardCategory })}>
         <option value="definition">{FLASHCARD_CATEGORY_LABEL.definition}</option>
         <option value="formula">{FLASHCARD_CATEGORY_LABEL.formula}</option>

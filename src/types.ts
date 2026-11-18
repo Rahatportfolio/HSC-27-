@@ -52,6 +52,20 @@ export interface ExamSession {
   /** Set when the paper was started from the daily/weekly/monthly routine. */
   cadence?: ExamCadence;
 }
+/** A live simulator paper; ids refer to retained bank/custom question definitions. */
+export interface ActiveExam {
+  id: string;
+  mode: ExamMode;
+  title: string;
+  subject?: SubjectId;
+  questionIds: string[];
+  answers: Record<string, number>;
+  index: number;
+  startedAt: number;
+  deadline: number;
+  cadence?: ExamCadence;
+}
+
 /** Reading size for the whole interface: small, comfortable (default) or large. */
 export type FontScale = 'sm' | 'md' | 'lg';
 /** CQ self-marking: ক (knowledge), খ (comprehension), গ (application), ঘ (higher order). */

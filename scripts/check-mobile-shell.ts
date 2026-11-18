@@ -35,6 +35,12 @@ const mutations: Record<string, string> = {
   'unsafe-bottom': '.mobile-bottom-nav { padding-bottom: 0 !important; }',
   'no-scroll-clearance': 'html { scroll-padding-top: 0 !important; scroll-padding-bottom: 0 !important; }',
   'wrong-status-background': '.top-chrome-stack { background: #14271f !important; }',
+  'faint-nav-label': '.mobile-bottom-nav button:not(.active) { color: #a4b297 !important; }',
+  'faint-active-nav-label': '.mobile-bottom-nav button.active { color: #62864d !important; }',
+  'faint-dark-nav-label': '[data-theme="dark"] .mobile-bottom-nav button:not(.active) { color: #4e6155 !important; }',
+  'faint-dark-active-nav-label': '[data-theme="dark"] .mobile-bottom-nav button.active { color: #236149 !important; }',
+  'wrong-nav-surface': '[data-theme="dark"] .mobile-bottom-nav { background: #000 !important; }',
+  'translucent-nav-label': '.mobile-bottom-nav button { opacity: .5 !important; }',
   'colliding-toolbar': '.topbar-progress-pill { display: inline-flex !important; }',
 };
 if (mutation && !mutations[mutation]) throw new Error(`Unknown mobile-shell mutation: ${mutation}`);
@@ -63,9 +69,17 @@ async function tapVisible(page: Page, selector: string) {
   await target.evaluate(e => e.scrollIntoView({ block: 'center', behavior: 'instant' }));
   const point = await target.evaluate(e => {
     const r = e.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2);
-    return { visible: !!hit && (hit === e || e.contains(hit)), blocker: hit?.tagName + '.' + hit?.getAttribute('class') };
+    return {
+      visible: !!hit && (hit === e || e.contains(hit)), blocker: hit?.tagName + '.' + hit?.getAttribute('class'),
+      target: r.toJSON(), hit: hit?.outerHTML.slice(0, 600), hitRect: hit?.getBoundingClientRect().toJSON(),
+      viewport: { width: innerWidth, height: innerHeight },
+      chrome: document.querySelector('.top-chrome-stack')?.getBoundingClientRect().toJSON(),
+      navigation: document.querySelector('.mobile-bottom-nav')?.getBoundingClientRect().toJSON(),
+      padding: { top: getComputedStyle(document.documentElement).scrollPaddingTop, bottom: getComputedStyle(document.documentElement).scrollPaddingBottom },
+    };
   });
-  assert.ok(point.visible, `Touch target ${selector} is covered by ${point.blocker}`);
+  if (!point.visible) await page.screenshot({ path: `${output}/blocked-touch.png` });
+  assert.ok(point.visible, `Touch target ${selector} is covered by ${point.blocker}: ${JSON.stringify(point)}`);
   await target.tap({ timeout: 2200 });
 }
 
@@ -93,6 +107,48 @@ async function checkClock(page: Page, label: string, count = 2) {
     assert.ok(c.font >= 16, `${label}: clock font ${c.font}px is too small on a phone`);
     assert.ok(c.rect.top >= measurement.safe - 1 && c.rect.bottom < measurement.height - 60 && c.rect.left >= 0 && c.rect.right <= measurement.width + 1, `${label}: clock outside safe viewport: ${JSON.stringify(measurement)}`);
     assert.ok(c.visible && !c.clipped, `${label}: digits are covered or cut off: ${JSON.stringify(measurement)}`);
+  }
+  return measurement;
+}
+
+async function checkNavigationContrast(page: Page) {
+  const measurement = await page.locator('.mobile-bottom-nav').evaluate(nav => {
+    const canvas = document.createElement('canvas'); canvas.width = canvas.height = 1;
+    const ctx = canvas.getContext('2d')!;
+    // Canvas resolves computed rgb()/color-mix() values to sRGB. Composite the
+    // active pill and label backgrounds instead of assuming white behind text.
+    // Method syntax also keeps this browser callback independent of tsx's
+    // Node-only function-name helper when Playwright serialises it.
+    const color = {
+      rgba(css: string) {
+        ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = css; ctx.fillRect(0, 0, 1, 1);
+        return [...ctx.getImageData(0, 0, 1, 1).data].map((value, i) => i === 3 ? value / 255 : value);
+      },
+      over(front: number[], back: number[]) { return [...front.slice(0, 3).map((value, i) => value * front[3] + back[i] * (1 - front[3])), 1]; },
+      luminance(rgb: number[]) { return rgb.slice(0, 3).map(value => value / 255).map(value => value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4).reduce((sum, value, i) => sum + value * [.2126, .7152, .0722][i], 0); },
+    };
+    const style = getComputedStyle(nav);
+    const sample = document.createElement('span'); sample.style.background = 'var(--surface)'; document.body.append(sample);
+    const themeSurface = getComputedStyle(sample).backgroundColor; sample.remove();
+    const labels = [...nav.querySelectorAll('button')].map(button => {
+      const label = button.querySelector<HTMLElement>('span:last-child')!;
+      const buttonStyle = getComputedStyle(button), labelStyle = getComputedStyle(label);
+      const background = color.over(color.rgba(labelStyle.backgroundColor), color.over(color.rgba(buttonStyle.backgroundColor), color.rgba(style.backgroundColor)));
+      const foreground = color.over(color.rgba(labelStyle.color), background), a = color.luminance(foreground), b = color.luminance(background);
+      return { text: label.textContent?.trim(), active: button.classList.contains('active'), color: labelStyle.color, background, contrast: (Math.max(a, b) + .05) / (Math.min(a, b) + .05), opacity: [style.opacity, buttonStyle.opacity, labelStyle.opacity] };
+    });
+    return { background: style.backgroundColor, themeSurface, labels };
+  });
+  // An opaque themed bar makes the contrast independent of the card/scroll
+  // position underneath it, including in dark mode. Alpha colors inside it are
+  // composited above; group opacity is deliberately disallowed for these tabs.
+  assert.equal(measurement.background, measurement.themeSurface, 'Bottom navigation surface must follow the selected theme');
+  assert.equal(measurement.labels.length, 5, 'Missing bottom navigation labels');
+  assert.ok(measurement.labels.some(label => label.active) && measurement.labels.some(label => !label.active), 'Both active and inactive navigation labels must be exercised');
+  for (const label of measurement.labels) {
+    assert.ok(label.text, 'Bottom navigation label is empty');
+    assert.ok(label.opacity.every(value => Number(value) === 1), `Bottom navigation text must not be faded by opacity: ${label.text}`);
+    assert.ok(label.contrast >= 4.5, `Bottom navigation text contrast is below 4.5:1: ${JSON.stringify(label)}`);
   }
   return measurement;
 }
@@ -149,6 +205,7 @@ try {
       assert.ok(layout.scrollWidth <= layout.width + 1, `Horizontal overflow: ${JSON.stringify(layout)}`);
       return layout;
     });
+    await probe(`${key} bottom-navigation-contrast`, () => checkNavigationContrast(page));
     await prepare(page, 'timer');
     await probe(`${key} actual-touch-start`, async () => {
       await tapVisible(page, '.timer-main-button');

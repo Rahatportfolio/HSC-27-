@@ -63,14 +63,16 @@ export default function FullBackup({ onRestored }: { onRestored?: (settings: Set
                 throw new Error(
                   "Study data changed during restore. New progress was kept; retry when no session is being saved.",
                 );
-              if (!saveData(staged.data, true))
+              const restoredData = { ...staged.data };
+              delete restoredData.activeExam; // A restore resets live papers, like the other clocks.
+              if (!saveData(restoredData, true))
                 throw new Error(
                   "Metadata could not be saved. Existing data is unchanged.",
                 );
               committed = true;
               timer.reset();
               try { localStorage.removeItem('hsc27-exam-clock-v1'); } catch { /* storage unavailable */ }
-              setData(staged.data);
+              setData(restoredData);
               setSelectedDate(staged.data.settings.startDate);
               onRestored?.(staged.data.settings);
               const warnings = backup.warnings || [];

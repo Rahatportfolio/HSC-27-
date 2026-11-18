@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { SUBJECTS, SUBJECT_FULL_MARKS } from './data';
 import type { SubjectId } from './data';
 import { calculateGpa, gradeFor } from './gpa';
-import { A_PLUS_MIN, GPA5_POINTS, biggestBlocker, goldenPlan, whatIf } from './golden';
+import { A_PLUS_MIN, GPA5_POINTS, biggestBlocker, goldenPlan, markGapLabel, whatIf } from './golden';
 import type { SubjectMarks } from './types';
 
 /** Builds marks from percentages so a test never hardcodes a raw mark by accident. */
@@ -164,6 +164,26 @@ describe('the plan names the subject to fix, and admits when there is none', () 
   it('points at a missing subject instead of silently ignoring it', () => {
     const plan = goldenPlan(marksFrom({ physics: 90 }));
     expect(biggestBlocker(plan)).toBe(plan.missing[0]);
+  });
+});
+
+describe('mark-gap labels are presentation, never a grade input', () => {
+  it.each([[0, '0'], [20, '20'], [.5, '0.5'], [160 - 159.99, '≈0.01'], [.014, '≈0.01'], [.000001, '<0.01']] as const)('formats %s as %s', (gap, expected) => {
+    expect(markGapLabel(gap)).toBe(expected);
+  });
+
+  it.each([NaN, Infinity, -1])('never presents invalid gap %s as a mark', gap => {
+    expect(markGapLabel(gap)).toBe('—');
+  });
+
+  it('does not promote a near-boundary raw mark when its displayed gap rounds', () => {
+    const marks = { ...all(85), physics: 159.999999 };
+    const plan = goldenPlan(marks, 'golden');
+    const row = plan.rows.find(row => row.subject === 'physics')!;
+    expect(row.grade).toBe('A'); expect(plan.golden).toBe(false);
+    expect(markGapLabel(row.toAPlus!)).toBe('<0.01');
+    expect(plan.verdictEn).toContain('<0.01 marks short');
+    expect(marks.physics).toBe(159.999999);
   });
 });
 

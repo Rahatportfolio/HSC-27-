@@ -8,11 +8,11 @@ import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../d
 import type { SubjectId } from '../data';
 import { bn, formatDate, percent, todayKey } from '../planner';
 import {
-  EXAM_COUNTS, EXAM_MODE_INFO, buildExamQuestions, examChapterAccuracy, examDurationMin,
+  EXAM_COUNTS, EXAM_MODE_INFO, beginExam, buildExamQuestions, examChapterAccuracy, examDurationMin,
   examGradeLetter, examHistoryStats, gradeExam, paperCapacity, saveExamSession,
 } from '../examSim';
 import { retryBuckets, retryChapterRows } from '../retryLoop';
-import { examPostmortem } from '../examAnalysis';
+import { examPostmortem, questionIndex } from '../examAnalysis';
 import { CADENCE_SPECS, cadenceSlots, cadenceStats, cadenceWeek, dailyTestChapter, missedDaily, nextCadenceSlot } from '../cadence';
 import type { CadenceSlot } from '../cadence';
 import type { ExamGrade } from '../examSim';
@@ -23,6 +23,7 @@ import { t } from '../i18n';
 
 type Stage = 'setup' | 'running' | 'result';
 interface ResultState {
+  sessionId: string;
   grade: ExamGrade;
   title: string;
   mode: ExamMode;
@@ -50,19 +51,28 @@ function paperTitle(mode: ExamMode, subject: SubjectId, chapterId: string): stri
 
 export default function ExamSimView() {
   const { data, setData, today, notify, confirm, openChapter } = usePlanner();
-  const [stage, setStage] = useState<Stage>('setup');
+  const [showHistory, setShowHistory] = useState(false);
   const [mode, setMode] = useState<ExamMode>('subject');
   const [subject, setSubject] = useState<SubjectId>('physics');
   const [chapterId, setChapterId] = useState('');
   const [count, setCount] = useState(10);
-  const [paper, setPaper] = useState<QuizQuestion[]>([]);
-  const [answers, setAnswers] = useState<Record<string, number>>({});
-  const [index, setIndex] = useState(0);
-  const [deadline, setDeadline] = useState(0);
-  const [startedAt, setStartedAt] = useState(0);
+  const draft = data.activeExam;
+  const paper = useMemo(() => {
+    const known = new Map(allQuestions(data).map(q => [q.id, q]));
+    return (draft?.questionIds || []).map(id => known.get(id)).filter((q): q is QuizQuestion => !!q);
+  }, [draft?.questionIds, data.questions]);
+  const answers = draft?.answers || {};
+  const index = draft?.index || 0;
+  const deadline = draft?.deadline || 0;
+  const startedAt = draft?.startedAt || 0;
+  const setAnswers = (update: (answers: Record<string, number>) => Record<string, number>) => setData(current => {
+    if (!current.activeExam || Date.now() >= current.activeExam.deadline) return current;
+    return { ...current, activeExam: { ...current.activeExam, answers: update(current.activeExam.answers) } };
+  });
+  const setIndex = (value: number | ((index: number) => number)) => setData(current => !current.activeExam ? current : ({ ...current, activeExam: { ...current.activeExam, index: typeof value === 'function' ? value(current.activeExam.index) : value } }));
   const [tick, setTick] = useState(Date.now());
   const [result, setResult] = useState<ResultState | null>(null);
-  const [cadence, setCadence] = useState<ExamCadence | undefined>(undefined);
+  const stage: Stage = result ? 'result' : draft && !showHistory ? 'running' : 'setup';
   const submitted = useRef(false);
 
   const sessions = useMemo(() => [...data.examSessions].sort((a, b) => b.at.localeCompare(a.at)), [data.examSessions]);
@@ -77,35 +87,33 @@ export default function ExamSimView() {
   const retryRows = useMemo(() => retryChapterRows(data, today).slice(0, 5), [data, today]);
   const dueRetryCount = retries.due.length + retries.upcoming.length;
   const subjectChapters = useMemo(() => sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject)), [subject]);
-  const remaining = stage === 'running' ? Math.max(0, Math.ceil((deadline - tick) / 1000)) : 0;
+  const remaining = draft ? Math.max(0, Math.ceil((deadline - tick) / 1000)) : 0;
   const active = paper[index];
   const answeredCount = paper.filter(question => Object.hasOwn(answers, question.id)).length;
 
   useEffect(() => {
-    if (stage !== 'running') return;
+    if (!draft) return;
     const id = setInterval(() => setTick(Date.now()), 500);
     return () => clearInterval(id);
-  }, [stage]);
+  }, [!!draft]);
 
   const start = (questions: QuizQuestion[], nextMode: ExamMode, cadence?: ExamCadence) => {
     if (!questions.length) {
       notify(t('এই বাছাইয়ে কোনো প্রশ্ন নেই। বিষয়, অধ্যায় বা সংখ্যা বদলাও।', 'No questions in this selection. Change the subject, chapter or count.'), 'info');
       return;
     }
-    submitted.current = false;
-    const minutes = examDurationMin(questions.length);
+    if (draft) {
+      setShowHistory(false);
+      notify(t('আগের উত্তরপত্র এখনো চলছে—সেটি জমা দিয়ে নতুন পরীক্ষা শুরু করো।', 'Your saved paper is still running. Submit it before starting another one.'), 'info');
+      return;
+    }
     const now = Date.now();
-    setMode(nextMode);
-    setPaper(questions);
-    setAnswers({});
-    setIndex(0);
-    setStartedAt(now);
-    setDeadline(now + minutes * 60 * 1000);
-    setTick(now);
-    setResult(null);
-    setCadence(cadence);
-    setStage('running');
-    notify(t(`${bn(questions.length)}টি প্রশ্ন · ${bn(minutes)} মিনিটের পরীক্ষা শুরু হলো।`, `${questions.length} questions · ${minutes}-minute exam started.`), 'success');
+    const next = beginExam(data, { mode: nextMode, title: paperTitle(nextMode, subject, chapterId || questions[0]?.chapterId || ''), ...(nextMode === 'subject' ? { subject } : {}), questions, ...(cadence ? { cadence } : {}) }, now);
+    if (!next.activeExam) { notify(t('প্রশ্ন রাখার জায়গা নেই। আগে ব্যাকআপ রেখে লাইব্রেরির জায়গা খালি করো।', 'There is no question storage space. Back up first and free library space.'), 'error'); return; }
+    submitted.current = false;
+    setData(next); setMode(nextMode); setTick(now); setResult(null); setShowHistory(false);
+    const minutes = examDurationMin(next.activeExam.questionIds.length);
+    notify(t(`${bn(next.activeExam.questionIds.length)}টি প্রশ্ন · ${bn(minutes)} মিনিটের পরীক্ষা শুরু হলো।`, `${next.activeExam.questionIds.length} questions · ${minutes}-minute exam started.`), 'success');
   };
 
   /** Starts the routine slot: daily = today's weakest chapter, weekly = a subject, monthly = all. */
@@ -139,17 +147,16 @@ export default function ExamSimView() {
   };
 
   const finish = () => {
-    if (submitted.current) return;
+    if (submitted.current || !draft) return;
     submitted.current = true;
-    const grade = gradeExam(paper, answers);
-    const title = paperTitle(mode, subject, chapterId || paper[0]?.chapterId || '');
-    const timeTakenSec = Math.max(0, Math.round((Date.now() - startedAt) / 1000));
-    setData(current => saveExamSession(current, {
-      mode, title, ...(mode === 'subject' ? { subject } : {}), questions: paper, answers,
-      durationMin: examDurationMin(paper.length), timeTakenSec, date: todayKey(), ...(cadence ? { cadence } : {}),
-    }));
-    setResult({ grade, title, mode, durationMin: examDurationMin(paper.length), timeTakenSec, questions: paper, answers, ...(cadence ? { cadence } : {}) });
-    setStage('result');
+    const grade = gradeExam(paper, answers), title = draft.title;
+    const timeTakenSec = Math.max(0, Math.round((Math.min(Date.now(), deadline) - startedAt) / 1000));
+    setData(current => {
+      const saved = saveExamSession(current, { id: draft.id, mode: draft.mode, title, ...(draft.subject ? { subject: draft.subject } : {}), questions: paper, answers, durationMin: examDurationMin(paper.length), timeTakenSec, date: todayKey(new Date(Math.min(Date.now(), deadline))), ...(draft.cadence ? { cadence: draft.cadence } : {}) });
+      if (saved.activeExam?.id !== draft.id) return saved;
+      const next = { ...saved }; delete next.activeExam; return next;
+    });
+    setResult({ sessionId: draft.id, grade, title, mode: draft.mode, durationMin: examDurationMin(paper.length), timeTakenSec, questions: paper, answers, ...(draft.cadence ? { cadence: draft.cadence } : {}) });
     notify(grade.percent >= 50
       ? t(`পরীক্ষা সেভ হয়েছে · ${bn(grade.score)}/${bn(grade.total)} সঠিক।`, `Exam saved · ${grade.score}/${grade.total} correct.`)
       : t(`পরীক্ষা সেভ হয়েছে · ${bn(grade.score)}/${bn(grade.total)}। ভুলগুলো রিভিশন কার্ডে যোগ হয়েছে।`, `Exam saved · ${grade.score}/${grade.total}. Mistakes were added to your revision cards.`),
@@ -172,7 +179,7 @@ export default function ExamSimView() {
 
   // Time up: auto-submit exactly what is on the answer sheet.
   useEffect(() => {
-    if (stage !== 'running' || !deadline) return;
+    if (!draft || !deadline) return;
     if (remaining > 0) return;
     notify(t('সময় শেষ! উত্তরপত্র নিজে থেকে জমা হলো।', 'Time is up. The paper was submitted automatically.'), 'info');
     finish();
@@ -182,7 +189,20 @@ export default function ExamSimView() {
   const retrySession = (session: ExamSession) => {
     const byId = new Map(allQuestions(data).map(question => [question.id, question]));
     const questions = session.questionIds.map(id => byId.get(id)).filter((question): question is QuizQuestion => !!question);
-    setMode('mistakes');
+    if (!questions.length) {
+      notify(t(`সেভ করা ${bn(session.questionIds.length)}টি প্রশ্নের কোনোটির সংজ্ঞাই এখন পাওয়া যাচ্ছে না। পূর্ণ ব্যাকআপে থাকলে সেখান থেকে ফিরিয়ে আনতে পারো। আগের ফল বদলায়নি।`, `None of the ${session.questionIds.length} saved questions are available. You can restore their definitions if they exist in a full backup. The saved score is unchanged.`), 'info');
+      return;
+    }
+    if (questions.length < session.questionIds.length) {
+      const missing = session.questionIds.length - questions.length;
+      confirm({
+        title: t('কিছু সেভ করা প্রশ্ন পাওয়া যাচ্ছে না', 'Some saved questions are unavailable'),
+        message: t(`${bn(session.questionIds.length)}টির মধ্যে ${bn(missing)}টি প্রশ্নের সংজ্ঞা নেই। শুধু বাকি ${bn(questions.length)}টি প্রশ্ন নিয়ে নতুন পরীক্ষা হবে। আগের ফল বদলাবে না। ছোট পরীক্ষা শুরু করবে?`, `${missing} of ${session.questionIds.length} saved question definitions are missing. Only ${questions.length} retained question(s) can be retried. The saved score will not change. Start the shorter paper?`),
+        label: t(`${bn(questions.length)}টি প্রশ্ন আবার দাও`, `Retry ${questions.length} question(s)`),
+        action: () => start(questions, 'mistakes'),
+      });
+      return;
+    }
     start(questions, 'mistakes');
   };
 
@@ -193,9 +213,10 @@ export default function ExamSimView() {
       titleEn="A timed paper, marked instantly."
       description="নমুনা ব্যাংক ও নিজের প্রশ্ন থেকে স্বয়ংক্রিয়ভাবে প্রশ্নপত্র তৈরি হয়। সময় শেষে উত্তরপত্র নিজে থেকেই জমা হয়, প্রতিটি ভুল ভুলের খাতা ও রিভিশনে যায়—আর আগের ভুলগুলোই পরের পরীক্ষায় ফিরে আসে।"
       descriptionEn="A paper is built automatically from the sample bank and your own questions. It submits itself when the clock hits zero, every mistake feeds the mistake book and revision, and previous mistakes come back in the next paper."
-      action={<button className="button secondary" onClick={() => setStage('setup')}><ListChecks size={17} />{t('পরীক্ষার তালিকা', 'Exam history')}</button>}
+      action={<button className="button secondary" onClick={() => { setResult(null); setShowHistory(true); }}><ListChecks size={17} />{t('পরীক্ষার তালিকা', 'Exam history')}</button>}
     />
 
+    {stage === 'setup' && draft && <section className="card padded"><h2>{t('আগের উত্তরপত্র চলছে', 'Saved paper in progress')}</h2><p>{t('সময় থামেনি। আগের পরীক্ষা শেষ না করে নতুন পরীক্ষা শুরু হবে না।', 'The clock has not paused. Finish your saved paper before starting another one.')}</p><button className="button primary" onClick={() => setShowHistory(false)}>{t('আগের পরীক্ষায় ফিরো', 'Resume saved paper')}</button></section>}
     {stage === 'setup' && <>
       <div className="exam-stat-row">
         <div className="card exam-stat"><span className="stat-icon green"><ClipboardList size={20} /></span><div><span>{t('মোট পরীক্ষা', 'Papers taken')}</span><strong>{bn(stats.count)}</strong><p>{t('সিমুলেটরে', 'In the simulator')}</p></div></div>
@@ -205,7 +226,7 @@ export default function ExamSimView() {
       </div>
 
       <section className="card exam-routine-card">
-        <div className="card-heading"><div><h2><AlarmClock size={19} />{t('পরীক্ষার রুটিন', 'Exam routine')}</h2><p>{t('প্রতিদিন ১০টি MCQ, প্রতি শুক্রবার ২৫টি, মাসে একবার ৫০টির পূর্ণ মক। মিস হলে সিস্টেম মনে করিয়ে দেয়।', 'Ten MCQs daily, twenty-five every Friday, a fifty-question mock once a month. Missed slots stay visible.')}</p></div>
+        <div className="card-heading"><div><h2><AlarmClock size={19} />{t('পরীক্ষার রুটিন', 'Exam routine')}</h2><p>{t('দৈনিক ১০টি MCQ, সাপ্তাহিক ২৫টি (শুক্রবারের পরামর্শ), আর প্রতি ৩০ দিনে ৫০টির মক। দরকারি স্লট আগের পরীক্ষার পর কটা দিন গেছে তা দিয়ে গণনা হয়; আগেও পরীক্ষা দিতে পারো।', 'Ten MCQs daily, twenty-five weekly (Friday suggested), and a fifty-question mock every 30 days. Due slots use elapsed days since your last paper; you can take one early.')}</p></div>
           <span className={`retry-pill ${nextSlot ? 'due' : ''}`}>{nextSlot ? `${t('এখনই দরকার', 'Due now')}: ${t(CADENCE_SPECS.find(spec => spec.cadence === nextSlot.cadence)!.label, CADENCE_SPECS.find(spec => spec.cadence === nextSlot.cadence)!.labelEn)}` : t('সব শেষ', 'All done')}</span>
         </div>
         {missed && <div className="exam-missed"><Flag size={16} /><span>{t(`গত ${bn(missed.days)} দিনে কোনো পরীক্ষা দেওয়া হয়নি। আজকের ছোট পরীক্ষাটা দিয়ে শুরু করো।`, `No paper in the last ${missed.days} day(s). Start with today’s short test.`)}</span></div>}
@@ -222,24 +243,28 @@ export default function ExamSimView() {
         <div className="exam-week-strip">
           <span className="tiny-muted">{t('এই সপ্তাহ', 'This week')}</span>
           {week.map(day => <div key={day.date} className={`exam-week-day ${day.done ? 'done' : ''} ${day.date === today ? 'today' : ''} ${day.cadence === 'weekly' ? 'weekly' : ''}`}>
-            <strong>{day.weekday}</strong><small>{day.weekday === 'শুক্র' ? t('সাপ্তাহিক', 'weekly') : day.done ? <Check size={12} /> : '·'}</small>
+            <strong>{day.weekday}</strong><small>{day.cadence === 'weekly' ? t('সাপ্তাহিক', 'weekly') : day.done ? <Check size={12} /> : '·'}</small>
           </div>)}
           <span className="tiny-muted">{t(`${bn(routine.taken7)}টি / ৭ দিন · ধারাবাহিকতা ${bn(routine.consistency)}%`, `${routine.taken7} in 7 days · consistency ${routine.consistency}%`)}</span>
         </div>
       </section>
       {(() => {
-        const post = examPostmortem(data.examSessions);
+        const post = examPostmortem(data.examSessions, undefined, questionIndex(allQuestions(data)));
         if (!post.papers) return null;
+        const missingDefinitions = data.examSessions.reduce((sum, session) => sum + session.questionIds.length, 0) - post.questions;
         return <section className="card exam-trend-card">
-          <div className="card-heading"><div><h2><TrendingUp size={19} />{t('গত পরীক্ষাগুলোর ছবি', 'Across your papers')}</h2><p>{t(`${bn(post.papers)}টি পরীক্ষা · ${bn(post.questions)}টি ব্যাংক-প্রশ্ন · ${t('প্রবণতা', 'trend')} ${post.trend.enough ? t('যথেষ্ট তথ্যে', 'on enough data') : t('এখনো অপর্যাপ্ত', 'still too little')}`, `${post.papers} papers · ${post.questions} banked questions · ${post.trend.enough ? 'enough data for a trend' : 'too little for a trend'}`)}</p></div></div>
+          <div className="card-heading"><div><h2><TrendingUp size={19} />{t('গত পরীক্ষাগুলোর ছবি', 'Across your papers')}</h2><p>{t(`${bn(post.papers)}টি পরীক্ষা · ${bn(post.questions)}টি সংরক্ষিত প্রশ্ন · ${t('প্রবণতা', 'trend')} ${post.trend.enough ? t('যথেষ্ট তথ্যে', 'on enough data') : t('এখনো অপর্যাপ্ত', 'still too little')}`, `${post.papers} papers · ${post.questions} retained questions · ${post.trend.enough ? 'enough data for a trend' : 'too little for a trend'}`)}</p></div></div>
+          {missingDefinitions > 0 && <p className="exam-history-warning" role="status" aria-label={t('অনুপস্থিত সেভ করা প্রশ্ন', 'Unavailable saved questions')}>{t(`${bn(missingDefinitions)}টি সেভ করা প্রশ্নের সংজ্ঞা পাওয়া যাচ্ছে না—নিচের বিস্তারিত হিসাবে সেগুলো বাদ আছে। আগের সেভ করা ফল অপরিবর্তিত। পূর্ণ ব্যাকআপে সংজ্ঞা থাকলে সেখান থেকে ফেরানো যাবে।`, `${missingDefinitions} saved question definition(s) are unavailable and excluded from the detailed figures below. Saved scores are unchanged. Definitions can be restored if they exist in a full backup.`)}</p>}
           <div className="exam-trend-stats">
             <div><span>{t('গড় ফল', 'Average')}</span><strong>{bn(post.trend.average)}%</strong></div>
             <div><span>{t('সেরা', 'Best')}</span><strong>{bn(post.trend.best)}%</strong></div>
-            <div><span>{t('উত্তরহীন', 'Unanswered')}</span><strong className={post.blankRate >= 15 ? 'warn' : ''}>{bn(post.blankRate)}%</strong></div>
+            <div><span>{t('সংরক্ষিত প্রশ্নে উত্তরহীন', 'Retained-question blanks')}</span><strong className={post.blankRate >= 15 ? 'warn' : ''}>{post.questions ? `${bn(post.blankRate)}%` : '—'}</strong></div>
             <div><span>{t('প্রবণতা', 'Trend')}</span><strong className={post.trend.enough ? (post.trend.change >= 0 ? 'good' : 'warn') : ''}>{post.trend.enough ? `${post.trend.change >= 0 ? '+' : ''}${bn(post.trend.change)}` : '—'}</strong></div>
           </div>
-          <div className="exam-postmortem-patterns">{post.patterns.slice(0, 2).map(pattern => <div key={pattern.key + pattern.titleEn} className={`focus-insight ${pattern.tone}`}><strong>{t(pattern.titleBn, pattern.titleEn)}</strong><span>{t(pattern.detailBn, pattern.detailEn)}</span></div>)}</div>
-          <p className="exam-postmortem-next"><strong>{t('পরের ধাপ:', 'Next:')}</strong> {t(post.nextBn, post.nextEn)}</p>
+          {post.questions > 0 && <>
+            <div className="exam-postmortem-patterns">{post.patterns.slice(0, 2).map(pattern => <div key={pattern.key + pattern.titleEn} className={`focus-insight ${pattern.tone}`}><strong>{t(pattern.titleBn, pattern.titleEn)}</strong><span>{t(pattern.detailBn, pattern.detailEn)}</span></div>)}</div>
+            <p className="exam-postmortem-next"><strong>{t('পরের ধাপ:', 'Next:')}</strong> {t(post.nextBn, post.nextEn)}</p>
+          </>}
         </section>;
       })()}
       <div className="exam-setup-grid">
@@ -310,7 +335,7 @@ export default function ExamSimView() {
     {stage === 'running' && active && <div className="exam-run-grid">
       <section className="card exam-run-card">
         <div className="exam-run-top">
-          <div><span className="eyebrow">{t('চলমান পরীক্ষা', 'Exam in progress')}</span><h2>{t(EXAM_MODE_INFO[mode].label, EXAM_MODE_INFO[mode].labelEn)}</h2></div>
+          <div><span className="eyebrow">{t('চলমান পরীক্ষা', 'Exam in progress')}</span><h2>{t(EXAM_MODE_INFO[draft?.mode || mode].label, EXAM_MODE_INFO[draft?.mode || mode].labelEn)}</h2></div>
           <div className={`exam-run-clock ${remaining <= 60 ? 'urgent' : ''}`} role="timer" aria-live="off"><Timer size={18} /><strong>{clock(remaining)}</strong><small>{t('বাকি সময়', 'left')}</small></div>
         </div>
         <div className="exam-run-progress"><ProgressBar value={percent(answeredCount, paper.length)} /><span>{bn(answeredCount)} / {bn(paper.length)} {t('উত্তর দেওয়া হয়েছে', 'answered')}</span></div>
@@ -334,10 +359,10 @@ export default function ExamSimView() {
             : <button className="button primary" onClick={submit}><CheckCheck size={16} />{t('জমা দাও', 'Submit')}</button>}
         </div>
         <div className="exam-palette" role="group" aria-label={t('প্রশ্নে যাও', 'Jump to a question')}>
-          {paper.map((question, questionIndex) => <button key={question.id} className={`exam-palette-cell ${Object.hasOwn(answers, question.id) ? 'answered' : ''} ${questionIndex === index ? 'current' : ''}`} onClick={() => setIndex(questionIndex)} aria-label={`${t('প্রশ্ন', 'Question')} ${bn(questionIndex + 1)}`}>{bn(questionIndex + 1)}</button>)}
+          {paper.map((question, questionIndex) => <button key={question.id} className={`exam-palette-cell ${Object.hasOwn(answers, question.id) ? 'answered' : ''} ${questionIndex === index ? 'current' : ''}`} onClick={() => setIndex(questionIndex)} aria-current={questionIndex === index ? 'step' : undefined} aria-label={`${t('প্রশ্ন', 'Question')} ${bn(questionIndex + 1)} — ${Object.hasOwn(answers, question.id) ? t('উত্তর দেওয়া', 'Answered') : t('উত্তরহীন', 'Unanswered')}`}>{bn(questionIndex + 1)}</button>)}
         </div>
         <div className="exam-run-footer">
-          <span className="tiny-muted">{t('উত্তর দেওয়া মাত্র সেভ থাকে; সময় শেষে অথবা “জমা দাও” চাপলে ফল তৈরি হবে।', 'Answers are kept as you go; the result is created on submit or when time runs out.')}</span>
+          <span className="tiny-muted">{t('উত্তর ও বাকি সময় এই ডিভাইসে সেভ থাকে; রিলোড করলেও একই উত্তরপত্র ফিরবে। অ্যাপ বন্ধ থাকলেও সময় চলবে। স্টোরেজের ত্রুটি দেখালে রিলোড করো না।', 'Answers and the deadline are saved on this device; reload resumes the same paper. Time keeps running while the app is closed. If a storage error appears, do not reload.')}</span>
           <button className="button secondary" onClick={submit}><Flag size={16} />{t('শেষ করো', 'Finish')}</button>
         </div>
       </section>
@@ -358,7 +383,7 @@ export default function ExamSimView() {
       onRetryWrong={() => start(result.grade.wrong.length + result.grade.unanswered.length
         ? [...result.grade.wrong, ...result.grade.unanswered]
         : result.questions, 'mistakes')}
-      onNew={() => setStage('setup')}
+      onNew={() => { setResult(null); setShowHistory(true); }}
       onOpenChapter={(id) => { const chapter = chapterById[id]; if (chapter) openChapter(chapter); }}
     />}
   </div>;
@@ -370,6 +395,7 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
   onNew: () => void;
   onOpenChapter: (chapterId: string) => void;
 }) {
+  const { data } = usePlanner();
   const { grade } = result;
   const rows = [...grade.breakdown].sort((a, b) => (a.correct / a.total) - (b.correct / b.total));
   const letter = examGradeLetter(grade.percent);
@@ -397,11 +423,15 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
     </section>
 
     {(() => {
-      // Why the marks were lost, counted from this very paper's question ids.
-      const post = examPostmortem([], [{ questionIds: result.questions.map(question => question.id), answers: result.answers }]);
+      // Use this exact saved submission and its retained definitions. An empty
+      // session list used to hide generated questions, show zero elapsed time,
+      // and even tell a student who had just finished that no paper existed.
+      const session = data.examSessions.find(item => item.id === result.sessionId);
+      if (!session) return null;
+      const post = examPostmortem([session], undefined, questionIndex(result.questions));
       if (!post.questions) return null;
       return <section className="card exam-postmortem">
-        <div className="card-heading"><div><h2><Stethoscope size={19} />{t('নম্বর কোথায় গেল', 'Where the marks went')}</h2><p>{t(`এই পরীক্ষার ${bn(post.questions)}টি ব্যাংক-প্রশ্নের হিসাব—অনুমান নয়, গোনা।`, `Counted from the ${post.questions} banked questions in this paper — not estimated.`)}</p></div></div>
+        <div className="card-heading"><div><h2><Stethoscope size={19} />{t('নম্বর কোথায় গেল', 'Where the marks went')}</h2><p>{t(`এই পরীক্ষার ${bn(post.questions)}টি সংরক্ষিত প্রশ্নের হিসাব—অনুমান নয়, গোনা।`, `Counted from the ${post.questions} retained questions in this paper — not estimated.`)}</p></div></div>
         <div className="exam-postmortem-stats">
           <div><span>{t('উত্তরহীন', 'Unanswered')}</span><strong>{bn(post.blank)}</strong></div>
           <div><span>{t('ভুল', 'Wrong')}</span><strong>{bn(post.wrong)}</strong></div>
@@ -434,7 +464,7 @@ function ExamResult({ result, onRetryWrong, onNew, onOpenChapter }: {
         <div className="card-heading"><div><h2><X size={19} />{t('ভুলের তালিকা', 'What went wrong')}</h2><p>{t('সঠিক উত্তর ও ব্যাখ্যা দেখে নাও; এগুলোই পরের পরীক্ষায় ফিরে আসবে।', 'Check the right answer and the explanation — these return in your next paper.')}</p></div><span className="tiny-muted">{bn(grade.wrong.length + grade.unanswered.length)}</span></div>
         {grade.wrong.length + grade.unanswered.length === 0
           ? <div className="exam-perfect"><CheckCheck size={26} /><strong>{t('সব প্রশ্ন সঠিক! এই অধ্যায়গুলো এখন ঝালাই।', 'Everything correct! Those chapters are sharp now.')}</strong></div>
-          : <div className="exam-wrong-list">
+          : <div className="exam-wrong-list" role="region" aria-label={t('পরীক্ষার ভুল ও উত্তরহীন প্রশ্ন', 'Exam mistakes and unanswered questions')} tabIndex={0}>
             {grade.wrong.map(question => <article className="exam-wrong-row" key={question.id}>
               <strong>{question.question}</strong>
               <p>{t('তোমার উত্তর', 'Your answer')}: <em>{question.options[result.answers[question.id]] ?? '—'}</em></p>

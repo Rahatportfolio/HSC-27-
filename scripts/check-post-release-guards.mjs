@@ -91,7 +91,7 @@ const cases = [
   ['full-dirty-draft', 'src/components/FullBackup.tsx', 'onRestored?.(staged.data.settings);', '/* fault: stale Settings draft */', restore, 'replaces a dirty Settings draft and selects'],
   ['full-selected-date', 'src/components/FullBackup.tsx', 'setSelectedDate(staged.data.settings.startDate);', '/* fault: wrong selected routine */', restore, 'replaces a dirty Settings draft and selects'],
   ['full-exam-clock', 'src/components/FullBackup.tsx', "try { localStorage.removeItem('hsc27-exam-clock-v1'); } catch { /* storage unavailable */ }", '/* fault: old exam clock */', restore, 'clears the previous exam clock after a successful full-media'],
-  ['full-durable-restore', 'src/components/FullBackup.tsx', 'if (!saveData(staged.data, true))', 'if (false)', restore, 'keeps clocks/profile and rolls staged media back'],
+  ['full-durable-restore', 'src/components/FullBackup.tsx', 'if (!saveData(restoredData, true))', 'if (false)', restore, 'keeps clocks/profile and rolls staged media back'],
   ['full-after-commit', 'src/components/FullBackup.tsx', 'if (!committed) await staged?.rollback();', 'await staged?.rollback();', concurrent, 'does not erase staged images after a durable restore commit'],
   ['full-concurrent-progress', 'src/components/FullBackup.tsx', 'if (latestData.current !== expected)', 'if (false)', concurrent, 'keeps new study progress'],
   ['full-legacy-toast', 'src/components/FullBackup.tsx', "warnings.length ? 'info' : 'success'", "'success'", restore, 'makes absent scanned images in an old full backup'],

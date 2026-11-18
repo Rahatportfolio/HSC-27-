@@ -6,7 +6,7 @@ import type {
   BoardQuestion, Carryover, ChapterMeta, CqEntry, DayScheduleOverride, FormulaEntry,
   ImportantDate, PersonalNote, PdfResource, QuizAttempt, QuizQuestion, RevisionItem, RoutineBlock,
   SettingsExtras, StudySession, SubjectMarks, TaskEdit, TestRecord, VideoLink, Flashcard,
-  ScannedNoteMeta, ExamSession, RetryItem,
+  ScannedNoteMeta, ExamSession, RetryItem, ActiveExam,
 } from './types';
 
 export type PhaseId = 'learn' | 'revise' | 'exam';
@@ -122,6 +122,8 @@ export interface AppData {
   tests: TestRecord[];
   /** Auto-marked MCQ exams from the exam simulator (newest last). */
   examSessions: ExamSession[];
+  /** One live paper, persisted with the same profile transaction as its answers. */
+  activeExam?: ActiveExam;
   /** Questions that are owed another attempt, on a spaced ladder. */
   retries: RetryItem[];
   libraryNotes: PersonalNote[];

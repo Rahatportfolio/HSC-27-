@@ -177,8 +177,8 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
         />
       ) : (
         <p>
-          এই প্ল্যাটফর্মে স্বয়ংক্রিয় watch tracking নেই।{" "}
-          <a href={item.url} target="_blank" rel="noreferrer">
+          {t('এই প্ল্যাটফর্মে স্বয়ংক্রিয় watch tracking নেই।', 'Automatic watch tracking is unavailable on this platform.')}{" "}
+          <a className="study-source-link" href={item.url} target="_blank" rel="noreferrer">
             {t("মূল ক্লাস খোলো", "Open original class")}
           </a>{" "}
           {t("এবং নিচে নিজের অগ্রগতি লেখো।", "Then record your progress below.")}

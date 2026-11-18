@@ -21,8 +21,9 @@ export function SubjectIcon({ subject, size = 18 }: { subject: SubjectId; size?:
   const Icon = subject === 'chemistry' ? FlaskConical : subject === 'biology' ? Leaf : subject === 'bangla' || subject === 'english' ? BookOpen : NotebookPen;
   return <Icon size={size} strokeWidth={1.7} />;
 }
-export function ProgressBar({ value, color, className = '' }: { value: number; color?: string; className?: string }) {
-  return <div className={`progress-track ${className}`} role="progressbar" aria-valuenow={value} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${Math.min(100, Math.max(0, value))}%`, background: color }} /></div>;
+export function ProgressBar({ value, color, label, className = '' }: { value: number; color?: string; label?: string; className?: string }) {
+  const safe = Number.isFinite(value) ? Math.min(100, Math.max(0, value)) : 0;
+  return <div className={`progress-track ${className}`} role="progressbar" aria-label={label || t('অগ্রগতি', 'Progress')} aria-valuenow={safe} aria-valuemin={0} aria-valuemax={100}><span style={{ width: `${safe}%`, background: color }} /></div>;
 }
 export function ProgressRing({ value, size = 112, stroke = 8, children, color = 'var(--green)' }: { value: number; size?: number; stroke?: number; children?: ReactNode; color?: string }) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
@@ -320,17 +321,20 @@ function ClassLink({ option, kind, showKind }: { option: ClassOption; kind: 'one
   const isPlaylist = option.kind === 'playlist';
   const watched = !!planner && !search && isWatched(planner.data, option.url);
   const label = formatTeacherLabel(option.channel);
+  // Speech users must be able to say the label they can see, including the
+  // short class kind and the Search/Playlist chips, in the same order.
+  const visibleLabel = [showKind ? classLabel(kind, true) : '', label, isPlaylist ? t('প্লেলিস্ট', 'Playlist') : '', search ? t('খুঁজুন', 'Search') : ''].filter(Boolean).join(' ');
   return <span className={`class-pill ${search ? 'is-search' : 'is-direct'} ${watched ? 'watched' : ''}`}>
     <a
       className={`class-link ${search ? 'search' : 'real'} ${isPlaylist ? 'playlist' : ''}`}
       href={option.url} target="_blank" rel="noreferrer"
-      aria-label={`${classLabel(kind)} — ${label}${search ? t(' (ইউটিউবে খুঁজে দেখো)', ' (search on YouTube)') : isPlaylist ? t(' (প্লেলিস্ট)', ' (playlist)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}${watched ? t(' (দেখা হয়েছে)', ' (watched)') : ''}`}
+      aria-label={`${visibleLabel} — ${classLabel(kind)}${search ? t(' (ইউটিউবে খুঁজে দেখো)', ' (search on YouTube)') : isPlaylist ? t(' (প্লেলিস্ট)', ' (playlist)') : t(' (সরাসরি ক্লাস)', ' (direct class)')}${watched ? t(' (দেখা হয়েছে)', ' (watched)') : ''}`}
       title={`${classLabel(kind)} · ${label}${isPlaylist ? t(' (সম্পূর্ণ প্লেলিস্ট)', ' (full playlist)') : search ? t(' — ইউটিউবে খুঁজে দেখো', ' — search on YouTube') : t(' — এক ক্লিকে সরাসরি ক্লাস', ' — click to watch class')}`}>
       {search ? <Search size={12.5} className="class-play-icon" aria-hidden="true" /> : <Play size={12.5} className="class-play-icon" aria-hidden="true" />}
-      {showKind && <span className="class-kind-tag">{classLabel(kind, true)}</span>}
+      {showKind && <span className="class-kind-tag">{classLabel(kind, true)}</span>}{' '}
       <span className="class-channel">{label}</span>
-      {isPlaylist && <span className="class-playlist-tag">{t('প্লেলিস্ট', 'Playlist')}</span>}
-      {search && <span className="class-search-tag">{t('খুঁজুন', 'Search')}</span>}
+      {isPlaylist && <> <span className="class-playlist-tag">{t('প্লেলিস্ট', 'Playlist')}</span></>}
+      {search && <> <span className="class-search-tag">{t('খুঁজুন', 'Search')}</span></>}
     </a>
     {!search && planner && <button type="button" className={`class-watch ${watched ? 'on' : ''}`} aria-pressed={watched}
       aria-label={`${label} ${classLabel(kind)} — ${watched ? t('দেখা হয়েছে, টিক সরাও', 'watched, clear the tick') : t('দেখেছি বলে টিক দাও', 'mark as watched')}`}
@@ -447,9 +451,9 @@ export function LessonList({ lessons, channel = 'shakibsirbangla' }: { lessons: 
       const watched = !!planner && !!lesson.url && isWatched(planner.data, key);
       return <span key={lesson.title} className={`lesson-pill ${watched ? 'watched' : ''}`}>
         <a className={`lesson-row ${lesson.url ? 'ready' : 'todo'}`} href={href} target="_blank" rel="noreferrer"
-          aria-label={`${lesson.title}${lesson.channel ? ' — ' + lesson.channel : ''}${lesson.url ? t(' (ক্লাস)', ' (class)') : t(' (চ্যানেলে খুঁজো)', ' (search the channel)')}${watched ? t(' — দেখা হয়েছে', ' — watched') : ''}`}>
-          <span className="lesson-copy"><span className="lesson-title">{lesson.title}</span>{lesson.channel && <span className="lesson-channel">{lesson.channel}</span>}</span>
-          {lesson.url ? <span className="lesson-state ready"><Play size={11} aria-hidden="true" />{t('ক্লাস', 'class')}</span> : <span className="lesson-state"><Search size={11} aria-hidden="true" />{t('খুঁজো', 'search')}</span>}
+          aria-label={`${lesson.title}${lesson.channel ? ' ' + lesson.channel : ''} ${lesson.url ? t('ক্লাস', 'class') : t('খুঁজো', 'search')}${watched ? t(' — দেখা হয়েছে', ' — watched') : ''}`}>
+          <span className="lesson-copy"><span className="lesson-title">{lesson.title}</span>{lesson.channel && <> <span className="lesson-channel">{lesson.channel}</span></>}</span>
+          {' '}{lesson.url ? <span className="lesson-state ready"><Play size={11} aria-hidden="true" />{t('ক্লাস', 'class')}</span> : <span className="lesson-state"><Search size={11} aria-hidden="true" />{t('খুঁজো', 'search')}</span>}
         </a>
         {lesson.url && planner && <button type="button" className={`class-watch ${watched ? 'on' : ''}`} aria-pressed={watched}
           aria-label={`${lesson.title} — ${watched ? t('দেখা হয়েছে, টিক সরাও', 'watched, clear the tick') : t('দেখেছি বলে টিক দাও', 'mark as watched')}`}
