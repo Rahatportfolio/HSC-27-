@@ -8,7 +8,7 @@ not be triggered as delivery of the S/Brain/performance rework.
 
 ## Required checks and immutable bytes
 
-- Only the active delivery branch `arena/2a6136bf-hsc-27`, a push carrying the explicit
+- Only the active delivery branch `arena/5f160f83-hsc-27`, a push carrying the explicit
   `[current-dev-apk]` acknowledgement, and the development-only confirmation
   can request publication. Normal builds do not publish downloads.
 - Exact repository, full source SHA, workflow, run and attempt must match.
@@ -55,9 +55,19 @@ every physical phone, OEM keyboard, background restriction or screen reader.
 
 ## Exact-source delivery record
 
-The **Delivery** section of [this follow-up branch's PR](https://github.com/Rahatportfolio/HSC-27-/pulls?q=is%3Apr+head%3Aarena%2F2a6136bf-hsc-27)
-records its direct `.apk` URL, full source SHA, successful run, APK hash and
-certificate. The [previous PR #20 download](https://github.com/Rahatportfolio/HSC-27-/pull/20)
+**Currently published development installer (source `81d2ce71aaec`):**
+https://github.com/Rahatportfolio/HSC-27-/releases/download/dev-apk-81d2ce71aaec/prostuti-hsc27-81d2ce71aaec-development.apk
+— 15,355,322 B, APK SHA-256
+`4ec3e58cec1e40eec34a890e586fe2d44a2cd1c4a8e42e7fae4c7aec3c88fa49` (equal to the
+GitHub asset digest), certificate SHA-256
+`0f648fd68308131be82a508da7d658d7e692d7f8b5cb487c68b40a5cc9b69fdb`, run
+[44603054186](https://github.com/Rahatportfolio/HSC-27-/actions/runs/44603054186)
+with APK build + API 34 + API 35 + built web all successful. Merged through
+[PR #21](https://github.com/Rahatportfolio/HSC-27-/pull/21); the merge tree equals
+the tested tree. That release is a non-Latest prerelease; the v2.43.0 Latest and
+draft v2.44.0 assets are untouched.
+
+The [previous PR #20 download](https://github.com/Rahatportfolio/HSC-27-/pull/20)
 is historical and does not contain these startup/recovery changes. Each separate development
 prerelease contains `inspection.json` and `SHA256SUMS.txt`; older production
 assets are not the new download. The workflow also exposes the measured result
