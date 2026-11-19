@@ -69,3 +69,20 @@ it('requires awake/unlocked test-device preconditions without bypassing real app
   expect(source).toContain('web.hasWindowFocus()');
   expect(source).toContain('refusing an unowned screen tap');
 });
+
+it('suppresses unrelated system ANR dialogs on the disposable emulator without weakening app assertions', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/android-apk.yml', import.meta.url), 'utf8');
+  expect(workflow).toContain('adb shell settings put global hide_error_dialogs 1');
+  expect(workflow).toContain('adb shell settings put global anr_show_background 0');
+  // The focus precondition itself must stay: no window owner means no tap.
+  expect(source).toContain('waitForFocusedWindow(web);');
+  expect(source).toContain('fail("App window never gained input focus');
+});
+
+it('diagnoses the focused window without relying on a shell pipe UiAutomation cannot parse', () => {
+  const shellCommands = [...source.matchAll(/shell\(((?:"(?:[^"\\]|\\.)*"\s*\+?\s*)+)\)/g)].map(match => match[1]);
+  expect(shellCommands.length).toBeGreaterThan(0);
+  for (const command of shellCommands) expect(command).not.toContain('|');
+  expect(source).toContain('focusedWindowLines(shell("dumpsys window"))');
+  expect(source).toContain('mTopFocusedDisplayId');
+});

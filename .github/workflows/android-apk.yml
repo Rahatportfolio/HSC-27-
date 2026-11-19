@@ -231,6 +231,14 @@ jobs:
             adb shell wm dismiss-keyguard
             adb shell svc wifi disable
             adb shell svc data disable
+            # Disposable emulator only. The Pixel Launcher ANR dialog appears on
+            # top of our Activity and legitimately steals window focus, which the
+            # instrumentation must never tap through. Suppress system/tool ANR and
+            # crash dialogs; the app's own failure paths are still asserted.
+            adb shell settings put global hide_error_dialogs 1
+            adb shell settings put global anr_show_background 0
+            adb shell settings get global hide_error_dialogs
+            adb shell settings get global anr_show_background
             bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log) || status=$?; adb pull /sdcard/Download/prostuti-instrumented-shell ./android-shell-evidence || true; exit "$status"'
       - name: Surface device failure details
         if: failure()

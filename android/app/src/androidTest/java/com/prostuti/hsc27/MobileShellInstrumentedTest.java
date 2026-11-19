@@ -144,6 +144,23 @@ public class MobileShellInstrumentedTest {
     return false;
   }
 
+  /**
+   * UiAutomation.executeShellCommand runs the raw command without a shell, so a
+   * literal pipe is rejected by dumpsys (observed as "Bad window command ...
+   * |"). Filter the dump in Java instead of piping it.
+   */
+  private String focusedWindowLines(String dump) {
+    StringBuilder kept = new StringBuilder();
+    for (String line : dump.split("\n")) {
+      String trimmed = line.trim();
+      if (trimmed.startsWith("mCurrentFocus") || trimmed.startsWith("mFocusedApp") || trimmed.startsWith("mTopFocusedDisplayId")) {
+        if (kept.length() > 0) kept.append('\n');
+        kept.append(trimmed);
+      }
+    }
+    return kept.length() == 0 ? "(no focus lines in dumpsys window)" : kept.toString();
+  }
+
   private void waitForFocusedWindow(WebView web) throws Exception {
     // A presented WebView frame does not imply that Android's input dispatcher
     // has focused its window after Activity launch/recreation (notably API 35).
@@ -161,7 +178,7 @@ public class MobileShellInstrumentedTest {
     }
     PowerManager power = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(PowerManager.class);
     KeyguardManager keyguard = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(KeyguardManager.class);
-    String owner = shell("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp|mTopFocusedDisplayId'");
+    String owner = focusedWindowLines(shell("dumpsys window"));
     record("unfocused-input", new JSONObject().put("interactive", power.isInteractive()).put("keyguardLocked", keyguard.isKeyguardLocked()).put("windowOwner", owner));
     screenshot("unfocused-input");
     fail("App window never gained input focus; refusing an unowned screen tap. interactive=" + power.isInteractive() + ", keyguardLocked=" + keyguard.isKeyguardLocked() + ", owner=" + owner);
