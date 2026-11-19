@@ -160,11 +160,26 @@ public class MobileShellInstrumentedTest {
   private void tap(WebView web, String selector) throws Exception {
     waitFor(web, "!!document.querySelector(" + JSONObject.quote(selector) + ")");
     waitForFocusedWindow(web);
+    waitFor(web, "!document.fonts||document.fonts.status==='loaded'");
     evaluate(web, "document.querySelector(" + JSONObject.quote(selector) + ").scrollIntoView({block:'center',behavior:'instant'});true");
-    SystemClock.sleep(150);
+    SystemClock.sleep(300);
     JSONObject point = object(web,
-      "(()=>{const e=document.querySelector(" + JSONObject.quote(selector) + ");const r=e.getBoundingClientRect();const hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return {x:r.x+r.width/2,y:r.y+r.height/2,width:innerWidth,hit:!!hit&&(hit===e||e.contains(hit))};})()"
+      "(()=>{const e=document.querySelector(" + JSONObject.quote(selector) + ");const r=e.getBoundingClientRect();let zoom=1;for(let p=e;p;p=p.parentElement){zoom*=parseFloat(getComputedStyle(p).zoom)||1;}" +
+      // Accept an Android CSS-zoom coordinate space ONLY when the ordinary
+      // viewport mapping fails and THREE exposed points, including both near
+      // edges, prove that the adjusted box hits this exact control. No JS click,
+      // overlay removal, arbitrary point search or unverified coordinate guess.
+      "const spaces=[{method:'viewport DOMRect',scale:1}];if(/Android/.test(navigator.userAgent)&&zoom>1.05)spaces.push({method:'verified Android CSS-zoom coordinates',scale:zoom});" +
+      "const probes=spaces.map(space=>{const box={left:r.left*space.scale,top:r.top*space.scale,width:r.width*space.scale,height:r.height*space.scale};const points=[.04,.5,.96].map(fraction=>{const x=box.left+box.width*fraction,y=box.top+box.height/2,h=document.elementFromPoint(x,y);return {x,y,exposed:x>=0&&x<innerWidth&&y>=0&&y<innerHeight&&!!h&&(h===e||e.contains(h)),blocker:h?.tagName+'.'+h?.className,html:h?.outerHTML.slice(0,350)};});return {...space,box,points,exposed:points.every(point=>point.exposed)};});" +
+      "const chosen=probes.find(probe=>probe.exposed)||probes[0];return {x:chosen.points[1].x,y:chosen.points[1].y,width:innerWidth,height:innerHeight,hit:chosen.exposed,disabled:!!e.disabled,zoom,method:chosen.method,userAgent:navigator.userAgent,probes};})()"
     );
+    if (!point.getBoolean("hit") || point.getBoolean("disabled")) {
+      record("blocked-touch", new JSONObject().put("selector", selector).put("point", point));
+      screenshot("blocked-touch");
+    } else if (!point.getString("method").equals("viewport DOMRect")) {
+      record("native-coordinate-calibration", new JSONObject().put("selector", selector).put("point", point));
+    }
+    assertFalse("Tap target is disabled: " + selector + " " + point, point.getBoolean("disabled"));
     assertTrue("Tap target is covered: " + selector + " " + point, point.getBoolean("hit"));
     final float[] coordinates = new float[2];
     InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> {
@@ -259,6 +274,13 @@ public class MobileShellInstrumentedTest {
         try {
           evaluate(web, "location.hash='timer';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
           waitFor(web, "!!document.querySelector('.timer-main-button')");
+          // A paused clock deliberately survives profile/restart. Reset it via
+          // the real confirmation UI before selecting another synthetic run.
+          if ("true".equals(evaluate(web, "!!document.querySelector('.timer-presets > button:nth-child(5)')?.disabled"))) {
+            tap(web, ".timer-reset-button");
+            tap(web, ".modal-actions .button.danger");
+            waitFor(web, "!document.querySelector('.modal')&&!document.querySelector('.timer-presets > button:nth-child(5)').disabled");
+          }
           tap(web, ".timer-presets > button:nth-child(5)");
           tap(web, ".timer-main-button");
           waitFor(web, "!!document.querySelector('.live-timer-topbar.running')");

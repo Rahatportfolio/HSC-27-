@@ -175,7 +175,9 @@ jobs:
 
   device-checks:
     name: Android WebView device checks (API ${{ matrix.api }})
-    needs: apk
+    # Native jobs compile their own exact-source instrumented app. Run them in
+    # parallel with unit/web gates, never bypass them at either publisher.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -257,11 +259,13 @@ jobs:
             const dir = 'android-shell-evidence';
             if (!fs.existsSync(dir)) { core.warning('Native shell evidence directory is missing'); return; }
             const measurements = `${dir}/measurements.jsonl`;
-            if (fs.existsSync(measurements)) core.notice(fs.readFileSync(measurements, 'utf8'), {title: 'Android shell measurements'});
+            if (fs.existsSync(measurements)) {
+              fs.readFileSync(measurements, 'utf8').trim().split('\n').forEach((line, index) => core.notice(line.slice(0, 3500), {title: `Android shell measurement ${index + 1}`}));
+            }
             // The check API truncates each annotation message at 4096 chars.
             // Keep the running/scrolled visual proof in numbered small chunks;
             // full-resolution startup/paused images remain in the test artifact.
-            for (const name of ['legacy-scrolled-130', 'personal-scrolled-130', 'personal-offline-brain-after-restart']) {
+            for (const name of ['legacy-scrolled-130', 'personal-scrolled-130', 'personal-offline-brain-after-restart', 'blocked-touch']) {
               const path = `${dir}/${name}.png`;
               if (!fs.existsSync(path)) continue;
               const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();

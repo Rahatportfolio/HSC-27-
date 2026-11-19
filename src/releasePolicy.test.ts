@@ -53,7 +53,19 @@ describe('release metadata and publication safety', () => {
     const attach = workflow.split('      - name: Attach APK to GitHub Release\n')[1]?.split('\n  device-checks:')[0];
     expect(attach).toBeTruthy();
     expect(attach).toMatch(/\n          draft: true(?:\n|$)/);
-    expect(workflow).toMatch(/device-checks:[\s\S]*?needs: apk/);
+    const native = workflow.split('\n  device-checks:\n')[1]?.split('\n  artifact-audit:')[0];
+    expect(native).toContain("if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}");
+    expect(native).not.toContain('needs: apk');
+    expect(workflow).toMatch(/artifact-audit:[\s\S]*?needs: \[apk, device-checks\]/);
+  });
+
+  it('requires all parallel build, native and web gates before the current development download', () => {
+    const text = workflow();
+    const publish = text.split('\n  current-development-download:\n')[1];
+    expect(publish).toContain('needs: [apk, device-checks, built-web]');
+    expect(publish.split('\n    runs-on:')[0]).not.toContain('always()');
+    expect(publish).toContain('node scripts/publish-current-development-apk.mjs');
+    expect(text.split('\n  device-checks:\n')[1]?.split('\n  artifact-audit:')[0]).toContain('npx tsx scripts/generate-native-test-profiles.ts --check');
   });
 
   it('requires signing inputs before a tagged APK build and tests the release guards', () => {
