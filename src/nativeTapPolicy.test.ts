@@ -59,3 +59,13 @@ it('retains disabled-state evidence and requires native rejection before any poi
 it('fails closed for an unproved geometry offset instead of searching for an arbitrary clickable pixel', () => {
   expect(measure({ unknownOffset: true }).hit).toBe(false);
 });
+it('requires awake/unlocked test-device preconditions without bypassing real app-window focus', () => {
+  const workflow = readFileSync(new URL('../.github/workflows/android-apk.yml', import.meta.url), 'utf8');
+  expect(workflow).toContain('adb shell svc power stayon true');
+  expect(workflow).toContain('adb shell input keyevent KEYCODE_WAKEUP');
+  expect(workflow).toContain('adb shell wm dismiss-keyguard');
+  expect(source).toContain('power.isInteractive()');
+  expect(source).toContain('keyguard.isKeyguardLocked()');
+  expect(source).toContain('web.hasWindowFocus()');
+  expect(source).toContain('refusing an unowned screen tap');
+});

@@ -3,9 +3,11 @@ package com.prostuti.hsc27;
 import static org.junit.Assert.*;
 
 import android.Manifest;
+import android.app.KeyguardManager;
 import android.graphics.Bitmap;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
+import android.os.PowerManager;
 import android.os.SystemClock;
 import android.view.InputDevice;
 import android.view.MotionEvent;
@@ -36,6 +38,10 @@ import org.junit.runners.MethodSorters;
 public class MobileShellInstrumentedTest {
   @BeforeClass
   public static void grantNotificationPrecondition() {
+    PowerManager power = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(PowerManager.class);
+    KeyguardManager keyguard = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(KeyguardManager.class);
+    assertTrue("Test emulator must be awake before Activity/window tests", power.isInteractive());
+    assertFalse("Test emulator must be unlocked before Activity/window tests", keyguard.isKeyguardLocked());
     // A system permission prompt is not the UI under test. Do not leave it on top
     // of later ActivityScenario/storage tests after starting the first timer.
     if (Build.VERSION.SDK_INT >= 33) {
@@ -153,8 +159,12 @@ public class MobileShellInstrumentedTest {
       if (stable >= 2) return;
       SystemClock.sleep(100);
     }
+    PowerManager power = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(PowerManager.class);
+    KeyguardManager keyguard = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(KeyguardManager.class);
+    String owner = shell("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp|mTopFocusedDisplayId'");
+    record("unfocused-input", new JSONObject().put("interactive", power.isInteractive()).put("keyguardLocked", keyguard.isKeyguardLocked()).put("windowOwner", owner));
     screenshot("unfocused-input");
-    fail("App window never gained input focus; refusing an unowned screen tap");
+    fail("App window never gained input focus; refusing an unowned screen tap. interactive=" + power.isInteractive() + ", keyguardLocked=" + keyguard.isKeyguardLocked() + ", owner=" + owner);
   }
 
   private void tap(WebView web, String selector) throws Exception {

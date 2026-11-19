@@ -222,6 +222,13 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            # Disposable emulator only: a resumed Activity may still be behind
+            # its lock screen after a slow boot/build. Never fake window focus
+            # or tap through a permission/system dialog in the instrumentation.
+            adb shell svc power stayon true
+            adb shell settings put system screen_off_timeout 2147483647
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
             adb shell svc wifi disable
             adb shell svc data disable
             bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log) || status=$?; adb pull /sdcard/Download/prostuti-instrumented-shell ./android-shell-evidence || true; exit "$status"'
@@ -259,20 +266,32 @@ jobs:
             const dir = 'android-shell-evidence';
             if (!fs.existsSync(dir)) { core.warning('Native shell evidence directory is missing'); return; }
             const measurements = `${dir}/measurements.jsonl`;
-            if (fs.existsSync(measurements)) {
-              fs.readFileSync(measurements, 'utf8').trim().split('\n').forEach((line, index) => core.notice(line.slice(0, 3500), {title: `Android shell measurement ${index + 1}`}));
-            }
-            // The check API truncates each annotation message at 4096 chars.
-            // Keep the running/scrolled visual proof in numbered small chunks;
-            // full-resolution startup/paused images remain in the test artifact.
-            for (const name of ['legacy-scrolled-130', 'personal-scrolled-130', 'personal-offline-brain-after-restart', 'blocked-touch']) {
+            const rows = fs.existsSync(measurements) ? fs.readFileSync(measurements, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
+            const summary = {api: rows[0]?.androidApi, stageCount: rows.length, freshSetup: rows.find(row => row.stage === 'availability-first'), chrome: rows.filter(row => row.chrome), clocks: rows.filter(row => row.clocks).map(row => ({stage: row.stage, count: row.clocks.length, minFont: Math.min(...row.clocks.map(clock => clock.font)), readable: row.clocks.every(clock => clock.hit && !clock.clipped)})), retained: rows.filter(row => row.notesUnchanged !== undefined), calibratedTaps: rows.filter(row => row.stage === 'native-coordinate-calibration').length, unfocused: rows.find(row => row.stage === 'unfocused-input'), physicalDeviceCertified: false};
+            core.notice(JSON.stringify(summary).slice(0, 3500), {title: 'Android shell summary'});
+            // GitHub keeps only ten notices per step and truncates each message
+            // at 4096 chars. Keep one summary plus <=9 small image chunks. Full
+            // resolution, full-frame PNGs and every raw row stay in the artifact.
+            const failure = ['unfocused-input', 'blocked-touch', 'failed-input'].find(name => fs.existsSync(`${dir}/${name}.png`));
+            const names = failure ? [failure] : ['legacy-scrolled-130', 'personal-scrolled-130', 'personal-offline-brain-after-restart'];
+            for (const name of names) {
               const path = `${dir}/${name}.png`;
               if (!fs.existsSync(path)) continue;
-              const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();
-              const data = image.toString('base64');
+              let pixels = await sharp(path).resize({width: 320}).toBuffer();
+              if (!failure) {
+                const meta = await sharp(pixels).metadata();
+                pixels = await sharp(pixels).extract({left: 0, top: 0, width: meta.width, height: Math.min(200, meta.height)}).toBuffer();
+              }
+              const limit = failure ? 27000 : 9000;
+              let data = '';
+              for (const quality of [60, 50, 40, 30, 20]) {
+                data = (await sharp(pixels).webp({quality}).toBuffer()).toString('base64');
+                if (data.length <= limit) break;
+              }
+              if (data.length > limit) { core.warning(`Preview too large; use full artifact for ${name}.png`); continue; }
               const total = Math.ceil(data.length / 3000);
               for (let part = 0; part < total; part++) {
-                core.notice(JSON.stringify({name: `${name}.webp`, encoding: 'base64', part, total, data: data.slice(part * 3000, (part + 1) * 3000)}), {title: `Android shell image ${name} part ${part + 1}/${total}`});
+                core.notice(JSON.stringify({name: `${name}${failure ? '' : '-top'}.webp`, croppedToTop: !failure, encoding: 'base64', part, total, data: data.slice(part * 3000, (part + 1) * 3000)}), {title: `Android shell image ${name} part ${part + 1}/${total}`});
               }
             }
       - name: Save Android test results
