@@ -2,16 +2,20 @@
  * CHROMIUM_PATH must point to an installed Chromium; no browser dependency is added. */
 import { chromium } from "playwright-core";
 import { createServer, preview } from "vite";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, mkdir, writeFile } from "node:fs/promises";
 import { freshData, STORAGE_KEY, todayKey } from "../src/planner";
 import { CHAPTERS } from "../src/data";
 import { emptyAdvanced } from "../src/advanced";
 
 if (!process.env.CHROMIUM_PATH) throw new Error("Set CHROMIUM_PATH");
-const server = await createServer({ server: { host: "0.0.0.0", port: 0 } });
-await server.listen();
-const address = server.httpServer!.address() as { port: number };
-const base = `http://127.0.0.1:${address.port}`;
+const output = process.env.STUDY_BROWSER_OUTPUT || '.cache/study-browser';
+await mkdir(output, { recursive: true });
+const server = process.env.BASE_URL ? undefined : await createServer({ server: { host: "0.0.0.0", port: 0 } });
+await server?.listen();
+const address = server?.httpServer!.address() as { port: number } | undefined;
+const base = process.env.BASE_URL?.replace(/\/$/, '') || `http://127.0.0.1:${address!.port}`;
+let failure = '';
+const checks: string[] = [];
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH,
   headless: true,
@@ -24,6 +28,9 @@ const browser = await chromium.launch({
 const page = await browser.newPage({
   viewport: { width: 320, height: 800 },
   reducedMotion: "reduce",
+  // Keep the synthetic media route interceptable on both dev and production.
+  // The final, separate PWA context below allows its actual service worker.
+  serviceWorkers: 'block',
 });
 try {
   await page.goto(base, { waitUntil: "networkidle" });
@@ -172,8 +179,7 @@ try {
     .getByRole("button", { name: /Full backup export|Export full backup/ })
     .click();
   const download = await downloadPromise;
-  await mkdir(".cache", { recursive: true });
-  const file = ".cache/browser-full.prostuti";
+  const file = `${output}/browser-full.prostuti`;
   await download.saveAs(file);
   const bytes = await readFile(file);
   if (bytes.length < fixture.length)
@@ -208,15 +214,17 @@ try {
   )
     throw new Error("PWA shared link was not collected");
   await fits();
-  const production = await preview({ preview: { host: "0.0.0.0", port: 0 } });
-  const productionAddress = production.httpServer.address() as { port: number };
+  checks.push('real saved WebM playback, resume, notes, byte-bearing full backup/restore, shared collector and responsive tabs');
+  const production = process.env.BASE_URL ? undefined : await preview({ preview: { host: "0.0.0.0", port: 0 } });
+  const productionAddress = production?.httpServer.address() as { port: number } | undefined;
+  const productionBase = process.env.BASE_URL?.replace(/\/$/, '') || `http://127.0.0.1:${productionAddress!.port}`;
   const offlineContext = await browser.newContext({
     viewport: { width: 360, height: 800 },
   });
   const offlinePage = await offlineContext.newPage();
   try {
     await offlinePage.goto(
-      `http://127.0.0.1:${productionAddress.port}/#studySystem`,
+      `${productionBase}/#studySystem`,
       { waitUntil: "networkidle" },
     );
     await offlinePage.evaluate(async () => {
@@ -282,16 +290,19 @@ try {
       "Offline PWA note"
     )
       throw new Error("Production offline note missing");
+    checks.push('actual production service-worker first-use offline reload, playable saved WebM and retained note');
   } finally {
     await offlineContext.close();
-    await new Promise<void>((resolve) =>
-      production.httpServer.close(() => resolve()),
-    );
+    if (production) await new Promise<void>((resolve) => production.httpServer.close(() => resolve()));
   }
   console.log(
     "Browser study checks passed: real offline video, resume, notes, full backup/restore, shared collector, mobile tabs and production PWA offline reload.",
   );
+} catch (error) {
+  failure = error instanceof Error ? error.stack || error.message : String(error);
+  console.error(failure); process.exitCode = 1;
 } finally {
   await browser.close();
-  await server.close();
+  await server?.close();
+  await writeFile(`${output}/report.json`, JSON.stringify({ base, complete: !failure, productionBuildForMainFlow: !!process.env.BASE_URL, checks, failure, physicalDeviceCertified: false }, null, 2));
 }

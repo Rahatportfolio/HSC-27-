@@ -201,6 +201,7 @@ jobs:
       - name: Prepare instrumented app
         run: |
           npm ci
+          npx tsx scripts/generate-native-test-profiles.ts --check
           npm run android:assets
           npm run android:sync
           cd android
@@ -260,7 +261,7 @@ jobs:
             // The check API truncates each annotation message at 4096 chars.
             // Keep the running/scrolled visual proof in numbered small chunks;
             // full-resolution startup/paused images remain in the test artifact.
-            for (const name of ['scrolled-130']) {
+            for (const name of ['legacy-scrolled-130', 'personal-scrolled-130', 'personal-offline-brain-after-restart']) {
               const path = `${dir}/${name}.png`;
               if (!fs.existsSync(path)) continue;
               const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();
@@ -348,6 +349,26 @@ jobs:
           CHROMIUM_PATH: /usr/bin/google-chrome
           WEB_BROWSER_OUTPUT: .cache/built-web
         run: npm run test:built-web
+      - name: Surface browser checkpoints and accessibility counts
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const read = name => {
+              const path = `.cache/built-web/${name}`;
+              return fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, 'utf8')) : null;
+            };
+            const main = read('report.json');
+            if (main) core.notice(JSON.stringify({complete: main.complete, productionBuild: main.productionBuild, results: main.results.map(({script, exitCode, signal}) => ({script, exitCode, signal})), failure: main.failure}), {title: 'Exact-source built web checkpoints'});
+            else core.warning('Built web report was not written; acceptance is not established');
+            const a11y = read('accessibility/report.json');
+            if (a11y) {
+              const reviews = a11y.rows.flatMap(row => row.reviews);
+              core.notice(JSON.stringify({states: a11y.rows.length, fullRouteMatrix: a11y.fullRouteMatrix, violationInstances: a11y.rows.reduce((sum, row) => sum + row.violations.reduce((n, rule) => n + rule.nodes.length, 0), 0), rawIncompleteInstances: a11y.rows.reduce((sum, row) => sum + row.incomplete.reduce((n, rule) => n + rule.nodes, 0), 0), supplementalVerified: reviews.filter(row => row.status === 'verified').length, supplementalFailed: reviews.filter(row => row.status === 'failed').length, supplementalUnresolved: reviews.filter(row => row.status === 'unresolved').length, physicalScreenReaderCertified: false}), {title: 'Bounded automated accessibility evidence'});
+            }
+            const study = read('study/report.json');
+            if (study) core.notice(JSON.stringify(study), {title: 'Real synthetic media and offline PWA checkpoint'});
       - name: Retain raw browser evidence including failures
         if: always()
         uses: actions/upload-artifact@v4

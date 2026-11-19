@@ -6,8 +6,10 @@ import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { preview } from 'vite';
+import { appendBrowserLog, browserFailureAnnotation, requireFullBrowserEnvironment } from './builtWebPolicy';
 
 assert(process.env.CHROMIUM_PATH, 'Set CHROMIUM_PATH to an installed Chromium');
+requireFullBrowserEnvironment(process.env);
 const output = process.env.WEB_BROWSER_OUTPUT || '.cache/built-web';
 await mkdir(output, { recursive: true });
 const server = await preview({ preview: { host: '0.0.0.0', port: 0, strictPort: true } });
@@ -17,26 +19,32 @@ const env = {
   ...process.env, BASE_URL: `http://127.0.0.1:${address.port}`, REVIEW_INCOMPLETE: '1', A11Y_REVIEW_INCOMPLETE: '1',
   LAZY_OUTPUT: `${output}/lazy`, RESPONSIVE_OUTPUT: `${output}/responsive`,
   PERSONAL_BROWSER_OUTPUT: `${output}/personal`, BRAIN_BROWSER_OUTPUT: `${output}/brain`,
-  DIALOG_BROWSER_OUTPUT: `${output}/dialog`, MOBILE_EVIDENCE: `${output}/mobile`,
+  DIALOG_BROWSER_OUTPUT: `${output}/dialog`, MOBILE_EVIDENCE: `${output}/mobile`, STUDY_BROWSER_OUTPUT: `${output}/study`,
   A11Y_OUTPUT: `${output}/accessibility`, A11Y_REVIEWER_OUTPUT: `${output}/reviewer-controls`,
 };
-// Refuse inherited filters: this single command means the complete matrix.
-for (const key of Object.keys(process.env)) assert(!/^(?:A11Y_(?:ROUTES|SCENARIOS|DIALOGS|EXAM_STATES_ONLY|FAULT)|RESPONSIVE_(?:ROUTES|PROFILES|SCENARIOS|FAULT)|MOBILE_(?:CASE|MUTATION))$/.test(key), `Remove subset/fault filter ${key} for full built-web acceptance`);
 const scripts = ['test:a11y-reviewer', 'test:lazy-browser', 'test:responsive', 'test:personal-browser', 'test:brain-browser', 'test:dialog-offline-browser', 'test:mobile-shell', 'test:study-browser', 'test:accessibility'];
-const results: { script: string; exitCode: number | null; signal: NodeJS.Signals | null }[] = [];
+type BrowserResult = { script: string; exitCode: number | null; signal: NodeJS.Signals | null; logTail?: string };
+const results: BrowserResult[] = [];
 let failure = '';
 try {
   for (const script of scripts) {
     console.log(`\n=== Built web: ${script} ===`);
-    const result = await new Promise<{ script: string; exitCode: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
-      const child = spawn('npm', ['run', script], { stdio: 'inherit', env });
+    const result = await new Promise<BrowserResult>((resolve, reject) => {
+      let logTail = '';
+      const child = spawn('npm', ['run', script], { stdio: ['ignore', 'pipe', 'pipe'], env });
+      child.stdout.setEncoding('utf8').on('data', (text: string) => { process.stdout.write(text); logTail = appendBrowserLog(logTail, text); });
+      child.stderr.setEncoding('utf8').on('data', (text: string) => { process.stderr.write(text); logTail = appendBrowserLog(logTail, text); });
       child.once('error', reject);
-      child.once('exit', (exitCode, signal) => resolve({ script, exitCode, signal }));
+      // close, not exit: retain the last assertion output after stdio drains.
+      child.once('close', (exitCode, signal) => resolve({ script, exitCode, signal, ...(exitCode === 0 ? {} : { logTail }) }));
     });
     results.push(result);
     assert.equal(result.exitCode, 0, `${script} failed (${result.signal || result.exitCode})`);
   }
-} catch (error) { failure = String(error); process.exitCode = 1; console.error(error); }
+} catch (error) {
+  failure = String(error); process.exitCode = 1; console.error(error);
+  if (process.env.GITHUB_ACTIONS === 'true') console.error(browserFailureAnnotation(failure, results.at(-1)?.logTail));
+}
 finally {
   await new Promise<void>((resolve, reject) => server.httpServer.close(error => error ? reject(error) : resolve()));
   await writeFile(`${output}/report.json`, JSON.stringify({ base: env.BASE_URL, productionBuild: true, complete: !failure, physicalDeviceCertified: false, results, failure }, null, 2));

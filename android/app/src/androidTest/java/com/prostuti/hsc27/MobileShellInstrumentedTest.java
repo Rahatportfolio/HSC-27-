@@ -192,7 +192,9 @@ public class MobileShellInstrumentedTest {
     try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
       AtomicReference<WebView> ref = new AtomicReference<>();
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
-      waitFor(ref.get(), "!!document.querySelector('.topbar')");
+      waitFor(ref.get(), "!!document.querySelector('.personal-setup form')");
+      assertEquals("Fresh Android users must give availability before receiving a routine", "true", evaluate(ref.get(), "!document.querySelector('.today-view')&&!document.querySelector('.personal-home')&&!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
+      record("availability-first", new JSONObject().put("freshSetupVisible", true).put("automaticRoutineCreated", false));
       screenshot("startup");
       AtomicReference<String> chrome = new AtomicReference<>();
       scenario.onActivity(a -> chrome.set(
@@ -212,6 +214,39 @@ public class MobileShellInstrumentedTest {
     }
   }
 
+  private String syntheticProfile(String profile) throws Exception {
+    try (InputStream in = InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("native-" + profile + "-profile.json")) {
+      return new String(in.readAllBytes(), StandardCharsets.UTF_8);
+    }
+  }
+
+  private void loadSyntheticProfile(WebView web, String profile) throws Exception {
+    // Isolated instrumentation emulator only. The app still requires real new
+    // users to finish availability setup. Do not add a production test hook or
+    // weaken that rule merely to make this legacy-dashboard regression pass.
+    String raw = syntheticProfile(profile);
+    evaluate(web,
+      "(()=>{const key='hsc27-prostuti-v1', stampKey=key+'-saved-at';const previous=Date.parse(localStorage.getItem(stampKey)||'');" +
+      "localStorage.setItem(stampKey,new Date(Math.max(Date.now(),Number.isFinite(previous)?previous+1:0)).toISOString());" +
+      "localStorage.setItem(key," + JSONObject.quote(raw) + ");history.replaceState(null,'','#today');return true;})()"
+    );
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
+    waitFor(web, "!!document.querySelector('" + (profile.equals("personal") ? ".personal-home" : ".today-view") + "')");
+  }
+
+  private void assertSyntheticProfile(WebView web, String profile) throws Exception {
+    JSONObject result = object(web,
+      "(()=>{const actual=JSON.parse(localStorage.getItem('hsc27-prostuti-v1')),expected=" + syntheticProfile(profile) + ";return {" +
+      "notesUnchanged:JSON.stringify(actual.notes)===JSON.stringify(expected.notes)," +
+      "completionUnchanged:JSON.stringify(actual.completed)===JSON.stringify(expected.completed)," +
+      "routineUnchanged:JSON.stringify(actual.personalRoutine||null)===JSON.stringify(expected.personalRoutine||null)};})()"
+    );
+    record(profile + "-retained-profile", result);
+    assertTrue("Clock/navigation changed private notes: " + result, result.getBoolean("notesUnchanged"));
+    assertTrue("Clock/navigation certified unfinished work: " + result, result.getBoolean("completionUnchanged"));
+    assertTrue("Clock/navigation silently changed the routine: " + result, result.getBoolean("routineUnchanged"));
+  }
+
   @Test
   public void b_clockAndProgressStayReadableWithAndroidTextZoomAndScroll() throws Exception {
     try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
@@ -219,50 +254,68 @@ public class MobileShellInstrumentedTest {
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
       WebView web = ref.get();
       waitFor(web, "!!document.querySelector('.topbar')");
-      try {
-        evaluate(web, "location.hash='timer';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
-        waitFor(web, "!!document.querySelector('.timer-main-button')");
-        tap(web, ".timer-presets > button:nth-child(5)");
-        tap(web, ".timer-main-button");
-        waitFor(web, "!!document.querySelector('.live-timer-topbar.running')");
-        evaluate(web, "location.hash='today';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
-        waitFor(web, "!!document.querySelector('.today-view')");
-        for (int zoom : new int[] {100, 130}) {
-          scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(zoom));
-          evaluate(web, "document.documentElement.dataset.font='lg';window.scrollTo({top:0,behavior:'instant'});true");
-          SystemClock.sleep(500);
-          assertClock(web, "home-" + zoom);
-          JSONObject card = object(web,
-            "(()=>{const e=document.querySelector('.test-readiness-subjects').closest('section');const s=getComputedStyle(e);const r=e.getBoundingClientRect();const n=e.nextElementSibling.getBoundingClientRect();return {left:parseFloat(s.paddingLeft),right:parseFloat(s.paddingRight),bottom:parseFloat(s.paddingBottom),gap:n.top-r.bottom};})()"
-          );
-          record("progress-" + zoom, card);
-          assertTrue("Progress text needs an inset, not rounded-edge clipping: " + card, card.getDouble("left") >= 12 && card.getDouble("right") >= 12 && card.getDouble("bottom") >= 12);
-          assertTrue("Adjacent dashboard cards need spacing: " + card, card.getDouble("gap") >= 10);
-          evaluate(web, "window.scrollTo({top:1000,behavior:'instant'});true");
-          waitFor(web, "window.scrollY>100");
-          assertClock(web, "scrolled-" + zoom);
-          tap(web, ".live-btn.toggle");
-          waitFor(web, "!!document.querySelector('.live-timer-topbar.paused')");
-          String paused = evaluate(web, "document.querySelector('.live-clock-chip.remaining strong').textContent");
-          SystemClock.sleep(1200);
-          assertEquals("Paused time changed", paused, evaluate(web, "document.querySelector('.live-clock-chip.remaining strong').textContent"));
-          assertClock(web, "paused-" + zoom);
-          tap(web, ".live-btn.toggle");
+      for (String profile : new String[] {"legacy", "personal"}) {
+        loadSyntheticProfile(web, profile);
+        try {
+          evaluate(web, "location.hash='timer';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
+          waitFor(web, "!!document.querySelector('.timer-main-button')");
+          tap(web, ".timer-presets > button:nth-child(5)");
+          tap(web, ".timer-main-button");
           waitFor(web, "!!document.querySelector('.live-timer-topbar.running')");
+          evaluate(web, "location.hash='today';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
+          waitFor(web, "!!document.querySelector('" + (profile.equals("personal") ? ".personal-home" : ".today-view") + "')");
+          for (int zoom : new int[] {100, 130}) {
+            scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(zoom));
+            evaluate(web, "document.documentElement.dataset.font='lg';window.scrollTo({top:0,behavior:'instant'});true");
+            SystemClock.sleep(500);
+            assertClock(web, profile + "-home-" + zoom);
+            JSONObject card = object(web,
+              "(()=>{const e=" + (profile.equals("personal") ? "document.querySelector('.personal-goal')" : "document.querySelector('.test-readiness-subjects').closest('section')") + ";const s=getComputedStyle(e);const r=e.getBoundingClientRect();const n=e.nextElementSibling.getBoundingClientRect();return {left:parseFloat(s.paddingLeft),right:parseFloat(s.paddingRight),bottom:parseFloat(s.paddingBottom),gap:n.top-r.bottom};})()"
+            );
+            record(profile + "-progress-" + zoom, card);
+            assertTrue("Progress text needs an inset, not rounded-edge clipping: " + card, card.getDouble("left") >= 12 && card.getDouble("right") >= 12 && card.getDouble("bottom") >= 12);
+            assertTrue("Adjacent dashboard cards need spacing: " + card, card.getDouble("gap") >= 10);
+            evaluate(web, "window.scrollTo({top:1000,behavior:'instant'});true");
+            waitFor(web, "window.scrollY>100");
+            assertClock(web, profile + "-scrolled-" + zoom);
+            tap(web, ".live-btn.toggle");
+            waitFor(web, "!!document.querySelector('.live-timer-topbar.paused')");
+            String paused = evaluate(web, "document.querySelector('.live-clock-chip.remaining strong').textContent");
+            SystemClock.sleep(1200);
+            assertEquals("Paused time changed", paused, evaluate(web, "document.querySelector('.live-clock-chip.remaining strong').textContent"));
+            assertClock(web, profile + "-paused-" + zoom);
+            tap(web, ".live-btn.toggle");
+            waitFor(web, "!!document.querySelector('.live-timer-topbar.running')");
+          }
+          evaluate(web, "location.hash='syllabus';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
+          waitFor(web, "!!document.querySelector('.syllabus-card')");
+          assertClock(web, profile + "-navigated");
+          tap(web, ".live-timer-indicator");
+          waitFor(web, "!!document.querySelector('.timer-view')");
+          assertClock(web, profile + "-opened-timer");
+          assertSyntheticProfile(web, profile);
+        } finally {
+          // Cleanup is deliberately not a claimed user tap. Stop the native timer
+          // before the next synthetic profile or unrelated storage tests.
+          evaluate(web, "document.querySelector('.live-timer-topbar.running .live-btn.toggle')?.click();true");
+          scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(100));
+          SystemClock.sleep(300);
         }
-        evaluate(web, "location.hash='syllabus';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
-        waitFor(web, "!!document.querySelector('.syllabus-card')");
-        assertClock(web, "navigated");
-        tap(web, ".live-timer-indicator");
-        waitFor(web, "!!document.querySelector('.timer-view')");
-        assertClock(web, "opened-timer");
-      } finally {
-        // Cleanup is deliberately not a claimed user tap; leave no foreground
-        // timer/permission dialog to interfere with unrelated storage tests.
-        evaluate(web, "document.querySelector('.live-timer-topbar.running .live-btn.toggle')?.click();true");
-        scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(100));
-        SystemClock.sleep(300);
       }
+      // S profile plus opt-in-disabled Brain must survive an actual Activity
+      // recreation offline, not just a DOM rerender or a localStorage mock.
+      scenario.recreate();
+      scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
+      web = ref.get();
+      waitFor(web, "!!document.querySelector('.topbar')");
+      evaluate(web, "location.hash='today';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
+      waitFor(web, "!!document.querySelector('.personal-home')");
+      assertSyntheticProfile(web, "personal");
+      evaluate(web, "location.hash='brain';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
+      waitFor(web, "!!document.querySelector('.brain-welcome .button.primary')");
+      assertEquals("Brain must not enable itself during native navigation/restart", "true", evaluate(web, "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).studyBrain"));
+      assertSyntheticProfile(web, "personal");
+      screenshot("personal-offline-brain-after-restart");
     }
   }
 
