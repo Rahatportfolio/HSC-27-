@@ -248,7 +248,12 @@ public class MobileShellInstrumentedTest {
       assertFalse("Persistent native splash/logo bar covers the WebView: " + chrome.get(), chrome.get().contains("true"));
       scenario.recreate();
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
-      waitFor(ref.get(), "!!document.querySelector('.topbar')");
+      // Wait for this Activity's own WebView, not whichever document finishing
+      // load happened last. Then prove the fresh availability-first form is
+      // still the visible screen rather than a partially mounted shell.
+      waitFor(ref.get(), "!!document.querySelector('.topbar') && !!document.querySelector('.personal-setup form')");
+      assertEquals("Recreation must not create a routine for a fresh user",
+        "true", evaluate(ref.get(), "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine&&!!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).routineSetupRequired"));
       screenshot("recreated");
       scenario.onActivity(a -> chrome.set("visibleNativeToolbar=" + hasVisibleNativeToolbar(a.getWindow().getDecorView())));
       record("recreated", new JSONObject().put("chrome", chrome.get()));
@@ -327,6 +332,8 @@ public class MobileShellInstrumentedTest {
     scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
     web = ref.get();
     waitFor(web, "!!document.querySelector('.personal-home')");
+    // No grace loop: the teardown flush must already own this write. A delayed
+    // re-read would hide a real loss caused by a late debounce or missing flush.
     assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
     record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("shortlistChapters", 2).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
@@ -356,9 +363,17 @@ public class MobileShellInstrumentedTest {
     // users to finish availability setup. Do not add a production test hook or
     // weaken that rule merely to make this legacy-dashboard regression pass.
     String raw = syntheticProfile(profile);
+    // Replace the durable SQLite mirror together with local storage. Without
+    // this the mount-time restore can re-apply an older real snapshot over the
+    // synthetic profile: a newer mirror stamp wins by design in production.
+    // Isolated instrumentation emulator only; no production test hook exists.
+    // A fixed literal pattern with zone UTC keeps this independent of host locale.
+    long syntheticEpoch = System.currentTimeMillis() + 86_400_000L;
+    String iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US) {{ setTimeZone(java.util.TimeZone.getTimeZone("UTC")); }}.format(new java.util.Date(syntheticEpoch));
+    assertTrue("Synthetic stamp must stay a valid ISO instant", iso.endsWith("Z") && iso.length() == 24);
     evaluate(web,
-      "(()=>{const key='hsc27-prostuti-v1', stampKey=key+'-saved-at';const previous=Date.parse(localStorage.getItem(stampKey)||'');" +
-      "localStorage.setItem(stampKey,new Date(Math.max(Date.now(),Number.isFinite(previous)?previous+1:0)).toISOString());" +
+      "(()=>{const key='hsc27-prostuti-v1', stampKey=key+'-saved-at';" +
+      "localStorage.setItem(stampKey," + JSONObject.quote(iso) + ");" +
       "localStorage.setItem(key," + JSONObject.quote(raw) + ");history.replaceState(null,'','#today');return true;})()"
     );
     InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
@@ -402,6 +417,10 @@ public class MobileShellInstrumentedTest {
           waitFor(web, "!!document.querySelector('.live-timer-topbar.running')");
           evaluate(web, "location.hash='today';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
           waitFor(web, "!!document.querySelector('" + (profile.equals("personal") ? ".personal-home" : ".today-view") + "')");
+          // The synthetic local snapshot must win over any older device mirror,
+          // otherwise a clock check would silently run against another student's
+          // data. This is a real precondition, not an artifact-tolerance retry.
+          waitFor(web, "(()=>{const raw=localStorage.getItem('hsc27-prostuti-v1');if(!raw)return false;const actual=JSON.parse(raw),expected=" + syntheticProfile(profile) + ";return JSON.stringify(actual.notes)===JSON.stringify(expected.notes)&&JSON.stringify(actual.completed)===JSON.stringify(expected.completed);})()");
           for (int zoom : new int[] {100, 130}) {
             scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(zoom));
             evaluate(web, "document.documentElement.dataset.font='lg';window.scrollTo({top:0,behavior:'instant'});true");

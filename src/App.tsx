@@ -362,14 +362,32 @@ export default function App() {
     return () => { active = false; window.clearTimeout(timer); };
   }, [notify, initial.data]);
   useEffect(() => { if (dbReady) setStorageOk(saveData(data)); }, [data, dbReady]);
+  // The last mirror write must not be lost when the WebView is torn down by an
+  // Activity recreation or the app leaves the foreground inside the debounce.
+  const pendingMirror = useRef<{ payload: string; updatedAt: string } | null>(null);
+  const flushMirror = useCallback(() => {
+    const pending = pendingMirror.current;
+    if (!pending) return;
+    pendingMirror.current = null;
+    void persistToDatabase(pending.payload, pending.updatedAt);
+  }, []);
   useEffect(() => {
     if (!isNativeApp() || !dbReady || !dbMirrorSafe) return;
     const payload = JSON.stringify(data);
     let updatedAt = new Date().toISOString();
     try { updatedAt = localStorage.getItem(SAVED_AT_KEY) || updatedAt; } catch { /* storage may be unavailable */ }
-    const handle = window.setTimeout(() => { void persistToDatabase(payload, updatedAt); }, 900);
+    pendingMirror.current = { payload, updatedAt };
+    const handle = window.setTimeout(flushMirror, 900);
     return () => window.clearTimeout(handle);
-  }, [data, dbReady, dbMirrorSafe]);
+  }, [data, dbReady, dbMirrorSafe, flushMirror]);
+  useEffect(() => {
+    if (!isNativeApp()) return;
+    const onHidden = () => { if (document.visibilityState === 'hidden') flushMirror(); };
+    const onPageHide = () => flushMirror();
+    window.addEventListener('pagehide', onPageHide);
+    document.addEventListener('visibilitychange', onHidden);
+    return () => { window.removeEventListener('pagehide', onPageHide); document.removeEventListener('visibilitychange', onHidden); flushMirror(); };
+  }, [flushMirror]);
   useEffect(() => { if (dbReady) setData(current => ensureRevisions(plan, current)); }, [dbReady, plan, data.completed, data.advanced, data.settings.revisionEnabled]);
   useEffect(() => { if (dbReady) setData(current => autoCarryover(plan, current, today)); }, [dbReady, plan, data.settings.carryoverMode, today]);
   // Android drops a notification whose channel does not exist, so the channels are
