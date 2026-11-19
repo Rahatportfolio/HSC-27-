@@ -131,10 +131,13 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
     });
     // A completion re-render must not pull tomorrow's second half into spare
     // room on the first day. Actual earlier work can establish the first day.
-    const workedDates = [...historical.values(), ...[...allocated.values()].flat()].filter(task => task.personalWork && pair.includes(task.chapterIds[0]) && isPersonalTaskComplete(task, data.completed)).map(task => task.date);
+    const currentSources = new Set(pair.flatMap(id => sourceRequirements(id)));
+    const workedDates = [...historical.values(), ...[...allocated.values()].flat()].filter(task => task.personalWork && currentSources.has(task.personalWork.sourceId) && isPersonalTaskComplete(task, data.completed)).map(task => task.date);
     if (!workedDates.length) for (const [id, at] of Object.entries(data.completed)) {
       const source = parseTaskRangeId(id)?.sourceId || id;
-      if (pair.some(chapterId => source.startsWith(`personal:${chapterId}:`)) && Number.isFinite(Date.parse(at))) workedDates.push(todayKey(new Date(at)));
+      // A replaced URL/duration/calculation is a new source. Its predecessor's
+      // timestamps remain history, never permission to skip this pair's day one.
+      if (currentSources.has(source) && Number.isFinite(Date.parse(at))) workedDates.push(todayKey(new Date(at)));
     }
     const firstWorked = workedDates.sort()[0];
     let pairDay = 0;

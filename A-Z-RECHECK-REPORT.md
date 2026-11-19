@@ -1,6 +1,8 @@
-# প্রস্তুতি HSC27 — মেরামত ও পূর্ণ পুনঃযাচাই
+# প্রস্তুতি HSC27 — PR #19-এর প্রকাশিত checkpoint
 
 **Session date: ১৬ নভেম্বর ২০২৬। চাওয়া routine start: ২০ নভেম্বর ২০২৬—অপরিবর্তিত।**
+
+**এই report-এর ১,১৯৫-test/build/browser সংখ্যা PR #19-এর পুরোনো snapshot-এর। নতুন branch-এর মেরামত ও নিজস্ব ফল [FULL-RECHECK-REPORT.md](FULL-RECHECK-REPORT.md)-এ; আগের APK/PWA-তে নতুন পরিবর্তন আছে বলে দাবি নয়।**
 
 এটি আগের ১,১৫০-test / ২.১৫ MB bundle / outstanding axe-review checkpoint-এর বদলি নতুন ফল। পাওয়া সমস্যাগুলো source-এ মেরামত হয়েছে; test বাদ দিয়ে বা unknown duration/completion অনুমান করে পাস দেখানো হয়নি। কোনো পরীক্ষাই সব ফোন, সব ভিডিও বা সব পরিস্থিতিতে “bug-free” নিশ্চয়তা নয়।
 
@@ -15,7 +17,7 @@
 - **Android বাস্তব touch gate:** canonical saved legacy/S fixtures, availability-first fresh launch, fonts/compositor/window focus, 100%/130% WebView text zoom, clock readability ও actual pointer injection। ordinary DOMRect mapping আগে; Android CSS-zoom fallback কেবল target-এর তিন exposed point মিলে গেলে। Disabled/covered/offscreen target বা unfocused window-তে tap নয়; screenshot/measurement থাকে। Retained paused timer বাস্তব reset/confirmation UI দিয়েই reset হয়। Disposable emulator awake/unlocked precondition production onboarding বা saved data বদলায় না।
 - **টেকসই gate:** mandatory postbuild size/eager-import/precache checks; cache-এর source copies আর Vitest-এর duplicate suite নয়। Lazy-route-aware unit/browser tests actual view-এর জন্য অপেক্ষা করে; timer assertions-এর real elapsed behavior অপরিবর্তিত। Main-only Pages deploy-এর পরে uploaded build-এর **প্রত্যেক file-এর actual public bytes/hash** মেলার নতুন GET-only gate; পুরোনো live URL বা deployment success দিয়ে নতুন source দাবি নয়।
 
-## বর্তমান যাচাই
+## PR #19 checkpoint-এর যাচাই
 
 | পরীক্ষা | ফল ও অর্থ |
 |---|---|
@@ -60,7 +62,7 @@ Raw axe JSON বাদ দেওয়া, rule disable বা selector exemption �
 
 ## আটটি ভিডিও-reference: date/provenance মেরামত
 
-আটটি exact YouTube page নতুন করে fetch করে shown duration, public title/description ও পাওয়া introduction/transcript excerpt মিলেছে। পুরোনো record-এর inconsistent **`2026-11-18`** date আলাদা `CLASS_REFERENCE_PROVENANCE`-এ **unverified** হিসেবে রাখা হয়েছে; নতুন metadata check-এর date **`2026-11-16`**। এটি student history বা পুরোনো observation-এর নিঃশব্দ backdate নয়।
+**আগের date claim প্রত্যাহার/সংশোধন:** এই report-এর আগের সংস্করণ `2026-11-16`-কে নিশ্চিত নতুন metadata-check date বলেছিল। Retained record-এ original `2026-11-18`, claimed recheck `2026-11-16` ও fetch trace `2026-11-19` মেলে না; প্রকৃত observation date প্রতিষ্ঠিত নয়। নতুন source সব raw label আলাদা রেখে `metadataRecheckedOn` ও প্রতিটি reference-এর `checkedOn: null` এবং unverified flag ব্যবহার করে। ছাত্র reference গ্রহণ করলে কেবল আলাদা `acceptedAt` যোগ হয়—player observation বা পুরোনো completion/history redating নয়। এই follow-up-এ নতুন YouTube fetch/full-content verification হয়নি। [মেরামত ও regression proof](FULL-RECHECK-REPORT.md)। নিচের দৈর্ঘ্য ও suitability সংরক্ষিত সীমিত reference, বর্তমান player reading নয়।
 
 | Exact video | Shown duration | সীমিত সিদ্ধান্ত |
 |---|---:|---|

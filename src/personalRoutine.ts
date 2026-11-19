@@ -28,7 +28,10 @@ export interface WorkBudget {
   minutes: number | null;
   source: DurationSource;
   url?: string;
+  /** Actual player observation, or an unchanged legacy reference record. */
   observedAt?: string;
+  /** When the student accepted saved reference metadata, NOT when a page was checked. */
+  acceptedAt?: string;
   calculation?: { quantity: number; unitMinutes: number; difficulty: 'easy' | 'normal' | 'hard'; reviewedPercent?: number };
 }
 export type ChapterWorkload = Record<WorkStage, WorkBudget>;
@@ -139,11 +142,15 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
         if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return fail();
       }
       if (budget.observedAt !== undefined && (typeof budget.observedAt !== 'string' || budget.observedAt.length > 40 || !Number.isFinite(Date.parse(budget.observedAt)))) return fail();
-      if (['youtube-player', 'reference-metadata'].includes(budget.source as string) && (!budget.url || !budget.observedAt)) return fail();
+      if (budget.acceptedAt !== undefined && (budget.source !== 'reference-metadata' || typeof budget.acceptedAt !== 'string' || budget.acceptedAt.length > 40 || !/^\d{4}-\d\d-\d\dT(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d(?:\.\d{1,3})?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)$/.test(budget.acceptedAt) || !isValidDate(budget.acceptedAt.slice(0, 10)) || !Number.isFinite(Date.parse(budget.acceptedAt)))) return fail();
+      if (budget.source === 'youtube-player' && (!budget.url || !budget.observedAt)) return fail();
+      // Old reference observations survive round-trip unchanged. New acceptance
+      // records never invent a verified observation date for the saved page.
+      if (budget.source === 'reference-metadata' && (!budget.url || !(budget.observedAt || budget.acceptedAt))) return fail();
       if (budget.calculation !== undefined && (!object(budget.calculation) || stage.media || budget.source !== 'planned' || !validWorkCalculation(budget.calculation) || budget.minutes !== independentWorkMinutes(stage.id, budget.calculation as unknown as WorkCalculation))) return fail();
       return [stage.id, { minutes: budget.minutes, source: budget.source,
         ...(budget.calculation ? { calculation: { ...(budget.calculation as WorkBudget['calculation']) } } : {}),
-        ...(budget.url ? { url: budget.url } : {}), ...(budget.observedAt ? { observedAt: budget.observedAt } : {}) }];
+        ...(budget.url ? { url: budget.url } : {}), ...(budget.observedAt ? { observedAt: budget.observedAt } : {}), ...(budget.acceptedAt ? { acceptedAt: budget.acceptedAt } : {}) }];
     });
     workloads[id] = Object.fromEntries(entries) as ChapterWorkload;
   }

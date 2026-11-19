@@ -90,18 +90,41 @@ describe('availability-first setup transaction', () => {
     act(() => h.confirm()!.action());
     expect(h.data()).toBe(data); expect(h.setData).not.toHaveBeenCalled(); expect(screen.getByRole('alert').textContent).toContain('Not saved');
   });
-  it('uses an opt-in checked-page duration with truthful provenance, and entering a new duration changes it to student-entered', () => {
+  it('uses an opt-in saved reference without inventing its observation date, and entering a new duration changes it to student-entered', () => {
     const data = personalDataFixture(); data.personalRoutine!.workloads[PERSONAL_IDS[0]] = defaultChapterWorkload(PERSONAL_IDS[0]); const h = setup(data);
     next(); next(); const fieldset = screen.getByText('Chapter class', { selector: 'legend' }).closest('fieldset')!;
     expect(within(fieldset).getByText('7:25:34')).toBeTruthy();
-    fireEvent.click(within(fieldset).getByRole('button', { name: 'Use this checked duration' }));
+    expect(fieldset.textContent).toContain('Observation date unverified.');
+    expect(fieldset.textContent).not.toContain('Page checked');
+    const acceptedAfter = Date.now();
+    fireEvent.click(within(fieldset).getByRole('button', { name: 'Use this reference duration' }));
     expect(Number((screen.getByLabelText('Chapter class minutes') as HTMLInputElement).value)).toBe(26734 / 60);
-    expect(within(fieldset).getByText(/Checked page metadata/)).toBeTruthy();
+    expect(within(fieldset).getByText(/Saved page reference/)).toBeTruthy();
     fireEvent.change(screen.getByLabelText('Chapter class minutes'), { target: { value: '500' } });
     expect(within(fieldset).getByText(/Student-entered/)).toBeTruthy();
-    fireEvent.click(within(fieldset).getByRole('button', { name: 'Use this checked duration' }));
+    fireEvent.click(within(fieldset).getByRole('button', { name: 'Use this reference duration' }));
     next(); save(); act(() => h.confirm()!.action());
-    expect(h.data().personalRoutine!.workloads[PERSONAL_IDS[0]].class).toMatchObject({ minutes: 26734 / 60, source: 'reference-metadata', observedAt: '2026-11-16' });
+    const budget = h.data().personalRoutine!.workloads[PERSONAL_IDS[0]].class;
+    expect(budget).toMatchObject({ minutes: 26734 / 60, source: 'reference-metadata' });
+    expect(budget.observedAt).toBeUndefined();
+    expect(Date.parse(budget.acceptedAt!)).toBeGreaterThanOrEqual(acceptedAfter);
+    expect(parsePersonalRoutine(h.data().personalRoutine!).workloads[PERSONAL_IDS[0]].class).toEqual(budget);
+  });
+  it.each(['manual', 'source', 'omit'] as const)('clears reference acceptance when the student changes the %s input', mode => {
+    const data = personalDataFixture(); data.personalRoutine!.workloads[PERSONAL_IDS[0]] = defaultChapterWorkload(PERSONAL_IDS[0]);
+    const h = setup(data); next(); next();
+    const stage = mode === 'omit' ? 'mcqClass' : 'class', name = mode === 'omit' ? 'MCQ solving class' : 'Chapter class';
+    const fieldset = screen.getByText(name, { selector: 'legend' }).closest('fieldset')!;
+    fireEvent.click(within(fieldset).getByRole('button', { name: 'Use this reference duration' }));
+    if (mode === 'source') fireEvent.change(screen.getByLabelText(`${name} URL`), { target: { value: 'https://www.youtube.com/watch?v=abcdefghijk' } });
+    else if (mode === 'manual') fireEvent.change(screen.getByLabelText(`${name} minutes`), { target: { value: '500' } });
+    else fireEvent.click(within(fieldset).getByRole('button', { name: 'Omit this optional solving video (practice stays required)' }));
+    next(); save(); act(() => h.confirm()!.action());
+    const budget = h.data().personalRoutine!.workloads[PERSONAL_IDS[0]][stage];
+    expect(budget.source).toBe(mode === 'source' ? 'unknown' : 'student');
+    expect(budget.minutes).toBe(mode === 'source' ? null : mode === 'manual' ? 500 : 0);
+    expect(budget.acceptedAt).toBeUndefined(); expect(budget.observedAt).toBeUndefined();
+    expect(parsePersonalRoutine(h.data().personalRoutine!).workloads[PERSONAL_IDS[0]][stage]).toEqual(budget);
   });
   it('does not preselect a known promotion, wrong chapter or unverified partial class as chemistry MCQ/CQ', () => {
     const work = defaultChapterWorkload('chemistry-1-3'); expect(work.mcqClass.url).toBeUndefined(); expect(work.cqClass.url).toBeUndefined();

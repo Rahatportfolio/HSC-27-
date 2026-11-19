@@ -1,5 +1,5 @@
 import type { AppData, Day } from './planner';
-import { addDays, diffDays, todayKey } from './planner';
+import { addDays, diffDays, isValidDate, todayKey } from './planner';
 import { downloadText } from './exports';
 import { t } from './i18n';
 import { chaptersCompletedBetween, completedTasksBetween } from './analytics';
@@ -20,9 +20,14 @@ const storage = (): Storage | null => {
 export const backupFileName = (today = todayKey()): string => `prostuti-backup-${today}.json`;
 export const backupJson = (data: AppData): string => JSON.stringify(data, null, 2);
 
+// A Storage object may exist while its methods throw (privacy/quota policies).
+// Backup nudges must never make the dashboard unavailable in that situation.
+function readBackupRecord(key: string): string | null {
+  try { return storage()?.getItem(key) || null; } catch { return null; }
+}
 export function lastBackupAt(): string | null {
-  const raw = storage()?.getItem(BACKUP_AT_KEY) || null;
-  return raw && Number.isFinite(Date.parse(raw)) ? raw : null;
+  const raw = readBackupRecord(BACKUP_AT_KEY);
+  return raw && isValidDate(raw.slice(0, 10)) && Number.isFinite(Date.parse(raw)) ? raw : null;
 }
 export function markBackup(at = new Date().toISOString()): string {
   try { storage()?.setItem(BACKUP_AT_KEY, at); storage()?.removeItem(BACKUP_SNOOZE_KEY); } catch { /* storage may be full */ }
@@ -32,20 +37,27 @@ export function markBackup(at = new Date().toISOString()): string {
 export function backupAgeDays(today = todayKey()): number | null {
   const at = lastBackupAt();
   if (!at) return null;
-  return Math.max(0, diffDays(at.slice(0, 10), today));
+  const age = diffDays(todayKey(new Date(at)), today);
+  // A changed device clock is not evidence that a backup happened today.
+  return age >= 0 ? age : null;
 }
 export function snoozeBackup(days = SNOOZE_DAYS, today = todayKey()): void {
   try { storage()?.setItem(BACKUP_SNOOZE_KEY, addDays(today, days)); } catch { /* ignore */ }
 }
 export function isBackupSnoozed(today = todayKey()): boolean {
-  const until = storage()?.getItem(BACKUP_SNOOZE_KEY);
-  return !!until && until > today;
+  const until = readBackupRecord(BACKUP_SNOOZE_KEY);
+  return !!until && isValidDate(until) && until > today;
 }
 /** Anything worth losing: progress, measured sessions, questions, scores or written notes. */
 export function hasStudyData(data: AppData): boolean {
-  return !!data.studyBrain?.checkIns.length || !!data.studyBrain?.feedback.length || !!data.advanced?.classes.length || !!Object.keys(data.advanced?.preparation || {}).length || data.pdfs.length > 0 || Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
+  return !!data.personalRoutine || !!Object.keys(data.personalPhases || {}).length
+    || data.flashcards.length > 0 || data.scannedNotes.length > 0 || data.examSessions.length > 0 || !!data.activeExam || data.retries.length > 0
+    || data.revisions.length > 0 || data.badges.length > 0 || Object.keys(data.classBookmarks).length > 0
+    || data.pdfBookmarks.length > 0 || data.pdfRecent.length > 0 || data.lockedDates.length > 0 || Object.keys(data.taskEdits).length > 0 || data.removedTasks.length > 0
+    || Object.keys(data.advanced?.targets || {}).length > 0 || !!data.advanced?.activityDates?.length || Object.keys(data.advanced?.coverageDates || {}).length > 0 || Object.keys(data.advanced?.dailyGoals || {}).length > 0
+    || !!data.studyBrain?.checkIns.length || !!data.studyBrain?.feedback.length || !!data.advanced?.classes.length || !!Object.keys(data.advanced?.preparation || {}).length || data.pdfs.length > 0 || Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
     || data.cq.length > 0 || data.mistakes.length > 0 || data.libraryNotes.length > 0
-    || Object.values(data.notes).some(note => note.trim()) || data.revisions.some(item => !!item.completedAt)
+    || Object.values(data.notes).some(note => note.trim())
     || data.questions.length > 0 || data.attempts.length > 0 || data.videos.length > 0
     || data.formulas.length > 0 || data.boardQuestions.length > 0 || data.routineBlocks.length > 0
     || data.importantDates.length > 0 || data.carryovers.length > 0 || data.formulaFavorites.length > 0
@@ -106,8 +118,8 @@ export async function shareBackup(data: AppData, today = todayKey()): Promise<Sh
 export function backupLabel(today = todayKey()): string {
   const age = backupAgeDays(today);
   if (age === null) return t('এখনও ব্যাকআপ নেওয়া হয়নি', 'No backup taken yet');
-  if (age === 0) return 'আজ ব্যাকআপ নেওয়া হয়েছে';
-  return `${new Intl.NumberFormat('bn-BD', { useGrouping: false }).format(age)} দিন আগে ব্যাকআপ`;
+  if (age === 0) return t('আজ ব্যাকআপ নেওয়া হয়েছে', 'Backed up today');
+  return t(`${new Intl.NumberFormat('bn-BD', { useGrouping: false }).format(age)} দিন আগে ব্যাকআপ`, `Backed up ${age} day(s) ago`);
 }
 
 export interface WeekReport {

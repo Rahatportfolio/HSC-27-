@@ -389,7 +389,7 @@ jobs:
     needs: [apk, device-checks, built-web]
     if: >-
       ${{ github.event_name == 'push' &&
-        github.ref == 'refs/heads/arena/80a86bf2-hsc-27' &&
+        github.ref == 'refs/heads/arena/25b5228c-hsc-27' &&
         contains(github.event.head_commit.message, '[current-dev-apk]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15

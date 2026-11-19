@@ -32,19 +32,51 @@ function loadApi(): Promise<YouTubeApi> {
   if (apiPromise) return apiPromise;
   apiPromise = new Promise((resolve, reject) => {
     const previous = window.onYouTubeIframeAPIReady;
-    const timer = window.setTimeout(() => { apiPromise = null; reject(new Error('YouTube metadata connection timed out')); }, 20000);
-    window.onYouTubeIframeAPIReady = () => { previous?.(); window.clearTimeout(timer); if (window.YT?.Player) resolve(window.YT); else { apiPromise = null; reject(new Error('YouTube player API unavailable')); } };
+    let settled = false;
     let script = document.querySelector<HTMLScriptElement>('script[data-prostuti-youtube-api]');
-    if (!script) { script = document.createElement('script'); script.src = 'https://www.youtube.com/iframe_api'; script.async = true; script.dataset.prostutiYoutubeApi = 'true'; document.head.appendChild(script); }
-    script.onerror = () => { window.clearTimeout(timer); apiPromise = null; script?.remove(); reject(new Error('YouTube metadata connection failed')); };
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      if (window.onYouTubeIframeAPIReady === ready) window.onYouTubeIframeAPIReady = previous;
+      if (script?.onerror === failed) script.onerror = null;
+    };
+    const fail = (message: string) => {
+      if (settled) return;
+      settled = true; cleanup(); script?.remove(); apiPromise = null; reject(new Error(message));
+    };
+    const failed = () => fail('YouTube metadata connection failed');
+    const ready = () => {
+      if (settled) return;
+      // Another player integration must not strand this request if it throws.
+      try { previous?.(); } catch { /* Unrelated readiness callback. */ }
+      if (!window.YT?.Player) { fail('YouTube player API unavailable'); return; }
+      settled = true; cleanup(); resolve(window.YT);
+    };
+    const timer = window.setTimeout(() => fail('YouTube metadata connection timed out'), 20000);
+    window.onYouTubeIframeAPIReady = ready;
+    if (!script) {
+      script = document.createElement('script'); script.src = 'https://www.youtube.com/iframe_api'; script.async = true; script.dataset.prostutiYoutubeApi = 'true';
+      script.onerror = failed; document.head.appendChild(script);
+    } else script.onerror = failed;
   });
   return apiPromise;
+}
+/** Cancellation belongs to the caller; one unmounted probe cannot cancel a
+ * script shared by another probe. Both resolve/reject paths remove listeners.
+ */
+function loadApiFor(signal: AbortSignal): Promise<YouTubeApi> {
+  return new Promise((resolve, reject) => {
+    const cleanup = () => signal.removeEventListener('abort', abort);
+    const abort = () => { cleanup(); reject(new Error('Cancelled')); };
+    signal.addEventListener('abort', abort, { once: true });
+    void loadApi().then(api => { cleanup(); resolve(api); }, error => { cleanup(); reject(error); });
+    if (signal.aborted) abort();
+  });
 }
 export async function inspectYouTubeDuration(raw: string, mount: HTMLElement, signal: AbortSignal): Promise<number> {
   const id = youtubeVideoId(raw);
   if (!id) throw new Error('Select a single YouTube video. A playlist/search has no verified chapter duration.');
   if (signal.aborted) throw new Error('Cancelled');
-  const api = await loadApi();
+  const api = await loadApiFor(signal);
   if (signal.aborted) throw new Error('Cancelled');
   return new Promise((resolve, reject) => {
     let player: DurationPlayer | undefined, settled = false;

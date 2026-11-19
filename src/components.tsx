@@ -389,12 +389,13 @@ export function ClassBlock({ classes, hint, compact = false }: { classes: Chapte
  * again once a week, and can be pushed away for three days.
  */
 export function BackupNudge() {
-  const { data, notify } = usePlanner();
+  const { data, notify, navigate } = usePlanner();
   const [hidden, setHidden] = useState(false);
   const [busy, setBusy] = useState(false);
   const today = todayKey();
   if (hidden || !needsBackup(data, today)) return null;
   const age = backupAgeDays(today);
+  const hasMedia = data.scannedNotes.length > 0 || data.pdfs.some(pdf => pdf.local) || data.advanced?.classes.some(item => item.local);
   const keep = () => {
     try {
       const name = downloadBackup(data, today);
@@ -415,9 +416,10 @@ export function BackupNudge() {
   return <div className="backup-nudge" role="note">
     <div>
       <ShieldCheck size={20} />
-      <span><strong>{age === null ? 'এখনও কোনো ব্যাকআপ নেই' : `${bn(age)} দিন ধরে ব্যাকআপ নেওয়া হয়নি`}</strong>{t('ফোন হারালে বা অ্যাপ মুছলে এই অগ্রগতি ফিরে পাওয়ার একটাই উপায়—JSON ব্যাকআপ।', 'One JSON file is the only way to restore this progress if the phone is lost.')}</span>
+      <span><strong>{age === null ? t('এখনও কোনো ব্যাকআপ নেই', 'No backup recorded yet') : t(`${bn(age)} দিন ধরে ব্যাকআপ নেওয়া হয়নি`, `No backup for ${age} day(s)`)}</strong>{t('ডেটা এই ডিভাইসেই থাকে। JSON-এ অগ্রগতি ও লিখিত নোট রাখো।', 'Your data stays on this device. Keep a JSON copy of progress and text notes.')}{hasMedia && <span>{t('JSON-এ স্ক্যানের ছবি বা স্থানীয় মিডিয়ার bytes থাকে না। স্ক্যানসহ নতুন Full backup ও আলাদা PDF রাখো।', 'JSON does not include scanned images or local media bytes. Also keep a new full backup and separate scanned PDFs.')}</span>}</span>
     </div>
     <span className="backup-nudge-actions">
+      {hasMedia && <button className="button primary small" onClick={() => navigate('settings')}>{t('Full backup খোলো', 'Open full backup')}</button>}
       <button className="button primary small" onClick={keep}>{t('ব্যাকআপ রাখো', 'Save backup')}</button>
       <button className="button secondary small" disabled={busy} onClick={() => void share()}>{t('শেয়ার / কপি', 'Share / copy')}</button>
       <button className="text-button" onClick={() => { snoozeBackup(); setHidden(true); notify(t('তিন দিন পরে আবার মনে করাব।', 'I will remind you again in three days.'), 'info'); }}>{t('পরে', 'Later')}</button>

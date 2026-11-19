@@ -1,5 +1,5 @@
 /** Bounded Chromium acceptance for S-first phase planning. Isolated synthetic browser
- * profiles only. Checked-page references are real snapshots; fixture workloads
+ * profiles only. Saved-page references have an unverified observation date; fixture workloads
  * and player tests are synthetic and must never be described as a catalogue audit.
  * Run against `npm run build && npm run preview`; set CHROMIUM_PATH and BASE_URL.
  */
@@ -87,7 +87,9 @@ async function flow() {
     for (const id of PERSONAL_IDS) {
       await chapter.selectOption(id);
       const lecture = page.locator('.workload-stage').filter({ has: page.getByText('Chapter class', { exact: true }) });
-      await lecture.getByRole('button', { name: 'Use this checked duration', exact: true }).click();
+      assert.match(await lecture.innerText(), /Observation date unverified/);
+      assert.doesNotMatch(await lecture.innerText(), /Page checked/);
+      await lecture.getByRole('button', { name: 'Use this reference duration', exact: true }).click();
       for (const stage of WORK_STAGES.filter(stage => stage.id !== 'class')) {
         const budget = ({ reading: 25, notes: 20, mcqPractice: 45, cqPractice: 60, revision: 20 } as Partial<Record<typeof stage.id, number>>)[stage.id] || 0;
         await page.getByLabel(`${stage.en} minutes`, { exact: true }).fill(String(budget));
@@ -104,6 +106,12 @@ async function flow() {
     const data = await read(page); assert.equal(data.settings.startDate, '2026-11-20'); assert.equal(data.routineSetupRequired, false); assert.deepEqual(data.personalRoutine!.chapterIds, PERSONAL_IDS);
     assert.equal(data.personalRoutine!.workloads[PERSONAL_IDS[0]].class.minutes, 26734 / 60); assert.equal(data.personalRoutine!.workloads[PERSONAL_IDS[1]].class.minutes, 28915 / 60);
     assert.equal(data.personalRoutine!.workloads[PERSONAL_IDS[0]].class.source, 'reference-metadata');
+    assert.match(await page.locator('.personal-home .backup-nudge').innerText(), /No backup recorded yet/);
+    assert.equal(await page.locator('.personal-home .backup-nudge').getByRole('button', { name: 'Save backup', exact: true }).count(), 1);
+    for (const id of PERSONAL_IDS) {
+      assert.equal(data.personalRoutine!.workloads[id].class.observedAt, undefined);
+      assert.ok(Number.isFinite(Date.parse(data.personalRoutine!.workloads[id].class.acceptedAt!)));
+    }
     const plan = buildStudyPlan(data, data.settings.startDate), active = plan.filter(day => day.tasks.length);
     assert.ok(active.length > 2);
     assert.equal(data.personalRoutine!.dailyLimitMinutes, 240); assert.equal(data.personalRoutine!.exclusions!.length, 7);
