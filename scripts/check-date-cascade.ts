@@ -13,7 +13,7 @@ import { CHAPTERS } from '../src/data';
 
 if (!process.env.CHROMIUM_PATH) throw new Error('Set CHROMIUM_PATH to a Chromium/Chrome executable.');
 const base = (process.env.BASE_URL || 'http://127.0.0.1:3000').replace(/\/?$/, '/');
-const output = '.cache/date-browser';
+const output = process.env.DATE_BROWSER_OUTPUT || '.cache/date-browser';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({
   executablePath: process.env.CHROMIUM_PATH, headless: true,

@@ -144,6 +144,23 @@ public class MobileShellInstrumentedTest {
     return false;
   }
 
+  /**
+   * UiAutomation.executeShellCommand runs the raw command without a shell, so a
+   * literal pipe is rejected by dumpsys (observed as "Bad window command ...
+   * |"). Filter the dump in Java instead of piping it.
+   */
+  private String focusedWindowLines(String dump) {
+    StringBuilder kept = new StringBuilder();
+    for (String line : dump.split("\n")) {
+      String trimmed = line.trim();
+      if (trimmed.startsWith("mCurrentFocus") || trimmed.startsWith("mFocusedApp") || trimmed.startsWith("mTopFocusedDisplayId")) {
+        if (kept.length() > 0) kept.append('\n');
+        kept.append(trimmed);
+      }
+    }
+    return kept.length() == 0 ? "(no focus lines in dumpsys window)" : kept.toString();
+  }
+
   private void waitForFocusedWindow(WebView web) throws Exception {
     // A presented WebView frame does not imply that Android's input dispatcher
     // has focused its window after Activity launch/recreation (notably API 35).
@@ -161,7 +178,7 @@ public class MobileShellInstrumentedTest {
     }
     PowerManager power = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(PowerManager.class);
     KeyguardManager keyguard = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(KeyguardManager.class);
-    String owner = shell("dumpsys window | grep -E 'mCurrentFocus|mFocusedApp|mTopFocusedDisplayId'");
+    String owner = focusedWindowLines(shell("dumpsys window"));
     record("unfocused-input", new JSONObject().put("interactive", power.isInteractive()).put("keyguardLocked", keyguard.isKeyguardLocked()).put("windowOwner", owner));
     screenshot("unfocused-input");
     fail("App window never gained input focus; refusing an unowned screen tap. interactive=" + power.isInteractive() + ", keyguardLocked=" + keyguard.isKeyguardLocked() + ", owner=" + owner);
@@ -231,12 +248,108 @@ public class MobileShellInstrumentedTest {
       assertFalse("Persistent native splash/logo bar covers the WebView: " + chrome.get(), chrome.get().contains("true"));
       scenario.recreate();
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
-      waitFor(ref.get(), "!!document.querySelector('.topbar')");
+      // Wait for this Activity's own WebView, not whichever document finishing
+      // load happened last. Then prove the fresh availability-first form is
+      // still the visible screen rather than a partially mounted shell.
+      waitFor(ref.get(), "!!document.querySelector('.topbar') && !!document.querySelector('.personal-setup form')");
+      assertEquals("Recreation must not create a routine for a fresh user",
+        "true", evaluate(ref.get(), "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine&&!!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).routineSetupRequired"));
       screenshot("recreated");
       scenario.onActivity(a -> chrome.set("visibleNativeToolbar=" + hasVisibleNativeToolbar(a.getWindow().getDecorView())));
       record("recreated", new JSONObject().put("chrome", chrome.get()));
       assertEquals("visibleNativeToolbar=false", chrome.get());
+      completeFreshSetupAndRecover(scenario, ref.get());
     }
+  }
+
+  /** Actual fresh-app form, not a synthetic saved-profile shortcut. Field entry
+   * uses DOM input events; all choices/Next/Save/completion use real native taps.
+   * This does not certify an OEM soft keyboard or a live YouTube catalogue. */
+  private void enterField(WebView web, String selector, String value) throws Exception {
+    waitFor(web, "!!document.querySelector(" + JSONObject.quote(selector) + ")");
+    evaluate(web, "(()=>{const e=document.querySelector(" + JSONObject.quote(selector) + ");const proto=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(e," + JSONObject.quote(value) + ");e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));return true;})()");
+    waitFor(web, "document.querySelector(" + JSONObject.quote(selector) + ").value===" + JSONObject.quote(value));
+  }
+
+  private void completeFreshSetupAndRecover(ActivityScenario<MainActivity> scenario, WebView web) throws Exception {
+    waitFor(web, "!!document.querySelector('.personal-setup form')");
+    tap(web, ".lang-toggle-chip");
+    waitFor(web, "document.documentElement.lang==='en'");
+    // Invalid empty form cannot skip availability or create default hours.
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-setup [role=alert]')");
+    assertEquals("Empty availability created a routine", "true", evaluate(web, "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
+    tap(web, ".availability-row .text-button");
+    enterField(web, "input[aria-label='Window 1 start']", "18:00");
+    enterField(web, "input[aria-label='Window 1 end']", "22:00");
+    enterField(web, ".personal-availability>.form-label input", "4");
+    tap(web, "input[name='fixed-obligations'][value='none']");
+    enterField(web, ".personal-session-options label:first-child input", "60");
+    enterField(web, ".personal-session-options label:last-child input", "5");
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-chapter-choices')");
+    tap(web, ".personal-shortlist-actions .button.ghost");
+    tap(web, ".personal-chapter-choices input[value='physics-1-3']");
+    tap(web, ".personal-chapter-choices input[value='chemistry-1-3']");
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-workload-editor')");
+    // The two first-pair buttons select different chapters without feeding a
+    // prebuilt profile into storage. Long durations must NOT become 80 minutes.
+    for (int chapter = 1; chapter <= 2; chapter++) {
+      tap(web, ".personal-workload-editor .personal-shortlist-actions button:nth-child(" + chapter + ")");
+      enterField(web, "input[aria-label='Chapter class minutes']", chapter == 1 ? "480" : "420");
+      enterField(web, "input[aria-label='Textbook reading minutes']", "30");
+      enterField(web, "input[aria-label='Note making minutes']", "20");
+      enterField(web, "input[aria-label='MCQ solving class minutes']", "0");
+      enterField(web, "input[aria-label='Own MCQ practice minutes']", "45");
+      enterField(web, "input[aria-label='CQ solving class minutes']", "0");
+      enterField(web, "input[aria-label='Own CQ practice minutes']", "60");
+      enterField(web, "input[aria-label='Chapter revision minutes']", "20");
+    }
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-preview-day')");
+    assertEquals("Capacity must extend the same pair rather than claim a two-day finish", "true", evaluate(web, "document.querySelector('.personal-preview').textContent.includes('SAME pair continues on extra days')"));
+    screenshot("new-student-preview");
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-home .personal-tasks .task-check')");
+    JSONObject saved = object(web, "JSON.parse(localStorage.getItem('hsc27-prostuti-v1'))");
+    JSONObject routine = saved.getJSONObject("personalRoutine");
+    assertFalse("Setup flag was not completed", saved.getBoolean("routineSetupRequired"));
+    assertEquals("2026-11-20", saved.getJSONObject("settings").getString("startDate"));
+    assertEquals("S", routine.getString("scope"));
+    assertEquals(2, routine.getJSONArray("chapterIds").length());
+    assertEquals(7, routine.getJSONArray("windows").length());
+    assertEquals(240, routine.getInt("dailyLimitMinutes"));
+    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-3").getJSONObject("class").getInt("minutes"));
+    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-3").getJSONObject("class").getInt("minutes"));
+    tap(web, ".personal-tasks .task-check");
+    enterField(web, "textarea[aria-label='Day note']", "Native fresh setup note: retain after restart and recovery");
+    waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.keys(d.completed).length===1&&Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery');})()");
+    assertEquals("A single segment must not finish a chapter", "0/2", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
+    String retained = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
+    scenario.recreate();
+    AtomicReference<WebView> ref = new AtomicReference<>();
+    scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
+    web = ref.get();
+    waitFor(web, "!!document.querySelector('.personal-home')");
+    // No grace loop: the teardown flush must already own this write. A delayed
+    // re-read would hide a real loss caused by a late debounce or missing flush.
+    assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("shortlistChapters", 2).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
+    screenshot("new-student-after-restart");
+    String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
+    final WebView recoveryWeb = web;
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> recoveryWeb.loadUrl("https://localhost/recovery.html"));
+    waitFor(web, "!!document.querySelector('#recovery-profile')");
+    tap(web, "#recovery-profile");
+    waitFor(web, "!!document.querySelector('#recovery-json').value");
+    assertEquals("Independent native recovery changed raw JSON", raw, evaluate(web, "document.querySelector('#recovery-json').value"));
+    assertEquals("Independent native recovery wrote to storage", raw, evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')"));
+    screenshot("new-student-independent-recovery");
+    tap(web, "#recovery-reopen");
+    waitFor(web, "!!document.querySelector('.personal-home')");
+    assertEquals("Returning from native recovery changed routine/history", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    record("new-student-independent-recovery", new JSONObject().put("exactRawLocalJson", true).put("zeroRecoveryStorageWrites", true).put("returnedToSavedRoutine", true).put("sqliteOrMediaRecoveryCertified", false));
   }
 
   private String syntheticProfile(String profile) throws Exception {
@@ -250,9 +363,17 @@ public class MobileShellInstrumentedTest {
     // users to finish availability setup. Do not add a production test hook or
     // weaken that rule merely to make this legacy-dashboard regression pass.
     String raw = syntheticProfile(profile);
+    // Replace the durable SQLite mirror together with local storage. Without
+    // this the mount-time restore can re-apply an older real snapshot over the
+    // synthetic profile: a newer mirror stamp wins by design in production.
+    // Isolated instrumentation emulator only; no production test hook exists.
+    // A fixed literal pattern with zone UTC keeps this independent of host locale.
+    long syntheticEpoch = System.currentTimeMillis() + 86_400_000L;
+    String iso = new java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", java.util.Locale.US) {{ setTimeZone(java.util.TimeZone.getTimeZone("UTC")); }}.format(new java.util.Date(syntheticEpoch));
+    assertTrue("Synthetic stamp must stay a valid ISO instant", iso.endsWith("Z") && iso.length() == 24);
     evaluate(web,
-      "(()=>{const key='hsc27-prostuti-v1', stampKey=key+'-saved-at';const previous=Date.parse(localStorage.getItem(stampKey)||'');" +
-      "localStorage.setItem(stampKey,new Date(Math.max(Date.now(),Number.isFinite(previous)?previous+1:0)).toISOString());" +
+      "(()=>{const key='hsc27-prostuti-v1', stampKey=key+'-saved-at';" +
+      "localStorage.setItem(stampKey," + JSONObject.quote(iso) + ");" +
       "localStorage.setItem(key," + JSONObject.quote(raw) + ");history.replaceState(null,'','#today');return true;})()"
     );
     InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
@@ -296,6 +417,10 @@ public class MobileShellInstrumentedTest {
           waitFor(web, "!!document.querySelector('.live-timer-topbar.running')");
           evaluate(web, "location.hash='today';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
           waitFor(web, "!!document.querySelector('" + (profile.equals("personal") ? ".personal-home" : ".today-view") + "')");
+          // The synthetic local snapshot must win over any older device mirror,
+          // otherwise a clock check would silently run against another student's
+          // data. This is a real precondition, not an artifact-tolerance retry.
+          waitFor(web, "(()=>{const raw=localStorage.getItem('hsc27-prostuti-v1');if(!raw)return false;const actual=JSON.parse(raw),expected=" + syntheticProfile(profile) + ";return JSON.stringify(actual.notes)===JSON.stringify(expected.notes)&&JSON.stringify(actual.completed)===JSON.stringify(expected.completed);})()");
           for (int zoom : new int[] {100, 130}) {
             scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(zoom));
             evaluate(web, "document.documentElement.dataset.font='lg';window.scrollTo({top:0,behavior:'instant'});true");

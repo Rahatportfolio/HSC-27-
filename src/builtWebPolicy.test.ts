@@ -5,7 +5,9 @@ describe('full built-web acceptance cannot silently become a subset or fault run
   it.each([
     'A11Y_ROUTES', 'A11Y_SCENARIOS', 'A11Y_DIALOGS', 'A11Y_EXAM_STATES_ONLY', 'A11Y_FAULT',
     'RESPONSIVE_ROUTES', 'RESPONSIVE_PROFILES', 'RESPONSIVE_SCENARIOS', 'RESPONSIVE_FAULT',
-    'MOBILE_CASE', 'MOBILE_VIEWPORT', 'MOBILE_MUTATION',
+    'MOBILE_CASE', 'MOBILE_VIEWPORT', 'MOBILE_MUTATION', 'DATE_SHORTCUT_ONLY', 'DATE_SHORTCUT_FAULT',
+    'INPUT_A11Y_SCENARIOS', 'INPUT_A11Y_ROUTES', 'INPUT_A11Y_CHECKS', 'INPUT_A11Y_FAULT',
+    'FOLLOWUP_SCENARIOS', 'FOLLOWUP_REVIEW_ONLY', 'FOLLOWUP_BROWSER_FAULT',
   ])('rejects %s before starting the preview', key => {
     expect(() => requireFullBrowserEnvironment({ [key]: '320' })).toThrow(`Remove subset/fault filter ${key}`);
     expect(() => requireFullBrowserEnvironment({ [key]: '' })).toThrow(`Remove subset/fault filter ${key}`);

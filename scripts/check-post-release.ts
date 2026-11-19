@@ -12,7 +12,7 @@ import { inspectMediaBackup } from '../src/mediaBackup';
 
 if (!process.env.CHROMIUM_PATH) throw new Error('Set CHROMIUM_PATH');
 const base = (process.env.BASE_URL || 'http://127.0.0.1:3000').replace(/\/?$/, '/');
-const output = '.cache/post-release/browser';
+const output = process.env.POST_RELEASE_OUTPUT || '.cache/post-release/browser';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const checks: string[] = [], errors: string[] = [];

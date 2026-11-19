@@ -2,8 +2,8 @@ import { defineConfig } from 'vite';
 import type { Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import { readdir, readFile, writeFile } from 'node:fs/promises';
-import { createHash } from 'node:crypto';
 import { join } from 'node:path';
+import { offlineShellBuildId } from './scripts/offlineShellBuild';
 
 // Precache the actual hashed build, so even a first-time visitor can reopen offline.
 function offlineShell(): Plugin {
@@ -15,12 +15,13 @@ function offlineShell(): Plugin {
       const files = (await readdir(dist, { recursive: true, withFileTypes: true }))
         .filter(entry => entry.isFile())
         .map(entry => join(entry.parentPath || entry.path, entry.name));
+      const relative = (file: string) => file.slice(dist.length + 1).split('\\').join('/');
       const shell = [...new Set(['./', './index.html', ...files
-        .map(file => './' + file.slice(dist.length + 1).split('\\').join('/'))
+        .map(file => './' + relative(file)).sort()
         .filter(file => file !== './sw.js')])];
       const workerPath = join(dist, 'sw.js');
       const worker = await readFile(workerPath, 'utf8');
-      const buildId = createHash('sha256').update(JSON.stringify(shell)).digest('hex').slice(0, 12);
+      const buildId = offlineShellBuildId(await Promise.all(files.map(async file => ({ path: relative(file), bytes: await readFile(file) }))));
       await writeFile(workerPath, worker
         .replace(/const SHELL = \[[^\]]*\];/, `const SHELL = ${JSON.stringify(shell)};`)
         .replace(/const CACHE = '[^']*';/, `const CACHE = 'prostuti-hsc27-${buildId}';`));
@@ -33,6 +34,8 @@ export default defineConfig({
   server: { host: '0.0.0.0', port: 3000, allowedHosts: true },
   preview: { host: '0.0.0.0', port: 3000, allowedHosts: true },
   build: {
+    // Keep native minWebViewVersion and the actual JavaScript target aligned.
+    target: ['chrome107', 'edge107', 'firefox104', 'safari16'],
     manifest: true,
     // Split independent, cacheable libraries/data, not arbitrary slices of a
     // cyclic planner. Heavy optional feature routes remain dynamic imports.

@@ -11,9 +11,24 @@
     <link rel="apple-touch-icon" href="./icon-192.png" />
     <link rel="manifest" href="./manifest.webmanifest" />
     <title>প্রস্তুতি — HSC 27 Study Planner</title>
+    <style>
+      #startup-recovery { box-sizing: border-box; max-width: 42rem; margin: 2rem auto; padding: 24px; color: #182e24; background: #fcfdf9; font: 1rem/1.8 system-ui, sans-serif; overflow-wrap: anywhere; }
+      #startup-recovery h1 { font-size: 1.6rem; line-height: 1.5; }
+      #startup-recovery a { display: inline-block; color: #174d36; padding: 12px; margin: 4px 8px 4px 0; border: 1px solid currentColor; border-radius: 8px; }
+      #root:not(:empty) + #startup-recovery { display: none; }
+    </style>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Independent of all application modules/CSS: failed startup must not leave a white screen. -->
+    <section id="startup-recovery" role="main" aria-labelledby="startup-heading">
+      <h1 id="startup-heading">প্রস্তুতি খুলছে… <span lang="en">Opening Prostuti…</span></h1>
+      <p>বেশি সময় লাগলে আবার খোলো, অথবা আলাদা recovery পাতায় সেভ করা JSON রাখো। Android System WebView ও Chrome আপডেট রাখো। অ্যাপ uninstall বা Clear data করবে না।</p>
+      <p lang="en">If the app does not open, retry or use independent JSON recovery. Update Android System WebView/Chrome. Do not uninstall or clear app data.</p>
+      <a href="./">আবার খোলো / Retry</a>
+      <a href="./recovery.html">JSON উদ্ধার / Recover JSON</a>
+      <noscript><p>JavaScript চালু করে আবার খোলো। পুরোনো অ্যাপ বা ডেটা মুছবে না।</p></noscript>
+    </section>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

@@ -12,10 +12,15 @@ self.addEventListener('fetch', event => {
   const request = event.request;
   if (request.method !== 'GET' || new URL(request.url).origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
+    // Recovery is a real independent document, not an app route. Caching it as
+    // index.html would strand the next offline launch on the recovery page.
+    const url = new URL(request.url), root = new URL('./', self.location.href);
+    const appDocument = url.pathname === root.pathname || url.pathname === root.pathname + 'index.html';
+    const target = appDocument ? './index.html' : request;
     event.respondWith(fetch(request).then(response => {
-      if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put('./index.html', copy)).catch(() => {})); }
+      if (response.ok) { const copy = response.clone(); event.waitUntil(caches.open(CACHE).then(cache => cache.put(target, copy)).catch(() => {})); }
       return response;
-    }).catch(() => caches.match('./index.html', { ignoreVary: true }).then(cached => cached || caches.match('./', { ignoreVary: true }))));
+    }).catch(() => caches.match(target, { ignoreVary: true, ignoreSearch: true }).then(cached => cached || (appDocument ? caches.match('./', { ignoreVary: true }) : Response.error()))));
     return;
   }
   event.respondWith(caches.match(request, { ignoreVary: true }).then(cached => cached || fetch(request).then(response => {

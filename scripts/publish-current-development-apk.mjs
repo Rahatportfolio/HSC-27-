@@ -11,7 +11,7 @@ import { requireDevelopmentApk } from './publish-development-apk.mjs';
 import { evidenceAnnotation } from './summarize-browser-evidence.mjs';
 
 export const CURRENT_POLICY = Object.freeze({
-  repo: 'Rahatportfolio/HSC-27-', branch: 'arena/25b5228c-hsc-27',
+  repo: 'Rahatportfolio/HSC-27-', branch: 'arena/2a6136bf-hsc-27',
   workflow: '.github/workflows/android-apk.yml',
   confirmation: 'current-development-only-no-compatible-update',
   jobs: ['Build installable APK', 'Android WebView device checks (API 34)', 'Android WebView device checks (API 35)', 'Built web acceptance'],
@@ -75,6 +75,19 @@ export function requireCurrentUploadedAssets(assets, files, delivery, published 
   return true;
 }
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+export function requireCurrentRecovery(packaged, expected, config, worker) {
+  assert.equal(config.android?.minWebViewVersion, 107, 'Packaged WebView minimum differs');
+  assert.equal(config.server?.errorPath, 'recovery.html', 'Packaged native recovery path differs');
+  const shell = JSON.parse(worker.match(/const SHELL = (\[[^;]*\]);/)?.[1] || '[]');
+  const hashes = {};
+  for (const name of ['recovery.html', 'recovery.js']) {
+    assert.ok(packaged[name]?.length && expected[name]?.length, `Missing packaged/source recovery file: ${name}`);
+    assert.equal(digest(packaged[name]), digest(expected[name]), `Packaged recovery differs from tested source: ${name}`);
+    assert.ok(shell.includes(`./${name}`), `Recovery missing from offline precache: ${name}`);
+    hashes[name] = digest(packaged[name]);
+  }
+  return { standaloneRawJsonOnly: true, minWebViewVersion: 107, errorPath: 'recovery.html', sha256: hashes };
+}
 function main() {
   // Check local preconditions before issuing any network or publication request.
   const env = process.env;
@@ -116,9 +129,12 @@ function main() {
   const css = html.match(/<link[^>]*\bhref="\.\/(assets\/index-[A-Za-z0-9_-]+\.css)"/)?.[1];
   assert.ok(entry && packaged.includes(`assets/public/${entry}`), 'Packaged entry is missing');
   assert.ok(css && packaged.includes(`assets/public/${css}`), 'Packaged stylesheet is missing');
-  const packagedHash = path => digest(execFileSync('unzip', ['-p', apk, `assets/public/${path}`], { maxBuffer: 10 * 1024 * 1024 }));
+  const readPackaged = path => execFileSync('unzip', ['-p', apk, `assets/public/${path}`], { maxBuffer: 10 * 1024 * 1024 });
+  const packagedHash = path => digest(readPackaged(path));
+  const recoveryFiles = ['recovery.html', 'recovery.js'];
+  const startupRecovery = requireCurrentRecovery(Object.fromEntries(recoveryFiles.map(name => [name, readPackaged(name)])), Object.fromEntries(recoveryFiles.map(name => [name, readFileSync(join('public', name))])), JSON.parse(execFileSync('unzip', ['-p', apk, 'assets/capacitor.config.json'], { encoding: 'utf8' })), readPackaged('sw.js').toString('utf8'));
   const apkBytes = readFileSync(apk);
-  const inspection = { ...delivery, ...identity, compatibleProductionUpdate: false, zipIntegrity: 'passed', apkSha256: digest(apkBytes), apkSize: apkBytes.length, artifactArchiveSha256: digest(archiveBytes), webEntry: entry, webEntrySha256: packagedHash(entry), webCss: css, webCssSha256: packagedHash(css), requiredJobs: CURRENT_POLICY.jobs, externalPlayerCertified: false, physicalDeviceCertified: false, originalSigningKeyRecovered: false };
+  const inspection = { ...delivery, ...identity, compatibleProductionUpdate: false, zipIntegrity: 'passed', apkSha256: digest(apkBytes), apkSize: apkBytes.length, artifactArchiveSha256: digest(archiveBytes), webEntry: entry, webEntrySha256: packagedHash(entry), webCss: css, webCssSha256: packagedHash(css), startupRecovery, requiredJobs: CURRENT_POLICY.jobs, externalPlayerCertified: false, physicalDeviceCertified: false, originalSigningKeyRecovered: false };
   writeFileSync(join(work, 'inspection.json'), JSON.stringify(inspection, null, 2));
   writeFileSync(join(work, 'SHA256SUMS.txt'), `${inspection.apkSha256}  ${delivery.assetName}\n`);
   const files = [delivery.assetName, 'inspection.json', 'SHA256SUMS.txt'].map(name => { const bytes = readFileSync(join(work, name)); return { name, size: bytes.length, sha256: digest(bytes) }; });

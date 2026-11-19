@@ -5,7 +5,7 @@ export function requireFullBrowserEnvironment(env: NodeJS.ProcessEnv): void {
   // A present-but-empty selector is rejected too: the command must be clearly
   // unfiltered, not depend on each child's interpretation of an empty string.
   for (const key of Object.keys(env)) {
-    assert(!/^(?:A11Y_(?:ROUTES|SCENARIOS|DIALOGS|EXAM_STATES_ONLY|FAULT)|RESPONSIVE_(?:ROUTES|PROFILES|SCENARIOS|FAULT)|MOBILE_(?:CASE|VIEWPORT|MUTATION))$/.test(key), `Remove subset/fault filter ${key} for full built-web acceptance`);
+    assert(!/^(?:A11Y_(?:ROUTES|SCENARIOS|DIALOGS|EXAM_STATES_ONLY|FAULT)|RESPONSIVE_(?:ROUTES|PROFILES|SCENARIOS|FAULT)|MOBILE_(?:CASE|VIEWPORT|MUTATION)|DATE_SHORTCUT_(?:ONLY|FAULT)|INPUT_A11Y_(?:SCENARIOS|ROUTES|CHECKS|FAULT)|FOLLOWUP_(?:SCENARIOS|REVIEW_ONLY|BROWSER_FAULT))$/.test(key), `Remove subset/fault filter ${key} for full built-web acceptance`);
   }
 }
 

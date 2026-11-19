@@ -21,8 +21,10 @@ const env = {
   PERSONAL_BROWSER_OUTPUT: `${output}/personal`, BRAIN_BROWSER_OUTPUT: `${output}/brain`,
   DIALOG_BROWSER_OUTPUT: `${output}/dialog`, MOBILE_EVIDENCE: `${output}/mobile`, STUDY_BROWSER_OUTPUT: `${output}/study`,
   A11Y_OUTPUT: `${output}/accessibility`, A11Y_REVIEWER_OUTPUT: `${output}/reviewer-controls`,
+  STARTUP_OUTPUT: `${output}/startup`, DATE_BROWSER_OUTPUT: `${output}/dates`, POST_RELEASE_OUTPUT: `${output}/media-backup`,
+  INPUT_A11Y_OUTPUT: `${output}/inputs`, FOLLOWUP_BROWSER_OUTPUT: `${output}/followup`,
 };
-const scripts = ['test:a11y-reviewer', 'test:lazy-browser', 'test:responsive', 'test:personal-browser', 'test:brain-browser', 'test:dialog-offline-browser', 'test:mobile-shell', 'test:study-browser', 'test:accessibility'];
+const scripts = ['test:startup-recovery', 'test:a11y-reviewer', 'test:lazy-browser', 'test:responsive', 'test:personal-browser', 'test:brain-browser', 'test:dialog-offline-browser', 'test:mobile-shell', 'test:study-browser', 'test:date-browser', 'test:post-release-browser', 'test:input-accessibility', 'test:followup-browser', 'test:accessibility'];
 type BrowserResult = { script: string; exitCode: number | null; signal: NodeJS.Signals | null; logTail?: string };
 const results: BrowserResult[] = [];
 let failure = '';
