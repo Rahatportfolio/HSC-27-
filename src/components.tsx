@@ -1,4 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
+import { openDialogScope } from './dialog';
+import { isPersonalTaskComplete, personalMediaUrl } from './personalRoutine';
 import type { CSSProperties, ReactNode } from 'react';
 import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, Minus, NotebookPen, Pause, Play, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react';
 import { CHAPTERS, chapterById, subjectById } from './data';
@@ -32,19 +34,8 @@ export function ProgressRing({ value, size = 112, stroke = 8, children, color = 
 export function Modal({ title, children, onClose, wide = false }: { title: string; children: ReactNode; onClose: () => void; wide?: boolean }) {
   const ref = useRef<HTMLDivElement>(null), titleId = useId();
   const closeRef = useRef(onClose); closeRef.current = onClose;
-  useEffect(() => {
-    const previous = document.activeElement as HTMLElement | null;
-    const overflow = document.body.style.overflow; document.body.style.overflow = 'hidden';
-    const focusable = () => Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]') || []);
-    const first = ref.current?.querySelector<HTMLElement>('[data-autofocus]') || focusable()[0]; first?.focus();
-    const key = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeRef.current(); }
-      if (e.key === 'Tab') { const items = focusable(); const first = items[0], last = items[items.length - 1]; if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last?.focus(); } else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first?.focus(); } }
-    };
-    document.addEventListener('keydown', key);
-    return () => { document.removeEventListener('keydown', key); document.body.style.overflow = overflow; previous?.focus(); };
-  }, []);
-  return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><div ref={ref} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId}><div className="modal-header"><h2 id={titleId}>{title}</h2><button className="icon-button" onClick={onClose} aria-label={t('বন্ধ করো', 'Close')}><X size={20} /></button></div><div className="modal-body">{children}</div></div></div>;
+  useEffect(() => ref.current ? openDialogScope(ref.current, () => closeRef.current()) : undefined, []);
+  return <div className="modal-backdrop" onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}><div ref={ref} className={`modal ${wide ? 'wide' : ''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><div className="modal-header"><h2 id={titleId}>{title}</h2><button className="icon-button" onClick={onClose} aria-label={t('বন্ধ করো', 'Close')}><X size={20} /></button></div><div className="modal-body">{children}</div></div></div>;
 }
 export function PageHeading({ eyebrow, title, titleEn, description, descriptionEn, action }: { eyebrow?: string; title: string; titleEn?: string; description: string; descriptionEn?: string; action?: ReactNode }) {
   return <div className="page-heading"><div>{eyebrow && <div className="eyebrow">{eyebrow}</div>}<h1>{t(title, titleEn || title)}</h1><p>{t(description, descriptionEn || description)}</p></div>{action && <div className="page-heading-action">{action}</div>}</div>;
@@ -63,7 +54,7 @@ export function PhaseJourney({ activeDate }: { activeDate: string }) {
 export function TaskCard({ task, compact = false }: { task: Task; compact?: boolean }) {
   const { data, setData, plan, notify, toggleTask, today, now, openMistake, openChapter, timer, startTimer, startPresetTimer, navigate, confirm } = usePlanner();
   const [expanded, setExpanded] = useState(false);
-  const done = !!data.completed[task.id];
+  const done = isPersonalTaskComplete(task, data.completed);
   const minute = dhakaMinutes(now);
   const current = !done && isTaskCurrent(task, today, minute);
   const generated = !!task.video || task.id.startsWith('smart-part|');
@@ -161,7 +152,7 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
           </button>
         )}
       </div>
-      {task.video && <button className="button secondary small" onClick={openVideo}><Play size={14}/>{t('ক্লাস খোলো','Open class')}</button>}<button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
+      {task.personalWork && personalMediaUrl(task.personalWork) && <a className="button secondary small" href={personalMediaUrl(task.personalWork)} target="_blank" rel="noreferrer"><Play size={14}/>{t('নির্ধারিত ক্লাসের অংশ খোলো', 'Open selected class segment')}</a>}{task.video && <button className="button secondary small" onClick={openVideo}><Play size={14}/>{t('ক্লাস খোলো','Open class')}</button>}<button className="task-title-button" onClick={() => setExpanded(!expanded)} aria-expanded={expanded}><h3>{task.title}</h3><ChevronDown size={16} className={expanded ? 'rotated' : ''} /></button>
       <p className={`task-detail ${expanded ? 'expanded' : ''}`}>{task.detail}</p>
       {expanded && <div className="task-expanded-wrap">
         {!generated && <><div className="task-move-editor">
@@ -236,7 +227,7 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
             <button type="button" className="button ghost small" onClick={() => adjustTaskDuration(30)}><Plus size={12} />{t('৩০ মি.', '30m')}</button>
           </div>
         </div>
-        </>}{generated && <p className="tiny-muted">{t('এই duration-based session workload থেকে তৈরি। সময় বদলাতে Study & offline-এর daily limit ব্যবহার করো।','This duration-based session follows the workload. Change daily limits in Study & offline.')}</p>}
+        </>}{generated && <p className="tiny-muted">{task.personalWork ? t('এটি পুরো ক্লাস/কাজের ছোট অংশ। টাইমার শেষ মানে ভিডিও দেখা/অনুশীলন শেষ নয়; সত্যিই এই অংশ শেষ হলে টিক দাও। সময় ও উৎস বদলাতে Settings-এর নিজের রুটিন ব্যবহার করো।', 'This is a segment of a full class/work stage. A timer cannot prove it was watched/practised; tick it only when actually finished. Edit availability and sources in your personal routine in Settings.') : t('এই duration-based session workload থেকে তৈরি। সময় বদলাতে Study & offline-এর daily limit ব্যবহার করো।','This duration-based session follows the workload. Change daily limits in Study & offline.')}</p>}
         {primaryClasses && <div className="task-inline-classes">
           {compact ? <ClassLinkRow classes={primaryClasses} /> : <ClassBlock classes={primaryClasses} compact />}
         </div>}
@@ -257,9 +248,9 @@ export function WeekChart({ large = false }: { large?: boolean }) {
   const monday = new Date(date.getTime() - dow * 86400000).toISOString().slice(0, 10);
   const days = Array.from({ length: 7 }, (_, i) => { const d = new Date(Date.parse(`${monday}T00:00:00Z`) + i * 86400000).toISOString().slice(0, 10); return { date: d, day: plan.find(x => x.date === d) }; });
   return <div className={`week-chart ${large ? 'large' : ''}`}>{days.map((d, i) => {
-    const minutes = d.day?.tasks.filter(t => data.completed[t.id]).reduce((n, t) => n + t.endMinute - t.startMinute, 0) || 0;
+    const minutes = d.day?.tasks.filter(task => isPersonalTaskComplete(task, data.completed)).reduce((n, t) => n + t.endMinute - t.startMinute, 0) || 0;
     const dayTargetMin = dailyTargetMinutes(data,d.date);
-    return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ${t('ঘণ্টার কাজ সম্পন্ন', 'hours of tasks done')}`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, minutes / dayTargetMin * 100))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{(isEnglish() ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'])[i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}{t('ঘ', 'h')}</small>}</button>;
+    return <button key={d.date} className={`week-day ${d.date === today ? 'today' : ''}`} onClick={() => { setSelectedDate(d.date); navigate('today', d.date); }} title={`${formatDate(d.date)}: ${bn(Math.round(minutes / 6) / 10)} ${t('ঘণ্টার কাজ সম্পন্ন', 'hours of tasks done')}`}><div className="bar-space"><span style={{ height: `${Math.max(3, Math.min(100, dayTargetMin > 0 ? minutes / dayTargetMin * 100 : minutes ? 100 : 0))}%` }} className={minutes ? 'has-value' : ''} /></div><span>{(isEnglish() ? ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] : ['সো', 'মঙ্গল', 'বু', 'বৃ', 'শু', 'শ', 'র'])[i]}</span>{large && <small>{bn(Math.round(minutes / 6) / 10)}{t('ঘ', 'h')}</small>}</button>;
   })}</div>;
 }
 export function StudyIllustration() {
@@ -276,7 +267,7 @@ export function SyllabusNotice() {
 }
 export function DaySummary({ day }: { day: Day }) {
   const { data } = usePlanner();
-  const done = day.tasks.filter(t => data.completed[t.id]).length;
+  const done = day.tasks.filter(task => isPersonalTaskComplete(task, data.completed)).length;
   return <div className="day-summary"><span>{bn(done)}/{bn(day.tasks.length)} {t('কাজ শেষ', 'tasks done')}</span><ProgressBar value={percent(done, day.tasks.length)} /></div>;
 }
 

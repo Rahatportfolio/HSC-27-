@@ -1,0 +1,22 @@
+import { t } from './i18n';
+import type { BrainStatus } from './studyBrain';
+
+export function brainStatusText(status: BrainStatus): { title: string; body: string } {
+  const copy: Record<BrainStatus, [string, string, string, string]> = {
+    off: ['তোমাকে একটু বুঝে পরের কাজ বলি?', 'A small brain for your study day?', 'সময়, ক্লান্তি আর তোমার ফিডব্যাক থেকে ছোট পরামর্শ—তোমার অনুমতি ছাড়া রুটিন বদলাবে না।', 'Small suggestions from your time, energy and feedback. Your routine stays under your control.'],
+    setup: ['আগে তোমার পড়ার সময় জানা দরকার।', 'First, tell the planner when you can study.', 'আগে availability ও S সেটআপ শেষ করো। ব্রেইন তোমার হয়ে সময় বা ভিডিওর দৈর্ঘ্য বানাবে না।', 'Finish availability and S setup first. The brain will not invent study hours or video lengths.'],
+    legacy: ['পুরোনো রুটিন অক্ষত রেখেছি।', 'Your existing routine is untouched.', 'এই ছোট ব্রেইনের পরের-কাজ পরামর্শ S রুটিনের জন্য। চাইলে Settings-এ প্রিভিউ দেখে নিজে বদলাও; কোনো অটো-মাইগ্রেশন নয়।', 'Next-segment suggestions currently support S routines. Review a migration in Settings only if you want one; nothing converts automatically.'],
+    rest: ['আজ বিরতি—নতুন কাজ চাপাচ্ছি না।', 'A break today. No extra work piled on.', 'আজ এইবারের জন্য ০ মিনিট বলেছ। রুটিন ও অসমাপ্ত অংশ রয়ে গেছে; তৈরি হলে চেক-ইন বদলে নিতে পারবে।', 'You offered zero minutes for this check-in. Your routine and unfinished work remain; update the check-in when you are ready.'],
+    complete: ['নির্বাচিত S-এ সম্পন্ন অগ্রগতি আছে।', 'Your selected S chapters have completion records.', 'অন্য A/B/C অধ্যায় নিজে থেকে ঢোকানো হয়নি। এটি সব বিষয় আয়ত্ত বা পরীক্ষায় নম্বরের নিশ্চয়তা নয়।', 'Other A/B/C chapters were not added. Completion records do not certify mastery or guarantee exam marks.'],
+    duration: ['এই জোড়ার আসল সময় মেলানো বাকি।', 'This pair still needs its real work durations.', 'অজানা ক্লাসকে ৮০ মিনিট ধরিনি, পরের অধ্যায়েও লাফ দিইনি। Settings-এ আলাদা ক্লাস ও নিজের কাজের সময় ঠিক করো।', 'No unknown class became 80 minutes, and no later chapter was substituted. Review separate class and independent-work durations in Settings.'],
+    missing: ['এই জোড়ার অসমাপ্ত কাজের বরাদ্দ নেই।', 'This pair has unfinished work without an allocation.', 'সরানো অংশ, শূন্য কাজ বা সময়সীমার ঘাটতি থাকতে পারে। নতুন কাজ বানানোর আগে নিজের প্ল্যান দেখো।', 'Removed work, zero budgets or a target-date gap may be involved. Review your plan before adding work.'],
+    review: ['আগের অংশ বাকি—আগে দেখে সিদ্ধান্ত নাও।', 'An earlier segment is still owed. Review it first.', 'শেষ হয়েছে ধরে পরের জোড়ায় যাইনি। এটিকে আজকের সময়ের ওপর চাপানো বা চুপিচুপি সরানো হয়নি।', 'The brain did not assume it finished or jump to another pair. It has not moved or piled this work onto today.'],
+    scheduled: ['তোমার নির্ধারিত সময়ে এই ছোট অংশ।', 'A small next step at your scheduled time.', 'নিচে আসল বরাদ্দের দিন ও সময় আছে। এটি এখনই নতুন কাজ যোগ করার নির্দেশ নয়।', 'The actual allocated date and slot are shown below. This is not an extra task to do outside your availability.'],
+    ready: ['এখন ছোট করে এই অংশটা ধরতে পারো।', 'A small, manageable next step for now.', 'একই জোড়ার অসমাপ্ত উৎস থেকে ছোট ফোকাস। বাকি ভিডিও বা অনুশীলন মুছে যাবে না; টাইমার শেষে নিজে প্রমাণ মিলিয়ে টিক দেবে।', 'A short focus from an unfinished source in the same pair. The rest is still owed; a timer never ticks the source complete.'],
+    capacity: ['দেওয়া সময়ের বাইরে পড়া চাপাব না।', 'No extra work beyond your stated time.', 'আজকের সংরক্ষিত সেশন, সময়ের সীমা বা বাকি স্লটে আর পুরো এক মিনিটও মেলেনি। লগ/সময় ভুল হলে নিজে মিলিয়ে নাও।', 'Your saved sessions, availability cap or remaining slot leave less than one whole minute. Review your logs or availability if they are inaccurate.'],
+    outside: ['এই স্লট তোমার দেওয়া সময়ের বাইরে।', 'This slot is outside your availability.', 'আগের নিজের সরানো/সম্পাদিত কাজ রাখা আছে, কিন্তু তার জন্য সময়ের বাইরে টাইমার চাপাইনি। ক্যালেন্ডারে দেখে ঠিক করো।', 'Your manually moved/edited work remains, but it does not authorise a timer outside availability. Review the slot in the calendar.'],
+    conflict: ['এই স্লটে অন্য কাজও আছে।', 'Another task overlaps this slot.', 'একই সময়ে দুই কাজের জন্য টাইমার সাজেস্ট করছি না। ক্যালেন্ডারে নিজের সময়গুলো দেখে ঠিক করো।', 'No focus timer is suggested over another appointment. Review the overlapping slots in your calendar.'],
+  };
+  const [titleBn, titleEn, bodyBn, bodyEn] = copy[status];
+  return { title: t(titleBn, titleEn), body: t(bodyBn, bodyEn) };
+}

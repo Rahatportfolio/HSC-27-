@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import App from './App';
 import { freshData, STORAGE_KEY } from './planner';
 import type { AppData } from './planner';
-import { allQuestions } from './analytics';
+import { allQuestions } from './questionBank';
 import { parseBackup } from './storage';
 
 type Draft = { id: string; questionIds: string[]; answers: Record<string, number>; index: number; startedAt: number; deadline: number };

@@ -20,6 +20,8 @@ concurrency:
 jobs:
   build:
     runs-on: ubuntu-latest
+    outputs:
+      web-proof: ${{ steps.web-proof.outputs.proof }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,6 +38,9 @@ jobs:
       - name: Run tests
         run: npm test
 
+      - name: Run production, release and deployment guard tests
+        run: node --test scripts/*node-test.mjs
+
       - name: Build
         run: npm run build
 
@@ -46,6 +51,10 @@ jobs:
           npm run test:responsive
           npm run test:study-browser
 
+      - name: Record the exact uploaded web files
+        id: web-proof
+        run: node scripts/verify-deployed-web.mjs capture dist
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
@@ -55,6 +64,7 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       pages: write
       id-token: write
     environment:
@@ -67,3 +77,19 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      - name: Checkout read-only public verification tooling
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Set up Node for byte verification
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Verify the real public PWA matches every uploaded file
+        env:
+          EXPECTED_WEB_PROOF: ${{ needs.build.outputs.web-proof }}
+          DEPLOYED_URL: ${{ steps.deployment.outputs.page_url }}
+        run: node scripts/verify-deployed-web.mjs verify

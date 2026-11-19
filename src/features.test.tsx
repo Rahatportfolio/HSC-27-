@@ -6,8 +6,9 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
+import * as native from './native';
 import { CHAPTERS } from './data';
-import { STORAGE_KEY } from './planner';
+import { freshData, STORAGE_KEY } from './planner';
 
 beforeAll(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -22,7 +23,8 @@ beforeAll(() => {
   URL.createObjectURL = vi.fn(() => 'blob:prostuti');
   URL.revokeObjectURL = vi.fn();
 });
-beforeEach(() => { localStorage.clear(); window.location.hash = ''; });
+beforeEach(() => { localStorage.clear(); localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); // legacy saved profile
+ window.location.hash = ''; });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function go(view: string) {
@@ -95,7 +97,7 @@ describe('practice screen', () => {
   it('records a CQ with part marks and fills the part analysis', async () => {
     render(<App />);
     go('practice');
-    const tabs = await waitFor(() => document.querySelector('.practice-tabs') as HTMLElement);
+    const tabs = await waitFor(() => { const element = document.querySelector('.practice-tabs') as HTMLElement; expect(element).toBeTruthy(); return element; });
     await act(async () => { within(tabs).getByRole('button', { name: /CQ ট্র্যাকার/ }).click(); });
     fireEvent.click((await screen.findAllByRole('button', { name: /CQ যোগ করো|প্রথম CQ যোগ করো/ }))[0]);
     type(await screen.findByLabelText(/প্রশ্ন\/উদ্দীপক/), 'উদ্দীপকের আলোকে ব্যাখ্যা করো।');
@@ -114,18 +116,19 @@ describe('practice screen', () => {
 
 describe('the Android reminder card', () => {
   it('renders on a native shell with its sync and test buttons', async () => {
-    (window as unknown as { Capacitor: unknown }).Capacitor = { isNativePlatform: () => true, Plugins: {} };
+    const nativeShell = vi.spyOn(native, 'isNativeApp').mockReturnValue(true);
+    vi.spyOn(native, 'nativeNotificationStatus').mockResolvedValue({ permission: 'unavailable', exact: 'unavailable', channels: false });
     try {
       render(<App />);
       go('reminders');
-      // Read straight after the first commit: on a device Capacitor is already initialised,
-      // so the device card and both of its controls must be there from the first paint.
-      expect(screen.getByText('ডিভাইস নোটিফিকেশন')).toBeTruthy();
+      // The optional route is asynchronous. Once loaded, native controls need
+      // no extra toggle or interaction to appear.
+      expect(await screen.findByText('ডিভাইস নোটিফিকেশন')).toBeTruthy();
       expect(screen.getByRole('button', { name: /এখনই সিঙ্ক করো/ })).toBeTruthy();
       expect(screen.getByRole('button', { name: /টেস্ট নোটিফিকেশন/ })).toBeTruthy();
       expect(screen.getByRole('switch', { name: /ডিভাইস নোটিফিকেশন/ })).toBeTruthy();
     } finally {
-      delete (window as unknown as { Capacitor?: unknown }).Capacitor;
+      nativeShell.mockRestore();
     }
   });
 });
@@ -161,8 +164,7 @@ describe('analytics screen', () => {
   it('shows the weekly report and prints only that card', async () => {
     render(<App />);
     go('analytics');
-    const card = document.querySelector('.weekly-report') as HTMLElement;
-    await waitFor(() => expect(card).toBeTruthy());
+    const card = await waitFor(() => { const element = document.querySelector('.weekly-report') as HTMLElement; expect(element).toBeTruthy(); return element; });
     expect(within(card).getByText(/সাপ্তাহিক রিপোর্ট/)).toBeTruthy();
     await act(async () => { within(card).getByRole('button', { name: /প্রিন্ট/ }).click(); });
     expect(window.print).toHaveBeenCalled();

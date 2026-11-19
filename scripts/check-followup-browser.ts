@@ -67,8 +67,8 @@ try {
       assert(hit.reachable, `Touch target is covered: ${JSON.stringify(hit)}`); await target.tap();
     };
     const trap = async () => {
-      if (fault === 'untrapped-dialog') await page.evaluate(() => document.addEventListener('keydown', event => { if (event.key === 'Tab') event.stopImmediatePropagation(); }, { capture: true }));
-      const controls = page.getByRole('dialog').locator('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex="0"]');
+      if (fault === 'untrapped-dialog') await page.evaluate(() => window.addEventListener('keydown', event => { if (event.key === 'Tab') event.stopImmediatePropagation(); }, { capture: true }));
+      const controls = page.getByRole('dialog').locator('button:visible:not(:disabled), input:visible:not(:disabled), select:visible:not(:disabled), textarea:visible:not(:disabled), a[href]:visible, summary:visible, [tabindex="0"]:visible');
       assert(await controls.count() > 1, 'Dialog lacks keyboard controls');
       await controls.first().focus(); await page.keyboard.press('Shift+Tab');
       assert(await controls.last().evaluate(element => document.activeElement === element), 'Reverse Tab did not wrap to the dialog’s last control');
@@ -86,7 +86,7 @@ try {
       if (fault === 'faint-dark-summary') await page.addStyleTag({ content: '.syllabus-summary{background:#1a241e!important}.syllabus-summary strong{color:#5b744f!important}' });
       if (fault === 'unnamed-completion-group') await page.locator('.filter-bar .segmented[aria-label]').evaluate(element => element.removeAttribute('role'));
       if (fault === 'unnamed-rating' && chapter) await page.locator('.chapter-plan-strip .star-badge').evaluate(element => element.removeAttribute('role'));
-      if (fault === 'decorative-initial-in-name') await page.locator('.topbar-avatar span').evaluate(element => element.removeAttribute('aria-hidden'));
+      if (fault === 'decorative-initial-in-name') await page.locator('.topbar-avatar > svg').evaluate(element => element.removeAttribute('aria-hidden'));
       const colours = await page.evaluate(() => ({
         profile: { foreground: getComputedStyle(document.querySelector('.topbar-avatar')!).color, background: getComputedStyle(document.querySelector('.topbar-avatar')!).backgroundColor },
         summary: [...document.querySelectorAll('.syllabus-summary strong')].map(element => ({ foreground: getComputedStyle(element).color, background: getComputedStyle(element.closest('.syllabus-summary')!).backgroundColor })),
@@ -98,15 +98,14 @@ try {
       const axe = await page.evaluate(async () => (window as unknown as { axe: { run: (root: Document, options: object) => Promise<AxeResults> } }).axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, iframes: false, resultTypes: ['violations', 'incomplete'] }));
       await writeFile(`${output}/${scenario.id}-${chapter ? 'chapter' : 'syllabus'}-axe.json`, JSON.stringify(axe, null, 2));
       assert.equal(axe.violations.length, 0, `Confirmed axe violation: ${axe.violations.map(rule => rule.id)}`);
-      // Axe 4.14 returns incomplete before comparing a one-character Bengali
-      // initial, even when it is explicitly decorative. Check this exact case
-      // independently; keep it in the report, never turn all incompletes green.
+      // The descriptive button now has a decorative icon, not a short Bengali
+      // initial. Keep exact semantic assertions and every raw axe finding.
       const profile = page.locator('.topbar-avatar');
       assert.equal(await profile.getAttribute('aria-label'), scenario.language === 'en' ? 'Profile & settings' : 'প্রোফাইল ও সেটিংস', 'Profile button lacks its descriptive name');
-      assert.equal(await profile.locator('span').getAttribute('aria-hidden'), 'true', 'Profile initial must be explicitly decorative');
-      const semantics = axe.incomplete.flatMap(rule => ['aria-prohibited-attr', 'label-content-name-mismatch'].includes(rule.id) ? rule.nodes.filter(node => !(rule.id === 'label-content-name-mismatch' && node.target.length === 1 && node.target[0] === '.topbar-avatar')).map(node => ({ rule: rule.id, target: node.target })) : []);
+      assert.equal(await profile.locator('svg').getAttribute('aria-hidden'), 'true', 'Profile icon must be explicitly decorative');
+      const semantics = axe.incomplete.flatMap(rule => ['aria-prohibited-attr', 'label-content-name-mismatch'].includes(rule.id) ? rule.nodes.map(node => ({ rule: rule.id, target: node.target })) : []);
       assert.equal(semantics.length, 0, `Unresolved semantic review: ${JSON.stringify(semantics)}`);
-      return { ratios, ...await geometry(), manuallyReviewedProfileInitial: true, remainingManualReview: axe.incomplete.map(rule => ({ rule: rule.id, nodes: rule.nodes.length })) };
+      return { ratios, ...await geometry(), supplementalProfileIconReview: true, remainingManualReview: axe.incomplete.map(rule => ({ rule: rule.id, nodes: rule.nodes.length })) };
     };
     await goto('syllabus', 'Syllabus', 'সিলেবাস');
     await probe('review-short-text-and-filter-semantics', () => review(false));
@@ -193,7 +192,7 @@ try {
         const reselectedColours = await optionColours('reselected');
         const save = dialog.getByRole('button', { name: scenario.language === 'en' ? 'Save question' : 'প্রশ্ন সেভ করো' });
         await save.focus(); await save.scrollIntoViewIfNeeded();
-        if (fault === 'covered-form-save') await save.evaluate(element => { const overlay = document.createElement('div'); overlay.textContent = 'Broken touch overlay'; const rect = element.getBoundingClientRect(); Object.assign(overlay.style, { position: 'fixed', left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`, zIndex: '99999', background: 'white' }); document.body.append(overlay); });
+        if (fault === 'covered-form-save') await save.evaluate(element => { const overlay = document.createElement('div'); overlay.textContent = 'Broken touch overlay'; Object.assign(overlay.style, { position: 'fixed', inset: '0', zIndex: '99999', background: 'white' }); element.closest('[role="dialog"]')!.append(overlay); });
         const reached = await save.evaluate(element => { const r = element.getBoundingClientRect(), hit = document.elementFromPoint(r.x + r.width / 2, r.y + r.height / 2); return !!hit && (hit === element || element.contains(hit)); });
         assert(reached, 'Reduced-height Save is covered');
         await page.keyboard.press('Enter'); await page.getByRole('dialog').waitFor({ state: 'detached' });

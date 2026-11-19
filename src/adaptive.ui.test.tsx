@@ -15,6 +15,7 @@ beforeAll(() => {
 });
 beforeEach(() => {
   localStorage.clear();
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); // explicit legacy saved profile
   window.location.hash = '#weakness';
 });
 afterEach(cleanup);

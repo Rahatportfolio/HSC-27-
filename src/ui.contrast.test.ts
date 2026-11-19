@@ -58,6 +58,61 @@ const LIGHT_SURFACE = '#ffffff';
 const DARK_SURFACE = '#151f1a';
 
 describe('text keeps WCAG AA contrast', () => {
+  it('keeps Bengali MCQ letters readable before and after answering, in either theme', () => {
+    for (const dark of [false, true]) for (const state of ['', '.correct', '.wrong']) {
+      const selector = `${dark ? '[data-theme="dark"] ' : ''}.quiz-option${state} .option-letter`;
+      expect(contrast(colourOf(selector, 'color', dark), colourOf(selector, 'background', dark)), selector).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps upcoming phase numbers and CQ part letters readable in either theme', () => {
+    for (const dark of [false, true]) {
+      for (const selector of ['.phase-number', '.phase-step.active .phase-number']) expect(contrast(colourOf(selector, 'color', dark), colourOf(selector, 'background', dark)), selector).toBeGreaterThanOrEqual(4.5);
+      for (const selector of ['.parts-field>span strong', '.rubric-row strong']) expect(contrast(colourOf(selector, 'color', dark), resolveColour('var(--surface-soft)', dark)), selector).toBeGreaterThanOrEqual(4.5);
+      const rubric = dark ? '[data-theme="dark"] .rubric-mark' : '.rubric-mark.c3';
+      expect(contrast(colourOf(rubric, 'color', dark), colourOf(rubric, 'background', dark)), rubric).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps tiny hero and motivation glyphs on readable theme surfaces', () => {
+    for (const dark of [false, true]) {
+      const note = dark ? '[data-theme="dark"] .hero-art-note' : '.hero-art-note';
+      expect(contrast(colourOf(note, 'color', dark), colourOf(note, 'background', dark)), note).toBeGreaterThanOrEqual(4.5);
+      expect(contrast(colourOf('.small-spark', 'color', dark), colourOf(note, 'background', dark))).toBeGreaterThanOrEqual(4.5);
+    }
+    expect(contrast(colourOf('.motivation-ribbon .motivation-mark'), '#fcfaf4')).toBeGreaterThanOrEqual(4.5);
+    for (const dark of [false, true]) for (const selector of ['.hero-separator', '.hero-progress>div:first-child strong']) expect(contrast(colourOf(selector, 'color', dark), dark ? '#182b22' : '#e8f1e1'), selector).toBeGreaterThanOrEqual(4.5);
+  });
+  it('keeps the one-letter C priority badge readable, including axe short-text incompletes', () => {
+    for (const selector of ['.priority-badge.c', '[data-theme="dark"] .priority-badge.c']) expect(contrast(colourOf(selector), colourOf(selector, 'background')), selector).toBeGreaterThanOrEqual(4.5);
+  });
+  it('uses a known notification-preview surface with readable heading, eyebrow and body in both themes', () => {
+    for (const dark of [false, true]) {
+      const background = colourOf(dark ? '[data-theme="dark"] .live-notif-preview-card' : '.live-notif-preview-card', 'background', dark);
+      for (const token of ['--ink', '--muted', '--soft']) expect(contrast(resolveColour(`var(${token})`, dark), background)).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps a one-letter desktop keyboard shortcut readable in either theme', () => {
+    for (const dark of [false, true]) {
+      const selector = dark ? '[data-theme="dark"] .global-search kbd' : '.global-search kbd';
+      expect(contrast(colourOf(selector, 'color', dark), colourOf(selector, 'background', dark))).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps all three star-priority glyph labels readable in either theme', () => {
+    for (const dark of [false, true]) for (const selector of ['.star-badge.s5', '.star-badge.s3', '.star-badge.s1']) {
+      expect(contrast(colourOf(selector, 'color', dark), dark ? DARK_SURFACE : LIGHT_SURFACE), selector).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps required-revision and custom session badges readable in either theme', () => {
+    for (const dark of [false, true]) for (const selector of ['.kind-badge', '.kind-badge.custom']) {
+      expect(contrast(colourOf(selector, 'color', dark), colourOf(selector, 'background', dark)), selector).toBeGreaterThanOrEqual(4.5);
+    }
+  });
+  it('keeps completed task titles/times and subject badges readable rather than fading their opacity', () => {
+    for (const dark of [false, true]) for (const selector of ['.task-card.done .task-title-button h3', '.task-card.done .task-time strong']) {
+      expect(contrast(colourOf(selector, 'color', dark), dark ? DARK_SURFACE : LIGHT_SURFACE), selector).toBeGreaterThanOrEqual(4.5);
+    }
+    expect([...CSS.matchAll(/\.task-card\.done \.subject-badge\s*\{([^}]*)\}/g)].at(-1)![1]).toContain('opacity:1');
+  });
+
   it('page heading descriptions are readable on the light surface', () => {
     expect(contrast(colourOf('.page-heading p'), LIGHT_SURFACE)).toBeGreaterThanOrEqual(4.5);
     expect(contrast(colourOf('.page-heading p', 'color', true), DARK_SURFACE)).toBeGreaterThanOrEqual(4.5);

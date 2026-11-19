@@ -1,5 +1,8 @@
 import DailyGoals from '../components/DailyGoals';
-import { StudyOverview } from './StudySystem';
+import StudyBrainTeaser from '../components/StudyBrainTeaser';
+import PersonalStudyHome from './PersonalStudyHome';
+import { PersonalRoutineSettings } from '../components/PersonalRoutineSetup';
+import { StudyOverview } from '../components/StudyOverview';
 import { learningDashboard } from '../learning';
 import { weaknessSummary } from '../weakness';
 import { classProgress } from '../classes';
@@ -103,6 +106,10 @@ function buildUnfinishedGroups(tasks: Task[]): UnfinishedGroup[] {
 }
 
 export default function TodayView() {
+  const { data } = usePlanner();
+  return data.personalRoutine ? <PersonalStudyHome /> : <LegacyTodayView />;
+}
+function LegacyTodayView() {
   const {
     plan, data, setData, storageOk, today, now, selectedDate, setSelectedDate,
     navigate, exportICS, timer, startTimer, startPresetTimer, sendStudyStatusNotification,
@@ -397,7 +404,7 @@ export default function TodayView() {
   const mockPart = mockAvg * 0.3;
   const mcqPart = mcqAcc * 0.2;
   const examReadiness = Math.round(syllabusPart + mockPart + mcqPart);
-  return <div className="view today-view"><StudyOverview /><DailyGoals key={today}/>
+  return <div className="view today-view"><PersonalRoutineSettings /><StudyBrainTeaser /><StudyOverview /><DailyGoals key={today}/>
     {weakness.total > 0 && <div className="home-weakness-alert" role="status">
       <ShieldAlert size={20} />
       <div>

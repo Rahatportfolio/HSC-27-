@@ -1,7 +1,10 @@
+import { parseTaskRangeId } from './taskReferences';
+import { openDialogScope } from './dialog';
 import { buildStudyProjection } from './studyPlan';
-import StudySystem from './views/StudySystem';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpRight, BadgeCheck, Bell, BookOpen, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, Grid3x3, HardDrive, Layers, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, X } from 'lucide-react';
+import PersonalRoutineSetup from './components/PersonalRoutineSetup';
+import { isPersonalTaskComplete, personalRoutineHealth, personalScheduleDateError } from './personalRoutine';
+import { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpRight, BadgeCheck, Bell, BookOpen, BrainCircuit, CalendarDays, ChartNoAxesCombined, Check, ChevronRight, ClipboardCheck, ClipboardList, Command, Crosshair, Download, FileText, FolderOpen, Grid3x3, HardDrive, Layers, LayoutDashboard, LibraryBig, List, Menu, Moon, NotebookPen, Pause, PenLine, PictureInPicture2, Play, RotateCcw, Scan, Search, Settings as SettingsIcon, ShieldCheck, Sprout, Sun, Target, Timer, UserRound, X } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
@@ -23,33 +26,14 @@ import type { ConfirmRequest, View } from './context';
 import { Modal } from './components';
 import { setLanguage, t } from './i18n';
 import { ChapterModal, ExamModal, MistakeModal, SearchModal } from './modals';
-import TodayView from './views/Today';
-import CalendarView from './views/Calendar';
-import SyllabusView from './views/Syllabus';
-import VideosView from './views/Videos';
-import PdfsView from './views/Pdfs';
-import TestPrepView from './views/TestPrep';
-import RevisionView from './views/Revision';
-import TimerView from './views/Timer';
-import PracticeView from './views/Practice';
-import ExamsView from './views/Exams';
-import ExamSimView from './views/ExamSim';
-import WeaknessView from './views/Weakness';
-import HeatmapView from './views/Heatmap';
-import BacklogView from './views/Backlog';
-import AuditView from './views/Audit';
-import AnalyticsView from './views/Analytics';
-import LibraryView from './views/Library';
-import RemindersView from './views/Reminders';
-import SettingsView from './views/Settings';
-import FlashcardsView from './views/Flashcards';
-import StorageView from './views/Storage';
-import NotesScannerView from './views/NotesScanner';
+import { preloadView, RouteBoundary, RouteLoading, routeViews } from './routeViews';
+import { downloadBackup } from './backup';
 
 type NavItem = { id: View; label: string; labelEn: string; short: string; shortEn: string; icon: LucideIcon };
 const NAV_GROUPS: { label: string; labelEn: string; items: NavItem[] }[] = [
   { label: 'পড়াশোনা', labelEn: 'Study', items: [
     { id: 'today' as const, label: 'হোম ড্যাশবোর্ড', labelEn: 'Home dashboard', short: 'হোম', shortEn: 'Home', icon: LayoutDashboard },
+    { id: 'brain' as const, label: 'স্টাডি ব্রেইন', labelEn: 'Study Brain', short: 'ব্রেইন', shortEn: 'Brain', icon: BrainCircuit },
     { id: 'calendar' as const, label: 'আমার স্টাডি প্ল্যান', labelEn: 'My study plan', short: 'প্ল্যান', shortEn: 'Plan', icon: CalendarDays },
     { id: 'syllabus' as const, label: 'সিলেবাস', labelEn: 'Syllabus', short: 'সিলেবাস', shortEn: 'Syllabus', icon: LibraryBig },
     { id: 'videos' as const, label: 'ভিডিও ক্লাস', labelEn: 'Video classes', short: 'ক্লাস', shortEn: 'Classes', icon: Play },
@@ -101,6 +85,16 @@ export default function App() {
   const [dbReady, setDbReady] = useState(() => !isNativeApp());
   const [dbMirrorSafe, setDbMirrorSafe] = useState(true);
   const [mobileMenu, setMobileMenu] = useState(false);
+  const [narrowNavigation, setNarrowNavigation] = useState(() => window.matchMedia('(max-width: 800px)').matches);
+  const navigationRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const media = window.matchMedia('(max-width: 800px)');
+    const change = (event: MediaQueryListEvent) => { setNarrowNavigation(event.matches); setMobileMenu(false); };
+    media.addEventListener('change', change);
+    return () => media.removeEventListener('change', change);
+  }, []);
+  useEffect(() => narrowNavigation && mobileMenu && navigationRef.current
+    ? openDialogScope(navigationRef.current, () => setMobileMenu(false)) : undefined, [narrowNavigation, mobileMenu]);
   const chromeRef = useRef<HTMLDivElement>(null);
   const bottomNavRef = useRef<HTMLElement>(null);
   useEffect(() => {
@@ -131,25 +125,28 @@ export default function App() {
   // One projection also powers Settings' draft preview; saved customisations are
   // always re-applied and the stored routine/history are never rewritten by rendering.
   const { plan, adaptive } = useMemo(() => buildStudyProjection(data, today), [data, today]);
-  const health = useMemo(() => planHealth(plan, data.settings, data.completed), [plan, data.settings, data.completed]);
-  const invalidSchedule = scheduleDateError(data.settings);
+  const health = useMemo(() => data.routineSetupRequired ? { warnings: [] as string[] } : data.personalRoutine ? personalRoutineHealth(data, plan) : planHealth(plan, data.settings, data.completed), [plan, data]);
+  const invalidSchedule = data.personalRoutine || data.routineSetupRequired ? personalScheduleDateError(data.settings) : scheduleDateError(data.settings);
   const timer = useStudyTimer({
     settings: data.settings,
     notify,
     onComplete: session => {
       setData(d => {
         const next = addStudySession(d, { minutes: session.minutes, subject: session.subject, chapterId: session.chapterId || undefined, mode: session.mode, label: session.label || undefined });
-        return session.taskId ? setTaskCompletion(next, [session.taskId], true, plan) : next;
+        const task = plan.flatMap(day => day.tasks).find(task => task.id === session.taskId);
+        // A clock measures study time; it cannot prove a personal source range was watched/practised.
+        return session.taskId && !task?.personalWork && !parseTaskRangeId(session.taskId)?.sourceId.startsWith('personal:') ? setTaskCompletion(next, [session.taskId], true, plan) : next;
       });
       void clearLiveTimerNotification();
       // React may defer the state updater, so derive the notification from the
       // completed task rather than reading a variable assigned inside setData.
-      const completed = session.taskId ? { ...data.completed, [session.taskId]: new Date().toISOString() } : data.completed;
+      const personalSegment = plan.some(day => day.tasks.some(task => task.id === session.taskId && task.personalWork)) || !!parseTaskRangeId(session.taskId || '')?.sourceId.startsWith('personal:');
+      const completed = session.taskId && !personalSegment ? { ...data.completed, [session.taskId]: new Date().toISOString() } : data.completed;
       const digest = buildDailyNotificationDigest(plan, { ...data, completed }, today);
       const doneTitle = digest.allDone && digest.totalTasks > 0
         ? t(`🎉 সেশন শেষ (${bn(session.minutes)} মি.) · আজকের সব পড়া কমপ্লিট!`, `🎉 Session done (${session.minutes}m) · All study completed!`)
         : t(`✅ সেশন শেষ (${bn(session.minutes)} মি.) · বাকি: ${digest.remainingSummary}`, `✅ Session done (${session.minutes}m) · Left: ${digest.remainingSummary}`);
-      const doneBody = `${t('আজ কী পড়া', 'Today')}: ${digest.whatToStudy}\n${t('সম্পন্ন', 'Completed')}: ${digest.completedSummary} · ${t('কমপ্লিট করা লাগবে', 'Remaining')}: ${digest.remainingSummary}`;
+      const doneBody = `${personalSegment ? t('পড়ার সময় সেভ হয়েছে। নির্ধারিত অংশ আসলেই শেষ হলে নিজে টিক দাও।', 'Study time saved. Tick the segment yourself only when it is actually finished.') + '\n' : ''}${t('আজ কী পড়া', 'Today')}: ${digest.whatToStudy}\n${t('সম্পন্ন', 'Completed')}: ${digest.completedSummary} · ${t('কমপ্লিট করা লাগবে', 'Remaining')}: ${digest.remainingSummary}`;
       void notifySessionDone(doneTitle, doneBody);
     },
   });
@@ -434,7 +431,7 @@ export default function App() {
     return () => window.removeEventListener('keydown', key);
   }, [confirmRequest, modal]);
   useEffect(() => { const onStorage = (e: StorageEvent) => { if (e.key !== STORAGE_KEY || !e.newValue) return; try { setData(parseBackup(e.newValue)); notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info'); } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); } }; window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage); }, [notify]);
-  const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !d.completed[id], plan)), [plan]);
+  const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !isPersonalTaskComplete(plan.flatMap(day => day.tasks).find(task => task.id === id) || { id }, d.completed), plan)), [plan]);
   const logSession = useCallback((session: Parameters<typeof addStudySession>[1]) => setData(d => addStudySession(d, session)), []);
   const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify(t('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'No unfinished session in this period.'), 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch { notify(t('ক্যালেন্ডার ফাইল তৈরি হয়নি। আবার চেষ্টা করো।', 'The calendar file was not created. Try again.'), 'error'); } }, [plan, data, today, notify]);
   /**
@@ -561,23 +558,26 @@ export default function App() {
   const todayDigest = useMemo(() => buildDailyNotificationDigest(plan, data, today), [plan, data, today]);
   const currentNav = NAV.find(n => n.id === view);
   const context = {
-    data, setData, plan, adaptive, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
+    data, setData, plan, adaptive, routineSetupReady: dbReady, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
     confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
-  const ViewComponent = invalidSchedule ? SettingsView : { studySystem: StudySystem, today: TodayView, calendar: CalendarView, syllabus: SyllabusView, videos: VideosView, pdfs: PdfsView, testprep: TestPrepView, revision: RevisionView, timer: TimerView, practice: PracticeView, examsim: ExamSimView, weakness: WeaknessView, heatmap: HeatmapView, backlog: BacklogView, audit: AuditView, exams: ExamsView, analytics: AnalyticsView, library: LibraryView, reminders: RemindersView, settings: SettingsView, flashcards: FlashcardsView, storage: StorageView, scanner: NotesScannerView }[view];
+  const ViewComponent = routeViews[invalidSchedule ? 'settings' : view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
   const examDays = diffDays(today, data.settings.examDate);
   const countdownText = (days: number) => days > 0 ? t(`বাকি ${bn(days)} দিন`, `${days}d left`) : days === 0 ? t('আজ পরীক্ষা', 'Today') : t('সম্পন্ন', 'Completed');
   return <PlannerContext.Provider value={context}>
     <a className="skip-link" href="#main-content" onClick={e => { e.preventDefault(); const main = document.getElementById('main-content'); main?.focus(); main?.scrollIntoView({ block: 'start' }); }}>{t('মূল কনটেন্টে যাও', 'Skip to main content')}</a>
     <div className="app-shell">
-      {mobileMenu && <button className="sidebar-overlay" aria-label={t('মেনু বন্ধ করো', 'Close menu')} onClick={() => setMobileMenu(false)} />}
+      <div id="app-navigation" ref={navigationRef} className="sidebar-region" role={narrowNavigation && mobileMenu ? 'dialog' : undefined}
+        aria-label={narrowNavigation && mobileMenu ? t('সব পৃষ্ঠা', 'All pages') : undefined} aria-modal={narrowNavigation && mobileMenu ? true : undefined}
+        aria-hidden={narrowNavigation && !mobileMenu ? true : undefined} inert={narrowNavigation && !mobileMenu ? true : undefined} tabIndex={-1}>
+      {narrowNavigation && mobileMenu && <button className="sidebar-overlay" tabIndex={-1} aria-label={t('মেনু বন্ধ করো', 'Close menu')} onClick={() => setMobileMenu(false)} />}
       <aside className={`sidebar ${mobileMenu ? 'open' : ''}`}>
         <button className="brand" onClick={() => navigate('today', today)} aria-label={`${t('প্রস্তুতি', 'Preparation')}. HSC 27 · SCIENCE`}><span className="brand-mark"><BookOpen size={25} strokeWidth={1.8} /><Check size={12} className="brand-check" /></span><span><strong>{t("প্রস্তুতি", "Preparation")}<span className="brand-period">.</span></strong>{' '}<small>HSC 27 · SCIENCE</small></span></button>
-        <button className="sidebar-close icon-button" onClick={() => setMobileMenu(false)} aria-label={t('মেনু বন্ধ করো', 'Close menu')}><X size={20} /></button>
+        <button className="sidebar-close icon-button" data-autofocus onClick={() => setMobileMenu(false)} aria-label={t('মেনু বন্ধ করো', 'Close menu')}><X size={20} /></button>
         <div className="sidebar-nav-scroll">
-          {NAV_GROUPS.map(group => <div key={group.label}><div className="nav-section-label">{t(group.label, group.labelEn)}</div><nav aria-label={t('মূল নেভিগেশন', 'Main navigation')}>{group.items.map(n => <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onClick={() => navigate(n.id)} aria-current={view === n.id ? 'page' : undefined}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.label, n.labelEn)}</span>{n.id === 'today' && <span className="nav-today-dot" />}{n.id === 'revision' && dueRevisions > 0 && <span className="nav-count alert">{bn(dueRevisions)}</span>}{n.id === 'exams' && <span className="nav-count">{bn(Object.keys(data.exams).length + data.tests.length)}</span>}</button>)}</nav></div>)}
+          {NAV_GROUPS.map(group => <div key={group.label}><div className="nav-section-label">{t(group.label, group.labelEn)}</div><nav aria-label={t('মূল নেভিগেশন', 'Main navigation')}>{group.items.map(n => <button key={n.id} className={`nav-item ${view === n.id ? 'active' : ''}`} onPointerEnter={() => preloadView(n.id)} onFocus={() => preloadView(n.id)} onClick={() => navigate(n.id)} aria-current={view === n.id ? 'page' : undefined}><n.icon size={19} strokeWidth={1.7} /><span>{t(n.label, n.labelEn)}</span>{n.id === 'today' && <span className="nav-today-dot" />}{n.id === 'revision' && dueRevisions > 0 && <span className="nav-count alert">{bn(dueRevisions)}</span>}{n.id === 'exams' && <span className="nav-count">{bn(Object.keys(data.exams).length + data.tests.length)}</span>}</button>)}</nav></div>)}
         </div>
         <div className="sidebar-bottom">
           <div className="dream-card"><Sprout size={24} strokeWidth={1.6} /><strong>{t("স্বপ্নটা তোমার।", "The dream is yours.")}<br />{t("প্রস্তুতিও তোমার।", "The preparation is yours too.")}</strong><p>{t("আজকের ছোট চেষ্টাই আগামীকের বড় আত্মবিশ্বাস।", "Today's steady effort builds tomorrow's confidence.")}</p><span>{t("A+ এর পথে", "On the way to A+")}<ArrowUpRight size={13} /></span></div>
@@ -585,6 +585,7 @@ export default function App() {
           <div className="sidebar-profile"><span className="avatar">{data.settings.name.trim().slice(0, 1) || 'প'}</span><div><strong>{data.settings.name || t('আমার প্রস্তুতি', 'My preparation')}</strong><span>{data.settings.board} {t('বোর্ড · বিজ্ঞান', 'board · Science')}</span></div><span className="status-dot" /></div>
         </div>
       </aside>
+      </div>
       <div className="main-shell">
         <div ref={chromeRef} className="top-chrome-stack">
           {(timer.running || timer.accumulatedMs > 0) && (
@@ -626,7 +627,7 @@ export default function App() {
             </div>
           )}
           <header className="topbar">
-            <div className="topbar-left"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(true)} aria-label={t('মেনু খুলো', 'Open menu')}><Menu size={22} /></button><div className="breadcrumb"><span>{t('আমার প্রস্তুতি', 'My preparation')}</span><ChevronRight size={14} /><strong>{currentNav ? t(currentNav.label, currentNav.labelEn) : t('সেটিংস ও ব্যাকআপ', 'Settings & backup')}</strong></div></div>
+            <div className="topbar-left"><button className="mobile-menu icon-button" onClick={() => setMobileMenu(true)} aria-expanded={mobileMenu} aria-controls="app-navigation" aria-label={t('মেনু খুলো', 'Open menu')}><Menu size={22} /></button><div className="breadcrumb"><span>{t('আমার প্রস্তুতি', 'My preparation')}</span><ChevronRight size={14} /><strong>{currentNav ? t(currentNav.label, currentNav.labelEn) : t('সেটিংস ও ব্যাকআপ', 'Settings & backup')}</strong></div></div>
             <div className="topbar-actions">
               {todayDigest.totalTasks > 0 && (
                 <button
@@ -692,7 +693,7 @@ export default function App() {
                 </button>
                 <button className="icon-button notification-button" onClick={() => navigate('reminders')} aria-label={t('রিমাইন্ডার', 'Reminders')}><Bell size={18} strokeWidth={1.75} />{data.settings.reminderEnabled && <span />}</button>
               </div>
-              <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label={t('প্রোফাইল ও সেটিংস', 'Profile & settings')}><span aria-hidden="true">{data.settings.name.trim().slice(0, 1) || 'প'}</span></button>
+              <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label={t('প্রোফাইল ও সেটিংস', 'Profile & settings')} title={t('প্রোফাইল ও সেটিংস', 'Profile & settings')}><UserRound size={17} aria-hidden="true" /></button>
             </div>
           </header>
         </div>
@@ -708,11 +709,11 @@ export default function App() {
             <strong className="exam-pill-days">{countdownText(examDays)}</strong>
           </button>
         </div>
-        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}{health.warnings.length > 0 && <section className="schedule-warning" role="alert" aria-label={t('রুটিনের সময়সীমার সতর্কতা', 'Schedule capacity warning')}><strong>{t('সময়সীমা মিলিয়ে নাও', 'Check your schedule capacity')}</strong><ul>{health.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul><button type="button" className="text-button" onClick={() => navigate('settings')}>{t('তারিখ ও সময় ঠিক করো', 'Review dates and times')}</button></section>}<ViewComponent /></main>
+        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}{health.warnings.length > 0 && !(data.personalRoutine && ['today', 'testprep', 'settings'].includes(view)) && !data.routineSetupRequired && <section className="schedule-warning" role="alert" aria-label={t('রুটিনের সময়সীমার সতর্কতা', 'Schedule capacity warning')}><strong>{t('সময়সীমা মিলিয়ে নাও', 'Check your schedule capacity')}</strong><ul>{health.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul><button type="button" className="text-button" onClick={() => navigate('settings')}>{t('তারিখ ও সময় ঠিক করো', 'Review dates and times')}</button></section>}{data.routineSetupRequired && !invalidSchedule && ['today', 'calendar', 'testprep', 'backlog'].includes(view) ? dbReady ? <PersonalRoutineSetup /> : <section className="card personal-setup" role="status"><p>{t('ডিভাইসের আগের তথ্য লোড করছি… তার আগে নতুন রুটিন তৈরি হবে না।', 'Loading your saved device data… no new routine is created before restoration.')}</p></section> : <RouteBoundary key={invalidSchedule ? 'settings' : view} onHome={() => navigate('today')} onSettings={() => navigate('settings')} onBackup={() => { try { downloadBackup(data); notify(t('JSON ব্যাকআপ ডাউনলোড শুরু হয়েছে। এতে আসল স্ক্যান/ভিডিও bytes নেই; মূল অ্যাপ বা ডেটা মুছো না।', 'JSON backup download started. It omits original scan/video bytes; do not uninstall or clear data.')); } catch { notify(t('ব্যাকআপ ডাউনলোড করা যায়নি। অ্যাপের ডেটা মুছো না; আবার চেষ্টা করো।', 'Backup could not download. Do not clear app data; try again.'), 'error'); } }}><Suspense fallback={<RouteLoading title={invalidSchedule || view === 'settings' ? t('সেটিংস ও ব্যাকআপ', 'Settings & backup') : t(currentNav?.label || 'প্রস্তুতি', currentNav?.labelEn || 'Preparation')} />}><ViewComponent /></Suspense></RouteBoundary>}</main>
       </div>
       <nav ref={bottomNavRef} className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>
         {(['today', 'calendar', 'syllabus', 'videos'] as const).map(id => NAV.find(n => n.id === id)!).map(n => (
-          <button key={n.id} className={view === n.id ? 'active' : ''} onClick={() => navigate(n.id)}>
+          <button key={n.id} className={view === n.id ? 'active' : ''} onPointerEnter={() => preloadView(n.id)} onFocus={() => preloadView(n.id)} onClick={() => navigate(n.id)}>
             <span className="mobile-nav-icon-wrap">
               <n.icon size={19} strokeWidth={view === n.id ? 2.1 : 1.7} />
               {n.id === 'timer' && timer.running && <i className="mobile-nav-live-dot" />}
@@ -720,7 +721,7 @@ export default function App() {
             <span>{t(n.short, n.shortEn)}</span>
           </button>
         ))}
-        <button type="button" className={mobileMenu ? 'active' : ''} onClick={() => setMobileMenu(v => !v)} aria-label={t('আরও — সব মেনু দেখো', 'More pages')}>
+        <button type="button" className={mobileMenu ? 'active' : ''} onClick={() => setMobileMenu(v => !v)} aria-expanded={mobileMenu} aria-controls="app-navigation" aria-label={t('আরও — সব মেনু দেখো', 'More pages')}>
           <span className="mobile-nav-icon-wrap">
             <Menu size={19} strokeWidth={1.7} />
             {dueRevisions > 0 && <i className="mobile-nav-badge-dot" />}

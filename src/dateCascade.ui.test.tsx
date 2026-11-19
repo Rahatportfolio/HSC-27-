@@ -54,7 +54,7 @@ describe('real Settings date cascade', () => {
     expect((screen.getByLabelText('Pick study date') as HTMLInputElement).value).toBe('2026-11-20');
     fireEvent.click(within(notice).getByRole('button', { name: 'Preview the first day' }));
     await waitFor(() => expect(window.location.hash).toBe('#calendar'));
-    expect(document.querySelector('.calendar-day-panel')?.textContent).toContain('20 November');
+    await waitFor(() => expect(document.querySelector('.calendar-day-panel')?.textContent).toContain('20 November'));
   }, 30000);
 
   it('shows the actual smart target on the start date rather than a not-started notice', async () => {

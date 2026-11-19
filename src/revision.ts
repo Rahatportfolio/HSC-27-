@@ -1,3 +1,4 @@
+import { isPersonalChapterDone, personalRoutineForChapter, personalCompletionEvidence } from './personalRoutine';
 import { readiness } from './advanced';
 import { CHAPTERS, chapterById } from './data';
 import type { AppData, Day } from './planner';
@@ -37,9 +38,15 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
   const stamp = nowIso();
   let advanced = data.advanced;
   for (const chapter of CHAPTERS) {
+    const personal = personalRoutineForChapter(data, chapter.id);
+    if (data.personalRoutine && !personal) continue; // Preserve unrelated legacy recall history.
+    const personalSource = `personal-chapter:${chapter.id}`;
     const tracked = advanced?.classes.some(c=>c.chapterId===chapter.id) || !!advanced?.preparation[chapter.id];
-    let completedOn = chapterCompletionDate(plan, chapter.id, data.completed);
-    if(tracked && advanced){
+    let completedOn = data.personalRoutine
+      ? isPersonalChapterDone(plan, chapter.id, data.completed, personal)
+        ? personalCompletionEvidence(data, chapter.id).sort((a, b) => Date.parse(a) - Date.parse(b)).map(at => todayKey(new Date(at))).at(-1) || null : null
+      : chapterCompletionDate(plan, chapter.id, data.completed);
+    if(!data.personalRoutine && tracked && advanced){
       if(readiness(data,chapter.id).coverage===100){
         completedOn=advanced.coverageDates?.[chapter.id] || todayKey(new Date(stamp));
         if(!advanced.coverageDates?.[chapter.id]){advanced={...advanced,coverageDates:{...advanced.coverageDates,[chapter.id]:completedOn}};changed=true;}
@@ -47,7 +54,7 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
     }
     const existing = byChapter.get(chapter.id) || [];
     if (!completedOn) {
-      const pending = existing.filter(item => !item.completedAt && !item.sourceTaskId?.startsWith('auto-'));
+      const pending = existing.filter(item => !item.completedAt && (data.personalRoutine ? item.sourceTaskId === personalSource : !item.sourceTaskId?.startsWith('auto-')));
       if (pending.length) {
         const pendingIds = new Set(pending.map(item => item.id));
         items = items.filter(item => !pendingIds.has(item.id));
@@ -57,9 +64,9 @@ export function ensureRevisions(plan: Day[], data: AppData): AppData {
     }
     for (const interval of REVISION_INTERVALS) {
       const dueDate = addDays(completedOn, interval);
-      const found = items.find(item => item.chapterId === chapter.id && item.interval === interval && !item.sourceTaskId?.startsWith('auto-'));
+      const found = items.find(item => item.chapterId === chapter.id && item.interval === interval && (data.personalRoutine ? item.sourceTaskId === personalSource : !item.sourceTaskId?.startsWith('auto-')));
       if (!found && items.length < LIMITS.revisions) {
-        items.push({ id: newId(), chapterId: chapter.id, subject: chapter.subject, dueDate, interval, createdAt: stamp });
+        items.push({ id: newId(), chapterId: chapter.id, subject: chapter.subject, dueDate, interval, createdAt: stamp, ...(data.personalRoutine ? { sourceTaskId: personalSource } : {}) });
         changed = true;
       } else if (found && !found.completedAt && !found.adjusted && found.dueDate !== dueDate) {
         items = items.map(item => item.id === found.id ? { ...item, dueDate } : item);

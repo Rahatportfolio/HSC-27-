@@ -1,3 +1,5 @@
+import { makePersonalMarkdown } from './personalExport';
+import { isPersonalTaskComplete } from './personalRoutine';
 import { CHAPTERS, PAPERS, SOURCES, SUBJECTS, syllabusNote, subjectById } from './data';
 import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, getPhases, getStats, isChapterDone, phaseName, taskStart, todayKey } from './planner';
 import type { AppData, Day, Task } from './planner';
@@ -41,7 +43,7 @@ export function makeICS(tasks: Task[], data: AppData, now = new Date()): string 
   return lines.map(foldICSLine).join('\r\n') + '\r\n';
 }
 export function exportCalendar(plan: Day[], data: AppData, range: 'day' | 'week' | 'all', date: string): number {
-  const tasks = plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && (range === 'all' || (range === 'day' ? taskStart(t).date === date : taskStart(t).date >= date && taskStart(t).date < addDaysLocal(date, 7))));
+  const tasks = plan.flatMap(d => d.tasks).filter(t => !isPersonalTaskComplete(t, data.completed) && (range === 'all' || (range === 'day' ? taskStart(t).date === date : taskStart(t).date >= date && taskStart(t).date < addDaysLocal(date, 7))));
   if (!tasks.length) return 0;
   downloadText(makeICS(tasks, data), `prostuti-${range}-${date}.ics`, 'text/calendar;charset=utf-8');
   return tasks.length;
@@ -49,6 +51,7 @@ export function exportCalendar(plan: Day[], data: AppData, range: 'day' | 'week'
 function addDaysLocal(date: string, days: number): string { return new Date(Date.parse(`${date}T00:00:00Z`) + days * 86400000).toISOString().slice(0, 10); }
 const mdCell = (s: string): string => s.replace(/\|/g, '\\|').replace(/\r?\n/g, ' ');
 export function makeMarkdown(plan: Day[], data: AppData): string {
+  if (data.personalRoutine) return makePersonalMarkdown(plan, data);
   const { settings } = data;
   const phases = getPhases(settings);
   const stats = getStats(plan, data, todayKey());

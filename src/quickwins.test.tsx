@@ -6,6 +6,7 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import App from './App';
+import { freshData, STORAGE_KEY } from './planner';
 
 beforeAll(() => {
   Object.defineProperty(window, 'matchMedia', {
@@ -22,7 +23,8 @@ beforeAll(() => {
   Object.defineProperty(window, 'indexedDB', { writable: true, value: undefined });
 });
 beforeEach(() => {
-  localStorage.clear();
+  localStorage.clear(); localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); // legacy saved profile
+
   sessionStorage.clear();
   window.location.hash = '';
 });
@@ -48,11 +50,13 @@ describe('continue-classes deep link', () => {
     const chip = await screen.findByRole('button', { name: /ক্লাস দেখা চালিয়ে যাও/ });
     fireEvent.click(chip);
 
-    const dialog = await screen.findByRole('dialog');
+    // The player route is intentionally lazy. Slower clean CI transforms need
+    // time to mount it; the handoff/data assertions are unchanged.
+    const dialog = await screen.findByRole('dialog', {}, { timeout: 8000 });
     expect(dialog).toBeTruthy();
     // The handoff flag is consumed exactly once.
     expect(sessionStorage.getItem('prostuti.openClass')).toBeNull();
-  });
+  }, 15000);
 });
 
 describe('calendar lock marker', () => {

@@ -10,6 +10,7 @@ import { createServer } from 'vite';
 import { freshData, STORAGE_KEY } from '../src/planner';
 import { freshTimerState, TIMER_KEY } from '../src/hooks';
 import { parseBackup } from '../src/storage';
+import { personalDataFixture } from '../src/test/personalRoutineFixture';
 
 if (!process.env.CHROMIUM_PATH) throw new Error('Set CHROMIUM_PATH to an installed Chromium/Chrome executable.');
 const output = process.env.MOBILE_EVIDENCE || '.cache/mobile-shell/browser';
@@ -274,11 +275,15 @@ try {
     });
     await context.close();
   }
-  await probe('first-study-day-toolbar', async () => {
-    // Before-start profiles do not show the daily progress pill. Exercise the
-    // actual first study day plus the conditional PWA install control as well.
+  for (const profile of [{ name: 'first-study-day-toolbar', data: freshData() }, { name: 'first-study-day-toolbar-personal', data: personalDataFixture() }]) await probe(profile.name, async () => {
+    // Before-start profiles do not show the daily progress pill. Exercise saved
+    // legacy AND S profiles on their first study day, with the PWA install button.
+    // Empty storage correctly opens availability setup and has no assigned work;
+    // first-launch onboarding itself is covered by check-personal-routine.ts.
     const context = await browser.newContext({ viewport: { width: 320, height: 760 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     try {
+      profile.data.settings.fontScale = 'lg';
+      await context.addInitScript(({ key, data }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(data)); }, { key: STORAGE_KEY, data: profile.data });
       const page = await context.newPage();
       await page.clock.install({ time: new Date('2026-11-20T06:00:00Z') });
       await prepare(page);
@@ -288,6 +293,7 @@ try {
         event.prompt = async () => {}; event.userChoice = Promise.resolve({ outcome: 'dismissed' }); window.dispatchEvent(event);
       });
       await page.waitForSelector('.install-app-btn');
+      assert.equal(await page.locator('.personal-home').count(), profile.data.personalRoutine ? 1 : 0, 'Wrong first-study-day profile');
       assert.equal(await page.locator('.topbar-progress-pill').count(), 1, 'First-day progress state was not exercised');
       const layout = await page.locator('.topbar').evaluate(bar => [...bar.querySelectorAll('button')].map(e => ({ name: e.getAttribute('aria-label') || e.className, rect: e.getBoundingClientRect().toJSON() })).filter(e => e.rect.width && e.rect.height));
       for (let i = 0; i < layout.length; i++) for (let j = i + 1; j < layout.length; j++) {
@@ -295,7 +301,7 @@ try {
         assert.ok(Math.min(a.right, b.right) - Math.max(a.left, b.left) <= 1 || Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) <= 1, `Toolbar buttons overlap: ${layout[i].name} / ${layout[j].name}`);
       }
       assert.ok(await page.locator('.global-search').evaluate(e => e.getBoundingClientRect().width >= 32), 'Search shrank below a usable touch target');
-      await page.screenshot({ path: `${output}/first-study-day-toolbar.png` });
+      await page.screenshot({ path: `${output}/${profile.name}.png` });
       return layout;
     } finally { await context.close(); }
   });

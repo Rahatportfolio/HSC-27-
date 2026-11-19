@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, cleanup, render, screen } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
 import App from './App';
 import { STORAGE_KEY, freshData } from './planner';
 
@@ -17,7 +17,7 @@ beforeAll(() => {
   });
 });
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: false });
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], shouldAdvanceTime: false });
   localStorage.clear();
   window.location.hash = '';
   localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData()));
@@ -32,8 +32,7 @@ const openTimer = async () => {
   const nav = screen.getAllByRole('button').find(b => (b.textContent || '').trim().startsWith('স্টাডি টাইমার'));
   if (!nav) throw new Error('timer nav item missing');
   await act(async () => { nav.click(); });
-  const view = document.querySelector('.view.timer-view');
-  if (!view) throw new Error('timer view did not mount');
+  const view = await waitFor(() => { const element = document.querySelector('.view.timer-view'); expect(element).toBeTruthy(); return element!; });
   return view as HTMLElement;
 };
 

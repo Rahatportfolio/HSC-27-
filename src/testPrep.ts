@@ -1,8 +1,10 @@
+import { hasFullPersonalAllocation, isPersonalTaskComplete } from './personalRoutine';
 import { CHAPTERS } from './data';
 import type { Priority } from './data';
 import { chapterPriority, chapterStage, isLearningComplete } from './learning';
-import { addDays, chapterStudyTasks, diffDays, hasFullTaskAllocation, percent, todayKey } from './planner';
+import { chapterStudyTasks, diffDays, hasFullTaskAllocation, percent } from './planner';
 import type { AppData, Day } from './planner';
+import { recentTaskPace } from './prediction';
 
 /**
  * Test Examination preparation mode: can all A-category chapters realistically be
@@ -36,28 +38,20 @@ const PACE_WINDOW = 14;
 export function testPrepStats(data: AppData, plan: Day[], today: string): TestPrepStats {
   const testDate = data.settings.testExamDate;
   const daysLeft = Math.max(0, diffDays(today < data.settings.startDate ? data.settings.startDate : today, testDate));
-  const aChapters = CHAPTERS.filter(chapter => chapterPriority(chapter, data) === 'A');
+  const aChapters = CHAPTERS.filter(chapter => data.personalRoutine ? data.personalRoutine.chapterIds.includes(chapter.id) : chapterPriority(chapter, data) === 'A');
   const doneA = aChapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
   const remainingA = aChapters.length - doneA;
 
   const aTasks = aChapters.flatMap(chapter => chapterStudyTasks(plan, chapter.id));
   const aTaskIds = new Set(aTasks.map(task => task.id));
   const scheduledParts = new Set(aTasks.map(task => task.originalTaskId || task.id));
-  let remainingATasks = aTasks.filter(task => !data.completed[task.id] && !data.completed[task.originalTaskId || task.id] && !data.removedTasks.includes(task.id)).length;
-  for (const chapter of aChapters) for (let part = 1; part <= chapter.effort; part++) {
+  let remainingATasks = aTasks.filter(task => !isPersonalTaskComplete(task, data.completed) && !data.completed[task.originalTaskId || task.id] && !data.removedTasks.includes(task.id)).length;
+  if (!data.personalRoutine) for (const chapter of aChapters) for (let part = 1; part <= chapter.effort; part++) {
     const id = `${chapter.id}:part-${part}`;
     if (!data.completed[id] && (!scheduledParts.has(id) || !hasFullTaskAllocation(aTasks, id, data.completed, true))) remainingATasks++;
   }
 
-  const windowFrom = addDays(today, -(PACE_WINDOW - 1));
-  let paceDone = 0;
-  for (const id of aTaskIds) {
-    const at = data.completed[id];
-    if (!at) continue;
-    const day = todayKey(new Date(at));
-    if (day >= windowFrom && day <= today) paceDone++;
-  }
-  const paceTasksPerDay = paceDone / PACE_WINDOW;
+  const paceTasksPerDay = recentTaskPace(plan.map(day => ({ ...day, tasks: day.tasks.filter(task => aTaskIds.has(task.id)) })), data, today, PACE_WINDOW);
 
   const divisor = Math.max(1, daysLeft);
   const requiredTasksPerDay = remainingATasks / divisor;
@@ -65,7 +59,8 @@ export function testPrepStats(data: AppData, plan: Day[], today: string): TestPr
   const dailyTarget = Math.max(remainingA > 0 ? 1 : 0, Math.ceil(requiredTasksPerDay));
   // A small daily requirement is reachable even after a slow fortnight; otherwise the
   // recent 14-day pace must at least cover what the calendar demands.
-  const onPace = remainingA === 0 || requiredTasksPerDay <= 0.25 || paceTasksPerDay >= requiredTasksPerDay;
+  const missingDurationsOrWork = !!data.personalRoutine && aChapters.some(chapter => !hasFullPersonalAllocation(data, plan, chapter.id));
+  const onPace = remainingA === 0 || !missingDurationsOrWork && (requiredTasksPerDay <= 0.25 || paceTasksPerDay >= requiredTasksPerDay);
   const warning: TestPrepStats['warning'] = remainingA === 0 ? null
     : daysLeft === 0 ? 'overdue'
       : onPace ? null
@@ -93,7 +88,7 @@ export function aCategoryChecklist(data: AppData, plan: Day[]): { id: string; ti
     }
   }
   return CHAPTERS
-    .filter(chapter => chapterPriority(chapter, data) === 'A')
+    .filter(chapter => data.personalRoutine ? data.personalRoutine.chapterIds.includes(chapter.id) : chapterPriority(chapter, data) === 'A')
     .map(chapter => ({
       id: chapter.id,
       title: chapter.title,

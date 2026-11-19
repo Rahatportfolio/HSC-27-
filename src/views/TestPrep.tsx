@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import PersonalStudyHome from './PersonalStudyHome';
 import {
   AlertTriangle, CalendarDays, Check, ChevronRight, CircleCheck, Flag, RefreshCw, Target, TrendingUp,
 } from 'lucide-react';
@@ -13,6 +14,10 @@ import { EmptyState, PageHeading, ProgressBar, ProgressRing } from '../component
 import { t } from '../i18n';
 
 export default function TestPrepView() {
+  const { data } = usePlanner();
+  return data.personalRoutine ? <PersonalStudyHome /> : <LegacyTestPrepView />;
+}
+function LegacyTestPrepView() {
   const { plan, data, setData, today, navigate, openChapter, notify, confirm } = usePlanner();
   const stats = useMemo(() => testPrepStats(data, plan, today), [data, plan, today]);
   const checklist = useMemo(() => aCategoryChecklist(data, plan), [data, plan]);

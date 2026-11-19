@@ -62,7 +62,7 @@ jobs:
         run: npm test
 
       - name: Release safety guard tests
-        run: node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs
+        run: node --test scripts/*node-test.mjs
 
       - name: Generate Android icons and splash screens
         run: npm run android:assets
@@ -175,7 +175,9 @@ jobs:
 
   device-checks:
     name: Android WebView device checks (API ${{ matrix.api }})
-    needs: apk
+    # Native jobs compile their own exact-source instrumented app. Run them in
+    # parallel with unit/web gates, never bypass them at either publisher.
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     strategy:
@@ -201,6 +203,7 @@ jobs:
       - name: Prepare instrumented app
         run: |
           npm ci
+          npx tsx scripts/generate-native-test-profiles.ts --check
           npm run android:assets
           npm run android:sync
           cd android
@@ -219,6 +222,13 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            # Disposable emulator only: a resumed Activity may still be behind
+            # its lock screen after a slow boot/build. Never fake window focus
+            # or tap through a permission/system dialog in the instrumentation.
+            adb shell svc power stayon true
+            adb shell settings put system screen_off_timeout 2147483647
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
             adb shell svc wifi disable
             adb shell svc data disable
             bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log) || status=$?; adb pull /sdcard/Download/prostuti-instrumented-shell ./android-shell-evidence || true; exit "$status"'
@@ -256,18 +266,32 @@ jobs:
             const dir = 'android-shell-evidence';
             if (!fs.existsSync(dir)) { core.warning('Native shell evidence directory is missing'); return; }
             const measurements = `${dir}/measurements.jsonl`;
-            if (fs.existsSync(measurements)) core.notice(fs.readFileSync(measurements, 'utf8'), {title: 'Android shell measurements'});
-            // The check API truncates each annotation message at 4096 chars.
-            // Keep the running/scrolled visual proof in numbered small chunks;
-            // full-resolution startup/paused images remain in the test artifact.
-            for (const name of ['scrolled-130']) {
+            const rows = fs.existsSync(measurements) ? fs.readFileSync(measurements, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
+            const summary = {api: rows[0]?.androidApi, stageCount: rows.length, freshSetup: rows.find(row => row.stage === 'availability-first'), chrome: rows.filter(row => row.chrome), clocks: rows.filter(row => row.clocks).map(row => ({stage: row.stage, count: row.clocks.length, minFont: Math.min(...row.clocks.map(clock => clock.font)), readable: row.clocks.every(clock => clock.hit && !clock.clipped)})), retained: rows.filter(row => row.notesUnchanged !== undefined), calibratedTaps: rows.filter(row => row.stage === 'native-coordinate-calibration').length, unfocused: rows.find(row => row.stage === 'unfocused-input'), physicalDeviceCertified: false};
+            core.notice(JSON.stringify(summary).slice(0, 3500), {title: 'Android shell summary'});
+            // GitHub keeps only ten notices per step and truncates each message
+            // at 4096 chars. Keep one summary plus <=9 small image chunks. Full
+            // resolution, full-frame PNGs and every raw row stay in the artifact.
+            const failure = ['unfocused-input', 'blocked-touch', 'failed-input'].find(name => fs.existsSync(`${dir}/${name}.png`));
+            const names = failure ? [failure] : ['legacy-scrolled-130', 'personal-scrolled-130', 'personal-offline-brain-after-restart'];
+            for (const name of names) {
               const path = `${dir}/${name}.png`;
               if (!fs.existsSync(path)) continue;
-              const image = await sharp(path).resize({width: 432}).webp({quality: 65}).toBuffer();
-              const data = image.toString('base64');
+              let pixels = await sharp(path).resize({width: 320}).toBuffer();
+              if (!failure) {
+                const meta = await sharp(pixels).metadata();
+                pixels = await sharp(pixels).extract({left: 0, top: 0, width: meta.width, height: Math.min(200, meta.height)}).toBuffer();
+              }
+              const limit = failure ? 27000 : 9000;
+              let data = '';
+              for (const quality of [60, 50, 40, 30, 20]) {
+                data = (await sharp(pixels).webp({quality}).toBuffer()).toString('base64');
+                if (data.length <= limit) break;
+              }
+              if (data.length > limit) { core.warning(`Preview too large; use full artifact for ${name}.png`); continue; }
               const total = Math.ceil(data.length / 3000);
               for (let part = 0; part < total; part++) {
-                core.notice(JSON.stringify({name: `${name}.webp`, encoding: 'base64', part, total, data: data.slice(part * 3000, (part + 1) * 3000)}), {title: `Android shell image ${name} part ${part + 1}/${total}`});
+                core.notice(JSON.stringify({name: `${name}${failure ? '' : '-top'}.webp`, croppedToTop: !failure, encoding: 'base64', part, total, data: data.slice(part * 3000, (part + 1) * 3000)}), {title: `Android shell image ${name} part ${part + 1}/${total}`});
               }
             }
       - name: Save Android test results
@@ -321,3 +345,86 @@ jobs:
           name: release-asset-verification
           path: release-asset-verification.json
           if-no-files-found: error
+
+  built-web:
+    name: Built web acceptance
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Test budget and development-download safety boundaries
+        run: node --test scripts/check-build-budget.node-test.mjs scripts/publish-current-development-apk.node-test.mjs
+      - name: Build production assets with mandatory budgets
+        run: npm run build
+      - name: Full production browser acceptance
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome
+          WEB_BROWSER_OUTPUT: .cache/built-web
+        run: npm run test:built-web
+      - name: Surface browser checkpoints and exact failing accessibility targets
+        if: always()
+        run: node scripts/summarize-browser-evidence.mjs .cache/built-web
+      - name: Retain raw browser evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-web-evidence
+          path: .cache/built-web/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  current-development-download:
+    name: Current tested development APK download
+    needs: [apk, device-checks, built-web]
+    if: >-
+      ${{ github.event_name == 'push' &&
+        github.ref == 'refs/heads/arena/80a86bf2-hsc-27' &&
+        contains(github.event.head_commit.message, '[current-dev-apk]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up JDK 21 for APK signature inspection
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Test all production and development guard boundaries
+        run: node --test scripts/*node-test.mjs
+      - name: Inspect exact APK and publish non-Latest development prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_DEV_APK_CONFIRMATION: current-development-only-no-compatible-update
+        run: node scripts/publish-current-development-apk.mjs
+      - name: Retain APK inspection and delivery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-development-apk-evidence
+          path: |
+            .cache/current-dev-apk/inspection.json
+            .cache/current-dev-apk/delivery.json
+            .cache/current-dev-apk/SHA256SUMS.txt
+          if-no-files-found: ignore
+          retention-days: 30

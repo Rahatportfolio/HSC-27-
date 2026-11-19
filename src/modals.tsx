@@ -1,9 +1,12 @@
 import { useState } from 'react';
+import { chapterWorkEstimate, hasFullPersonalAllocation, isPersonalTaskComplete, isSChapter, personalRoutineForChapter } from './personalRoutine';
+import PersonalAllocationHistory from './components/PersonalAllocationHistory';
+import PersonalChapterProgress from './components/PersonalChapterProgress';
 import type { CSSProperties, FormEvent } from 'react';
 import { ArrowRight, ArrowUpRight, BellRing, BookOpen, CalendarDays, Check, ChevronRight, Clock3, FolderOpen, List, NotebookPen, Play, Search, Timer } from 'lucide-react';
 import { CHAPTERS, PAPERS, SUBJECTS, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
-import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, percent, phaseName } from './planner';
+import { bn, chapterStudyTasks, formatDate, formatDayOffset, formatTime, formatDurationBn, percent, phaseName } from './planner';
 import { MISTAKE_LIMIT, newId, nowIso } from './storage';
 import { chapterMeta, setTaskCompletion, updateChapterMeta } from './study';
 import { scheduleFor } from './schedule';
@@ -12,9 +15,8 @@ import { INTERVAL_LABEL } from './revision';
 import { dueFlashcards } from './flashcards';
 import { usePlanner } from './context';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, Modal, ProgressBar, SubjectBadge } from './components';
-import { STARTER_QUESTIONS } from './quiz-data';
+import { BUILTIN_QUESTION_COUNTS } from './questionBankIndex';
 import { CLASS_CATALOG } from './videoCatalog';
-import { bnNum } from './selfAudit';
 import { t } from './i18n';
 import { chapterPriority, chapterStage, isLearningComplete, STAGES, STEPS } from './learning';
 import type { ChapterStage, MistakeCategory } from './types';
@@ -24,31 +26,38 @@ const PREP_LABEL = { none: 'শুরু হয়নি', practicing: 'অন�
 
 export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClose: () => void }) {
   const { plan, data, setData, navigate, toggleTask, startTimer } = usePlanner();
-  const tasks = chapterStudyTasks(plan, c.id), done = tasks.filter(task => data.completed[task.id]).length;
+  const tasks = chapterStudyTasks(plan, c.id), done = tasks.filter(task => isPersonalTaskComplete(task, data.completed)).length;
+  const sChapter = isSChapter(data, c.id);
+  const personal = personalRoutineForChapter(data, c.id);
+  const fullAllocation = !personal || hasFullPersonalAllocation(data, plan, c.id);
+  const workEstimate = personal ? chapterWorkEstimate(personal, c.id) : null;
   const meta = chapterMeta(data, c.id);
   const priority = chapterPriority(c, data);
   const stage = chapterStage(c, data, plan);
   const revisions = data.revisions.filter(item => item.chapterId === c.id && !item.completedAt).sort((a, b) => a.dueDate.localeCompare(b.dueDate));
   return <Modal title={c.title} onClose={onClose} wide>
     <div className="chapter-modal-meta"><SubjectBadge subject={c.subject} /><span>পত্র {bn(c.paper)} · পাঠ/অধ্যায় {bn(c.number)}</span><span className={`priority-badge ${priority.toLowerCase()}`}>{priority} · {PRIORITY_LABEL[priority]}</span>{meta.weak && <span className="weak-pill">{t("দুর্বল", "Weak")}</span>}</div>
-    <p className="modal-description">{c.focus}</p>
+    <p className="modal-description">{c.focus}</p>{sChapter && <div className="personal-pair-note"><span className="s-category-badge">S</span> {t('তোমার গুরুত্বপূর্ণ সিলেবাসের অংশ। শুধু অর্ধেক ক্লাস/দৃশ্যমান সেশন শেষ করা পুরো অধ্যায় শেষ নয়। সময় ও S তালিকা বদলাতে Settings ব্যবহার করো।', 'Part of your important syllabus. A half-class or visible fragment is not a whole completed chapter. Edit availability and S selection in Settings.')}<button type="button" className="text-button" onClick={() => { navigate('settings'); onClose(); }}>{t('রুটিন ও প্রকৃত ক্লাস-সময়', 'Routine & actual class times')}</button></div>}
     <div className="form-grid">
       <label>{t('নিজের অগ্রাধিকার', 'Personal priority')}<select value={priority} onChange={e => setData(d => updateChapterMeta(d, c.id, { priority: e.target.value as 'A' | 'B' | 'C' }))}>{(['A','B','C'] as const).map(p => <option key={p} value={p}>{p} · {PRIORITY_LABEL[p]}</option>)}</select></label>
-      <label>{t('অধ্যায়ের অবস্থা', 'Chapter status')}<select value={meta.stage || 'auto'} onChange={e => setData(d => updateChapterMeta(d, c.id, { stage: e.target.value === 'auto' ? undefined : e.target.value as ChapterStage }))}><option value="auto">{t('সেশন থেকে স্বয়ংক্রিয়', 'Automatic from sessions')}</option>{STAGES.map(item => <option key={item.id} value={item.id}>{t(item.bn, item.en)}</option>)}</select></label>
+      {!personal && <label>{t('অধ্যায়ের অবস্থা', 'Chapter status')}<select value={meta.stage || 'auto'} onChange={e => setData(d => updateChapterMeta(d, c.id, { stage: e.target.value === 'auto' ? undefined : e.target.value as ChapterStage }))}><option value="auto">{t('সেশন থেকে স্বয়ংক্রিয়', 'Automatic from sessions')}</option>{STAGES.map(item => <option key={item.id} value={item.id}>{t(item.bn, item.en)}</option>)}</select></label>}
     </div>
-    <p className="tiny-muted">{t('অগ্রাধিকার পড়ার ক্রমের পরামর্শ, পরীক্ষার পূর্বাভাস নয়। C অধ্যায়ও পড়তে হবে। অগ্রাধিকার বদলালে বর্তমান রুটিনের ক্রম বদলায় না। নিজে অবস্থা বাছলে সেশন টিক তার বদলে গণনা হবে না।', 'Priority suggests study order, not exam predictions. C chapters remain in the syllabus. Changing priority does not reorder the current plan. A chosen status overrides session-derived completion.')}</p>
-    <div className="prep-grid">{STEPS.map(step => <label className="check-line" key={step.id}><input type="checkbox" checked={!!meta.steps?.[step.id]} onChange={e => { const checked = e.target.checked; setData(d => updateChapterMeta(d, c.id, { steps: { ...chapterMeta(d, c.id).steps, [step.id]: checked } })); }} />{t(step.bn, step.en)}</label>)}</div>
-    {(() => { const sch = scheduleFor(c.id, plan); const links = classLinksFor(c.id); const lastDate = sch?.end; return <>
-      {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} role="img" aria-label={t(`গুরুত্ব: ${bn(sch.star)}/৫ স্টার`, `Importance: ${sch.star} of 5 stars`)}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{bn(sch.hours)} ঘণ্টা</span>{lastDate && <span>{t("রুটিনে শেষ", "Target finish")} <strong>{formatDate(lastDate)}</strong></span>}</div>}
+    {!data.personalRoutine && <p className="tiny-muted">{t('অগ্রাধিকার পড়ার ক্রমের পরামর্শ, পরীক্ষার পূর্বাভাস নয়। C অধ্যায়ও পড়তে হবে। অগ্রাধিকার বদলালে বর্তমান রুটিনের ক্রম বদলায় না। নিজে অবস্থা বাছলে সেশন টিক তার বদলে গণনা হবে না।', 'Priority suggests study order, not exam predictions. C chapters remain in the syllabus. Changing priority does not reorder the current plan. A chosen status overrides session-derived completion.')}</p>}
+    {personal && <><p className="tiny-muted">{t('অবস্থা ছয়টি কাজ থেকে হিসাব হয়; এক ক্লিকে পুরো অধ্যায় সম্পন্ন করা বন্ধ আছে।', 'Status is calculated from six required groups; there is no one-click whole-chapter completion.')}{meta.stage && <span> {t('পুরোনো ব্যক্তিগত অবস্থা রাখা আছে (সম্পন্ন হওয়ার প্রমাণ নয়)', 'Retained old self-assessment (not completion evidence)')}: {t(STAGES.find(item => item.id === meta.stage)!.bn, STAGES.find(item => item.id === meta.stage)!.en)}.</span>}</p><PersonalChapterProgress chapterId={c.id} /></>}
+    {!personal && <div className="prep-grid">{STEPS.map(step => <label className="check-line" key={step.id}><input type="checkbox" checked={!!meta.steps?.[step.id]} onChange={e => { const checked = e.target.checked; setData(d => updateChapterMeta(d, c.id, { steps: { ...chapterMeta(d, c.id).steps, [step.id]: checked } })); }} />{t(step.bn, step.en)}</label>)}</div>}
+    {(() => { const sch = scheduleFor(c.id, plan); const links = classLinksFor(c.id); const lastDate = fullAllocation ? sch?.end : undefined; return <>
+      {sch && <div className="chapter-plan-strip"><span className={`star-badge s${sch.star}`} role="img" aria-label={t(`গুরুত্ব: ${bn(sch.star)}/৫ স্টার`, `Importance: ${sch.star} of 5 stars`)}>{'★'.repeat(sch.star)}{'☆'.repeat(5 - sch.star)}</span><span><Clock3 size={14} />{workEstimate ? workEstimate.complete ? formatDurationBn(workEstimate.minutes) : t('পূর্ণ সময় অজানা', 'Full duration unknown') : `${bn(sch.hours)} ${t('ঘণ্টা', 'hours')}`}</span>{lastDate && <span>{sChapter ? t("শেষ বরাদ্দ (সম্পন্ন নয়)", "Last allocation (not completion)") : t("রুটিনে শেষ", "Target finish")} <strong>{formatDate(lastDate)}</strong></span>}</div>}
       {links && <ClassBlock classes={links} hint={t("প্রতিটি অংশে সরাসরি ক্লাস ও প্লেলিস্টের পাশাপাশি শিক্ষকদের চ্যানেলে খোঁজার লিংক সাজানো আছে।", "Direct classes and playlists are paired with quick searches on favourite teachers’ channels.")} />}
     {BANGLA_LESSONS[c.id] && <LessonList lessons={BANGLA_LESSONS[c.id]} />}
     </>; })()}
     {c.note && <div className="notice-box"><BookOpen size={18} /><p>{c.note}</p></div>}
     <div className="chapter-modal-progress"><span>{bn(done)}/{bn(tasks.length)} ধাপ শেষ · {isLearningComplete(stage) ? 'অধ্যায় সম্পন্ন' : 'প্রতিটি ধাপ আলাদাভাবে টিক দাও'}</span><ProgressBar value={percent(done, tasks.length)} /></div>
-    <div className="chapter-session-list">{tasks.map((t, index) => <div key={t.id} className="chapter-session"><button className={`task-check ${data.completed[t.id] ? 'checked' : ''}`} aria-pressed={!!data.completed[t.id]} aria-label={`${formatDate(t.date)} ধাপ সম্পন্ন`} onClick={() => toggleTask(t.id)}>{data.completed[t.id] && <Check size={16} />}</button><div><strong>{formatDate(t.date, 'long')} · ধাপ {bn(index + 1)}</strong><span>{formatTime(t.startMinute)}{formatDayOffset(t.startMinute)} – {formatTime(t.endMinute)}{formatDayOffset(t.endMinute)}</span><p>{t.detail}</p></div></div>)}</div>
-    {!tasks.length && <EmptyState title={t("এই ইউনিটের তারিখ পাওয়া যায়নি", "No date found for this unit")} description={t('সেটিংস থেকে শুরুর তারিখ যাচাই করো।', 'Check the start date in Settings.')} />}
+    <div className="chapter-session-list">{tasks.map((t, index) => <div key={t.id} className="chapter-session"><button className={`task-check ${isPersonalTaskComplete(t, data.completed) ? 'checked' : ''}`} aria-pressed={isPersonalTaskComplete(t, data.completed)} aria-label={`${formatDate(t.date)} ধাপ সম্পন্ন`} onClick={() => toggleTask(t.id)}>{isPersonalTaskComplete(t, data.completed) && <Check size={16} />}</button><div><strong>{formatDate(t.date, 'long')} · ধাপ {bn(index + 1)}</strong><span>{formatTime(t.startMinute)}{formatDayOffset(t.startMinute)} – {formatTime(t.endMinute)}{formatDayOffset(t.endMinute)}</span><p>{t.detail}</p></div></div>)}</div>
+    {personal && <PersonalAllocationHistory tasks={(personal.history || []).filter(task => task.chapterIds.includes(c.id))} />}
+    {!tasks.length && !(personal && isLearningComplete(stage)) && <EmptyState title={t("এই ইউনিটের তারিখ পাওয়া যায়নি", "No date found for this unit")} description={t('সেটিংস থেকে শুরুর তারিখ যাচাই করো।', 'Check the start date in Settings.')} />}
+    {personal && !fullAllocation && <p className="personal-warning">{t('অধ্যায়ের সব কাজ বরাদ্দ হয়নি। দৃশ্যমান অংশ টিক দিয়ে পুরো অধ্যায় শেষ দেখানো বন্ধ আছে।', 'Not all chapter work is allocated. Completing visible fragments cannot certify the whole chapter.')}</p>}
     <div className="chapter-tool-row">
-      {tasks.length > 0 && <button className="button secondary" onClick={() => setData(d => { const finish = !isLearningComplete(chapterStage(c, d, plan)); return updateChapterMeta(setTaskCompletion(d, tasks.map(task => task.id), finish, plan), c.id, { stage: finish ? 'completed' : 'inProgress' }); })}><Check size={16} />{isLearningComplete(stage) ? t('অধ্যায় অসম্পূর্ণ করো', 'Mark chapter incomplete') : t('পুরো অধ্যায় সম্পন্ন করো', 'Mark chapter complete')}</button>}
+      {!personal && tasks.length > 0 && <button className="button secondary" disabled={!fullAllocation && !isLearningComplete(stage)} onClick={() => setData(d => { const finish = !isLearningComplete(chapterStage(c, d, plan)); return updateChapterMeta(setTaskCompletion(d, tasks.map(task => task.id), finish, plan), c.id, { stage: finish ? 'completed' : 'inProgress' }); })}><Check size={16} />{isLearningComplete(stage) ? t('অধ্যায় অসম্পূর্ণ করো', 'Mark chapter incomplete') : t('পুরো অধ্যায় সম্পন্ন করো', 'Mark chapter complete')}</button>}
       <button className="button secondary" onClick={() => { startTimer(c.subject, c.id); onClose(); }}><Timer size={16} />{t("এই অধ্যায়ে টাইমার", "Timer for this chapter")}</button>
       <button className={`button secondary ${meta.weak ? 'selected' : ''}`} aria-pressed={meta.weak} onClick={() => setData(d => updateChapterMeta(d, c.id, { weak: !meta.weak }))}><NotebookPen size={16} />{meta.weak ? 'দুর্বল তালিকা থেকে সরাও' : 'দুর্বল হিসেবে রাখো'}</button>
       {tasks[0] && <button className="button secondary" onClick={() => { navigate('today', tasks[0].date); onClose(); }}>{t("রুটিনে দেখো", "See it in the routine")}<ArrowRight size={16} /></button>}
@@ -59,15 +68,15 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
       // The class block above reads the older per-chapter list, which has no board
       // group; the verified catalog does, so the board count comes from there.
       const boardLinks = CLASS_CATALOG.filter(item => item.chapterId === c.id && item.classType === 'board').length;
-      const bank = STARTER_QUESTIONS.filter(question => question.chapterId === c.id).length;
+      const bank = BUILTIN_QUESTION_COUNTS[c.id] || 0;
       return <div className="chapter-source-note">
         <p><strong>{t('প্রশ্নের উৎস', 'Where the questions come from')}</strong>{' '}
           {t(
-            `এই অধ্যায়ের ${bnNum(bank)}টি MCQ অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে—বোর্ডের মূল প্রশ্নপত্র থেকে নয়।`,
+            `এই অধ্যায়ের ${bn(bank)}টি MCQ অ্যাপের নিজের পাঠ্যবই-যাচাইকৃত ব্যাংক থেকে—বোর্ডের মূল প্রশ্নপত্র থেকে নয়।`,
             `This chapter's ${bank} MCQs come from the app's own textbook-checked bank, not an original board paper.`,
           )}</p>
         <p className="tiny-muted">{boardLinks > 0
-          ? t(`এই অধ্যায়ে ${bnNum(boardLinks)}টি বোর্ড-প্রশ্নের ভিডিও লিংক যাচাই করা আছে।`, `${boardLinks} board-question video link(s) are verified for this chapter.`)
+          ? t(`এই অধ্যায়ে ${bn(boardLinks)}টি বোর্ড-প্রশ্নের ভিডিও লিংক যাচাই করা আছে।`, `${boardLinks} board-question video link(s) are verified for this chapter.`)
           : t('এই অধ্যায়ে বোর্ড-প্রশ্নের যাচাই করা ভিডিও নেই—তাই অ্যাপ কোনো বোর্ড প্রশ্নের দাবি করে না।', 'No verified board-question video exists for this chapter, so the app makes no board-paper claim here.')}</p>
       </div>;
     })()}

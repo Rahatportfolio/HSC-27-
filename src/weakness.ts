@@ -2,9 +2,10 @@ import { CHAPTERS, sortChapters } from './data';
 import type { Chapter, SubjectId } from './data';
 import type { AppData, Day } from './planner';
 import { addDays, diffDays } from './planner';
-import { allQuestions, weakChapters } from './analytics';
+import { weakChapters } from './analytics';
+import { questionChapters } from './questionBankIndex';
 import type { WeakChapter } from './analytics';
-import { examChapterAccuracy } from './examSim';
+import { examChapterAccuracy } from './examHistory';
 import { retryBuckets } from './retryLoop';
 import { chapterStage } from './learning';
 
@@ -45,7 +46,7 @@ const CQ_MIN_SAMPLE = 1;
 
 /** Accuracy per chapter from the stored attempt history. */
 export function chapterAccuracy(data: AppData): Map<string, { total: number; correct: number; accuracy: number }> {
-  const chapterOf = new Map(allQuestions(data).map(question => [question.id, question.chapterId]));
+  const chapterOf = questionChapters(data);
   const rows = new Map<string, { total: number; correct: number }>();
   for (const attempt of data.attempts) {
     const chapterId = chapterOf.get(attempt.questionId);

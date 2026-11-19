@@ -4,7 +4,7 @@ import { parseBackup, LIMITS } from './storage';
 import { beginExam, buildExamQuestions, examPool, saveExamSession } from './examSim';
 import type { SaveExamInput } from './examSim';
 import { generateQuestions } from './questionGen';
-import { allQuestions } from './analytics';
+import { allQuestions } from './questionBank';
 
 const question = generateQuestions('physics-1-7', { variant: 'az-persistent-exam', count: 1 })[0];
 const input: SaveExamInput & { id: string } = { id: 'az-stable-paper', mode: 'chapter', title: 'Persistent generated paper', questions: [question], answers: { [question.id]: (question.answer + 1) % 4 }, durationMin: 1, timeTakenSec: 12, date: '2026-11-20' };

@@ -2,6 +2,7 @@ import type { AppData, Day } from './planner';
 import { addDays, diffDays, todayKey } from './planner';
 import { downloadText } from './exports';
 import { t } from './i18n';
+import { chaptersCompletedBetween, completedTasksBetween } from './analytics';
 
 /**
  * Manual backups only work if the student remembers them, so the app keeps a tiny
@@ -42,7 +43,7 @@ export function isBackupSnoozed(today = todayKey()): boolean {
 }
 /** Anything worth losing: progress, measured sessions, questions, scores or written notes. */
 export function hasStudyData(data: AppData): boolean {
-  return !!data.advanced?.classes.length || !!Object.keys(data.advanced?.preparation || {}).length || data.pdfs.length > 0 || Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
+  return !!data.studyBrain?.checkIns.length || !!data.studyBrain?.feedback.length || !!data.advanced?.classes.length || !!Object.keys(data.advanced?.preparation || {}).length || data.pdfs.length > 0 || Object.keys(data.completed).length > 0 || data.studySessions.length > 0 || data.tests.length > 0
     || data.cq.length > 0 || data.mistakes.length > 0 || data.libraryNotes.length > 0
     || Object.values(data.notes).some(note => note.trim()) || data.revisions.some(item => !!item.completedAt)
     || data.questions.length > 0 || data.attempts.length > 0 || data.videos.length > 0
@@ -128,14 +129,16 @@ export function weekReport(data: AppData, plan: Day[], today = todayKey(), subje
   const perSubject = new Map<string, number>();
   for (const session of sessions) perSubject.set(session.subject, (perSubject.get(session.subject) || 0) + session.minutes);
   const ranked = [...perSubject.entries()].sort((a, b) => b[1] - a[1]);
-  const tasksDone = Object.values(data.completed).filter(at => inWeek(at.slice(0, 10))).length;
+  const tasksDone = data.personalRoutine ? completedTasksBetween(plan, data, from, today).length
+    : Object.values(data.completed).filter(at => inWeek(at.slice(0, 10))).length;
   const attempts = data.attempts.filter(item => inWeek(item.date));
   const correct = attempts.filter(item => item.correct).length;
   const cq = data.cq.filter(item => inWeek(item.date));
   const tests = data.tests.filter(item => inWeek(item.date));
-  const chaptersDone = new Set(plan.flatMap(day => day.tasks)
-    .filter(task => !!data.completed[task.id] && inWeek(data.completed[task.id].slice(0, 10)))
-    .flatMap(task => task.chapterIds)).size;
+  const chaptersDone = data.personalRoutine ? chaptersCompletedBetween(plan, data, from, today).length
+    : new Set(plan.flatMap(day => day.tasks)
+      .filter(task => !!data.completed[task.id] && inWeek(data.completed[task.id].slice(0, 10)))
+      .flatMap(task => task.chapterIds)).size;
   const report: WeekReport = {
     from, to: today, days: 7, sessions: sessions.length, minutes,
     tasksDone, chaptersDone,
@@ -151,7 +154,7 @@ export function weekReport(data: AppData, plan: Day[], today = todayKey(), subje
   report.lines = [
     `প্রস্তুতি · সাপ্তাহিক রিপোর্ট (${from} → ${today})`,
     `পড়ার সময়: ${hours} ঘণ্টা · ${sessions.length} সেশন · ${tasksDone} কাজ শেষ`,
-    `অধ্যায় এগিয়েছে: ${chaptersDone}টি · রিভিশন: ${report.revisions}টি`,
+    `${data.personalRoutine ? 'ছয়টি কাজসহ সম্পন্ন অধ্যায়' : 'অধ্যায় এগিয়েছে'}: ${chaptersDone}টি · রিভিশন: ${report.revisions}টি`,
     `MCQ: ${attempts.length}টি · নির্ভুলতা ${report.accuracy}%`,
     cq.length ? `CQ: ${cq.length}টি · গড় ${report.cqAverage}%` : 'CQ: এই সপ্তাহে লেখা হয়নি',
     tests.length ? `টেস্ট: ${tests.length}টি · গড় ${report.testAverage}%` : 'টেস্ট: এই সপ্তাহে হয়নি',

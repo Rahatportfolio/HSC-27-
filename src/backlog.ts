@@ -1,3 +1,5 @@
+import { reflowPersonalPlan } from './personalReflow';
+import { isPersonalTaskComplete, personalCapacity } from './personalRoutine';
 import { CHAPTERS, chapterById } from './data';
 import type { SubjectId } from './data';
 import { addDays, taskStart } from './planner';
@@ -122,13 +124,13 @@ export function backlogItems(plan: Day[], data: AppData, today: string): Backlog
   const items = new Map<string, BacklogItem>();
   const carriedByTask = new Map<string, Carryover[]>();
   for (const carryover of data.carryovers) {
-    if (data.completed[carryover.taskId]) continue;
+    if (isPersonalTaskComplete({ id: carryover.taskId }, data.completed)) continue;
     carriedByTask.set(carryover.taskId, [...(carriedByTask.get(carryover.taskId) ?? []), carryover]);
   }
 
   for (const day of plan) {
     for (const task of day.tasks) {
-      if (data.completed[task.id] || data.removedTasks.includes(task.id)) continue;
+      if (isPersonalTaskComplete(task, data.completed) || data.removedTasks.includes(task.id)) continue;
       const start = taskStart(task);
       if (start.date >= today) continue;
       const chapterWork = task.chapterIds.length > 0;
@@ -218,6 +220,20 @@ export function planBacklog(
 ): BacklogPlan {
   const horizonDays = Math.max(1, Math.min(30, Math.round(options.horizonDays ?? BACKLOG_HORIZON_DEFAULT)));
   const minBlock = Math.max(15, Math.min(90, Math.round(options.minBlockMinutes ?? BACKLOG_MIN_BLOCK_DEFAULT)));
+  if (data.personalRoutine) {
+    const effective = reflowPersonalPlan(data, plan, today);
+    const carried = effective.flatMap(day => day.tasks).filter(task => !isPersonalTaskComplete(task, data.completed) && (task.date < today || task.rescheduledFrom && task.rescheduledFrom < today));
+    const pending = carried.map(task => ({ taskId: task.id, key: task.id, sourceTaskIds: [task.id], title: task.title, subject: task.subject, chapterIds: task.chapterIds,
+      minutes: task.endMinute - task.startMinute, fromDate: task.rescheduledFrom || task.date, daysLate: Math.max(0, Math.round((Date.parse(today) - Date.parse(task.rescheduledFrom || task.date)) / 86400000)), reason: 'unfinished' as const, alreadyCarried: task.date >= today, carryoverIds: [] }));
+    const placements = pending.flatMap(item => { const task = carried.find(task => task.id === item.taskId)!; return task.date >= today ? [{ itemKey: item.key, taskIds: [task.id], title: task.title, subject: task.subject, minutes: item.minutes, toDate: task.date }] : []; });
+    const days = effective.filter(day => day.date >= today && day.date < addDays(today, horizonDays)).map(day => {
+      const added = placements.filter(item => item.toDate === day.date).reduce((sum, item) => sum + item.minutes, 0), cap = personalCapacity(data, day.date), total = day.tasks.reduce((sum, task) => sum + task.endMinute - task.startMinute, 0);
+      return { date: day.date, before: total - added, added, cap, room: Math.max(0, cap - total), itemCount: placements.filter(item => item.toDate === day.date).length, displaced: added > 0 };
+    });
+    return { items: pending, totalMinutes: pending.reduce((sum, item) => sum + item.minutes, 0), buckets: backlogBuckets(pending), days,
+      moves: placements.map(item => ({ itemKey: item.itemKey, taskId: item.taskIds[0], title: item.title, minutes: item.minutes, fromDate: pending.find(row => row.key === item.itemKey)!.fromDate, toDate: item.toDate })),
+      placements, unplaced: pending.filter(item => !placements.some(placement => placement.itemKey === item.key)), merged: [], cap: personalCapacity(data, today), displacedDays: days.filter(day => day.displaced).length, horizonDays };
+  }
   const buffer = options.bufferMinutes ?? data.settings.adaptiveBuffer ?? 30;
   const items = mergeFragments(backlogItems(plan, data, today), minBlock);
   const cap = adaptiveCap(data, today, buffer);
@@ -303,6 +319,8 @@ export function planBacklog(
  * and is reported.
  */
 export function applyBacklogPlan(plan: BacklogPlan, data: AppData, sourcePlan: Day[]): { data: AppData; placed: number } {
+  // Already applied by the effective personal projection. Never create duplicate carryovers.
+  if (data.personalRoutine) return { data, placed: plan.placements.length };
   let next = data;
   let placed = 0;
   const taskById = new Map<string, { title: string; subject: SubjectId; chapterIds: string[]; minutes: number; date: string }>();

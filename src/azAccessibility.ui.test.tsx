@@ -86,12 +86,13 @@ describe('A–Z accessible names and honest control semantics', () => {
     expect(stored.questions.at(-1)).toMatchObject({ question: 'Synthetic four-option question', options: ['Answer 0', 'Answer 1', 'Answer 2', 'Answer 3'], answer: 2 });
   });
 
-  it('hides the decorative profile initial from the accessible button name without hiding the button', async () => {
+  it('hides the decorative profile icon from the accessible button name without hiding the button', async () => {
     const data = freshData(); data.settings.language = 'en'; data.settings.name = 'রাহাত';
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data)); window.location.hash = '#calendar';
     render(<App />); await screen.findByRole('region', { name: 'Plan milestones' });
     const profile = screen.getByRole('button', { name: 'Profile & settings' });
-    expect(profile.querySelector('[aria-hidden="true"]')?.textContent).toBe('র');
+    expect(profile.querySelector('svg')?.getAttribute('aria-hidden')).toBe('true');
+    expect(profile.textContent).toBe(''); // No ambiguous initial for short-text name matching.
     fireEvent.click(profile); expect(await screen.findByText('Your study, your rhythm.')).toBeTruthy();
   });
 

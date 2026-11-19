@@ -1,10 +1,12 @@
 import { parseAdvanced } from './advanced';
+import { parsePersonalRoutine, resumeUnfinishedPersonalPhase } from './personalRoutine';
+import { parseStudyBrain } from './studyBrain';
 import { CHAPTERS, PAPERS, SUBJECTS, chapterById } from './data';
 import { addDays, isValidDate, STORAGE_KEY, todayKey } from './planner';
 import type { AppData, Settings } from './planner';
 import { DEFAULT_SETTINGS, freshData } from './planner';
 import type { CqParts, DayScheduleOverride, Flashcard, FlashcardCategory, MistakeCategory, MistakeRetry, PrepStatus, RecallRating, RevisionInterval, StudyMode, TestKind, VideoLink, ScannedNoteMeta, ExamMode, ExamCadence } from './types';
-import { STARTER_QUESTIONS } from './quiz-data';
+import { BUILTIN_QUESTION_IDS } from './questionBankIndex';
 import { PDF_MATERIAL_IDS } from './pdfCatalog';
 
 const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -229,7 +231,7 @@ export function parseBackup(rawText: string): AppData {
 
   if (raw.activeExam !== undefined) {
     const exam = raw.activeExam;
-    const known = new Set([...STARTER_QUESTIONS, ...result.questions].map(q => q.id));
+    const known = new Set([...BUILTIN_QUESTION_IDS, ...result.questions.map(q => q.id)]);
     if (!object(exam) || !nonEmpty(exam.id, 180) || !nonEmpty(exam.title, 200) || !examModes.has(exam.mode as ExamMode) || (exam.subject !== undefined && !isSubject(exam.subject)) || (exam.cadence !== undefined && !examCadences.has(exam.cadence as ExamCadence)) || !Array.isArray(exam.questionIds) || exam.questionIds.length < 1 || exam.questionIds.length > 50 || exam.questionIds.some(id => !nonEmpty(id, 180) || !known.has(id)) || new Set(exam.questionIds).size !== exam.questionIds.length || !int(exam.index, 0, exam.questionIds.length - 1) || !int(exam.startedAt, 1, 8_640_000_000_000_000) || !int(exam.deadline, 1, 8_640_000_000_000_000) || Number(exam.deadline) - Number(exam.startedAt) !== Math.max(5, exam.questionIds.length) * 60_000 || !object(exam.answers) || Object.entries(exam.answers).some(([id, answer]) => !(exam.questionIds as unknown[]).includes(id) || !int(answer, 0, 3))) throw new Error('চলমান পরীক্ষার উত্তরপত্র সঠিক নয়।');
     const answers: Record<string, number> = {};
     for (const [id, answer] of Object.entries(exam.answers)) put(answers, id, Number(answer));
@@ -495,17 +497,35 @@ export function parseBackup(rawText: string): AppData {
   }
 
   if (raw.advanced !== undefined) result.advanced = parseAdvanced(raw.advanced);
-  return result;
+  if (raw.routineSetupRequired !== undefined) {
+    if (typeof raw.routineSetupRequired !== 'boolean') throw new Error('Routine setup flag invalid');
+    result.routineSetupRequired = raw.routineSetupRequired;
+  }
+  if (raw.personalRoutine !== undefined) result.personalRoutine = parsePersonalRoutine(raw.personalRoutine);
+  if (raw.personalPhases !== undefined) {
+    if (!object(raw.personalPhases) || Object.keys(raw.personalPhases).some(key => !['S', 'A', 'B', 'C'].includes(key))) throw new Error('Personal phases invalid');
+    result.personalPhases = {};
+    for (const scope of ['S', 'A', 'B', 'C'] as const) if (raw.personalPhases[scope] !== undefined) {
+      const routine = parsePersonalRoutine(raw.personalPhases[scope]);
+      if (routine.scope !== scope || result.personalRoutine?.scope === scope) throw new Error('Personal phase scope invalid');
+      result.personalPhases[scope] = routine;
+    }
+    const selected = [result.personalRoutine, ...Object.values(result.personalPhases)].flatMap(routine => routine?.chapterIds || []);
+    if (new Set(selected).size !== selected.length) throw new Error('Personal phase chapters overlap');
+  }
+  if (result.personalRoutine && result.personalRoutine.scope !== 'S' && !result.personalPhases?.S) throw new Error('A later personal phase must retain its S prerequisite.');
+  if (raw.studyBrain !== undefined) result.studyBrain = parseStudyBrain(raw.studyBrain);
+  return resumeUnfinishedPersonalPhase(result);
 }
 
 export function loadData(): { data: AppData; warning: string } {
   let raw: string | null = null;
   try {
     raw = localStorage.getItem(STORAGE_KEY);
-    return { data: raw ? parseBackup(raw) : freshData(), warning: '' };
+    return { data: raw ? parseBackup(raw) : { ...freshData(), routineSetupRequired: true }, warning: '' };
   } catch {
     if (raw) { try { localStorage.setItem(RECOVERY_KEY, raw); } catch { /* storage may be unavailable/full */ } }
-    return { data: freshData(), warning: 'সেভ করা তথ্য পড়া যায়নি। সম্ভব হলে কাঁচা তথ্য রিকভারি ফাইল হিসেবে রাখা হয়েছে; Settings থেকে নামিয়ে রাখো।' };
+    return { data: { ...freshData(), routineSetupRequired: true }, warning: 'সেভ করা তথ্য পড়া যায়নি। সম্ভব হলে কাঁচা তথ্য রিকভারি ফাইল হিসেবে রাখা হয়েছে; Settings থেকে নামিয়ে রাখো।' };
   }
 }
 export function saveData(data: AppData, forceTimestamp = false): boolean {

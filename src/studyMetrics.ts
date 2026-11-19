@@ -1,7 +1,7 @@
 import { SUBJECTS, CHAPTERS } from "./data";
 import { addDays, todayKey } from "./planner";
 import type { AppData } from "./planner";
-import { STARTER_QUESTIONS } from "./quiz-data";
+import { questionChapters } from "./questionBankIndex";
 
 export function dailyPractice(data: AppData, date: string) {
   return {
@@ -54,12 +54,10 @@ export function weeklySubjects(data: AppData, today: string) {
   });
 }
 export function weakChapters(data: AppData) {
-  const questions = new Map(
-    [...STARTER_QUESTIONS, ...data.questions].map((q) => [q.id, q]),
-  );
+  const questions = questionChapters(data);
   return CHAPTERS.map((c) => {
     const answers = data.attempts
-      .filter((a) => questions.get(a.questionId)?.chapterId === c.id)
+      .filter((a) => questions.get(a.questionId) === c.id)
       .slice(-20);
     const wrong = answers.filter((a) => !a.correct).length;
     const cq = data.cq.filter((q) => q.chapterId === c.id).slice(-5);

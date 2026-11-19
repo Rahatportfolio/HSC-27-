@@ -1,3 +1,4 @@
+import { isPersonalTaskComplete } from '../personalRoutine';
 import { useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpRight, Bell, BellRing, CalendarDays, CheckCircle2, ChevronDown, Clock3, Info, MonitorSmartphone, ShieldCheck, Sparkles } from 'lucide-react';
 import { usePlanner } from '../context';
@@ -48,11 +49,11 @@ export default function RemindersView() {
     if (typeof Notification !== 'undefined') setPermission(Notification.permission);
     if (!ok && permission === 'granted') void test();
   };
-  const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !data.completed[t.id] && taskStart(t).date >= start && (!end || taskStart(t).date < end)).length;
+  const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !isPersonalTaskComplete(t, data.completed) && taskStart(t).date >= start && (!end || taskStart(t).date < end)).length;
   const ranges = [
     { id: 'day' as const, title: t('আজকের রুটিন', 'Today’s routine'), desc: t('শুধু আজকের বাকি সেশনগুলো', 'Only today’s remaining sessions'), icon: Clock3, count: count(today, addDays(today, 1)), date: today },
     { id: 'week' as const, title: t('আগামী ৭ দিন', 'Next 7 days'), desc: t('এই সপ্তাহটা গুছিয়ে রাখো', 'Keep this week organised'), icon: CalendarDays, count: count(today, addDays(today, 7)), date: `${today} → ${addDays(today, 6)}` },
-    { id: 'all' as const, title: t('পুরো পরিকল্পনা', 'Whole plan'), desc: t('শুরু থেকে শেষ পর্যন্ত সব বাকি সেশন', 'Every remaining session, start to finish'), icon: ArrowDownToLine, count: count(plan[0].date), date: `${plan[0].date} → ${plan[plan.length - 1].date}` },
+    { id: 'all' as const, title: t('পুরো পরিকল্পনা', 'Whole plan'), desc: t('শুরু থেকে শেষ পর্যন্ত সব বাকি সেশন', 'Every remaining session, start to finish'), icon: ArrowDownToLine, count: plan.length ? count(plan[0].date) : 0, date: plan.length ? `${plan[0].date} → ${plan[plan.length - 1].date}` : t('এখনও রুটিন বরাদ্দ হয়নি', 'No routine allocated yet') },
   ];
   return <div className="view reminders-view"><PageHeading eyebrow="A GENTLE NUDGE" title="পড়ার কথা মনে থাকবে।" titleEn="You won’t forget to study." description="প্রতিটি নোটিফিকেশনেই থাকবে আজ কী পড়া, মোট কতটুকু পড়া এবং আর কতটুকু কমপ্লিট করা লাগবে।" descriptionEn="Every notification tells you what to study today, total scheduled time, and how much still needs to be completed." />
     <section className="card live-notif-preview-card" aria-label={t('স্টাডি নোটিফিকেশন প্রিভিউ', 'Study notification preview')}>

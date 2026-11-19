@@ -1,4 +1,5 @@
 import { readiness } from './advanced';
+import { isPersonalChapterDone, isPersonalTaskComplete, personalCompletionEvidence, personalRoutineForChapter } from './personalRoutine';
 import { CHAPTERS, SUBJECTS } from './data';
 import type { Chapter, Priority, SubjectId } from './data';
 import { chapterStudyTasks, isChapterDone } from './planner';
@@ -20,9 +21,15 @@ export const STEPS: { id: ChapterStep; bn: string; en: string }[] = [
 export function chapterPriority(chapter: Chapter, data: AppData): Priority {
   return data.chapterMeta[chapter.id]?.priority || chapter.priority;
 }
-/** Explicit personal status overrides the legacy task-derived status; watching a video alone never completes a chapter. */
+/** Personal routines require every source group. Legacy self-assessments remain historical. */
 export function chapterStage(chapter: Chapter, data: AppData, plan: Day[]): ChapterStage {
   const meta = data.chapterMeta[chapter.id];
+  const personal = personalRoutineForChapter(data, chapter.id);
+  if (personal) {
+    // Old whole-chapter statuses are preserved as history, never a bypass of the six required steps.
+    if (isPersonalChapterDone(plan, chapter.id, data.completed, personal)) return 'fullyRevised';
+    return personalCompletionEvidence(data, chapter.id).length || chapterStudyTasks(plan, chapter.id).some(task => isPersonalTaskComplete(task, data.completed)) ? 'inProgress' : 'notStarted';
+  }
   // New tracked chapters cannot be completed by a legacy task checkbox alone.
   if (data.advanced?.classes.some(c => c.chapterId === chapter.id) || data.advanced?.preparation[chapter.id]) {
     const progress = readiness(data, chapter.id);
@@ -32,7 +39,7 @@ export function chapterStage(chapter: Chapter, data: AppData, plan: Day[]): Chap
   }
   if (meta?.stage) return meta.stage;
   const tasks = chapterStudyTasks(plan, chapter.id);
-  if (isChapterDone(plan, chapter.id, data.completed)) return 'completed';
+  if (isChapterDone(data.personalRoutine ? [] : plan, chapter.id, data.completed)) return 'completed';
   if (tasks.some(task => !!data.completed[task.id]) || Object.values(meta?.steps || {}).some(Boolean) || meta?.cq === 'ready' || meta?.mcq === 'ready') return 'inProgress';
   return 'notStarted';
 }
@@ -51,6 +58,7 @@ export function learningProgress(chapters: Chapter[], data: AppData, plan: Day[]
 }
 export function learningDashboard(data: AppData, plan: Day[]) {
   const category = Object.fromEntries((['A', 'B', 'C'] as const).map(priority => [priority, learningProgress(CHAPTERS.filter(c => chapterPriority(c, data) === priority), data, plan)])) as Record<Priority, ProgressGroup>;
-  const subject = Object.fromEntries(SUBJECTS.map(s => [s.id, learningProgress(CHAPTERS.filter(c => c.subject === s.id), data, plan)])) as Record<SubjectId, ProgressGroup>;
-  return { overall: learningProgress(CHAPTERS, data, plan), category, subject };
+  const scope = data.personalRoutine ? CHAPTERS.filter(c => data.personalRoutine!.chapterIds.includes(c.id)) : CHAPTERS;
+  const subject = Object.fromEntries(SUBJECTS.map(s => [s.id, learningProgress(scope.filter(c => c.subject === s.id), data, plan)])) as Record<SubjectId, ProgressGroup>;
+  return { overall: learningProgress(scope, data, plan), category, subject };
 }

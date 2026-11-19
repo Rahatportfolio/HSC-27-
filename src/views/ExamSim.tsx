@@ -16,7 +16,7 @@ import { examPostmortem, questionIndex } from '../examAnalysis';
 import { CADENCE_SPECS, cadenceSlots, cadenceStats, cadenceWeek, dailyTestChapter, missedDaily, nextCadenceSlot } from '../cadence';
 import type { CadenceSlot } from '../cadence';
 import type { ExamGrade } from '../examSim';
-import { allQuestions } from '../analytics';
+import { allQuestions } from '../questionBank';
 import type { ExamCadence, ExamMode, ExamSession, QuizQuestion } from '../types';
 import { EmptyState, PageHeading, ProgressBar, ProgressRing, SubjectBadge } from '../components';
 import { t } from '../i18n';

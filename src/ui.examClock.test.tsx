@@ -18,7 +18,7 @@ beforeAll(() => {
   });
 });
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: false });
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'], shouldAdvanceTime: false });
   localStorage.clear();
   window.location.hash = '';
   localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData()));
@@ -43,8 +43,7 @@ const startExam = async () => {
   if (!nav) throw new Error('simulator nav item missing');
   await act(async () => { nav.click(); });
 
-  const start = screen.getAllByRole('button').find(b => (b.textContent || '').includes('পরীক্ষা শুরু করো'));
-  if (!start) throw new Error('start button missing');
+  const start = await screen.findByRole('button', { name: /পরীক্ষা শুরু করো/ });
   await act(async () => { start.click(); });
 
   const clockEl = document.querySelector('.exam-run-clock strong');

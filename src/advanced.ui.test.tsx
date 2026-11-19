@@ -27,7 +27,7 @@ beforeEach(() => {
 afterEach(cleanup);
 it("adds a real permitted class, persists it and refuses duplicate entries", async () => {
   render(<App />);
-  fireEvent.change(screen.getByLabelText("ক্লাসের নাম"), {
+  fireEvent.change(await screen.findByLabelText("ক্লাসের নাম"), {
     target: { value: "Physics seven hours" },
   });
   fireEvent.change(screen.getByLabelText("লিংক"), {
@@ -46,7 +46,7 @@ it("adds a real permitted class, persists it and refuses duplicate entries", asy
     ).toBe(25200),
   );
   expect(screen.getByRole("button", { name: "Save offline" })).toBeTruthy();
-  fireEvent.change(screen.getByLabelText("ক্লাসের নাম"), {
+  fireEvent.change(await screen.findByLabelText("ক্লাসের নাম"), {
     target: { value: "Duplicate" },
   });
   fireEvent.change(screen.getByLabelText("লিংক"), {
@@ -62,7 +62,7 @@ it("adds a real permitted class, persists it and refuses duplicate entries", asy
 });
 it("does not offer platform downloads even when saved as a class bookmark", async () => {
   render(<App />);
-  fireEvent.change(screen.getByLabelText("ক্লাসের নাম"), {
+  fireEvent.change(await screen.findByLabelText("ক্লাসের নাম"), {
     target: { value: "Public YouTube class" },
   });
   fireEvent.change(screen.getByLabelText("লিংক"), {
