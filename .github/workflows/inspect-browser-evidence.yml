@@ -1,0 +1,59 @@
+name: Inspect stored browser evidence (read only)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'Android APK run containing the original built-web-evidence artifact'
+        required: true
+        type: string
+  push:
+    branches: ['arena/**']
+    paths:
+      - '.github/workflows/inspect-browser-evidence.yml'
+      - 'scripts/summarize-browser-evidence*'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    name: Read stored browser failure details (not acceptance)
+    if: ${{ github.event_name == 'workflow_dispatch' || (github.ref == 'refs/heads/arena/80a86bf2-hsc-27' && contains(github.event.head_commit.message, '[inspect-browser-run:')) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout diagnostic script
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate same-repository Android evidence source
+        id: source
+        uses: actions/github-script@v7
+        env:
+          EVIDENCE_RUN: ${{ inputs.run_id }}
+        with:
+          script: |
+            const input = process.env.EVIDENCE_RUN || context.payload.head_commit?.message?.match(/\[inspect-browser-run:([1-9]\d*)\]/)?.[1];
+            if (!/^[1-9]\d*$/.test(input || '')) throw new Error('A real numeric run ID is required');
+            const run_id = Number(input);
+            if (!Number.isSafeInteger(run_id)) throw new Error('Invalid run ID');
+            const {data: run} = await github.rest.actions.getWorkflowRun({...context.repo, run_id});
+            if (run.path !== '.github/workflows/android-apk.yml' || run.repository.full_name !== `${context.repo.owner}/${context.repo.repo}`) throw new Error('Wrong original workflow or repository');
+            const {data} = await github.rest.actions.listWorkflowRunArtifacts({...context.repo, run_id, per_page: 100});
+            const artifacts = data.artifacts.filter(item => item.name === 'built-web-evidence' && !item.expired);
+            if (artifacts.length !== 1) throw new Error('Missing/ambiguous original browser artifact');
+            core.setOutput('artifact_id', artifacts[0].id);
+            core.setOutput('run_id', run.id);
+            core.notice(JSON.stringify({runId: run.id, sourceSha: run.head_sha, conclusion: run.conclusion, artifactId: artifacts[0].id, readOnlyInspection: true, acceptanceGranted: false}), {title: 'Original browser evidence source'});
+      - name: Read original immutable browser artifact
+        uses: actions/download-artifact@v4
+        with:
+          artifact-ids: ${{ steps.source.outputs.artifact_id }}
+          run-id: ${{ steps.source.outputs.run_id }}
+          github-token: ${{ github.token }}
+          path: .cache/inspected-browser-evidence
+          merge-multiple: true
+      - name: Surface original failure selectors and measurements without rerunning tests
+        run: node scripts/summarize-browser-evidence.mjs .cache/inspected-browser-evidence
