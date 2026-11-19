@@ -8,6 +8,7 @@ import { closeSync, mkdirSync, openSync, readFileSync, readdirSync, writeFileSyn
 import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { requireDevelopmentApk } from './publish-development-apk.mjs';
+import { evidenceAnnotation } from './summarize-browser-evidence.mjs';
 
 export const CURRENT_POLICY = Object.freeze({
   repo: 'Rahatportfolio/HSC-27-', branch: 'arena/80a86bf2-hsc-27',
@@ -111,10 +112,13 @@ function main() {
   const packaged = execFileSync('unzip', ['-Z1', apk], { encoding: 'utf8' }).trim().split('\n');
   assert.ok(packaged.includes('assets/public/index.html') && packaged.includes('assets/public/sw.js'), 'Missing packaged app shell');
   const html = execFileSync('unzip', ['-p', apk, 'assets/public/index.html'], { encoding: 'utf8' });
-  const entry = html.match(/<script[^>]*\bsrc="\.\/(assets\/index-[^"]+\.js)"/)?.[1];
+  const entry = html.match(/<script[^>]*\bsrc="\.\/(assets\/index-[A-Za-z0-9_-]+\.js)"/)?.[1];
+  const css = html.match(/<link[^>]*\bhref="\.\/(assets\/index-[A-Za-z0-9_-]+\.css)"/)?.[1];
   assert.ok(entry && packaged.includes(`assets/public/${entry}`), 'Packaged entry is missing');
+  assert.ok(css && packaged.includes(`assets/public/${css}`), 'Packaged stylesheet is missing');
+  const packagedHash = path => digest(execFileSync('unzip', ['-p', apk, `assets/public/${path}`], { maxBuffer: 10 * 1024 * 1024 }));
   const apkBytes = readFileSync(apk);
-  const inspection = { ...delivery, ...identity, compatibleProductionUpdate: false, zipIntegrity: 'passed', apkSha256: digest(apkBytes), apkSize: apkBytes.length, artifactArchiveSha256: digest(archiveBytes), requiredJobs: CURRENT_POLICY.jobs, externalPlayerCertified: false, physicalDeviceCertified: false, originalSigningKeyRecovered: false };
+  const inspection = { ...delivery, ...identity, compatibleProductionUpdate: false, zipIntegrity: 'passed', apkSha256: digest(apkBytes), apkSize: apkBytes.length, artifactArchiveSha256: digest(archiveBytes), webEntry: entry, webEntrySha256: packagedHash(entry), webCss: css, webCssSha256: packagedHash(css), requiredJobs: CURRENT_POLICY.jobs, externalPlayerCertified: false, physicalDeviceCertified: false, originalSigningKeyRecovered: false };
   writeFileSync(join(work, 'inspection.json'), JSON.stringify(inspection, null, 2));
   writeFileSync(join(work, 'SHA256SUMS.txt'), `${inspection.apkSha256}  ${delivery.assetName}\n`);
   const files = [delivery.assetName, 'inspection.json', 'SHA256SUMS.txt'].map(name => { const bytes = readFileSync(join(work, name)); return { name, size: bytes.length, sha256: digest(bytes) }; });
@@ -133,5 +137,6 @@ function main() {
   const result = { ...inspection, releaseId: published.id, releaseUrl: published.html_url, directApkUrl: published.assets.find(asset => asset.name === delivery.assetName).browser_download_url, latestReleaseUnchanged: true };
   writeFileSync(join(work, 'delivery.json'), JSON.stringify(result, null, 2));
   console.log(`Current development APK: ${result.directApkUrl}\nSHA-256: ${inspection.apkSha256}\nNOT a compatible production update. Keep the original app and data.`);
+  console.log(evidenceAnnotation('notice', 'Current development APK evidence', result));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) main();

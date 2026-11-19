@@ -33,6 +33,18 @@ function collectFixture(tag: boolean, withRelease = true) {
 }
 
 describe('release metadata and publication safety', () => {
+  it('keeps the normal main Pages path and verifies every uploaded public file after deployment', () => {
+    const pages = read('.github/workflows/static.yml');
+    expect(pages).toContain('branches: [main]');
+    expect(pages).toContain('name: github-pages');
+    expect(pages).toContain('node scripts/verify-deployed-web.mjs capture dist');
+    expect(pages).toContain('node --test scripts/*node-test.mjs');
+    expect(pages).toContain('EXPECTED_WEB_PROOF: ${{ needs.build.outputs.web-proof }}');
+    expect(pages).toContain('DEPLOYED_URL: ${{ steps.deployment.outputs.page_url }}');
+    expect(pages.indexOf('node scripts/verify-deployed-web.mjs verify')).toBeGreaterThan(pages.indexOf('uses: actions/deploy-pages@v4'));
+    expect(pages).not.toContain('continue-on-error');
+  });
+
   it('keeps the Android, package and lockfile versions aligned', () => {
     const pkg = JSON.parse(read('package.json'));
     const lock = JSON.parse(read('package-lock.json'));
@@ -76,7 +88,7 @@ describe('release metadata and publication safety', () => {
     expect(guard).toContain('node scripts/check-android-release.mjs signing-inputs');
     expect(text.indexOf('name: Require original signing key for tags')).toBeLessThan(text.indexOf('name: Build debug APK'));
     const tests = text.split('      - name: Release safety guard tests\n')[1]?.split('\n      - name:')[0];
-    expect(tests).toContain('node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs');
+    expect(tests).toContain('node --test scripts/*node-test.mjs');
   });
 
   it('collects the signed release rather than the debug APK for a tag', () => {

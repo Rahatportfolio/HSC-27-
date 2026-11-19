@@ -44,6 +44,16 @@ scan/media bytes; keep verified full-media backups and separately opened PDFs.
 PWA and APK private storage remain separate. Emulator checks do not certify
 every physical phone, OEM keyboard, background restriction or screen reader.
 
-The actual direct URL exists only after successful delivery. The workflow log
-and `.cache/current-dev-apk/delivery.json` identify the real URL, source/run,
-APK hash and certificate comparison. [Current result](A-Z-RECHECK-REPORT.md).
+## Exact-source delivery record
+
+The **Delivery** section of [PR #19](https://github.com/Rahatportfolio/HSC-27-/pull/19)
+records the actual direct `.apk` URL, full source SHA, successful run, APK hash
+and certificate. Its separate development prerelease contains `inspection.json`
+and `SHA256SUMS.txt`; older production assets are not this download. The workflow
+also exposes the measured result in a **Current development APK evidence**
+annotation and retains `.cache/current-dev-apk/delivery.json` in its artifact.
+
+PWA publication is separate: the protected main Pages workflow checks every
+uploaded public file against the exact build after deployment. Its real URL/run
+and byte-verification result are in the same PR delivery record, not inferred
+from a local preview. [Measured code/browser report](A-Z-RECHECK-REPORT.md).

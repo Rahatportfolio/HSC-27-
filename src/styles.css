@@ -4644,7 +4644,7 @@ body {
 .exam-breakdown-list { display: grid; gap: 10px; }
 .exam-breakdown-row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(60px, 1fr) 46px auto; gap: 8px; align-items: center; font-size: .82rem; }
 .exam-breakdown-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
-.exam-breakdown-title span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.exam-breakdown-title span { min-width: 0; max-width: 100%; overflow: visible; text-overflow: clip; white-space: normal; overflow-wrap: anywhere; }
 .exam-breakdown-row small { text-align: right; color: var(--muted); }
 .exam-wrong-list { display: grid; gap: 10px; max-height: 620px; overflow: auto; }
 .exam-wrong-row { display: grid; gap: 4px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--rose-border); background: var(--rose-soft); color: var(--ink); }

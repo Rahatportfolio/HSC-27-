@@ -62,7 +62,7 @@ jobs:
         run: npm test
 
       - name: Release safety guard tests
-        run: node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs
+        run: node --test scripts/*node-test.mjs
 
       - name: Generate Android icons and splash screens
         run: npm run android:assets
@@ -411,7 +411,7 @@ jobs:
           distribution: temurin
           java-version: 21
       - name: Test all production and development guard boundaries
-        run: node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs scripts/publish-development-apk.node-test.mjs scripts/publish-current-development-apk.node-test.mjs
+        run: node --test scripts/*node-test.mjs
       - name: Inspect exact APK and publish non-Latest development prerelease
         env:
           GH_TOKEN: ${{ github.token }}

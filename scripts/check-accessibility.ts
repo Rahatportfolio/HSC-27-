@@ -14,6 +14,7 @@ import { freshData, STORAGE_KEY } from '../src/planner';
 import { emptyAdvanced } from '../src/advanced';
 import { parseBackup } from '../src/storage';
 import { allQuestions } from '../src/questionBank';
+import { chapterById } from '../src/data';
 
 const require = createRequire(import.meta.url);
 const base = process.env.BASE_URL || 'http://127.0.0.1:3000';
@@ -141,6 +142,7 @@ try {
           'faded-calendar-dates': '.calendar-cell{opacity:.3!important}',
           'undecorated-source-link': '.study-source-link{text-decoration:none!important}',
           'pale-dark-exam-mistakes': '.exam-wrong-row:not(.unanswered){background:#fdf6f5!important}',
+          'clipped-exam-chapter': '.exam-breakdown-title>span:not(.subject-badge){overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}',
         };
         if (css[fault]) await page.addStyleTag({ content: css[fault] });
       }
@@ -222,6 +224,38 @@ try {
       await page.locator('.exam-history-list .exam-history-row').first().waitFor();
       assert.equal(await page.locator('.exam-result').count(), 0, 'History coverage must render history, not rescan the retained result component');
       await scan('exam-history-and-retries');
+
+      // Random subject papers do not reliably include a long chapter title.
+      // Keep that coverage and ALSO submit the exact chapter that exposed a
+      // clipped Bengali label on 393px CI. Real setup/submit controls only.
+      await goto('examsim');
+      await page.locator('.exam-mode-tabs button').first().click();
+      await page.locator('.exam-setup-card .quiz-setup-grid select').nth(1).selectOption('physics-2-4');
+      await page.locator('.exam-setup-card .wide-button').click();
+      await page.locator('.exam-run-card').waitFor();
+      await page.locator('.exam-run-footer .button').click();
+      await page.getByRole('dialog').locator('.modal-actions .button.primary').click();
+      await page.locator('.exam-result').waitFor();
+      const chapterTitle = page.locator('.exam-breakdown-title>span:not(.subject-badge)');
+      assert.equal(await chapterTitle.count(), 1, 'Long-title chapter paper must have one real chapter breakdown');
+      assert.equal(await chapterTitle.innerText(), chapterById['physics-2-4'].title, 'Must exercise the exact long chapter, not a random short label');
+      await scan('long-chapter-result');
+      const measureChapterTitle = async () => chapterTitle.evaluate(element => {
+        element.scrollIntoView({ block: 'center', behavior: 'instant' });
+        const box = element.getBoundingClientRect(), range = document.createRange(); range.selectNodeContents(element);
+        const rects = Array.from(range.getClientRects());
+        return { text: element.textContent, box: box.toJSON(), rects: rects.map(rect => rect.toJSON()), fits: rects.length > 0 && rects.every(rect => rect.left >= box.left - 1 && rect.right <= box.right + 1 && rect.top >= box.top - 1 && rect.bottom <= box.bottom + 1) };
+      });
+      let titleMeasurement = await measureChapterTitle();
+      assert(titleMeasurement.fits, `Long chapter title is clipped: ${JSON.stringify(titleMeasurement)}`);
+      const openChapter = page.locator('.exam-breakdown-row .icon-button');
+      await openChapter.hover(); await scan('long-chapter-result-hover');
+      titleMeasurement = await measureChapterTitle();
+      assert(titleMeasurement.fits, `Hovered long chapter title is clipped: ${JSON.stringify(titleMeasurement)}`);
+      // The chapter action must still work; wrapping cannot cover its real tap.
+      await openChapter.click(); await page.getByRole('dialog').waitFor();
+      assert((await page.getByRole('dialog').innerText()).includes(chapterById['physics-2-4'].title));
+      await page.keyboard.press('Escape');
     }
     await context.close();
   }
