@@ -11,7 +11,7 @@ import { requireDevelopmentApk } from './publish-development-apk.mjs';
 import { evidenceAnnotation } from './summarize-browser-evidence.mjs';
 
 export const CURRENT_POLICY = Object.freeze({
-  repo: 'Rahatportfolio/HSC-27-', branch: 'arena/2a6136bf-hsc-27',
+  repo: 'Rahatportfolio/HSC-27-', branch: 'arena/5f160f83-hsc-27',
   workflow: '.github/workflows/android-apk.yml',
   confirmation: 'current-development-only-no-compatible-update',
   jobs: ['Build installable APK', 'Android WebView device checks (API 34)', 'Android WebView device checks (API 35)', 'Built web acceptance'],

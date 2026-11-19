@@ -16,7 +16,7 @@ test('accepts only this exact tested run and returns an explicitly development-o
   assert.deepEqual(source(), { tag: `dev-apk-${sha.slice(0, 12)}`, assetName: `prostuti-hsc27-${sha.slice(0, 12)}-development.apk`, sourceSha: sha, runId: 123, artifactId: 456 });
 });
 test('pins this delivery branch in both the publisher and workflow without weakening any prerequisite', () => {
-  assert.equal(CURRENT_POLICY.branch, 'arena/2a6136bf-hsc-27');
+  assert.equal(CURRENT_POLICY.branch, 'arena/5f160f83-hsc-27');
   const workflow = readFileSync(new URL('../.github/workflows/android-apk.yml', import.meta.url), 'utf8');
   const job = workflow.slice(workflow.indexOf('\n  current-development-download:'));
   assert.match(job, /needs: \[apk, device-checks, built-web\]/);
