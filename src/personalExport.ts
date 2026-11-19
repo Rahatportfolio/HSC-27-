@@ -44,7 +44,7 @@ export function makePersonalMarkdown(plan: Day[], data: AppData): string {
       '| ধাপ | উৎসের/নিজে করার মিনিট | সময়ের উৎস ও হিসাব | লিংক |', '|---|---:|---|---|');
     for (const stage of WORK_STAGES) {
       const budget = work[stage.id], calc = budget.calculation;
-      const provenance = budget.source === 'youtube-player' ? 'নির্বাচিত ভিডিওর player metadata' : budget.source === 'reference-metadata' ? 'যাচাই করা পৃষ্ঠার snapshot (বর্তমান player নয়)' : budget.source === 'student' ? 'শিক্ষার্থীর দেওয়া সময়' : budget.source === 'planned' ? 'নিজে কাজের পরিকল্পিত বাজেট' : 'অজানা — Duration Unavailable';
+      const provenance = budget.source === 'youtube-player' ? 'নির্বাচিত ভিডিওর player metadata' : budget.source === 'reference-metadata' ? 'সংরক্ষিত পৃষ্ঠার reference (যাচাইয়ের তারিখ অনিশ্চিত; বর্তমান player নয়)' : budget.source === 'student' ? 'শিক্ষার্থীর দেওয়া সময়' : budget.source === 'planned' ? 'নিজে কাজের পরিকল্পিত বাজেট' : 'অজানা — Duration Unavailable';
       const calculation = calc ? ` · ${calc.quantity} × ${calc.unitMinutes} মিনিট × difficulty ${calc.difficulty}${stage.id === 'revision' && calc.reviewedPercent !== undefined ? ` · আগের রিভিউ ${calc.reviewedPercent}% (সর্বোচ্চ ৫০% সময় ছাড়)` : ''}` : '';
       lines.push(`| ${stage.bn} | ${budget.minutes === null ? 'অজানা' : budget.minutes === 0 ? ['mcqClass', 'cqClass'].includes(stage.id) ? '০ — অতিরিক্ত ভিডিও বাদ; অনুশীলন প্রয়োজনীয়' : '০ — প্রয়োজনীয় কাজের বাজেট অসম্পূর্ণ' : budget.minutes} | ${provenance}${calculation}${budget.observedAt ? ` · ${budget.observedAt}` : ''} | ${cell(budget.url || '—')} |`);
     }

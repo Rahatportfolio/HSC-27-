@@ -8,7 +8,7 @@ not be triggered as delivery of the S/Brain/performance rework.
 
 ## Required checks and immutable bytes
 
-- Only `arena/80a86bf2-hsc-27`, a push carrying the explicit
+- Only the active delivery branch `arena/25b5228c-hsc-27`, a push carrying the explicit
   `[current-dev-apk]` acknowledgement, and the development-only confirmation
   can request publication. Normal builds do not publish downloads.
 - Exact repository, full source SHA, workflow, run and attempt must match.
@@ -46,12 +46,14 @@ every physical phone, OEM keyboard, background restriction or screen reader.
 
 ## Exact-source delivery record
 
-The **Delivery** section of [PR #19](https://github.com/Rahatportfolio/HSC-27-/pull/19)
-records the actual direct `.apk` URL, full source SHA, successful run, APK hash
-and certificate. Its separate development prerelease contains `inspection.json`
-and `SHA256SUMS.txt`; older production assets are not this download. The workflow
-also exposes the measured result in a **Current development APK evidence**
-annotation and retains `.cache/current-dev-apk/delivery.json` in its artifact.
+The **Delivery** section of [this follow-up branch's PR](https://github.com/Rahatportfolio/HSC-27-/pulls?q=is%3Apr+head%3Aarena%2F25b5228c-hsc-27)
+records its direct `.apk` URL, full source SHA, successful run, APK hash and
+certificate. The [previous PR #19 download](https://github.com/Rahatportfolio/HSC-27-/pull/19)
+is historical and does not contain this follow-up. Each separate development
+prerelease contains `inspection.json` and `SHA256SUMS.txt`; older production
+assets are not the new download. The workflow also exposes the measured result
+in a **Current development APK evidence** annotation and retains
+`.cache/current-dev-apk/delivery.json` in its artifact.
 
 PWA publication is separate: the protected main Pages workflow checks every
 uploaded public file against the exact build after deployment. Its real URL/run

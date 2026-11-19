@@ -116,6 +116,14 @@ describe('reworked setup UI', () => {
 });
 
 describe('six-group completion and dashboard UI', () => {
+  it('does not leave the actual S dashboard without the saved-data backup reminder', () => {
+    const data = personalDataFixture(), before = JSON.stringify(data);
+    harness(data, <PersonalStudyHome />);
+    expect(screen.getByText('No backup recorded yet')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Save backup' })).toBeTruthy();
+    expect(JSON.stringify(data)).toBe(before);
+    expect(localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
   it('labels Analytics as the current phase, separates six-group coverage/readiness, and uses availability rather than legacy hours', () => {
     const data = personalDataFixture(), original = structuredClone(data);
     harness(data, <AnalyticsView />);

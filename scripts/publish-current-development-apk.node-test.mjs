@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
 import { CURRENT_POLICY, requireCurrentSource, requireCurrentArchive, requireCurrentUploadedAssets } from './publish-current-development-apk.mjs';
 
 const sha = 'a'.repeat(40), hash = 'b'.repeat(64);
@@ -13,6 +14,22 @@ function fixture() {
 function source(f = fixture()) { return requireCurrentSource(f.env, f.run, f.jobs, f.artifact); }
 test('accepts only this exact tested run and returns an explicitly development-only immutable name', () => {
   assert.deepEqual(source(), { tag: `dev-apk-${sha.slice(0, 12)}`, assetName: `prostuti-hsc27-${sha.slice(0, 12)}-development.apk`, sourceSha: sha, runId: 123, artifactId: 456 });
+});
+test('pins this delivery branch in both the publisher and workflow without weakening any prerequisite', () => {
+  assert.equal(CURRENT_POLICY.branch, 'arena/25b5228c-hsc-27');
+  const workflow = readFileSync(new URL('../.github/workflows/android-apk.yml', import.meta.url), 'utf8');
+  const job = workflow.slice(workflow.indexOf('\n  current-development-download:'));
+  assert.match(job, /needs: \[apk, device-checks, built-web\]/);
+  assert.ok(job.includes(`github.ref == 'refs/heads/${CURRENT_POLICY.branch}'`));
+  assert.match(job, /github\.event_name == 'push'/);
+  assert.ok(job.includes("contains(github.event.head_commit.message, '[current-dev-apk]')"));
+  assert.ok(job.includes(`CURRENT_DEV_APK_CONFIRMATION: ${CURRENT_POLICY.confirmation}`));
+});
+for (const branch of ['main', 'arena/80a86bf2-hsc-27']) test(`rejects a coherent successful run from the non-current branch ${branch}`, () => {
+  const f = fixture();
+  f.env.GITHUB_REF = `refs/heads/${branch}`;
+  f.run.head_branch = branch; f.artifact.workflow_run.head_branch = branch;
+  assert.throws(() => source(f), /Wrong branch/);
 });
 for (const [name, mutate] of [
   ['non-Actions caller', f => { f.env.GITHUB_ACTIONS = 'false'; }],

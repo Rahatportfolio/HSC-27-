@@ -7,7 +7,7 @@ import { ArrowLeft, ArrowRight, CalendarDays, Clock3, Settings2 } from 'lucide-r
 import { usePlanner } from '../context';
 import { CHAPTERS, chapterById } from '../data';
 import { addDays, bn, dailyTargetMinutes, formatDate, formatDurationBn, formatTime, isValidDate } from '../planner';
-import { LocalNote, PageHeading, ProgressBar, TaskCard } from '../components';
+import { BackupNudge, LocalNote, PageHeading, ProgressBar, TaskCard } from '../components';
 import { learningProgress } from '../learning';
 import { hasFullPersonalAllocation, isPersonalTaskComplete, personalBookLabel, personalChapterPairs, personalRoutineHealth, routineIssueText, weeklyWindows, personalChapterProgress, nextPersonalRoutine } from '../personalRoutine';
 import { t } from '../i18n';
@@ -54,6 +54,7 @@ export default function PersonalStudyHome() {
     </section>
     {nextPhase && <section className="card personal-next-phase" aria-label={t('পরের ধাপের পরিকল্পনা', 'Next-phase planning')}><h2>{routine.scope} {t('ধাপের ছয়টি কাজ সম্পন্ন', 'phase’s six required groups are complete')}</h2><p>{t('এবার বাকি সিলেবাসের পরের ধাপ তৈরি করতে পারো। তোমার সময় বজায় থাকবে; অজানা ভিডিওর দৈর্ঘ্য বানানো হবে না।', 'You can now prepare the next syllabus phase. Your availability is retained; unknown video durations are never invented.')} {nextPhase.scope} · {bn(nextPhase.chapterIds.length)} {t('অধ্যায়', 'chapters')}</p><button type="button" className="button primary" onClick={() => setPhaseDraft(nextPhase)}>{t('পরের ধাপ তৈরি করো', 'Prepare next phase')} · {nextPhase.scope}</button></section>}
     <StudyBrainTeaser />
+    <BackupNudge />
     <section className="card personal-day-controls" aria-label={t('পড়ার দিন নির্বাচন', 'Choose study day')}>
       <button type="button" className="icon-button" aria-label={t('আগের দিন', 'Previous day')} disabled={selectedDate <= data.settings.startDate} onClick={() => changeDate(addDays(selectedDate, -1))}><ArrowLeft size={18} /></button>
       <label>{t('পড়ার তারিখ', 'Study date')}<input type="date" aria-label={t('পড়ার তারিখ নির্বাচন', 'Select study date')} min={data.settings.startDate} max={addDays(data.settings.examDate, -1)} value={selectedDate} onChange={e => changeDate(e.target.value)} /></label>

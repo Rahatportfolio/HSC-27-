@@ -29,19 +29,23 @@ Video study time is **actual source duration ÷ chosen playback speed**, rounded
 
 Only extra MCQ/CQ **videos** can be explicitly omitted with zero minutes. The main video, reading, notes, MCQ practice, CQ practice and revision need positive budgets. Unknown/zero mandatory work cannot be silently skipped or certified as complete. Skipping an extra video is not skipping independent practice.
 
+After a source/duration/calculation is replaced, completion of its predecessor remains history but cannot establish day one for an entirely new set of sources or pull both new halves into a single study day.
+
 The scheduler takes the lower of daily net cap and actual usable windows, subtracting fixed obligations. Session breaks also fit inside windows, including across adjacent windows. A short net budget is shared between both books where possible instead of spending it all on the first book.
 
 ## Actual duration and provenance
 
-Media durations initially remain **unknown** until the student reads the exact single video's IFrame metadata, explicitly accepts an available dated page reference, or enters the actual shown duration. These sources are labelled separately. Selecting/editing a source clears stale duration provenance. Failed/offline/blocked/live/mismatched metadata never becomes an assumed 80-minute class.
+Media durations initially remain **unknown** until the student reads the exact single video's IFrame metadata, explicitly accepts an available saved page reference (its observation date is unverified), or enters the actual shown duration. These sources are labelled separately. Selecting/editing a source clears stale duration provenance. Failed/offline/blocked/live/mismatched metadata never becomes an assumed 80-minute class.
 
 A session opens the selected single video at the relevant source offset. Playlist totals are not chapter durations, and an aggregate playlist offset cannot select the appropriate constituent lesson; the UI discloses this limitation. Students must choose relevant lessons or enter their actual relevant total explicitly.
 
-### Bounded public-page metadata recheck — 16 November 2026
+### Bounded saved page references — observation date unverified
 
-All eight exact public pages below were fetched again. Their shown lengths agree with the retained values. The old record’s inconsistent `2026-11-18` date is preserved separately as `CLASS_REFERENCE_PROVENANCE.previousSnapshotRecordedOn`, with `previousSnapshotDateVerified: false`; it is not represented as verified history. The fresh `checkedOn: 2026-11-16` belongs to this separate metadata check, not a rewrite of student completion/history dates. [Current report and limits](A-Z-RECHECK-REPORT.md).
+**Correction of the previous date claim:** these eight saved records contain an original date `2026-11-18`, a claimed recheck `2026-11-16`, and a retained fetch trace `2026-11-19`. The labels do not establish a reliable observation chronology. No actual observation date can be certified from that record. All raw labels remain in `CLASS_REFERENCE_PROVENANCE` with `metadataRecheckDateVerified: false`; `metadataRecheckedOn` and each reference's `checkedOn` are `null`. This follow-up did **not** freshly fetch YouTube or verify live playback/content. [Latest fixes and verification](FULL-RECHECK-REPORT.md).
 
-These are **eight exact public pages**, not a catalogue-wide verification or a claim that the browser player was exercised against live YouTube here. Titles/descriptions establish only the limited suitability noted below; no publisher's “100% complete/common” marketing is adopted as a guarantee. Data lives in `src/classDurationReferences.ts`.
+The editor says **Observation date unverified** and **Use this reference duration**. Opting in records `acceptedAt`, the student's actual acceptance instant, separately from a page observation. Original stored `observedAt` values, notes, completion times and source identities survive backup/reload unchanged; they are not silently redated or newly certified. Selecting a different source or entering a new duration clears stale acceptance/observation provenance. A player reading still requires its own URL and observation evidence.
+
+These are **eight exact saved page records**, not a catalogue-wide verification. Retained titles/descriptions support only the bounded suitability notes below; no publisher's “100% complete/common” marketing is adopted as a guarantee. Data lives in `src/classDurationReferences.ts`.
 
 | Page | Shown length | Use in the new S editor |
 |---|---:|---|
