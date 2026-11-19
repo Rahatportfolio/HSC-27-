@@ -8,6 +8,7 @@
  */
 
 import { idbSet, idbGet, idbDelete, idbKeys } from './storage-manager';
+import { newId } from './storage';
 import type { SubjectId } from './data';
 
 export const SCANNED_NOTES_PREFIX = 'scan:';
@@ -161,7 +162,7 @@ export async function savePagesToDb(pages: ScannedPage[]): Promise<string[]> {
   const keys: string[] = [];
   try {
     for (const page of pages) {
-      const key = `${SCANNED_NOTES_PREFIX}${crypto.randomUUID()}`;
+      const key = `${SCANNED_NOTES_PREFIX}${newId()}`;
       if (await idbSet(key, page.dataUrl, 'image') === null)
         throw new Error('Scanned pages could not be saved: image storage is unavailable or full.');
       keys.push(key);

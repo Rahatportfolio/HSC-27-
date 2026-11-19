@@ -8,7 +8,7 @@ not be triggered as delivery of the S/Brain/performance rework.
 
 ## Required checks and immutable bytes
 
-- Only the active delivery branch `arena/25b5228c-hsc-27`, a push carrying the explicit
+- Only the active delivery branch `arena/2a6136bf-hsc-27`, a push carrying the explicit
   `[current-dev-apk]` acknowledgement, and the development-only confirmation
   can request publication. Normal builds do not publish downloads.
 - Exact repository, full source SHA, workflow, run and attempt must match.
@@ -21,14 +21,23 @@ not be triggered as delivery of the S/Brain/performance rework.
   hashes are never presented as APK hashes.
 - APK ZIP integrity, actual Android package/version, debug flag, signature and
   certificate are inspected with Android build tools. Packaged shell/entry
-  bytes must exist. There is no rebuild, re-sign, identity switch or fallback
-  to a different APK. A separate APK SHA-256 and inspection JSON are retained.
+  bytes must exist. Both independent recovery files must match this source
+  byte-for-byte and appear in the packaged offline precache. The packaged
+  Capacitor config must retain WebView minimum 107 and `recovery.html` as its
+  error path. There is no rebuild, re-sign, identity switch or fallback to a
+  different APK. A separate APK SHA-256 and inspection JSON are retained.
 - Publication starts as a new draft. Exact uploaded asset sizes, SHA-256 digests
   and direct GitHub URLs are verified before it becomes a **non-Latest
   development prerelease**. No `--clobber`, existing tag/asset replacement or
   version release is allowed; Latest is checked before and after publication.
-- 31 current-delivery guard tests complement the existing production/development
-  release guards. The old `requireCompatibleUpdate` gate is unchanged.
+- Current-delivery guard tests complement the existing production/development
+  release guards, including rejection of the previous delivery branch and
+  stale/missing recovery bytes or config. The old `requireCompatibleUpdate`
+  gate is unchanged.
+- Built web acceptance requires all **14** production suites, including startup,
+  dates, full media backup/restore, inputs and follow-up interactions. Native
+  checks include actual fresh-form save/restart/recovery, not only prefilled
+  saved profiles. These checks are not a statistical 99.99% reliability claim.
 
 ## Installation/data boundary
 
@@ -46,10 +55,10 @@ every physical phone, OEM keyboard, background restriction or screen reader.
 
 ## Exact-source delivery record
 
-The **Delivery** section of [this follow-up branch's PR](https://github.com/Rahatportfolio/HSC-27-/pulls?q=is%3Apr+head%3Aarena%2F25b5228c-hsc-27)
+The **Delivery** section of [this follow-up branch's PR](https://github.com/Rahatportfolio/HSC-27-/pulls?q=is%3Apr+head%3Aarena%2F2a6136bf-hsc-27)
 records its direct `.apk` URL, full source SHA, successful run, APK hash and
-certificate. The [previous PR #19 download](https://github.com/Rahatportfolio/HSC-27-/pull/19)
-is historical and does not contain this follow-up. Each separate development
+certificate. The [previous PR #20 download](https://github.com/Rahatportfolio/HSC-27-/pull/20)
+is historical and does not contain these startup/recovery changes. Each separate development
 prerelease contains `inspection.json` and `SHA256SUMS.txt`; older production
 assets are not the new download. The workflow also exposes the measured result
 in a **Current development APK evidence** annotation and retains

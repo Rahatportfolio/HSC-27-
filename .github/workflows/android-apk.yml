@@ -267,7 +267,7 @@ jobs:
             if (!fs.existsSync(dir)) { core.warning('Native shell evidence directory is missing'); return; }
             const measurements = `${dir}/measurements.jsonl`;
             const rows = fs.existsSync(measurements) ? fs.readFileSync(measurements, 'utf8').trim().split('\n').filter(Boolean).map(line => JSON.parse(line)) : [];
-            const summary = {api: rows[0]?.androidApi, stageCount: rows.length, freshSetup: rows.find(row => row.stage === 'availability-first'), chrome: rows.filter(row => row.chrome), clocks: rows.filter(row => row.clocks).map(row => ({stage: row.stage, count: row.clocks.length, minFont: Math.min(...row.clocks.map(clock => clock.font)), readable: row.clocks.every(clock => clock.hit && !clock.clipped)})), retained: rows.filter(row => row.notesUnchanged !== undefined), calibratedTaps: rows.filter(row => row.stage === 'native-coordinate-calibration').length, unfocused: rows.find(row => row.stage === 'unfocused-input'), physicalDeviceCertified: false};
+            const summary = {api: rows[0]?.androidApi, stageCount: rows.length, freshSetup: rows.find(row => row.stage === 'availability-first'), freshJourney: rows.find(row => row.stage === 'new-student-setup-restart'), standaloneRecovery: rows.find(row => row.stage === 'new-student-independent-recovery'), chrome: rows.filter(row => row.chrome), clocks: rows.filter(row => row.clocks).map(row => ({stage: row.stage, count: row.clocks.length, minFont: Math.min(...row.clocks.map(clock => clock.font)), readable: row.clocks.every(clock => clock.hit && !clock.clipped)})), retained: rows.filter(row => row.notesUnchanged !== undefined), calibratedTaps: rows.filter(row => row.stage === 'native-coordinate-calibration').length, unfocused: rows.find(row => row.stage === 'unfocused-input'), physicalDeviceCertified: false};
             core.notice(JSON.stringify(summary).slice(0, 3500), {title: 'Android shell summary'});
             // GitHub keeps only ten notices per step and truncates each message
             // at 4096 chars. Keep one summary plus <=9 small image chunks. Full
@@ -389,7 +389,7 @@ jobs:
     needs: [apk, device-checks, built-web]
     if: >-
       ${{ github.event_name == 'push' &&
-        github.ref == 'refs/heads/arena/25b5228c-hsc-27' &&
+        github.ref == 'refs/heads/arena/2a6136bf-hsc-27' &&
         contains(github.event.head_commit.message, '[current-dev-apk]') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15

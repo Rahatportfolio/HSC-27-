@@ -38,7 +38,8 @@
     "test:build-budget": "node --test scripts/check-build-budget.node-test.mjs",
     "test:lazy-browser": "tsx scripts/check-lazy-routes.ts",
     "test:a11y-reviewer": "tsx scripts/check-a11y-reviewer.ts",
-    "test:built-web": "tsx scripts/check-built-web.ts"
+    "test:built-web": "tsx scripts/check-built-web.ts",
+    "test:startup-recovery": "tsx scripts/check-startup-recovery.ts"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",

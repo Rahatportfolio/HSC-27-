@@ -236,7 +236,96 @@ public class MobileShellInstrumentedTest {
       scenario.onActivity(a -> chrome.set("visibleNativeToolbar=" + hasVisibleNativeToolbar(a.getWindow().getDecorView())));
       record("recreated", new JSONObject().put("chrome", chrome.get()));
       assertEquals("visibleNativeToolbar=false", chrome.get());
+      completeFreshSetupAndRecover(scenario, ref.get());
     }
+  }
+
+  /** Actual fresh-app form, not a synthetic saved-profile shortcut. Field entry
+   * uses DOM input events; all choices/Next/Save/completion use real native taps.
+   * This does not certify an OEM soft keyboard or a live YouTube catalogue. */
+  private void enterField(WebView web, String selector, String value) throws Exception {
+    waitFor(web, "!!document.querySelector(" + JSONObject.quote(selector) + ")");
+    evaluate(web, "(()=>{const e=document.querySelector(" + JSONObject.quote(selector) + ");const proto=e.tagName==='TEXTAREA'?HTMLTextAreaElement.prototype:HTMLInputElement.prototype;Object.getOwnPropertyDescriptor(proto,'value').set.call(e," + JSONObject.quote(value) + ");e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));return true;})()");
+    waitFor(web, "document.querySelector(" + JSONObject.quote(selector) + ").value===" + JSONObject.quote(value));
+  }
+
+  private void completeFreshSetupAndRecover(ActivityScenario<MainActivity> scenario, WebView web) throws Exception {
+    waitFor(web, "!!document.querySelector('.personal-setup form')");
+    tap(web, ".lang-toggle-chip");
+    waitFor(web, "document.documentElement.lang==='en'");
+    // Invalid empty form cannot skip availability or create default hours.
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-setup [role=alert]')");
+    assertEquals("Empty availability created a routine", "true", evaluate(web, "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
+    tap(web, ".availability-row .text-button");
+    enterField(web, "input[aria-label='Window 1 start']", "18:00");
+    enterField(web, "input[aria-label='Window 1 end']", "22:00");
+    enterField(web, ".personal-availability>.form-label input", "4");
+    tap(web, "input[name='fixed-obligations'][value='none']");
+    enterField(web, ".personal-session-options label:first-child input", "60");
+    enterField(web, ".personal-session-options label:last-child input", "5");
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-chapter-choices')");
+    tap(web, ".personal-shortlist-actions .button.ghost");
+    tap(web, ".personal-chapter-choices input[value='physics-1-3']");
+    tap(web, ".personal-chapter-choices input[value='chemistry-1-3']");
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-workload-editor')");
+    // The two first-pair buttons select different chapters without feeding a
+    // prebuilt profile into storage. Long durations must NOT become 80 minutes.
+    for (int chapter = 1; chapter <= 2; chapter++) {
+      tap(web, ".personal-workload-editor .personal-shortlist-actions button:nth-child(" + chapter + ")");
+      enterField(web, "input[aria-label='Chapter class minutes']", chapter == 1 ? "480" : "420");
+      enterField(web, "input[aria-label='Textbook reading minutes']", "30");
+      enterField(web, "input[aria-label='Note making minutes']", "20");
+      enterField(web, "input[aria-label='MCQ solving class minutes']", "0");
+      enterField(web, "input[aria-label='Own MCQ practice minutes']", "45");
+      enterField(web, "input[aria-label='CQ solving class minutes']", "0");
+      enterField(web, "input[aria-label='Own CQ practice minutes']", "60");
+      enterField(web, "input[aria-label='Chapter revision minutes']", "20");
+    }
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-preview-day')");
+    assertEquals("Capacity must extend the same pair rather than claim a two-day finish", "true", evaluate(web, "document.querySelector('.personal-preview').textContent.includes('SAME pair continues on extra days')"));
+    screenshot("new-student-preview");
+    tap(web, ".personal-setup-actions button[type='submit']");
+    waitFor(web, "!!document.querySelector('.personal-home .personal-tasks .task-check')");
+    JSONObject saved = object(web, "JSON.parse(localStorage.getItem('hsc27-prostuti-v1'))");
+    JSONObject routine = saved.getJSONObject("personalRoutine");
+    assertFalse("Setup flag was not completed", saved.getBoolean("routineSetupRequired"));
+    assertEquals("2026-11-20", saved.getJSONObject("settings").getString("startDate"));
+    assertEquals("S", routine.getString("scope"));
+    assertEquals(2, routine.getJSONArray("chapterIds").length());
+    assertEquals(7, routine.getJSONArray("windows").length());
+    assertEquals(240, routine.getInt("dailyLimitMinutes"));
+    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-3").getJSONObject("class").getInt("minutes"));
+    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-3").getJSONObject("class").getInt("minutes"));
+    tap(web, ".personal-tasks .task-check");
+    enterField(web, "textarea[aria-label='Day note']", "Native fresh setup note: retain after restart and recovery");
+    waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.keys(d.completed).length===1&&Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery');})()");
+    assertEquals("A single segment must not finish a chapter", "0/2", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
+    String retained = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
+    scenario.recreate();
+    AtomicReference<WebView> ref = new AtomicReference<>();
+    scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
+    web = ref.get();
+    waitFor(web, "!!document.querySelector('.personal-home')");
+    assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("shortlistChapters", 2).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
+    screenshot("new-student-after-restart");
+    String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
+    final WebView recoveryWeb = web;
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> recoveryWeb.loadUrl("https://localhost/recovery.html"));
+    waitFor(web, "!!document.querySelector('#recovery-profile')");
+    tap(web, "#recovery-profile");
+    waitFor(web, "!!document.querySelector('#recovery-json').value");
+    assertEquals("Independent native recovery changed raw JSON", raw, evaluate(web, "document.querySelector('#recovery-json').value"));
+    assertEquals("Independent native recovery wrote to storage", raw, evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')"));
+    screenshot("new-student-independent-recovery");
+    tap(web, "#recovery-reopen");
+    waitFor(web, "!!document.querySelector('.personal-home')");
+    assertEquals("Returning from native recovery changed routine/history", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    record("new-student-independent-recovery", new JSONObject().put("exactRawLocalJson", true).put("zeroRecoveryStorageWrites", true).put("returnedToSavedRoutine", true).put("sqliteOrMediaRecoveryCertified", false));
   }
 
   private String syntheticProfile(String profile) throws Exception {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { CURRENT_POLICY, requireCurrentSource, requireCurrentArchive, requireCurrentUploadedAssets } from './publish-current-development-apk.mjs';
+import { CURRENT_POLICY, requireCurrentSource, requireCurrentArchive, requireCurrentUploadedAssets, requireCurrentRecovery } from './publish-current-development-apk.mjs';
 
 const sha = 'a'.repeat(40), hash = 'b'.repeat(64);
 function fixture() {
@@ -16,7 +16,7 @@ test('accepts only this exact tested run and returns an explicitly development-o
   assert.deepEqual(source(), { tag: `dev-apk-${sha.slice(0, 12)}`, assetName: `prostuti-hsc27-${sha.slice(0, 12)}-development.apk`, sourceSha: sha, runId: 123, artifactId: 456 });
 });
 test('pins this delivery branch in both the publisher and workflow without weakening any prerequisite', () => {
-  assert.equal(CURRENT_POLICY.branch, 'arena/25b5228c-hsc-27');
+  assert.equal(CURRENT_POLICY.branch, 'arena/2a6136bf-hsc-27');
   const workflow = readFileSync(new URL('../.github/workflows/android-apk.yml', import.meta.url), 'utf8');
   const job = workflow.slice(workflow.indexOf('\n  current-development-download:'));
   assert.match(job, /needs: \[apk, device-checks, built-web\]/);
@@ -25,7 +25,7 @@ test('pins this delivery branch in both the publisher and workflow without weake
   assert.ok(job.includes("contains(github.event.head_commit.message, '[current-dev-apk]')"));
   assert.ok(job.includes(`CURRENT_DEV_APK_CONFIRMATION: ${CURRENT_POLICY.confirmation}`));
 });
-for (const branch of ['main', 'arena/80a86bf2-hsc-27']) test(`rejects a coherent successful run from the non-current branch ${branch}`, () => {
+for (const branch of ['main', 'arena/80a86bf2-hsc-27', 'arena/25b5228c-hsc-27']) test(`rejects a coherent successful run from the non-current branch ${branch}`, () => {
   const f = fixture();
   f.env.GITHUB_REF = `refs/heads/${branch}`;
   f.run.head_branch = branch; f.artifact.workflow_run.head_branch = branch;
@@ -72,3 +72,26 @@ test('requires exact uploaded sizes, hashes, names and direct GitHub URLs', () =
   assert.throws(() => requireCurrentUploadedAssets([...assets, ...assets], files, delivery));
   assert.throws(() => requireCurrentUploadedAssets(assets, files, { ...delivery, tag: 'v2.44.0' }));
 });
+function recoveryFixture() {
+  const expected = { 'recovery.html': Buffer.from('independent HTML'), 'recovery.js': Buffer.from('independent JS') };
+  return { expected, packaged: { ...expected }, config: { android: { minWebViewVersion: 107 }, server: { errorPath: 'recovery.html' } }, worker: 'const SHELL = ["./recovery.html","./recovery.js"];' };
+}
+function recovery(f = recoveryFixture()) { return requireCurrentRecovery(f.packaged, f.expected, f.config, f.worker); }
+test('requires standalone recovery bytes identical to source, correct native fallback and offline inclusion', () => {
+  const proof = recovery(); assert.equal(proof.standaloneRawJsonOnly, true); assert.equal(proof.minWebViewVersion, 107);
+  assert.equal(proof.errorPath, 'recovery.html'); assert.deepEqual(Object.keys(proof.sha256), ['recovery.html', 'recovery.js']);
+  for (const hash of Object.values(proof.sha256)) assert.match(hash, /^[a-f0-9]{64}$/);
+});
+for (const name of ['recovery.html', 'recovery.js']) {
+  test(`rejects missing or stale packaged ${name}`, () => {
+    const missing = recoveryFixture(); delete missing.packaged[name]; assert.throws(() => recovery(missing));
+    const stale = recoveryFixture(); stale.packaged[name] = Buffer.from('an old file'); assert.throws(() => recovery(stale));
+  });
+}
+for (const [name, mutate] of [
+  ['old WebView minimum', f => { f.config.android.minWebViewVersion = 60; }],
+  ['no native fallback', f => { delete f.config.server; }],
+  ['wrong fallback document', f => { f.config.server.errorPath = 'index.html'; }],
+  ['uncached recovery HTML', f => { f.worker = 'const SHELL = ["./recovery.js"];'; }],
+  ['uncached recovery script', f => { f.worker = 'const SHELL = ["./recovery.html"];'; }],
+]) test(`holds publication on ${name}`, () => { const f = recoveryFixture(); mutate(f); assert.throws(() => recovery(f)); });

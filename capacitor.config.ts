@@ -11,7 +11,12 @@ const config: CapacitorConfig = {
   android: {
     backgroundColor: '#f6f7f3',
     allowMixedContent: false,
+    // Match Vite's Chrome 107 production baseline, not Capacitor's default 60.
+    // On older WebViews, offer independent read-only recovery instead of a
+    // syntactically unsupported entry/blank screen. Never erase a saved profile.
+    minWebViewVersion: 107,
   },
+  server: { errorPath: 'recovery.html' },
   plugins: {
     LocalNotifications: {
       smallIcon: 'ic_stat_icon',

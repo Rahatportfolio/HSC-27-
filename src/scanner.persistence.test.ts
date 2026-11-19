@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const pages = vi.hoisted(() => new Map<string, unknown>());
 const failure = vi.hoisted(() => ({ writes: Infinity }));
 vi.mock('./storage-manager', () => ({
@@ -14,8 +14,16 @@ vi.mock('./storage-manager', () => ({
 import { loadPagesFromDb, savePagesToDb, scannedNotesSizeBytes } from './scanner';
 const image = 'data:image/png;base64,aGVsbG8=';
 beforeEach(() => { pages.clear(); failure.writes = Infinity; });
+afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
 describe('scanner page persistence is complete or fails visibly', () => {
+  it.each([undefined, {}])('still saves exact scan pages when randomUUID is unavailable (%s)', async cryptoValue => {
+    vi.stubGlobal('crypto', cryptoValue);
+    const keys = await savePagesToDb(Array.from({ length: 3 }, () => ({ dataUrl: image, width: 1, height: 1 })));
+    expect(keys).toHaveLength(3); expect(new Set(keys).size).toBe(3);
+    expect(await loadPagesFromDb(keys)).toEqual([image, image, image]);
+    expect(keys.every(key => key.startsWith('scan:'))).toBe(true);
+  });
   it('does not claim a scan was saved when image storage is unavailable', async () => {
     failure.writes = 0;
     await expect(savePagesToDb([{ dataUrl: image, width: 1, height: 1 }])).rejects.toThrow(/stor|save|পৃষ্ঠা/i);

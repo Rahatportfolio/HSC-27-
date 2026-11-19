@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="bn">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta name="robots" content="noindex" />
+  <meta name="referrer" content="no-referrer" />
+  <title>প্রস্তুতি — স্থানীয় JSON উদ্ধার / JSON recovery</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #182e24; background: #fcfdf9; font: 1rem/1.8 system-ui, sans-serif; }
+    main { max-width: 48rem; margin: auto; padding: 24px; padding-top: max(24px, env(safe-area-inset-top)); padding-bottom: max(24px, env(safe-area-inset-bottom)); overflow-wrap: anywhere; }
+    h1 { font-size: 1.6rem; line-height: 1.5; } h2 { font-size: 1.2rem; }
+    button, a { display: inline-block; max-width: 100%; padding: 12px; margin: 4px 8px 4px 0; color: #174d36; background: #f3f7ee; border: 1px solid #537361; border-radius: 8px; font: inherit; line-height: 1.6; text-align: start; cursor: pointer; }
+    button:disabled { color: #535e56; background: #eee; cursor: not-allowed; }
+    :focus-visible { outline: 3px solid #174d36; outline-offset: 3px; }
+    textarea { display: block; width: 100%; min-height: 14rem; padding: 12px; border: 1px solid #537361; color: #182e24; background: #fff; font: 0.9rem/1.7 monospace; resize: vertical; }
+    .warning { padding: 16px; border: 2px solid #795b13; border-radius: 8px; } #recovery-status { min-height: 3.6em; }
+  </style>
+</head>
+<body>
+<main aria-labelledby="recovery-heading">
+  <h1 id="recovery-heading">স্থানীয় JSON উদ্ধার <span lang="en">/ Local JSON recovery</span></h1>
+  <p>অ্যাপের মূল ফাইল না খুললেও এই আলাদা পাতায় একই অ্যাপ/browser-এর সেভ করা JSON অপরিবর্তিত দেখা, কপি বা ডাউনলোড করা যাবে। কিছুই নিজে থেকে মুছবে, বদলাবে বা আপলোড করবে না। Android System WebView ও Chrome আপডেট করে আবার চেষ্টা করো।</p>
+  <p lang="en">This independent page reads raw localStorage JSON only, not SQLite or another browser/app profile. It does not validate, repair, restore, upload or change your data.</p>
+  <p class="warning">অ্যাপ uninstall বা Clear data করবে না। এটি পূর্ণ ব্যাকআপ নয়; ছবি, PDF ও ভিডিওর আসল bytes এখানে থাকবে না। মূল ডিভাইস, Full backup ও আলাদা PDF রাখো।<br /><span lang="en">Do not uninstall or clear app data. This is not a full backup: JSON contains metadata, not images, PDFs or video bytes. Keep the original device and verified full-media backups.</span></p>
+  <a id="recovery-reopen" href="./">অ্যাপ আবার খোলো / Reopen app</a>
+  <h2>১। কোন JSON দেখবে? / Choose a snapshot</h2>
+  <button id="recovery-profile" type="button">সেভ করা JSON দেখো / Show saved JSON</button>
+  <button id="recovery-old" type="button">পুরোনো recovery কপি / Show old recovery copy</button>
+  <p id="recovery-status" role="status" aria-live="polite">বোতাম চাপলে শুধু স্থানীয় কপি পড়া হবে। / Tap to read a local snapshot.</p>
+  <label for="recovery-json">অপরিবর্তিত JSON / Unmodified JSON (read-only)</label>
+  <textarea id="recovery-json" readonly spellcheck="false" autocapitalize="off"></textarea>
+  <h2>২। আলাদা কপি রাখো / Keep a separate copy</h2>
+  <button id="recovery-copy" type="button" disabled>JSON কপি / Copy shown JSON</button>
+  <button id="recovery-download" type="button" disabled>JSON ডাউনলোড / Download shown JSON</button>
+  <p>অ্যাপ/WebView-এ ডাউনলোড সমর্থিত না হলে উপরের ঘর চেপে ধরে সব লেখা বেছে কপি করো, তারপর নিরাপদ ফাইলে রাখো। ডাউনলোডের বোতাম চাপা মানেই ফাইল সেভ নিশ্চিত নয়—ফাইল খুলে মিলিয়ে নাও। উদ্ধার কপিতে ত্রুটি থাকলে সেটিও অপরিবর্তিত থাকবে; সেটিকে যাচাই করা backup বলা হচ্ছে না।</p>
+  <p lang="en">If copying/downloading is blocked, select and copy the text manually. Verify the saved file yourself. An old or corrupt snapshot is preserved as evidence, not certified as a restorable backup. Use Settings → Full backup after the app works again.</p>
+  <noscript><p>JSON দেখতে JavaScript প্রয়োজন। / Enable JavaScript to read JSON. No application modules are needed.</p></noscript>
+</main>
+<script src="./recovery.js" defer></script>
+</body>
+</html>
