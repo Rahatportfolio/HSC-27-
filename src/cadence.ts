@@ -2,7 +2,7 @@ import { weekdayName } from './i18n';
 import type { AppData } from './planner';
 import { addDays, diffDays } from './planner';
 import type { ExamCadence, ExamSession } from './types';
-import { STARTER_QUESTIONS } from './quiz-data';
+import { BUILTIN_QUESTION_META } from './questionBankIndex';
 
 /**
  * The exam cadence: a daily short test, a weekly paper and a monthly full mock.
@@ -79,7 +79,7 @@ export function cadenceSlots(data: AppData, today: string): CadenceSlot[] {
  */
 export function dailyTestChapter(data: AppData, weakChapterIds: string[] = []): string {
   const counts = new Map<string, number>();
-  for (const question of [...STARTER_QUESTIONS, ...data.questions]) {
+  for (const question of [...BUILTIN_QUESTION_META, ...data.questions]) {
     if (question.chapterId) counts.set(question.chapterId, (counts.get(question.chapterId) || 0) + 1);
   }
   for (const chapterId of weakChapterIds) if (counts.has(chapterId)) return chapterId;

@@ -35,7 +35,8 @@ beforeAll(() => {
   // jsdom has no IndexedDB; the PDF view must survive that gracefully.
   Object.defineProperty(window, 'indexedDB', { writable: true, value: undefined });
 });
-beforeEach(() => { localStorage.clear(); window.location.hash = ''; });
+beforeEach(() => { localStorage.clear(); localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); // legacy saved profile
+ window.location.hash = ''; });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
 
 function go(view: string) {

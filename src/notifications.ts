@@ -1,3 +1,4 @@
+import { isPersonalTaskComplete } from './personalRoutine';
 import { chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import {
@@ -93,8 +94,8 @@ export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: s
   // must not invent 8/16 hours of scheduled work from the settings target.
   const totalMinutes = tasks.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
 
-  const doneList = tasks.filter(tk => Boolean(data.completed[tk.id]));
-  const remainingList = tasks.filter(tk => !data.completed[tk.id]);
+  const doneList = tasks.filter(tk => isPersonalTaskComplete(tk, data.completed));
+  const remainingList = tasks.filter(tk => !isPersonalTaskComplete(tk, data.completed));
 
   const doneTasks = doneList.length;
   const doneMinutes = doneList.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);

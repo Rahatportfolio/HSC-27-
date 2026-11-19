@@ -8,17 +8,19 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import type { Page } from 'playwright-core';
 import type { AxeResults } from 'axe-core';
+import { reviewIncomplete } from './review-a11y-incomplete';
+import type { A11yReview } from './review-a11y-incomplete';
 import { freshData, STORAGE_KEY } from '../src/planner';
 import { emptyAdvanced } from '../src/advanced';
 import { parseBackup } from '../src/storage';
-import { allQuestions } from '../src/analytics';
+import { allQuestions } from '../src/questionBank';
 
 const require = createRequire(import.meta.url);
 const base = process.env.BASE_URL || 'http://127.0.0.1:3000';
 const output = process.env.A11Y_OUTPUT || '.cache/accessibility';
 const fault = process.env.A11Y_FAULT || '';
 const routeTitles = {
-  today: 'Home dashboard', calendar: 'My study plan', syllabus: 'Syllabus', videos: 'Video classes',
+  today: 'Home dashboard', brain: 'Study Brain', calendar: 'My study plan', syllabus: 'Syllabus', videos: 'Video classes',
   studySystem: 'Study & offline', scanner: 'Note scanner', pdfs: 'PDF library', testprep: 'Test preparation',
   practice: 'Practice', flashcards: 'Flashcards', revision: 'Smart revision', examsim: 'Exam simulator',
   weakness: 'Weakness detector', heatmap: 'Syllabus heatmap', backlog: 'Backlog manager', exams: 'Exams & GPA',
@@ -27,7 +29,7 @@ const routeTitles = {
 } as const;
 type Route = keyof typeof routeTitles;
 const routeTitlesBn: Record<Route, string> = {
-  today: 'হোম ড্যাশবোর্ড', calendar: 'আমার স্টাডি প্ল্যান', syllabus: 'সিলেবাস', videos: 'ভিডিও ক্লাস',
+  today: 'হোম ড্যাশবোর্ড', brain: 'স্টাডি ব্রেইন', calendar: 'আমার স্টাডি প্ল্যান', syllabus: 'সিলেবাস', videos: 'ভিডিও ক্লাস',
   studySystem: 'স্টাডি ও অফলাইন', scanner: 'নোট স্ক্যানার', pdfs: 'পিডিএফ লাইব্রেরি', testprep: 'টেস্ট প্রস্তুতি',
   practice: 'অনুশীলন', flashcards: 'ফ্ল্যাশকার্ড', revision: 'স্মার্ট রিভিশন', examsim: 'পরীক্ষা সিমুলেটর',
   weakness: 'দুর্বলতা ডিটেক্টর', heatmap: 'সিলেবাস হিটম্যাপ', backlog: 'ব্যাকলগ ম্যানেজার', exams: 'পরীক্ষা ও GPA',
@@ -37,6 +39,7 @@ const routeTitlesBn: Record<Route, string> = {
 const allRoutes = Object.keys(routeTitles) as Route[];
 const routes = process.env.A11Y_ROUTES ? process.env.A11Y_ROUTES.split(',') as Route[] : allRoutes;
 assert(routes.length && routes.every(route => allRoutes.includes(route)), 'Unknown/empty accessibility route selection');
+assert.equal(new Set(routes).size, routes.length, 'Duplicate accessibility routes');
 const matrix = [
   { id: '320-light-en', width: 320, theme: 'light', language: 'en', populated: false },
   { id: '393-dark-bn', width: 393, theme: 'dark', language: 'bn', populated: false },
@@ -50,6 +53,7 @@ const matrix = [
   { id: '1280-dark-bn', width: 1280, theme: 'dark', language: 'bn', populated: true },
 ] as const;
 const selected = process.env.A11Y_SCENARIOS?.split(',');
+assert(!selected || new Set(selected).size === selected.length, 'Duplicate accessibility scenarios');
 const scenarios = matrix.filter(s => !selected || selected.includes(s.id));
 assert(scenarios.length && (!selected || selected.every(id => scenarios.some(s => s.id === id))), 'Unknown/empty scenario selection');
 const dialogs: { route: Route; name: string; selector: string; populatedOnly?: boolean; before?: (page: Page) => Promise<void> }[] = [
@@ -72,12 +76,15 @@ const dialogs: { route: Route; name: string; selector: string; populatedOnly?: b
   { route: 'studySystem', name: 'duration-player-modal', selector: '.study-actions .button.primary', populatedOnly: true },
 ];
 const dialogFilter = process.env.A11Y_DIALOGS?.split(',');
+assert(!dialogFilter || new Set(dialogFilter).size === dialogFilter.length, 'Duplicate accessibility dialogs');
+assert(!dialogFilter?.includes('none') || dialogFilter.length === 1, 'The none dialog filter cannot be combined with a dialog');
 const extraPopulatedStates = !dialogFilter || process.env.A11Y_EXTRA_STATES === '1';
 const examStatesOnly = process.env.A11Y_EXAM_STATES_ONLY === '1';
 const chosenDialogs = dialogFilter?.includes('none') ? [] : dialogs.filter(d => !dialogFilter || dialogFilter.includes(d.name));
 assert(!dialogFilter || dialogFilter.every(name => name === 'none' || dialogs.some(d => d.name === name)), 'Unknown dialog selection');
-await mkdir(output, { recursive: true });
-const rows: { name: string; violations: AxeResults['violations']; incomplete: { id: string; nodes: number }[]; pageErrors: string[] }[] = [];
+await mkdir(`${output}/raw`, { recursive: true });
+const supplemental = process.env.A11Y_REVIEW_INCOMPLETE !== '0';
+const rows: { name: string; violations: AxeResults['violations']; incomplete: { id: string; nodes: number }[]; reviews: A11yReview[]; rawFile: string; pageErrors: string[] }[] = [];
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/tmp/chromium', headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 try {
   for (const scenario of scenarios) {
@@ -139,10 +146,13 @@ try {
       }
       await page.addScriptTag({ path: require.resolve('axe-core/axe.min.js') });
       const result = await page.evaluate(async () => (window as unknown as { axe: { run: (root: Document, options: object) => Promise<AxeResults> } }).axe.run(document, { runOnly: { type: 'tag', values: ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'] }, iframes: false, resultTypes: ['violations', 'incomplete'] }));
-      const row = { name: `${scenario.id}/${name}`, violations: result.violations, incomplete: result.incomplete.map(v => ({ id: v.id, nodes: v.nodes.length })), pageErrors: [...pageErrors] };
+      const rawFile = `raw/${scenario.id}-${name}.json`;
+      await writeFile(`${output}/${rawFile}`, JSON.stringify(result, null, 2));
+      const reviews = supplemental ? await reviewIncomplete(page, `${scenario.id}/${name}`, result.incomplete) : [];
+      const row = { name: `${scenario.id}/${name}`, violations: result.violations, incomplete: result.incomplete.map(v => ({ id: v.id, nodes: v.nodes.length })), reviews, rawFile, pageErrors: [...pageErrors] };
       rows.push(row);
-      await writeFile(`${output}/report.json`, JSON.stringify({ base, fault, routes, scenarios, dialogs: chosenDialogs.map(d => d.name), extraPopulatedStates, examStatesOnly, rows }, null, 2));
-      console.log(`${row.violations.length || row.pageErrors.length ? 'FAIL' : 'PASS'} ${row.name}: ${row.violations.map(v => `${v.id}(${v.nodes.length})`).join(', ')}`);
+      await writeFile(`${output}/report.json`, JSON.stringify({ base, fault, routes, scenarios, fullRouteMatrix: routes.length === allRoutes.length && scenarios.length === matrix.length && !dialogFilter && !examStatesOnly, supplemental, dialogs: chosenDialogs.map(d => d.name), extraPopulatedStates, examStatesOnly, rows }, null, 2));
+      console.log(`${row.violations.length || row.pageErrors.length || reviews.some(review => review.status !== 'verified') ? 'FAIL' : 'PASS'} ${row.name}: ${row.violations.map(v => `${v.id}(${v.nodes.length})`).join(', ')}; ${reviews.length} supplemental element reviews`);
       if (process.env.A11Y_SCREENSHOTS === '1') await page.screenshot({ path: `${output}/${scenario.id}-${name}.png`, fullPage: false });
     };
     for (const route of routes) { await goto(route); await scan(route); }
@@ -216,6 +226,7 @@ try {
     await context.close();
   }
 } finally { await browser.close(); }
-const failed = rows.filter(row => row.violations.length || row.pageErrors.length);
-console.log(JSON.stringify({ checked: rows.length, failed: failed.length, repeatedViolationInstances: failed.reduce((n, row) => n + row.violations.reduce((m, v) => m + v.nodes.length, 0), 0), automatedOnly: true, incompleteChecksNeedManualReview: rows.reduce((n, row) => n + row.incomplete.reduce((m, v) => m + v.nodes, 0), 0) }));
+const failed = rows.filter(row => row.violations.length || row.pageErrors.length || row.reviews.some(review => review.status !== 'verified'));
+const reviews = rows.flatMap(row => row.reviews);
+console.log(JSON.stringify({ checked: rows.length, failed: failed.length, repeatedViolationInstances: failed.reduce((n, row) => n + row.violations.reduce((m, v) => m + v.nodes.length, 0), 0), automatedOnly: true, physicalScreenReaderCertification: false, supplemental, supplementalVerified: reviews.filter(row => row.status === 'verified').length, supplementalFailed: reviews.filter(row => row.status === 'failed').length, supplementalUnresolved: reviews.filter(row => row.status === 'unresolved').length, rawIncompleteInstances: rows.reduce((n, row) => n + row.incomplete.reduce((m, v) => m + v.nodes, 0), 0) }));
 if (failed.length) process.exitCode = 1;

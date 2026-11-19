@@ -1,4 +1,6 @@
 import { isValidDate } from './planner';
+import { reflowPersonalPlan } from './personalReflow';
+import { isPersonalTaskComplete } from './personalRoutine';
 import type { AppData, Day, Task } from './planner';
 import type { TaskEdit } from './types';
 
@@ -33,6 +35,28 @@ function reflowDay(tasks: Task[]): Task[] {
  * Returns the same array untouched when there is nothing to edit (cheap common path).
  */
 export function applyManualSchedule(plan: Day[], data: AppData): Day[] {
+  if (data.personalRoutine) {
+    // Explicit edits stay explicit. Reflowing a changed day would stretch a source
+    // fragment, consume somebody else's window or move an appointment silently.
+    const byDate = new Map(plan.map(day => [day.date, day]));
+    const groups = new Map(plan.map(day => [day.date, [] as Task[]]));
+    for (const day of plan) for (const task of day.tasks) {
+      if (data.removedTasks.includes(task.id)) continue;
+      const edit = data.taskEdits[task.id];
+      const date = edit?.date && byDate.has(edit.date) ? edit.date : day.date;
+      const target = byDate.get(date)!;
+      const override = data.dayOverrides[date];
+      const startMinute = override?.taskStartMinutes?.[task.id] ?? task.startMinute;
+      const duration = task.personalWork ? task.endMinute - task.startMinute
+        : override?.taskMinutes?.[task.id] ?? task.endMinute - task.startMinute;
+      groups.get(date)!.push({ ...task, date, dayIndex: target.index, phase: target.phase,
+        ...(edit?.title ? { title: edit.title } : {}),
+        ...(!task.personalWork && edit?.subject ? { subject: edit.subject } : {}),
+        ...(!task.personalWork && edit?.chapterIds ? { chapterIds: edit.chapterIds } : {}),
+        startMinute, endMinute: startMinute + duration });
+    }
+    return plan.map(day => ({ ...day, tasks: groups.get(day.date)!.sort((a, b) => a.startMinute - b.startMinute) }));
+  }
   const removed = new Set(data.removedTasks);
   const edits = data.taskEdits;
   if (!removed.size && !Object.keys(edits).length) return plan;
@@ -161,6 +185,15 @@ export function rescheduleUnfinished(
   today: string,
   options: { maxExtraMinutesPerDay?: number } = {},
 ): RescheduleResult {
+  if (data.personalRoutine) {
+    // Personal plans roll forward as a pure source-range projection. Regenerating
+    // replaces future work, never applies the legacy +45-minute daily bonus.
+    const effective = reflowPersonalPlan(data, plan, today);
+    const pending = effective.flatMap(day => day.tasks).filter(task => !isPersonalTaskComplete(task, data.completed));
+    return { data, moved: pending.filter(task => task.date >= today && task.rescheduledFrom && task.rescheduledFrom < task.date).length,
+      skippedLocked: pending.filter(task => task.date < today && data.lockedDates.includes(task.date)).length,
+      skippedBudget: pending.filter(task => task.date < today && !data.lockedDates.includes(task.date)).length + Number(effective.some(day => (day.deferredMinutes || 0) > 0)) };
+  }
   const maxExtra = options.maxExtraMinutesPerDay ?? 45;
   const locked = new Set(data.lockedDates);
   const added = new Map<string, number>();

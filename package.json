@@ -18,6 +18,9 @@
     "test:responsive": "node scripts/check-responsive.mjs",
     "test:mobile-shell": "tsx scripts/check-mobile-shell.ts",
     "test:study-browser": "tsx scripts/check-study-system.ts",
+    "test:personal-browser": "tsx scripts/check-personal-routine.ts",
+    "test:brain-browser": "tsx scripts/check-study-brain.ts",
+    "test:dialog-offline-browser": "tsx scripts/check-dialog-offline.ts",
     "test:date-guards": "node scripts/check-date-guards.mjs",
     "test:post-release-guards": "node scripts/check-post-release-guards.mjs",
     "test:post-release-browser": "tsx scripts/check-post-release.ts",
@@ -28,7 +31,14 @@
     "test:followup-browser": "tsx scripts/check-followup-browser.ts",
     "test:followup-guards": "node scripts/check-followup-guards.mjs",
     "test:input-accessibility": "tsx scripts/check-input-accessibility.ts",
-    "test:input-guards": "node scripts/check-input-accessibility-guards.mjs"
+    "test:input-guards": "node scripts/check-input-accessibility-guards.mjs",
+    "questions:index": "tsx scripts/generate-question-index.ts",
+    "prebuild": "tsx scripts/generate-question-index.ts --check",
+    "postbuild": "node scripts/check-build-budget.mjs",
+    "test:build-budget": "node --test scripts/check-build-budget.node-test.mjs",
+    "test:lazy-browser": "tsx scripts/check-lazy-routes.ts",
+    "test:a11y-reviewer": "tsx scripts/check-a11y-reviewer.ts",
+    "test:built-web": "tsx scripts/check-built-web.ts"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",

@@ -4,9 +4,13 @@ import { applyManualSchedule } from './scheduleEdit';
 import { integrateStudyPlan } from './smartSchedule';
 import { applyAdaptivePlan } from './adaptive';
 import { weaknessReport } from './weakness';
+import { reflowPersonalPlan } from './personalReflow';
+import { buildPersonalStudyProjection } from './personalRoutine';
 
 /** The underlying task identities and source durations before splitting or adaptation. */
 export function buildOrdinaryStudyPlan(data: AppData): Day[] {
+  if (data.personalRoutine) return applyManualSchedule(applyRoutine(buildPersonalStudyProjection(data).plan, data.routineBlocks), data);
+  if (data.routineSetupRequired) return [];
   const generated = buildPlan(data.settings);
   const routine = applyRoutine(generated, data.routineBlocks);
   const edited = applyManualSchedule(routine, data);
@@ -19,6 +23,12 @@ export function buildOrdinaryStudyPlan(data: AppData): Day[] {
  * Return the explanation together with the final plan so it cannot be double-adapted.
  */
 export function buildStudyProjection(data: AppData, today: string) {
+  // Neither legacy adaptive swaps nor the extra-media overlay may break S scope,
+  // the two-day pair, actual source durations or explicit availability windows.
+  if (data.personalRoutine || data.routineSetupRequired) {
+    const baseline = buildOrdinaryStudyPlan(data);
+    return { plan: data.personalRoutine ? reflowPersonalPlan(data, baseline, today) : baseline, adaptive: null };
+  }
   const integrated = integrateStudyPlan(buildOrdinaryStudyPlan(data), data, today);
   const rows = data.settings.adaptiveEnabled ? weaknessReport(integrated, data, today) : [];
   const adaptive = rows.length ? applyAdaptivePlan(integrated, rows, data, today, {

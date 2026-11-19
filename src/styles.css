@@ -3169,7 +3169,7 @@ body {
   flex-direction: column;
   gap: 16px;
   margin-bottom: 18px;
-  background: linear-gradient(180deg, #f6fbf7 0%, #fcfaf5 100%);
+  background: var(--surface-soft);
   border: 1px solid #cfe2d5;
   border-left: 4px solid #2f6f51;
 }
@@ -3324,7 +3324,7 @@ body {
 }
 
 [data-theme="dark"] .live-notif-preview-card {
-  background: linear-gradient(180deg, #16261e 0%, #141e19 100%);
+  background: var(--surface-soft);
   border-color: #2b4637;
   border-left-color: #5ebc91;
 }
@@ -4111,7 +4111,7 @@ body {
 .stat-tile>strong.good{color:var(--green)}
 .stat-tile>strong.warn{color:var(--amber)}
 .stat-tile>small{font-size:10px;color:var(--soft)}
-.priority-badge.c{background:#f1edf9;color:#7a6aa8}
+.priority-badge.c{background:#f1edf9;color:#64528c}
 [data-theme="dark"] .priority-badge.c{background:#282040;border-color:#3f3560;color:#b9a8ef}
 
 /* ---------- video classes ---------- */
@@ -5236,3 +5236,191 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .verified-board-source{color:var(--subject-physics)}
 /* Missing historical definitions are not zero answers or silently shorter papers. */
 .exam-history-warning{margin-top:12px;padding:12px;border:1px solid var(--amber-border);border-radius:9px;background:var(--amber-soft);color:var(--ink-2);font-size:13px;line-height:1.75;overflow-wrap:anywhere}
+
+/* Personal S-only planner: availability is a hard boundary, not a suggested 8/16h day. */
+.personal-setup,.personal-settings-summary,.s-shortlist-notice{padding:24px;margin-bottom:20px;color:var(--ink);background:var(--surface)}
+.personal-setup .personal-setup-title{font-size:clamp(23px,3vw,32px);line-height:1.5;margin:8px 0 12px;color:var(--ink)}
+.personal-setup h2,.personal-home h2,.personal-settings-summary h2{font-size:19px;line-height:1.6;color:var(--ink);margin:12px 0}
+.personal-setup p,.personal-home p,.personal-settings-summary p,.s-shortlist-notice p,.personal-calendar-goal p{font-size:14px;line-height:1.85;color:var(--muted);margin:10px 0;overflow-wrap:anywhere}
+.personal-setup small,.personal-home small{font-size:12px;line-height:1.7;color:var(--muted);overflow-wrap:anywhere}
+.personal-setup fieldset{min-width:0;border:1px solid var(--line-strong);border-radius:12px;padding:16px;margin:18px 0;background:var(--surface)}
+.personal-setup legend{font-size:15px;font-weight:600;padding:0 8px;color:var(--ink)}
+.personal-setup label{display:flex;flex-direction:column;gap:8px;font-size:14px;line-height:1.7;color:var(--ink);min-width:0}
+.personal-setup input:not([type=checkbox]):not([type=radio]),.personal-setup select,.personal-day-controls input{width:100%;min-width:0;min-height:44px;padding:10px 12px;color:var(--ink);background:var(--surface);border:1px solid var(--line-strong);border-radius:8px;font:inherit;font-size:14px}
+.personal-setup input[type=checkbox]{width:20px;height:20px;min-width:20px;flex-shrink:0;accent-color:var(--green)}
+.personal-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;list-style:none;padding:0;margin:24px 0}
+.personal-steps li{display:flex;align-items:center;gap:8px;min-width:0;padding:12px 8px;border:1px solid var(--line);border-radius:9px;font-size:13px;color:var(--muted);background:var(--surface-soft);overflow-wrap:anywhere}
+.personal-steps li[aria-current=step]{color:var(--ink);border-color:var(--green);font-weight:700}
+.personal-steps li>span{width:26px;height:26px;display:grid;place-items:center;flex-shrink:0;border:1px solid var(--line-strong);border-radius:50%}
+.availability-days{display:flex;gap:10px 16px;flex-wrap:wrap;margin-bottom:10px}
+.personal-setup .availability-days>label{flex-direction:row;align-items:center;min-height:44px;padding:6px;cursor:pointer}
+.personal-session-options{margin-top:22px}
+.personal-setup-actions,.personal-shortlist-actions,.workload-source-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px;margin:18px 0}
+.personal-setup-actions{justify-content:flex-end;border-top:1px solid var(--line);padding-top:18px}
+.personal-setup-actions .button,.workload-source-actions .button{min-height:44px;white-space:normal;text-align:center;max-width:100%}
+.personal-warning,.personal-pair-note{padding:14px 16px;background:var(--surface-muted);color:var(--ink)!important;border:1px solid var(--line-strong);border-left:4px solid var(--green);border-radius:8px;line-height:1.85;overflow-wrap:anywhere;font-size:14px}
+.personal-chapter-choices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:0 16px}
+.personal-chapter-choices>fieldset{margin:10px 0}
+.personal-setup .personal-chapter-choices label{display:flex;flex-direction:row;align-items:center;gap:10px;min-height:48px;padding:10px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.personal-chapter-choices label>span:not(.s-category-badge){flex:1;min-width:0;overflow-wrap:anywhere}
+.personal-chapter-choices small{display:block}
+.s-category-badge{display:inline-flex;align-items:center;justify-content:center;min-width:27px;height:27px;padding:3px 7px;border-radius:7px;background:#214e3a;color:#fff!important;font-family:'DM Sans',sans-serif;font-size:14px;font-weight:800;flex-shrink:0}
+.s-shortlist-notice,.personal-settings-summary{display:flex;flex-wrap:wrap;align-items:center;gap:14px}
+.s-shortlist-notice>div,.personal-settings-summary>div{flex:1;min-width:min(220px,100%)}
+.personal-settings-summary .s-category-badge{float:left;margin:12px 10px 0 0}
+.personal-settings-summary .button{white-space:normal;min-height:44px}
+.workload-stage>label{margin-bottom:14px}
+.workload-time-row{display:grid;grid-template-columns:minmax(150px,1fr) minmax(0,1fr);align-items:center;gap:16px}
+.duration-status{font-size:13px;color:var(--ink);overflow-wrap:anywhere}
+.duration-status.unknown{font-weight:600}
+.workload-source-actions .text-button{min-height:44px;line-height:1.7;white-space:normal}
+.duration-probe{max-width:100%;padding:12px;border:1px solid var(--line);border-radius:8px;margin-top:12px}
+.duration-probe iframe{width:100%;max-width:100%;border:0}
+.duration-probe small{display:block}
+.personal-preview ul{padding-left:22px;line-height:1.9;font-size:14px}
+.personal-preview-day{padding:14px 0;border-bottom:1px solid var(--line)}
+.personal-home>.card{padding:22px;margin-bottom:18px}
+.personal-goal .card-heading>strong{font-size:25px;color:var(--ink);font-family:'DM Sans',sans-serif;white-space:nowrap}
+.personal-goal .s-category-badge{margin-bottom:6px}
+.personal-day-controls{display:grid;grid-template-columns:auto minmax(140px,220px) auto auto;gap:14px;align-items:center;justify-content:start}
+.personal-day-controls label{font-size:14px;color:var(--ink);line-height:1.7}
+.personal-availability-summary{grid-column:1/-1;display:flex;flex-direction:column;gap:8px;line-height:1.8}
+.personal-availability-summary>span{color:var(--ink);font-size:14px;overflow-wrap:anywhere}
+.personal-pair-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.personal-pair-chapter{border:1px solid var(--line-strong);padding:18px;border-radius:12px;background:var(--surface-soft);color:var(--ink);text-align:left;display:flex;flex-direction:column;gap:10px;min-width:0;overflow-wrap:anywhere}
+.personal-pair-chapter>strong{font-size:19px;line-height:1.6}
+.personal-pair-chapter>span:last-child{font-size:13px;line-height:1.7}
+.personal-home .personal-tasks .task-detail{font-size:13px;line-height:1.85;color:var(--muted)}
+.personal-home .task-title-button h3{font-size:16px;line-height:1.6}
+.personal-home .task-list{min-width:0}
+.personal-home .task-topline{flex-wrap:wrap}
+.personal-calendar-goal{padding:22px;margin-bottom:18px}
+@media(max-width:700px){
+  .personal-setup,.personal-home>.card,.personal-settings-summary,.s-shortlist-notice{padding:16px}
+  .personal-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .personal-chapter-choices,.personal-pair-grid,.workload-time-row{grid-template-columns:minmax(0,1fr)}
+  .personal-setup fieldset{padding:12px}
+  .personal-setup .form-grid{grid-template-columns:minmax(0,1fr)}
+  .personal-setup-actions .button{flex:1 1 150px}
+  .personal-shortlist-actions>.button,.workload-source-actions>.button{flex:1 1 150px}
+  .personal-settings-summary>.button{width:100%}
+  .personal-day-controls{grid-template-columns:44px minmax(0,1fr) 44px;gap:8px}
+  .personal-day-controls>.button{grid-column:1/-1;justify-self:start}
+  .personal-pair-chapter{padding:14px}
+}
+.personal-setup .availability-midnight{flex-direction:row;align-items:center;margin-block:12px;min-height:44px}
+.personal-setup .personal-setup-title:focus{outline:2px solid var(--green);outline-offset:5px;border-radius:3px}
+
+/* Small local Study Brain: legible, optional, and never a second routine. */
+.brain-teaser{display:flex;align-items:center;gap:18px;padding:22px;margin-bottom:20px;border-color:var(--line-strong);background:var(--surface)}
+.brain-mark{display:grid;place-items:center;width:54px;height:54px;flex-shrink:0;background:var(--mint);color:var(--green);border:1px solid var(--line-strong);border-radius:17px}
+.brain-teaser>div{flex:1;min-width:0}.brain-teaser h2{font-size:19px;line-height:1.6;margin:5px 0;color:var(--ink)}
+.brain-teaser p,.brain-teaser small{font-size:13px;line-height:1.8;color:var(--muted)}.brain-teaser small{display:flex;align-items:center;gap:6px;margin-top:8px}
+.brain-teaser .button,.brain-view .button{min-height:44px;white-space:normal;text-align:center;line-height:1.65;max-width:100%}
+.brain-view{color:var(--ink);overflow-wrap:anywhere}.brain-view h2{font-size:20px;line-height:1.6;margin:0 0 12px;color:var(--ink)}.brain-view h2>svg{vertical-align:middle;margin-right:6px}
+.brain-view h3{font-size:16px;line-height:1.65;color:var(--ink)}.brain-view p,.brain-view li,.brain-view dd{font-size:14px;line-height:1.85;color:var(--muted)}.brain-view p{margin:10px 0}
+.brain-view small{font-size:12px;line-height:1.8;color:var(--muted)}.brain-local-badge{display:inline-flex;align-items:center;gap:8px;background:var(--mint);border:1px solid var(--line-strong);color:var(--green);padding:9px 12px;border-radius:9px;font-size:11px;letter-spacing:.4px;line-height:1.7}
+.brain-boundary{display:flex;align-items:flex-start;gap:12px;padding:16px 18px;margin-bottom:22px;border-left:3px solid var(--green);background:var(--surface-soft);border-radius:0 12px 12px 0;color:var(--green)}.brain-boundary>svg{margin-top:5px}.brain-boundary p{margin:0;font-size:13px}
+.brain-layout{display:grid;grid-template-columns:minmax(0,1.65fr) minmax(260px,1fr);gap:22px;align-items:start}.brain-layout>*{min-width:0}.brain-main{display:flex;flex-direction:column;gap:22px}.brain-panel{padding:24px;min-width:0;background:var(--surface)}
+.brain-welcome{max-width:800px}.brain-welcome>.brain-mark{margin-bottom:18px;width:66px;height:66px}.brain-welcome ul{padding-left:22px;margin:20px 0}.brain-actions{display:flex;align-items:center;flex-wrap:wrap;gap:10px;margin:18px 0}.brain-welcome>small{display:block;border-top:1px solid var(--line);padding-top:16px}
+.brain-message{padding-bottom:20px;border-bottom:1px solid var(--line);margin:20px 0}.brain-view label{display:flex;flex-direction:column;gap:8px;color:var(--ink);font-size:14px;line-height:1.7;min-width:0}.brain-message>label{font-weight:600;margin-bottom:10px}.brain-message>div{display:flex;gap:10px}.brain-message input{flex:1;min-width:0}
+.brain-view input,.brain-view select{background:var(--surface);color:var(--ink);border:1px solid var(--line-strong);border-radius:8px;width:100%;min-width:0;min-height:46px;padding:10px 12px;font-size:14px}.brain-view input::placeholder{color:var(--muted);opacity:1}
+.brain-check-in-form fieldset{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px 16px;min-width:0;padding:18px 0;margin:0 0 16px;border:0;border-bottom:1px solid var(--line)}.brain-check-in-form legend{font-size:14px;color:var(--ink);font-weight:600;line-height:1.7;padding:0;max-width:100%}.brain-check-in-form>small{display:block;margin-top:12px}
+.brain-view .brain-reply,.brain-view .brain-notice{padding:14px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-soft);color:var(--ink);font-size:13px;line-height:1.85}
+.brain-recommendation>.eyebrow{display:block;margin-bottom:10px;line-height:1.8}.brain-pair{border-bottom:1px solid var(--line);padding-bottom:16px}.brain-next-source{border:1px solid var(--line-strong);border-radius:12px;background:var(--surface-soft);padding:18px;margin:20px 0}.brain-next-source h3{font-size:21px;margin:8px 0}.brain-next-source p{font-size:13px}.brain-next-source .brain-focus-length{color:var(--ink);margin:15px 0}.brain-focus-length>strong{font-family:'DM Sans','Hind Siliguri',sans-serif;font-size:36px;color:var(--green);font-weight:600}.brain-focus-length>span{display:block;font-size:12px;color:var(--muted)}
+.brain-view summary{font-size:14px;font-weight:600;line-height:1.8;cursor:pointer;color:var(--ink);padding:10px 0}.brain-reasons ul{padding-left:22px;margin:8px 0}.brain-reasons li{font-size:13px;margin:8px 0}.brain-feedback{border-top:1px solid var(--line);padding-top:18px;margin-top:22px}.brain-feedback p{font-size:12px}
+.brain-facts{margin:20px 0}.brain-facts>div{border-bottom:1px solid var(--line);padding:14px 0}.brain-facts dt{font-size:12px;color:var(--muted);margin-bottom:6px}.brain-facts dd{margin:0;color:var(--ink)}.brain-focus-preference{padding:4px 0 20px;border-bottom:1px solid var(--line);margin-bottom:20px}.brain-focus-preference>.button{margin-top:12px}.brain-focus-preference>small{display:block;margin-top:10px}.brain-memory-list{list-style:none;padding:0;margin:0}.brain-memory-list li{display:flex;flex-direction:column;gap:5px;padding:12px 0;border-top:1px solid var(--line)}.brain-memory-list strong{font-size:13px;color:var(--ink)}.brain-memory-list span{font-size:12px}.brain-view .brain-privacy{font-size:12px;border-top:1px solid var(--line);padding-top:16px;margin-top:20px}.brain-memory>.text-button{white-space:normal;min-height:44px;text-align:left;line-height:1.8}
+@media(max-width:1100px){.brain-layout{grid-template-columns:minmax(0,1fr)}.brain-teaser{flex-wrap:wrap}.brain-teaser>.button{margin-left:72px}}
+@media(max-width:650px){.brain-panel{padding:18px}.brain-layout,.brain-main{gap:18px}.brain-check-in-form fieldset{grid-template-columns:minmax(0,1fr)}.brain-message>div{flex-wrap:wrap}.brain-message input{flex-basis:100%}.brain-message .button{width:100%}.brain-teaser{gap:13px;padding:17px}.brain-teaser>.brain-mark{width:44px;height:44px;border-radius:13px}.brain-teaser>div{flex-basis:calc(100% - 60px)}.brain-teaser>.button{width:100%;margin-left:0}.brain-actions>.button{flex:1 1 140px}.brain-boundary{padding:13px;gap:10px}.brain-next-source{padding:14px}}
+
+/* Six-group progress, explicit obligations and retained (not re-scheduled) history. */
+.personal-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px;margin:18px 0}
+.personal-metrics>div{min-width:0;padding:14px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-soft)}
+.personal-metrics strong{display:block;margin-bottom:10px;font-size:14px;line-height:1.7;color:var(--ink)}
+.personal-metrics small{display:block;margin-top:9px;font-size:12px;line-height:1.8;color:var(--muted)}
+.personal-s-counts{display:flex;gap:12px 22px;flex-wrap:wrap;margin:14px 0;color:var(--ink);font-size:14px;line-height:1.8}
+.personal-completion{margin:20px 0;padding:18px;border:1px solid var(--line-strong);border-radius:12px;background:var(--surface)}
+.personal-completion h2{font-size:18px;line-height:1.6}
+.personal-completion .card-heading{align-items:flex-start;flex-wrap:wrap;gap:10px}
+.personal-completion-groups{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.personal-completion-groups fieldset{min-width:0;border:1px solid var(--line-strong);border-radius:9px;padding:12px;background:var(--surface)}
+.personal-completion-groups fieldset.is-complete{border-color:var(--green);background:var(--surface-soft)}
+.personal-completion-groups legend{padding:0 6px;color:var(--ink);font-size:14px;font-weight:600;line-height:1.8}
+.personal-completion-groups .check-line{display:flex;align-items:flex-start;gap:10px;min-height:44px;margin:4px 0;padding:6px 0;font-size:14px;color:var(--ink);line-height:1.75;cursor:pointer}
+.personal-completion-groups input,.personal-setup input[type=radio]{width:20px;height:20px;min-width:20px;min-height:20px;flex-shrink:0;accent-color:var(--green)}
+.personal-completion-groups small{display:block;margin-top:4px;color:var(--muted);font-size:12px;line-height:1.8}
+.personal-setup .availability-obligations>.check-line{flex-direction:row;align-items:center;min-height:44px;cursor:pointer}
+.independent-calculator{padding:4px 0 15px;margin-bottom:14px;border-bottom:1px solid var(--line)}
+.independent-calculator>.button{min-height:44px;margin-top:12px;white-space:normal}
+.personal-history{margin:18px 0;padding:16px;border:1px solid var(--line-strong);border-radius:10px;background:var(--surface-soft);color:var(--ink);font-size:14px;line-height:1.8;overflow-wrap:anywhere}
+.personal-history summary{cursor:pointer;min-height:32px;font-weight:600;line-height:1.8}
+.personal-history ul{padding-left:20px}
+.personal-history li{padding:12px 0;border-top:1px solid var(--line)}
+.personal-history li>span{display:block;color:var(--muted);font-size:12px;line-height:1.8}
+.personal-unallocated{margin:18px 0;padding:14px;border:1px dashed var(--line-strong);border-radius:10px;color:var(--ink);line-height:1.8;overflow-wrap:anywhere}
+.personal-unallocated h3{font-size:16px}
+@media(max-width:600px){
+  .personal-metrics,.personal-completion-groups,.personal-setup-dates{grid-template-columns:minmax(0,1fr)}
+  .personal-completion{padding:12px}
+}
+/* Completed work remains readable/actionable; use the tick/strike, not faded text. */
+.task-card.done .task-title-button h3{color:var(--muted);text-decoration-color:currentColor}
+.task-card.done .task-time strong{color:var(--muted)}
+.task-card.done .subject-badge{opacity:1}
+.kind-badge{color:var(--ink-2);background:var(--surface-soft)}
+.kind-badge.custom{color:var(--ink-2);background:var(--surface-soft)}
+
+/* The open mobile drawer is one modal focus/pointer scope, including its own
+   dismissible backdrop; the desktop sidebar keeps its existing fixed layout. */
+.sidebar-region[role="dialog"]{position:fixed;inset:0;z-index:60}
+
+/* Rating glyphs are meaningful text, including the one-star label axe cannot
+   classify. Use theme-aware AA foregrounds rather than pale fixed colours. */
+.star-badge.s5{color:var(--rose)}
+.star-badge.s3{color:var(--amber)}
+.star-badge.s1{color:var(--muted)}
+/* Single-letter shortcuts also need readable text contrast. */
+.global-search kbd{color:var(--muted);background:var(--surface);border-color:var(--line-strong)}
+[data-theme="dark"] .global-search kbd{color:var(--muted);background:var(--surface);border-color:var(--line-strong)}
+
+/* Class tags must wrap inside narrow/large-font columns, never be clipped by
+   the adjacent watched button. Preserve the visible teacher and type labels. */
+.class-group-card .class-pill{display:flex;width:100%;overflow:visible}
+.class-group-card .class-link{flex:1 1 auto;flex-wrap:wrap}
+.class-group-card .class-channel{flex:1 1 72px;min-width:0;max-width:100%;white-space:normal;overflow:visible;overflow-wrap:anywhere}
+.class-group-card .class-watch{flex-shrink:0;border-radius:0 8px 8px 0}
+/* Short Bengali option letters are meaningful labels, even when axe's
+   short-text heuristic cannot grade them. Keep every answer state readable. */
+.quiz-option .option-letter{color:var(--ink-2);background:var(--surface-soft)}
+.quiz-option.correct .option-letter{color:#34592c;background:#dcebca}
+.quiz-option.wrong .option-letter{color:#743f2b;background:#f4dfd3}
+[data-theme="dark"] .quiz-option .option-letter{color:var(--ink-2);background:#22302a}
+[data-theme="dark"] .quiz-option.correct .option-letter{color:#c8e2c4;background:#1c2e22}
+[data-theme="dark"] .quiz-option.wrong .option-letter{color:#edc8b8;background:#2c211d}
+/* The rubric contains full words, not a one-character icon. A fixed 24px box
+   let its Bengali label paint over the adjacent mark at large font sizes. */
+.rubric-row{display:grid;grid-template-columns:minmax(0,1fr);gap:7px}
+.rubric-row>div{min-width:0}
+.rubric-mark{width:auto;height:auto;min-height:28px;max-width:100%;padding:3px 8px;justify-self:start;white-space:normal;overflow-wrap:anywhere}
+.rubric-row strong{color:var(--ink-2)}
+.parts-field>span strong{color:var(--ink-2)}
+.rubric-mark.c3{color:var(--amber);background:var(--surface-soft)}
+[data-theme="dark"] .rubric-mark{color:var(--ink-2);background:var(--surface-soft)}
+/* Upcoming phase numbers and decorative micro-glyphs must also be legible. */
+.phase-number{color:var(--muted);background:var(--surface-soft);border-color:var(--line-strong)}
+.phase-step.active .phase-number{color:var(--ink-2);background:var(--surface-soft);border-color:var(--line-strong)}
+.motivation-ribbon .motivation-mark{color:var(--amber)}
+.hero-art-note{color:var(--muted);background:var(--surface);opacity:1}
+[data-theme="dark"] .hero-art{opacity:1}
+[data-theme="dark"] .hero-art-note{color:var(--muted);background:var(--surface);opacity:1}
+.small-spark{color:var(--amber)}
+.hero-separator{color:var(--muted)}
+.hero-progress>div:first-child strong{color:var(--ink-2)}
+/* Target/date labels and subject names are information, not disposable
+   ellipses. Let the existing responsive flex/grid rows grow with large text. */
+.exam-pill-label{overflow:visible;white-space:normal;text-overflow:clip;overflow-wrap:anywhere}
+.exam-breakdown-title{flex-wrap:wrap;align-items:flex-start}
+.exam-breakdown-title>.subject-badge{flex:0 0 auto;max-width:100%;overflow:visible;white-space:normal}
+.route-loading,.route-error{padding:24px;color:var(--ink);background:var(--surface);overflow-wrap:anywhere}
+.route-loading p,.route-error p{color:var(--muted);line-height:1.8}
+.route-error .form-actions{display:flex;flex-wrap:wrap;gap:10px}

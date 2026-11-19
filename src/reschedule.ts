@@ -1,3 +1,4 @@
+import { personalScheduleDateError } from './personalRoutine';
 import { addDays, diffDays, getPhases, hasFullTaskAllocation, isValidDate, scheduleDateError } from './planner';
 import type { AppData, Settings, Task } from './planner';
 import { t } from './i18n';
@@ -17,7 +18,7 @@ export const scheduleChanged = (before: Settings, after: Settings): boolean =>
  * A locked schedule must be explicitly unlocked before a global regeneration.
  */
 export function applyScheduleSettings(data: AppData, settings: Settings): AppData {
-  const error = scheduleDateError(settings);
+  const error = data.personalRoutine || data.routineSetupRequired ? personalScheduleDateError(settings, data.personalRoutine) : scheduleDateError(settings);
   if (error) throw new Error(error);
   const changed = scheduleChanged(data.settings, settings);
   const inOldPlan = (date: string) => date >= data.settings.startDate && date < data.settings.examDate;
@@ -27,7 +28,7 @@ export function applyScheduleSettings(data: AppData, settings: Settings): AppDat
   const delta = diffDays(data.settings.startDate, settings.startDate);
   const nextSettings = { ...settings, calendarRevision: data.settings.calendarRevision + (changed ? 1 : 0) };
   if (!changed) return { ...data, settings: nextSettings };
-  const end = getPhases(settings).at(-1)!.end;
+  const end = data.personalRoutine || data.routineSetupRequired ? addDays(settings.examDate, -1) : getPhases(settings).at(-1)!.end;
 
   const shift = (date: string) => {
     if (!inOldPlan(date)) return date;

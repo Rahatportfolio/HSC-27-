@@ -68,8 +68,8 @@ function PlayerModal({ resource, onClose }: { resource: ClassResource; onClose: 
         <span>{subjectById[resource.subject].name} · {t('পত্র', 'Paper')} {bn(resource.paper)}</span>
         <span>{resource.channel}</span>
         {chapter && <span>{chapter.title}</span>}
-        {resource.durationSec && <span className="meta-chip"><Clock3 size={13} />{formatDurationBn(resource.durationSec)}</span>}
-        {resource.downloaded && resource.fileSizeBytes && <span className="meta-chip"><HardDrive size={13} />{sizeLabel(resource.fileSizeBytes)}</span>}
+        {(resource.durationSec ?? 0) > 0 && <span className="meta-chip"><Clock3 size={13} />{formatDurationBn(resource.durationSec ?? 0)}</span>}
+        {resource.downloaded && (resource.fileSizeBytes ?? 0) > 0 && <span className="meta-chip"><HardDrive size={13} />{sizeLabel(resource.fileSizeBytes)}</span>}
         {resource.downloaded && <span className="meta-chip saved">{t('ডিভাইসে সেভ করা', 'Saved on device')}</span>}
       </div>
       {resource.watchedPercent > 0 && (
@@ -217,8 +217,8 @@ export default function VideosView() {
         eyebrow="VIDEO CLASSES"
         title="ক্লাস খুঁজে দেখো।"
         titleEn="Find your classes."
-        description="১১৪ অধ্যায়ের যাচাই করা ক্লাস — শিক্ষক, ধরন ও অগ্রগতি দিয়ে ছাঁকো। প্রতিটি রিসোর্সের শেষ যাচাইয়ের তারিখ দেওয়া আছে।"
-        descriptionEn="Verified classes across all 114 chapters — filter by teacher, type and progress. Every resource carries its last-verified date."
+        description="১১৪ অধ্যায়ের সংরক্ষিত ক্লাস লিংক — শিক্ষক, ধরন ও অগ্রগতি দিয়ে ছাঁকো। লিংকের গঠন পরীক্ষা হয়েছে; সব ভিডিওর বিষয়বস্তু বা প্লেব্যাক যাচাই হয়নি।"
+        descriptionEn="Stored class links across 114 chapters — filter by teacher, type and progress. URL structure is checked; not every video’s content or playback has been verified."
         action={
           <div className="video-stats">
             <span><strong>{bn(CLASS_CATALOG.length)}</strong>{t('ক্লাস সেল', 'class rows')}</span>
@@ -237,7 +237,7 @@ export default function VideosView() {
             key={type.id}
             className={`type-chip ${classType === type.id ? 'active' : ''} ${counts[type.id] === 0 ? 'empty' : ''}`}
             onClick={() => setClassType(type.id)}
-            title={counts[type.id] === 0 ? t('এই ধরনের যাচাই করা রিসোর্স এখনো যোগ করা হয়নি।', 'No verified resource of this type yet.') : undefined}
+            title={counts[type.id] === 0 ? t('এই ধরনের রিসোর্স এখনো যোগ করা হয়নি।', 'No resource of this type has been added yet.') : undefined}
           >
             <strong>{classTypeLabel(type.id, isEnglish())}</strong><span>{bn(counts[type.id])}</span>
           </button>
@@ -300,7 +300,7 @@ export default function VideosView() {
           </div>
         )}
         <p className="tiny-muted video-verified-note">
-          <ShieldCheck size={13} /> {t(`ডেটাসেট শেষ যাচাই: ${bn(CATALOG_DATE)} · প্রতি বিল্ডে স্ট্রাকচার টেস্ট সব লিংক যাচাই করে`, `Dataset last verified: ${CATALOG_DATE} · structural tests re-check every link on each build`)}
+          <ShieldCheck size={13} /> {t(`পুরোনো ডেটাসেটের তারিখ: ${bn(CATALOG_DATE)} · স্ট্রাকচার টেস্ট শুধু লিংকের গঠন যাচাই করে, অধ্যায়ের মিল বা player নয়`, `Historical dataset date: ${CATALOG_DATE} · structural tests check URL format, not chapter suitability or playback`)}
         </p>
 
         {mode === 'classes' ? (
@@ -331,10 +331,10 @@ export default function VideosView() {
                         <h3>{item.title}</h3>
                         <p className="video-card-channel">{item.channel}</p>
                         <div className="video-card-meta">
-                          {item.durationSec && <span className="meta-chip"><Clock3 size={13} />{formatDurationBn(item.durationSec)}</span>}
-                          {item.downloaded && item.fileSizeBytes && <span className="meta-chip"><HardDrive size={13} />{sizeLabel(item.fileSizeBytes)}</span>}
+                          {(item.durationSec ?? 0) > 0 && <span className="meta-chip"><Clock3 size={13} />{formatDurationBn(item.durationSec ?? 0)}</span>}
+                          {item.downloaded && (item.fileSizeBytes ?? 0) > 0 && <span className="meta-chip"><HardDrive size={13} />{sizeLabel(item.fileSizeBytes)}</span>}
                           {item.downloaded && <span className="meta-chip saved">{t('ডাউনলোড করা', 'Downloaded')}</span>}
-                          {item.watchedPercent && <span className="meta-chip"><span style={{ width: '34px', height: '8px', background: '#e5e7eb', borderRadius: '4px', display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} /><span style={{ width: `${Math.min(100, item.watchedPercent)}%`, height: '8px', background: '#15803d', borderRadius: '4px', display: 'inline-block', verticalAlign: 'middle' }} />{bn(item.watchedPercent)}%</span>}
+                          {item.watchedPercent > 0 && <span className="meta-chip"><span style={{ width: '34px', height: '8px', background: '#e5e7eb', borderRadius: '4px', display: 'inline-block', verticalAlign: 'middle', marginRight: '6px' }} /><span style={{ width: `${Math.min(100, item.watchedPercent)}%`, height: '8px', background: '#15803d', borderRadius: '4px', display: 'inline-block', verticalAlign: 'middle' }} />{bn(item.watchedPercent)}%</span>}
                         </div>
                         <div className="video-card-actions">
                           <button className="button primary small" onClick={() => setPlaying(item)}>
@@ -374,7 +374,7 @@ export default function VideosView() {
                 ? t('এই ধরনের ক্লাস এখনো যোগ করা হয়নি', 'This class type is not added yet')
                 : t('মিলে যাওয়া ক্লাস নেই', 'No matching class')}
               description={classType === 'concept' || classType === 'practical'
-                ? t('যাচাই করা রিসোর্স পাওয়া গেলে এখানে দেখানো হবে। ভুল বা কাল্পনিক লিংক দেওয়া হয় না।', 'Verified resources will appear here. Fake or unverified links are never shown.')
+                ? t('এই ধরনের রিসোর্স পাওয়া গেলে যোগ করা যাবে। অন্য ধরন বা নিজের লিংক ব্যবহার করো।', 'Resources of this type have not been added. Try another type or your own link.')
                 : t('ফিল্টার বদলাও বা সার্চের শব্দ কমাও।', 'Change the filters or shorten your search.')}
               action={<button className="button secondary" onClick={resetFilters}>{t('ফিল্টার মুছো', 'Clear filters')}</button>}
             />
@@ -386,7 +386,7 @@ export default function VideosView() {
 
       <div className="info-panel">
         <ShieldCheck size={18} />
-        <p>{t('সব লিংক স্থানীয় যাচাইকৃত ডেটাসেট থেকে এসেছে; কোনো ভিডিও, শিক্ষক বা প্লেলিস্ট বানানো হয়নি। কোনো অধ্যায়ে রিসোর্স না থাকলে "রিসোর্স এখনো যোগ করা হয়নি" দেখানো হয়।', 'All links come from the locally verified dataset — no video, teacher or playlist is invented. Chapters without a resource honestly show “not added yet”.')}</p>
+        <p>{t('সংরক্ষিত ভিডিও/শিক্ষকের লেবেল পুরোনো তালিকা থেকে এসেছে। খোলার পর অধ্যায়, শিক্ষক ও সম্পূর্ণতা মিলিয়ে নাও। আটটি নির্দিষ্ট ভিডিওর পৃষ্ঠার সময় আলাদাভাবে পরীক্ষা করা আছে; এটি সব ক্লাসের audit নয়। ভিডিও দেখা মানে বই, নোট, MCQ/CQ অনুশীলন বা রিভিশন সম্পন্ন নয়।', 'Stored video and teacher labels come from the historical catalogue. Check the chapter, teacher and completeness after opening. Eight exact video pages have separate duration references; that is not an audit of every class. Watching a video does not complete reading, notes, MCQ/CQ practice or revision.')}</p>
       </div>
 
       {playing && <PlayerModal resource={playing} onClose={() => setPlaying(null)} />}

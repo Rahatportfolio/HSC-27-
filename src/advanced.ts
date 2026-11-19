@@ -1,4 +1,4 @@
-import { STARTER_QUESTIONS } from "./quiz-data";
+import { BUILTIN_QUESTION_META } from "./questionBankIndex";
 import { CHAPTERS, chapterById, SUBJECTS } from "./data";
 import type { SubjectId } from "./data";
 import { addDays, diffDays, isValidDate } from "./planner";
@@ -247,7 +247,7 @@ export function priority(data: AppData, id: string, today: string): number {
   if (!c) return 0;
   const tests = data.tests.filter((t) => t.chapterIds.includes(id));
   const questions = new Set(
-    [...STARTER_QUESTIONS, ...data.questions]
+    [...BUILTIN_QUESTION_META, ...data.questions]
       .filter((q) => q.chapterId === id)
       .map((q) => q.id),
   );

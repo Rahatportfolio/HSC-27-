@@ -1,9 +1,11 @@
 import { CHAPTERS, SUBJECTS } from './data';
 import type { SubjectId } from './data';
 import type { AppData, Day, Task } from './planner';
-import { addDays, diffDays, todayKey } from './planner';
+import { addDays, dailyTargetMinutes, diffDays, todayKey } from './planner';
+import { isPersonalChapterDone, personalRoutineForChapter } from './personalRoutine';
+import { tasksFirstCompletedBetween } from './prediction';
 import type { QuizAttempt, StudySession } from './types';
-import { STARTER_QUESTIONS } from './quiz-data';
+import { questionChapters } from './questionBankIndex';
 import { chapterCompletionDate } from './revision';
 
 export const WEEKDAYS_SHORT = ['সো', 'মঙ্গল', 'বু', 'বৃহ', 'শু', 'শনি', 'রবি'];
@@ -32,15 +34,29 @@ export function dailySeries(sessions: StudySession[], endDate: string, days: num
   });
 }
 export function completedTasksOn(plan: Day[], data: AppData, date: string): Task[] {
-  return plan.flatMap(day => day.tasks).filter(task => data.completed[task.id] && dateOfIso(data.completed[task.id]) === date);
+  return completedTasksBetween(plan, data, date, date);
 }
 export function completedTasksBetween(plan: Day[], data: AppData, from: string, to: string): Task[] {
-  return plan.flatMap(day => day.tasks).filter(task => {
-    const at = data.completed[task.id];
-    if (!at) return false;
-    const date = dateOfIso(at);
-    return date >= from && date <= to;
-  });
+  return tasksFirstCompletedBetween(plan, data, from, to);
+}
+/** Six-group completion in the interval, including retained prerequisite phases.
+ * A redundant recent tick cannot move old completed work into a newer week.
+ */
+export function chaptersCompletedBetween(plan: Day[], data: AppData, from: string, to: string): string[] {
+  if (!data.personalRoutine) return CHAPTERS.filter(chapter => {
+    const date = chapterCompletionDate(plan, chapter.id, data.completed);
+    return !!date && date >= from && date <= to;
+  }).map(chapter => chapter.id);
+  const through: Record<string, string> = {}, before: Record<string, string> = {};
+  for (const [id, at] of Object.entries(data.completed)) {
+    if (!Number.isFinite(Date.parse(at))) continue;
+    const date = dateOfIso(at); if (date > to) continue;
+    through[id] = at; if (date < from) before[id] = at;
+  }
+  return CHAPTERS.filter(chapter => {
+    const routine = personalRoutineForChapter(data, chapter.id);
+    return routine && isPersonalChapterDone(plan, chapter.id, through, routine) && !isPersonalChapterDone(plan, chapter.id, before, routine);
+  }).map(chapter => chapter.id);
 }
 export function studyDates(data: AppData): Set<string> {
   const dates = new Set([...data.studySessions.map(session => session.date),...data.attempts.map(a=>a.date),...(data.advanced?.activityDates||[])]);
@@ -75,13 +91,10 @@ export function attemptStats(attempts: QuizAttempt[], filter?: (attempt: QuizAtt
 export function subjectAccuracy(attempts: QuizAttempt[]): Record<SubjectId, AttemptStats> {
   return Object.fromEntries(SUBJECTS.map(subject => [subject.id, attemptStats(attempts, attempt => attempt.subject === subject.id)])) as Record<SubjectId, AttemptStats>;
 }
-export function allQuestions(data: AppData) {
-  return [...STARTER_QUESTIONS, ...data.questions];
-}
 export interface WeakChapter { chapterId: string; subject: SubjectId; score: number; reasons: string[] }
 /** Confidence, self-flagged weakness, MCQ accuracy and low CQ marks all feed the weak-chapter list. */
 export function weakChapters(_plan: Day[], data: AppData): WeakChapter[] {
-  const questionChapter = new Map(allQuestions(data).map(question => [question.id, question.chapterId]));
+  const questionChapter = questionChapters(data);
   const accuracy = new Map<string, { total: number; correct: number }>();
   for (const attempt of data.attempts) {
     const chapterId = questionChapter.get(attempt.questionId);
@@ -144,10 +157,7 @@ export function weeklyReview(plan: Day[], data: AppData, today: string): WeeklyR
   const sessions = data.studySessions.filter(session => session.date >= weekStart && session.date <= weekEnd);
   const completed = completedTasksBetween(plan, data, weekStart, throughToday);
   const planned = plan.flatMap(day => day.tasks).filter(task => task.date >= weekStart && task.date <= weekEnd);
-  const chaptersCompleted = CHAPTERS.filter(chapter => {
-    const date = chapterCompletionDate(plan, chapter.id, data.completed);
-    return !!date && date >= weekStart && date <= weekEnd;
-  }).map(chapter => chapter.id);
+  const chaptersCompleted = chaptersCompletedBetween(plan, data, weekStart, throughToday);
   const elapsedDays = diffDays(weekStart, throughToday) + 1;
   const dates = new Set(sessions.map(session => session.date));
   const nextWeek = Array.from({ length: 7 }, (_, index) => {
@@ -158,7 +168,9 @@ export function weeklyReview(plan: Day[], data: AppData, today: string): WeeklyR
   return {
     weekStart, weekEnd,
     minutes: minutesBetween(data.studySessions, weekStart, weekEnd),
-    targetMinutes: data.settings.dailyHours * 60 * elapsedDays,
+    targetMinutes: data.personalRoutine ? Array.from({ length: elapsedDays }, (_, index) => addDays(weekStart, index))
+      .filter(date => date >= data.settings.startDate && date >= (data.personalRoutine!.startsOn || data.settings.startDate) && date < data.settings.examDate)
+      .reduce((sum, date) => sum + dailyTargetMinutes(data, date), 0) : data.settings.dailyHours * 60 * elapsedDays,
     bySubject: subjectMinutes(data.studySessions, weekStart, weekEnd),
     tasksCompleted: completed.length,
     tasksPlanned: planned.length,
@@ -176,7 +188,10 @@ export function badgeList(data: AppData, plan: Day[], today: string) {
   // `focus` is the lifetime aggregate (legacy sessions included), so it is the source of truth.
   const totalMinutes = data.focus.minutes;
   const testCount = Object.keys(data.exams).length + data.tests.length;
-  const completedChapters = CHAPTERS.filter(chapter => chapterCompletionDate(plan, chapter.id, data.completed)).length;
+  const completedChapters = data.personalRoutine ? CHAPTERS.filter(chapter => {
+    const routine = personalRoutineForChapter(data, chapter.id);
+    return routine && isPersonalChapterDone(plan, chapter.id, data.completed, routine);
+  }).length : CHAPTERS.filter(chapter => chapterCompletionDate(plan, chapter.id, data.completed)).length;
   const attempts = attemptStats(data.attempts);
   return [
     { id: 'first-day', title: 'প্রথম পদক্ষেপ', titleEn: 'First step', detail: 'প্রথম পড়ার দিন', detailEn: 'Your first study day', earned: streak > 0 || Object.keys(data.completed).length > 0 },

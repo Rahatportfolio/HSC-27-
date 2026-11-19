@@ -1,4 +1,5 @@
 import { CHAPTERS, CORE, PAPERS, chapterById, subjectById } from './data';
+import { isPersonalChapterDone, isPersonalTaskComplete, personalCapacity } from './personalRoutine';
 import { isEnglish, t } from './i18n';
 import { parseTaskRangeId } from './taskReferences';
 import type { Chapter, SubjectId } from './data';
@@ -60,6 +61,9 @@ export const DEFAULT_SETTINGS: Settings = {
 };
 
 export interface Task {
+  personalWork?: import('./personalRoutine').PersonalWork;
+  /** Original scheduled date of unfinished work moved into an actual free slot. */
+  rescheduledFrom?: string;
   video?: { classId: string; from: number; to: number };
   originalTaskId?: string;
   /** Full source duration for split allocations, so a visible fragment cannot imply full coverage. */
@@ -79,7 +83,15 @@ export interface Task {
 }
 
 export interface Day {
+  /** Explicit scope marker survives empty/removed days, preventing legacy completion fallback. */
+  personalRoutine?: true;
   deferredMinutes?: number;
+  /** Retained explicit appointments that cannot safely fit in availability. */
+  unscheduled?: Task[];
+  /** Completed historical allocations retained separately when new windows no longer fit. */
+  historyTasks?: Task[];
+  /** Effective rolling-calendar anchor (projection metadata, never completion). */
+  reflowFrom?: string;
   date: string;
   index: number;
   phase: PhaseId;
@@ -103,6 +115,14 @@ export type MistakeRetry = 'pending' | 'retried' | 'mastered';
 export interface Mistake { id: string; subject: SubjectId; chapterId?: string; text: string; correctAnswer?: string; userAnswer?: string; date: string; category: MistakeCategory; retryStatus: MistakeRetry; resolved: boolean }
 
 export interface AppData {
+  /** Opt-in, on-device suggestions; never a second schedule or completion source. */
+  studyBrain?: import('./studyBrainTypes').StudyBrainMemory;
+  /** Explicitly configured S-only, availability- and duration-based routine. */
+  personalRoutine?: import('./personalRoutine').PersonalRoutine;
+  /** Finished, explicitly advanced phases retain workloads and historical source identities. */
+  personalPhases?: Partial<Record<'S' | 'A' | 'B' | 'C', import('./personalRoutine').PersonalRoutine>>;
+  /** Only genuinely new profiles ask before generating any routine. Old backups stay legacy until consent. */
+  routineSetupRequired?: boolean;
   advanced?: import('./advanced').AdvancedData;
   version: 2;
   settings: Settings;
@@ -200,7 +220,8 @@ export const freshData = (): AppData => ({
 });
 
 /** Effective net daily study hours for a date, accounting for next-month boost and per-day custom override. */
-export function dailyTargetMinutes(data: Pick<AppData,'settings'|'dayOverrides'|'advanced'>,date:string):number {
+export function dailyTargetMinutes(data: Pick<AppData,'settings'|'dayOverrides'|'advanced'|'personalRoutine'>,date:string):number {
+  if (data.personalRoutine) return personalCapacity(data as AppData, date);
   return data.advanced?.targets[date] ?? effectiveDailyHours(data.settings,date,data.dayOverrides?.[date])*60;
 }
 
@@ -896,12 +917,12 @@ export function buildPlan(settings: Settings = DEFAULT_SETTINGS): Day[] {
 }
 
 export function chapterTasks(plan: Day[], chapterId: string): Task[] {
-  return plan.flatMap(d => d.tasks).filter(t => t.chapterIds.includes(chapterId) && (t.kind === 'learn' || t.kind === 'language' || t.kind === 'ict') && t.id.includes(':part-'));
+  return plan.flatMap(d => d.tasks).filter(t => t.chapterIds.includes(chapterId) && (t.personalWork || ((t.kind === 'learn' || t.kind === 'language' || t.kind === 'ict') && t.id.includes(':part-'))));
 }
 /** Initial learning and its accompanying chapter practice form one completion unit. */
 export function chapterStudyTasks(plan: Day[], chapterId: string): Task[] {
   return plan.flatMap(d => d.tasks).filter(task => task.chapterIds.includes(chapterId) &&
-    (((task.kind === 'learn' || task.kind === 'language' || task.kind === 'ict') && (task.originalTaskId || task.id).includes(':part-')) ||
+    (task.personalWork || ((task.kind === 'learn' || task.kind === 'language' || task.kind === 'ict') && (task.originalTaskId || task.id).includes(':part-')) ||
      (task.kind === 'practice' && (task.originalTaskId || task.id).startsWith(`chap-practice-${chapterId}-`))));
 }
 /** Does the allocation cover an entire source task, not merely one visible fragment?
@@ -939,6 +960,7 @@ export function hasFullTaskAllocation(tasks: Task[], id: string, completed?: Rec
  * Conversely, ticking only the visible subset can never complete an unallocated part.
  */
 export function isChapterDone(plan: Day[], id: string, completed: Record<string, string>): boolean {
+  if (plan.some(day => day.personalRoutine || day.tasks.some(task => task.personalWork))) return isPersonalChapterDone(plan, id, completed);
   const chapter = chapterById[id];
   if (!chapter) return false;
   const tasks = chapterStudyTasks(plan, id);
@@ -959,37 +981,39 @@ export function chapterLastDate(plan: Day[], id: string): string | undefined {
   return tasks[tasks.length - 1]?.date;
 }
 export function isDayComplete(day: Day | undefined, completed: Record<string, string>): boolean {
-  return !!day && day.tasks.length > 0 && day.tasks.every(t => !!completed[t.id]);
+  return !!day && day.tasks.length > 0 && day.tasks.every(task => isPersonalTaskComplete(task, completed));
 }
 /** Finds the very next day after `afterDate` that still has unfinished study tasks (auto-advance when today finishes early!). */
 export function getNextUnfinishedDay(plan: Day[], afterDate: string, completed: Record<string, string>): Day | undefined {
-  return plan.find(d => d.date > afterDate && d.tasks.some(t => !completed[t.id]));
+  return plan.find(d => d.date > afterDate && d.tasks.some(task => !isPersonalTaskComplete(task, completed)));
 }
 /** Returns unfinished tasks from days strictly before `beforeDate` so previous unfinished study appears alongside today's 2 chapters. */
 export function getUnfinishedPastTasks(plan: Day[], beforeDate: string, completed: Record<string, string>): Task[] {
   return plan
     .filter(d => d.date < beforeDate)
     .flatMap(d => d.tasks)
-    .filter(t => taskStart(t).date < beforeDate && !completed[t.id]);
+    .filter(t => taskStart(t).date < beforeDate && !isPersonalTaskComplete(t, completed));
 }
 
 export function getStats(plan: Day[], data: AppData, today: string) {
   const all = plan.flatMap(d => d.tasks);
-  const done = all.filter(t => data.completed[t.id]);
-  const chapters = CHAPTERS.filter(c => isChapterDone(plan, c.id, data.completed));
+  const done = all.filter(task => isPersonalTaskComplete(task, data.completed));
+  const scope = data.personalRoutine ? CHAPTERS.filter(c => data.personalRoutine!.chapterIds.includes(c.id)) : CHAPTERS;
+  const complete = (id: string) => data.personalRoutine ? isPersonalChapterDone(plan, id, data.completed, data.personalRoutine) : isChapterDone(plan, id, data.completed);
+  const chapters = scope.filter(c => complete(c.id));
   const activeDates = new Set([...Object.values(data.completed).map(at => todayKey(new Date(at))),...data.studySessions.map(s=>s.date),...data.attempts.map(a=>a.date),...data.cq.map(c=>c.date),...(data.advanced?.activityDates||[])]);
   let streak = 0, cursor = activeDates.has(today) ? today : addDays(today, -1);
   while (activeDates.has(cursor)) { streak++; cursor = addDays(cursor, -1); }
-  const backlog = all.filter(t => taskStart(t).date < today && !data.completed[t.id]);
+  const backlog = all.filter(t => taskStart(t).date < today && !isPersonalTaskComplete(t, data.completed));
   const subjectProgress = Object.fromEntries(Object.keys(subjectById).map(s => {
-    const chs = CHAPTERS.filter(c => c.subject === s);
-    return [s, { done: chs.filter(c => isChapterDone(plan, c.id, data.completed)).length, total: chs.length }];
+    const chs = scope.filter(c => c.subject === s);
+    return [s, { done: chs.filter(c => complete(c.id)).length, total: chs.length }];
   })) as Record<SubjectId, { done: number; total: number }>;
   return {
     total: all.length,
     done: done.length,
     chapters: chapters.length,
-    totalChapters: CHAPTERS.length,
+    totalChapters: scope.length,
     streak,
     backlog,
     subjectProgress,

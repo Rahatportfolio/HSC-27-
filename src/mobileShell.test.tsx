@@ -15,7 +15,7 @@ beforeAll(() => {
   window.scrollTo = vi.fn();
 });
 beforeEach(() => {
-  vi.useFakeTimers();
+  vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
   vi.setSystemTime(new Date('2026-11-16T09:00:00Z'));
   localStorage.clear();
   const data = freshData();
@@ -45,7 +45,8 @@ describe('reported mobile clipping and missing clock regressions', () => {
   it('keeps a named ticking timer reachable after navigation and pause without resetting data', async () => {
     render(<App />);
     await go('timer');
-    await act(async () => { (document.querySelector('.timer-main-button') as HTMLButtonElement).click(); });
+    const start = await screen.findByRole('button', { name: 'Start' });
+    await act(async () => { start.click(); });
     await act(async () => { vi.advanceTimersByTime(2500); });
     await go('today');
     const bar = screen.getByRole('status', { name: 'Active study timer' });

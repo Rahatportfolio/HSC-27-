@@ -9,7 +9,7 @@ import {
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
 } from './notifications';
-import { DEFAULT_SETTINGS, applyDayOverrides, buildPlan } from './planner';
+import { DEFAULT_SETTINGS, applyDayOverrides, buildPlan, freshData, STORAGE_KEY } from './planner';
 import { loadData } from './storage';
 
 beforeAll(() => {
@@ -36,7 +36,8 @@ afterEach(() => {
 
 describe('smart study notifications (what to study, total study, and remaining to complete)', () => {
   beforeEach(() => {
-    localStorage.clear();
+    localStorage.clear(); localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); // legacy saved profile
+
     window.location.hash = '';
     setLanguage('bn');
   });
@@ -146,7 +147,7 @@ describe('smart study notifications (what to study, total study, and remaining t
     // Navigate to RemindersView and verify the live notification preview card renders all 4 fields
     const sidebar = document.querySelector('aside.sidebar') as HTMLElement;
     fireEvent.click(within(sidebar).getByRole('button', { name: /রিমাইন্ডার/i }));
-    const previewCard = screen.getByLabelText('স্টাডি নোটিফিকেশন প্রিভিউ');
+    const previewCard = await screen.findByLabelText('স্টাডি নোটিফিকেশন প্রিভিউ');
     expect(within(previewCard).getByText('আজ কী পড়া')).toBeTruthy();
     expect(within(previewCard).getByText('কতটুকু পড়া (মোট)')).toBeTruthy();
     expect(within(previewCard).getByText('সম্পন্ন হয়েছে')).toBeTruthy();

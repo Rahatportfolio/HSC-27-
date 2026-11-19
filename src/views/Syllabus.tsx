@@ -1,10 +1,11 @@
 import { useState } from 'react';
+import { RECOMMENDED_S_IDS, chapterWorkEstimate, hasFullPersonalAllocation, isPersonalTaskComplete, personalRoutineForChapter } from '../personalRoutine';
 import type { CSSProperties } from 'react';
 import { ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, FileText, LayoutGrid, List, Play, Search, ShieldAlert } from 'lucide-react';
 import { usePlanner } from '../context';
 import { CHAPTERS, PAPER_NAMES, SUBJECTS, syllabusNote, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { bn, chapterFirstDate, chapterStudyTasks, formatDate, percent } from '../planner';
+import { bn, chapterFirstDate, chapterStudyTasks, formatDate, formatDurationBn, percent } from '../planner';
 import { chapterMeta } from '../study';
 import { CHAPTER_SCHEDULE, scheduleFor } from '../schedule';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
@@ -23,7 +24,7 @@ export default function SyllabusView() {
   const { plan, data, openChapter } = usePlanner();
   const [subject, setSubject] = useState<SubjectId>('physics');
   const [status, setStatus] = useState<'all' | 'pending' | 'done'>('all');
-  const [priority, setPriority] = useState<'all' | 'A' | 'B' | 'C'>('all');
+  const [priority, setPriority] = useState<'all' | 'S' | 'A' | 'B' | 'C'>(data.personalRoutine || data.routineSetupRequired ? 'S' : 'all');
   const [query, setQuery] = useState('');
   const [weakOnly, setWeakOnly] = useState(false);
   const [star, setStar] = useState<'all' | 5 | 3 | 1>('all');
@@ -31,15 +32,16 @@ export default function SyllabusView() {
   const [showFullBlocks, setShowFullBlocks] = useState(true);
   const [openLessons, setOpenLessons] = useState<Record<string, boolean>>({});
 
+  const sIds = (data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds || RECOMMENDED_S_IDS;
   const s = subjectById[subject];
-  const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject));
+  const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject && (priority !== 'S' || sIds.includes(chapter.id))));
   const done = chapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
   const weak = chapters.filter(chapter => chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak').length;
   const noted = chapters.filter(chapter => chapterMeta(data, chapter.id).note.trim()).length;
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
 
   const visible = chapters.filter(chapter => (status === 'all' || (status === 'done') === isLearningComplete(chapterStage(chapter, data, plan)))
-    && (priority === 'all' || chapterPriority(chapter, data) === priority)
+    && (priority === 'all' || (priority === 'S' ? sIds.includes(chapter.id) : chapterPriority(chapter, data) === priority))
     && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && (!unwatchedOnly || (() => { const progress = chapterClassProgress(data, chapter.id); return progress.total > 0 && progress.watched < progress.total; })())
@@ -52,14 +54,15 @@ export default function SyllabusView() {
       titleEn="Let’s organise the syllabus."
       description="অধ্যায় ও ব্যক্তিগত অগ্রগতি দেখো। বিদ্যমান ক্লাস লিংক ও HSC ২০২৭ সিলেবাস সম্পূর্ণ যাচাই করা হয়নি।"
       descriptionEn="Track your chapters. Existing class links and the HSC 2027 syllabus have not been fully verified."
-      action={<div className="syllabus-total"><strong>{bn(CHAPTERS.length)}</strong><span>{t('অধ্যায় ও ইউনিট', 'Chapters & units')}<br />{t('৭ বিষয় · ১৩ পত্র', '7 subjects · 13 papers')}</span></div>}
+      action={<div className="syllabus-total"><strong>{bn(priority === 'S' ? sIds.length : CHAPTERS.length)}</strong><span>{priority === 'S' && 'S · '}{t('অধ্যায় ও ইউনিট', 'Chapters & units')}<br />{t('৭ বিষয় · ১৩ পত্র', '7 subjects · 13 papers')}</span></div>}
     />
 
+    <section className="card s-shortlist-notice"><span className="s-category-badge">S</span><div><strong>{t('A থেকে বাছাই করা গুরুত্বপূর্ণ অধ্যায়', 'Important chapters selected from A')} · {bn(sIds.length)}</strong><p>{data.personalRoutine && data.personalRoutine.scope !== 'S' ? t(`S সংরক্ষিত আছে; S-এর ছয়টি কাজ শেষ করে এখন ${data.personalRoutine.scope} ধাপ চলছে। বাকি A/B/C লাইব্রেরিতে থাকবে।`, `S is retained. After completing its six required groups you are now in phase ${data.personalRoutine.scope}. Other A/B/C chapters remain in the library.`) : data.personalRoutine ? t('এখন শুধু এই S তালিকাই রুটিনের লক্ষ্য। বাকি A/B/C দেখা যাবে, কিন্তু শেষ করতে বাধ্য করা হবে না।', 'Only your S shortlist is this routine’s goal. Other A/B/C chapters remain available, not compulsory.') : t('প্রস্তাবিত shortlist = A-এর ৫★ অধ্যায়। ব্যক্তিগত S-only রুটিন চালু করতে হোম/Settings-এ নিজের সময় দাও; পুরোনো রুটিন নিজে থেকে বদলায়নি।', 'Suggested shortlist = five-star A chapters. Set your availability in Home/Settings to opt into S-only planning; the legacy routine has not silently changed.')}</p></div><button type="button" className="button primary small" onClick={() => setPriority('S')}>{t('S ক্যাটাগরি দেখো', 'Show S category')}</button></section>
     <div className="subject-tabs">
       {SUBJECTS.map(sub => {
-        const total = CHAPTERS.filter(chapter => chapter.subject === sub.id);
+        const total = CHAPTERS.filter(chapter => chapter.subject === sub.id && (priority !== 'S' || sIds.includes(chapter.id)));
         const complete = total.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
-        return <button key={sub.id} className={`subject-tab ${subject === sub.id ? 'active' : ''}`} onClick={() => { setSubject(sub.id); setQuery(''); setWeakOnly(false); setUnwatchedOnly(false); setPriority('all'); setStar('all'); setStatus('all'); }} style={{ '--subject': sub.color, '--subject-tint': sub.tint } as CSSProperties}>
+        return <button key={sub.id} className={`subject-tab ${subject === sub.id ? 'active' : ''}`} onClick={() => { setSubject(sub.id); setQuery(''); setWeakOnly(false); setUnwatchedOnly(false); setPriority(data.personalRoutine || data.routineSetupRequired ? 'S' : 'all'); setStar('all'); setStatus('all'); }} style={{ '--subject': sub.color, '--subject-tint': sub.tint } as CSSProperties}>
           <span className="subject-tab-icon"><SubjectIcon subject={sub.id} /></span>
           <strong>{sub.name}</strong>
           <span>{bn(complete)}/{bn(total.length)}{sub.optional ? ` · ${t('৪র্থ বিষয়','4th subject')}` : ''}</span>
@@ -93,7 +96,7 @@ export default function SyllabusView() {
           <input placeholder={t('অধ্যায় বা টপিক খুঁজো…', 'Search chapter or topic…')} aria-label={t('অধ্যায় খুঁজো', 'Search chapters')} value={query} onChange={e => setQuery(e.target.value)} />
         </label>
         <div className="segmented">
-          {(['all', 'A', 'B', 'C'] as const).map(p => <button key={p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : `${p} · ${priorityLabel(p)}`}</button>)}
+          {(['all', 'S', 'A', 'B', 'C'] as const).map(p => <button key={p} aria-pressed={priority === p} className={priority === p ? 'active' : ''} onClick={() => setPriority(p)}>{p === 'all' ? t('সব অধ্যায়', 'All') : p === 'S' ? t('S · শুধু গুরুত্বপূর্ণ', 'S · important only') : `${p} · ${priorityLabel(p)}`}</button>)}
         </div>
         <div className="segmented" role="group" aria-label={t('সম্পন্ন অবস্থা', 'Completion status')}>
           {(['all', 'pending', 'done'] as const).map(value => <button key={value} aria-pressed={status === value} className={status === value ? 'active' : ''} onClick={() => setStatus(value)}>{value === 'all' ? t('সব অবস্থা', 'All statuses') : value === 'pending' ? t('বাকি', 'Pending') : t('সম্পন্ন', 'Done')}</button>)}
@@ -131,13 +134,15 @@ export default function SyllabusView() {
           <div className="chapter-list">
             {rows.map(chapter => {
               const tasks = chapterStudyTasks(plan, chapter.id);
-              const complete = tasks.filter(task => data.completed[task.id]).length;
+              const complete = tasks.filter(task => isPersonalTaskComplete(task, data.completed)).length;
               const isDone = isLearningComplete(chapterStage(chapter, data, plan));
               const date = chapterFirstDate(plan, chapter.id);
-              const endDate = tasks[tasks.length - 1]?.date;
+              const endDate = data.personalRoutine && !hasFullPersonalAllocation(data, plan, chapter.id) ? undefined : tasks[tasks.length - 1]?.date;
               const meta = chapterMeta(data, chapter.id);
               const isWeak = meta.weak || data.confidence[chapter.id] === 'weak';
               const slot = scheduleFor(chapter.id, plan);
+              const personal = personalRoutineForChapter(data, chapter.id);
+              const work = personal ? chapterWorkEstimate(personal, chapter.id) : null;
               const links = CHAPTER_CLASSES[chapter.id];
               const lessons = BANGLA_LESSONS[chapter.id];
               const progress = chapterClassProgress(data, chapter.id);
@@ -161,10 +166,10 @@ export default function SyllabusView() {
                   </span>
                   {slot && <span className="chapter-plan-cell">
                     <span className={`star-badge s${slot.star}`}>{'★'.repeat(slot.star)}{'☆'.repeat(5 - slot.star)}</span>
-                    <small>{bn(slot.hours)} {t('ঘণ্টা','hours')} · {endDate ? `${t('শেষ','ends')} ${formatDate(endDate)}` : t('সময় বরাদ্দ নেই', 'Not scheduled')}</small>
+                    <small>{work ? work.complete ? formatDurationBn(work.minutes) : t('পূর্ণ সময় অজানা', 'Full duration unknown') : `${bn(slot.hours)} ${t('ঘণ্টা', 'hours')}`} · {endDate ? `${data.personalRoutine ? t('শেষ বরাদ্দ', 'last allocation') : t('শেষ','ends')} ${formatDate(endDate)}` : t('সময় বরাদ্দ নেই', 'Not scheduled')}</small>
                     <small className="plan-links">{progress.watched ? `${bn(progress.watched)}/${bn(progress.total)} ${t('ক্লাস দেখা','classes watched')}` : `${bn(progress.total)} ${t('টি সরাসরি ক্লাস','direct classes')}`}</small>
                   </span>}
-                  <span className={`priority-badge ${chapterPriority(chapter, data).toLowerCase()}`}>{chapterPriority(chapter, data)}</span>
+                  {sIds.includes(chapter.id) ? <span className="s-category-badge" title={t('A থেকে বাছাই করা ব্যক্তিগত গুরুত্বপূর্ণ তালিকা', 'Personal important shortlist within A')}>S</span> : <span className={`priority-badge ${chapterPriority(chapter, data).toLowerCase()}`}>{chapterPriority(chapter, data)}</span>}
                   <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} ধাপ</small></span>
                   <ChevronRight size={17} />
                 </button>

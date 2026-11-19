@@ -27,7 +27,10 @@ describe('the app a first-time visitor sees', () => {
     const saved = localStorage.getItem(STORAGE_KEY);
     expect(saved).toBeTruthy();
     expect(JSON.parse(saved!).version).toBeGreaterThanOrEqual(1);
-    // A brand-new profile still has a real plan to look at, not an empty screen.
+    // A new student must be asked for availability, never silently given 8/16h.
+    expect(JSON.parse(saved!).routineSetupRequired).toBe(true);
+    expect(screen.getByRole('heading', { name: 'আগে বলো, কখন পড়তে পারবে?' })).toBeTruthy();
+    expect(document.querySelector('.task-card')).toBeNull();
     const view = document.querySelector('.view') as HTMLElement;
     expect((view.textContent ?? '').length).toBeGreaterThan(500);
   }, 60000);

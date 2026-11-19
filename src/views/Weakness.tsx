@@ -56,7 +56,7 @@ export default function WeaknessView() {
       <div className="card weakness-stat"><span className="stat-icon blue"><TrendingDown size={20} /></span><div><span>{t('সবচেয়ে ঝুঁকিপূর্ণ', 'Biggest risk')}</span><strong>{summary.focus[0] ? subjectById[summary.focus[0].subject].short : '—'}</strong><p>{summary.focus[0] ? chapterById[summary.focus[0].chapterId]?.title.slice(0, 18) : t('কিছু নেই', 'nothing yet')}</p></div></div>
     </div>
 
-    <section className="card adaptive-card">
+    {data.personalRoutine || data.routineSetupRequired ? <section className="card personal-calendar-goal"><h2>{t('নিজের সময় ও একই অধ্যায়ের জোড়া অটুট', 'Your availability and chapter pair stay intact')}</h2><p>{t('এই পাতার দুর্বলতা/অনুশীলনের পরামর্শ ঐচ্ছিক। S রুটিনে legacy adaptive swap, অতিরিক্ত ঘণ্টা বা অন্য অধ্যায় নিজে থেকে ঢোকানো বন্ধ। সময় ও নির্বাচিত কাজ Settings থেকে নিজে বদলাও।', 'Weakness/practice suggestions are optional. Legacy adaptive swaps, bonus hours and extra chapters cannot silently enter your S routine. Edit your availability and selected work explicitly in Settings.')}</p></section> : <section className="card adaptive-card">
       <div className="card-heading"><div><h2><Zap size={19} />{t('অ্যাডাপ্টিভ রুটিন', 'Adaptive routine')}</h2><p>{t('দুর্বল অধ্যায়ের জন্য পরের ৩ দিনের রুটিন নিজে থেকে সাজানো—কিন্তু দিনের সীমা কখনোই ভাঙে না।', 'The next three days reshuffle towards weak chapters — the daily ceiling never breaks.')}</p></div><button className="text-button" onClick={() => navigate('heatmap')}>{t('সিলেবাস হিটম্যাপ', 'Syllabus heatmap')}</button><span className={`retry-pill ${data.settings.adaptiveEnabled ? 'due' : ''}`}>{data.settings.adaptiveEnabled ? t('চালু', 'On') : t('বন্ধ', 'Off')}</span></div>
       <div className="adaptive-budget">
         <div><span>{t('আজকের সীমা', 'Today’s ceiling')}</span><strong>{bn(Math.round(capToday / 60))}<small>{t('ঘ', 'h')}</small> {bn(capToday % 60)}<small>{t('মি', 'm')}</small></strong><small>{t(`সর্বোচ্চ ${bn(HARD_DAILY_CAP_MINUTES / 60)} ঘণ্টা`, `Hard ceiling ${HARD_DAILY_CAP_MINUTES / 60}h`)}</small></div>
@@ -81,7 +81,7 @@ export default function WeaknessView() {
             {adaptive.dropped.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.dropped.length)}টি পরিবর্তন বাতিল হয়েছে: সরানো কাজের জায়গা নেই, তাই আসল কাজ অক্ষত রাখা হয়েছে।`, `${adaptive.dropped.length} replacement(s) cancelled: displaced work had no room, so the original tasks were kept.`)}</p>}
             {adaptive.unfitted.length > 0 && <p className="tiny-muted">{t(`${bn(adaptive.unfitted.length)}টি দুর্বল অধ্যায়ের জন্য জায়গা নেই—রুটিন ইতিমধ্যে পূর্ণ।`, `${adaptive.unfitted.length} weak chapter(s) have no room — the routine is already full.`)}</p>}
           </div>}
-    </section>
+    </section>}
 
     {!rows.length ? <EmptyState title={t('এখনো কোনো দুর্বলতা ধরা পড়েনি', 'Nothing flagged yet')} description={t('MCQ অনুশীলন ও পরীক্ষা দিলে এখানে কারণসহ তালিকা তৈরি হবে।', 'Practise MCQ and take a paper — this list builds itself from real answers.')} action={<button className="button primary" onClick={() => navigate('examsim')}>{t('পরীক্ষা শুরু করো', 'Start a paper')}</button>} /> : <>
       {summary.focus.length > 0 && <section className="card weakness-focus">
@@ -124,7 +124,7 @@ export default function WeaknessView() {
 
         <aside className="weakness-rail">
           <section className="card weakness-plan-card">
-            <div className="card-heading"><div><h2><CalendarClock size={18} />{t('এই সপ্তাহের প্রতিকার', 'This week’s attack plan')}</h2><p>{t('প্রতিদিন দুটি অধ্যায়—তারপর নতুন কিছু।', 'Two chapters a day, then move on.')}</p></div></div>
+            <div className="card-heading"><div><h2><CalendarClock size={18} />{t('এই সপ্তাহের প্রতিকার', 'This week’s attack plan')}</h2><p>{data.personalRoutine ? t('আগের অসমাপ্ত অংশ আগে; একই জোড়া ও তোমার সময়ের সীমা মানবে। এগুলো ঐচ্ছিক পরামর্শ, বাড়তি রুটিন নয়।', 'Unfinished ranges first, respecting the same pair and your availability. These are optional suggestions, not extra scheduled work.') : t('প্রতিদিন দুটি অধ্যায়—তারপর নতুন কিছু।', 'Two chapters a day, then move on.')}</p></div></div>
             {week.length ? <div className="weakness-week">{week.map(day => <div key={day.date}>
               <span className="weakness-day">{day.date === today ? t('আজ', 'Today') : formatDate(day.date, 'weekday')}<small>{formatDate(day.date)}</small></span>
               <div>{day.rows.map(row => <button key={row.chapterId} onClick={() => open(row.chapterId)}>{chapterById[row.chapterId]?.title}<i style={{ background: subjectById[row.subject].color }} /></button>)}</div>

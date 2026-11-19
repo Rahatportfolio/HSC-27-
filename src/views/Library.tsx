@@ -111,7 +111,7 @@ function VideosTab() {
     <div className="card-heading">
       <div>
         <h2><Youtube size={20} />{t("YouTube ক্লাস ভান্ডার ও সংরক্ষিত লিংক", "YouTube class archive & saved links")}</h2>
-        <p>{t(`সব ৭টি বিষয়ের ১১৪টি অধ্যায়ের যাচাইকৃত সরাসরি ক্লাস (${bn(overall.watched)}/${bn(overall.total)}টি দেখা হয়েছে) এবং তোমার নিজের যোগ করা ভিডিও।`, `Verified direct classes across all 7 subjects & 114 chapters (${overall.watched}/${overall.total} watched) plus your own saved links.`)}</p>
+        <p>{t(`সব ৭টি বিষয়ের ১১৪টি অধ্যায়ের সংরক্ষিত ক্লাস লিংক (${bn(overall.watched)}/${bn(overall.total)}টি দেখা হয়েছে) এবং তোমার নিজের যোগ করা ভিডিও।`, `Stored class links across all 7 subjects & 114 chapters (${overall.watched}/${overall.total} watched) plus your own saved links.`)}</p>
       </div>
       <button className="button primary" onClick={() => setOpen(true)}><Plus size={16} />{t("ভিডিও যোগ করো", "Add a video")}</button>
     </div>

@@ -321,3 +321,83 @@ jobs:
           name: release-asset-verification
           path: release-asset-verification.json
           if-no-files-found: error
+
+  built-web:
+    name: Built web acceptance
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.audit_release == '' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install exact dependencies
+        run: npm ci
+      - name: Test budget and development-download safety boundaries
+        run: node --test scripts/check-build-budget.node-test.mjs scripts/publish-current-development-apk.node-test.mjs
+      - name: Build production assets with mandatory budgets
+        run: npm run build
+      - name: Full production browser acceptance
+        env:
+          CHROMIUM_PATH: /usr/bin/google-chrome
+          WEB_BROWSER_OUTPUT: .cache/built-web
+        run: npm run test:built-web
+      - name: Retain raw browser evidence including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: built-web-evidence
+          path: .cache/built-web/
+          if-no-files-found: ignore
+          retention-days: 30
+
+  current-development-download:
+    name: Current tested development APK download
+    needs: [apk, device-checks, built-web]
+    if: >-
+      ${{ github.event_name == 'push' &&
+        github.ref == 'refs/heads/arena/80a86bf2-hsc-27' &&
+        contains(github.event.head_commit.message, '[current-dev-apk]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - name: Checkout exact tested source
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Set up JDK 21 for APK signature inspection
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - name: Test all production and development guard boundaries
+        run: node --test scripts/check-android-release.node-test.mjs scripts/verify-release-asset.node-test.mjs scripts/publish-development-apk.node-test.mjs scripts/publish-current-development-apk.node-test.mjs
+      - name: Inspect exact APK and publish non-Latest development prerelease
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_DEV_APK_CONFIRMATION: current-development-only-no-compatible-update
+        run: node scripts/publish-current-development-apk.mjs
+      - name: Retain APK inspection and delivery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-development-apk-evidence
+          path: |
+            .cache/current-dev-apk/inspection.json
+            .cache/current-dev-apk/delivery.json
+            .cache/current-dev-apk/SHA256SUMS.txt
+          if-no-files-found: ignore
+          retention-days: 30

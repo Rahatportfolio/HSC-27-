@@ -15,7 +15,6 @@ import {
 } from '../scanner';
 import { EmptyState, PageHeading, SubjectBadge } from '../components';
 import { t } from '../i18n';
-import jsPDF from 'jspdf';
 import { saveBackupBlob } from '../mediaBackup';
 
 interface PageEdit {
@@ -195,6 +194,9 @@ export default function NotesScannerView() {
     try {
       const urls = await loadPagesFromDb(note.pageKeys);
       if (urls.length !== note.pageCount) throw new Error('One or more scanned pages are missing.');
+      // Keep the PDF renderer out of the initial app payload. The offline shell
+      // precaches this build's dynamic chunks, so saved scans still export offline.
+      const { default: jsPDF } = await import('jspdf');
       const pdf = new jsPDF({ unit: 'mm', format: 'a4' });
       const pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
       for (const [index, url] of urls.entries()) {

@@ -1,4 +1,5 @@
 import { remainingMedia } from './smartSchedule';
+import { isPersonalTaskComplete, retainPersonalHistory, resumeUnfinishedPersonalPhase, undoPersonalRange } from './personalRoutine';
 import type { SubjectId } from './data';
 import type { AppData, Day, Mistake, Task } from './planner';
 import { addDays, hasFullTaskAllocation, taskStart, todayKey } from './planner';
@@ -40,12 +41,12 @@ export function carryoversOn(data: AppData, date: string): Carryover[] {
   return items.filter((item, index) => items.findIndex(other => other.taskId === item.taskId) === index);
 }
 export function pendingCarryovers(data: AppData): Carryover[] {
-  const items = data.carryovers.filter(item => !item.completedAt && !data.completed[item.taskId]).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  const items = data.carryovers.filter(item => !item.completedAt && !isPersonalTaskComplete({ id: item.taskId }, data.completed)).sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
   return items.filter((item, index) => items.findIndex(other => other.taskId === item.taskId) === index);
 }
 export function addCarryover(data: AppData, task: Pick<Task, 'id' | 'title' | 'subject' | 'endMinute' | 'startMinute' | 'date'>, date: string): AppData {
   if (data.carryovers.length >= 2000) return data;
-  const exists = !!data.completed[task.id] || data.carryovers.some(item => item.taskId === task.id && !item.completedAt);
+  const exists = isPersonalTaskComplete(task, data.completed) || data.carryovers.some(item => item.taskId === task.id && !item.completedAt);
   if (exists) return data;
   const entry: Carryover = {
     id: newId(), taskId: task.id, title: task.title, subject: task.subject,
@@ -64,10 +65,16 @@ export function setTaskCompletion(data: AppData, ids: string[], done: boolean, p
     return !!c && range.to / 1000 <= c.duration + 0.01 &&
       !remainingMedia(c).some(([s, e]) => s < range.to / 1000 - 0.01 && e > range.from / 1000 + 0.01);
   }));
-  const completed = { ...data.completed };
+  let completed = { ...data.completed };
+  if (!done && plan) for (const task of plan.flatMap(day => day.tasks)) {
+    if (selected.has(task.id) && task.personalWork) completed = undoPersonalRange(completed, task);
+  }
   const stamp = nowIso();
   const splitSources = new Set<string>();
   for (const id of selected) {
+    // Regenerated sub-ranges already covered by real evidence must not acquire
+    // today's synthetic tick/recall anchor when a mixed day is bulk-completed.
+    if (done && isPersonalTaskComplete({ id }, completed)) continue;
     if (done) completed[id] = completed[id] || stamp;
     else {
       delete completed[id];
@@ -89,24 +96,27 @@ export function setTaskCompletion(data: AppData, ids: string[], done: boolean, p
     else if (tasks && hasFullTaskAllocation(tasks, source, completed)) completed[source] ||= stamp;
     selected.add(source);
   }
-  return { ...data, completed, carryovers: data.carryovers.map(entry => selected.has(entry.taskId)
+  const undoneChapters = !done && plan ? new Set(plan.flatMap(day => day.tasks).filter(task => task.personalWork && selected.has(task.id)).flatMap(task => task.chapterIds)) : new Set<string>();
+  const chapterMeta = undoneChapters.size ? Object.fromEntries(Object.entries(data.chapterMeta).map(([id, meta]) => [id, undoneChapters.has(id) && ['completed', 'revisionNeeded', 'fullyRevised'].includes(meta.stage || '') ? { ...meta, stage: 'inProgress' as const, updatedAt: stamp } : meta])) : data.chapterMeta;
+  const next = { ...data, completed, chapterMeta, carryovers: data.carryovers.map(entry => selected.has(entry.taskId)
     ? { ...entry, completedAt: done ? completed[entry.taskId] : undefined } : entry) };
+  return resumeUnfinishedPersonalPhase(done && plan ? retainPersonalHistory(next, plan) : next);
 }
 export function toggleCarryover(data: AppData, id: string, plan?: Day[]): AppData {
   const item = data.carryovers.find(entry => entry.id === id);
-  return item ? setTaskCompletion(data, [item.taskId], !data.completed[item.taskId], plan) : data;
+  return item ? setTaskCompletion(data, [item.taskId], !isPersonalTaskComplete({ id: item.taskId }, data.completed), plan) : data;
 }
 export function removeCarryover(data: AppData, id: string): AppData {
   return { ...data, carryovers: data.carryovers.filter(item => item.id !== id) };
 }
 /** Optional automatic carryover: recent missed sessions, capped so the list cannot explode. */
 export function autoCarryover(plan: Day[], data: AppData, today: string): AppData {
-  if (data.settings.carryoverMode !== 'auto' || data.advanced?.classes.length) return data;
+  if (data.personalRoutine || data.settings.carryoverMode !== 'auto' || data.advanced?.classes.length) return data;
   const pending = pendingCarryovers(data);
   if (pending.filter(item => item.date === today).length >= 6) return data;
   const carried = new Set(data.carryovers.filter(item => !item.completedAt).map(item => item.taskId));
   const candidates = plan.flatMap(day => day.tasks)
-    .filter(task => task.kind !== 'exam' && taskStart(task).date < today && taskStart(task).date >= addDays(today, -10) && !data.completed[task.id] && !carried.has(task.id))
+    .filter(task => task.kind !== 'exam' && taskStart(task).date < today && taskStart(task).date >= addDays(today, -10) && !isPersonalTaskComplete(task, data.completed) && !carried.has(task.id))
     .sort((a, b) => taskStart(a).date.localeCompare(taskStart(b).date));
   let next = data;
   for (const task of candidates.slice(0, Math.max(0, 6 - pending.filter(item => item.date === today).length))) {
@@ -132,7 +142,7 @@ export function unresolvedMistakeCount(data: AppData, category?: MistakeCategory
 export function addBacklogToToday(plan: Day[], data: AppData, today: string, limit = 5): { data: AppData; added: number } {
   const carried = new Set(data.carryovers.filter(item => !item.completedAt).map(item => item.taskId));
   const candidates = plan.flatMap(day => day.tasks)
-    .filter(task => task.kind !== 'exam' && taskStart(task).date < today && !data.completed[task.id] && !carried.has(task.id))
+    .filter(task => task.kind !== 'exam' && taskStart(task).date < today && !isPersonalTaskComplete(task, data.completed) && !carried.has(task.id))
     .sort((a, b) => taskStart(b).date.localeCompare(taskStart(a).date));
   let next = data, added = 0;
   for (const task of candidates.slice(0, limit)) {

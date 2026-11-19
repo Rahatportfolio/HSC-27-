@@ -16,7 +16,8 @@ beforeAll(() => {
   window.scrollTo = vi.fn();
 });
 beforeEach(() => {
-  localStorage.clear();
+  localStorage.clear(); localStorage.setItem(STORAGE_KEY, JSON.stringify(freshData())); // legacy saved profile
+
   window.location.hash = '';
 });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });

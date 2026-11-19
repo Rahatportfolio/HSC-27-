@@ -1,9 +1,10 @@
+import { isPersonalTaskComplete } from '../personalRoutine';
 import { useMemo, useState } from 'react';
 import { AlertTriangle, CalendarClock, Check, Layers, ShieldAlert, Undo2 } from 'lucide-react';
 import { usePlanner } from '../context';
 import { subjectById, chapterById } from '../data';
-import { bn, formatDate } from '../planner';
-import { EmptyState, PageHeading, ProgressBar } from '../components';
+import { bn, formatDate, formatDurationBn } from '../planner';
+import { EmptyState, PageHeading, ProgressBar, TaskCard } from '../components';
 import {
   BACKLOG_HORIZON_DEFAULT, applyBacklogPlan, backlogBySubject, criticalBacklog, dropBacklog,
   itemTaskIds, mergedMinutes, planBacklog, repeatedChapters,
@@ -17,6 +18,25 @@ import { t } from '../i18n';
  *   3. If it cannot go anywhere — what is honestly true, and what can be let go?
  */
 export default function BacklogView() {
+  const { data } = usePlanner();
+  return data.personalRoutine ? <PersonalBacklogView /> : <LegacyBacklogView />;
+}
+function PersonalBacklogView() {
+  const { plan, data, today, navigate } = usePlanner();
+  const pending = plan.flatMap(day => day.tasks).filter(task => (task.date < today || task.rescheduledFrom && task.rescheduledFrom < today) && !isPersonalTaskComplete(task, data.completed));
+  const deferred = plan.reduce((sum, day) => sum + (day.deferredMinutes || 0), 0);
+  return <div className="view personal-home">
+    <PageHeading eyebrow="UNFINISHED S SEGMENTS" title="আগের অংশ বাকি মানে এখনও বাকি।" titleEn="An unfinished segment is still owed."
+      description="একই অধ্যায়ের পরের অর্ধেককে আগের অর্ধেকের বিকল্প ধরা হবে না। আগের অসমাপ্ত অংশ পরের খালি স্লটে বসে, পরের কাজকে পিছিয়ে দেয়। কোনো দিনের সময়সীমায় বাড়তি ঘণ্টা যোগ হয়নি। কেবল সত্যিই শেষ করা অংশ টিক দাও।"
+      descriptionEn="Tomorrow’s other half cannot replace a missed segment. Unfinished ranges occupy the next available slots and displace later work. No bonus hours are added to any day. Tick only the segments you actually finish."
+      action={<button type="button" className="button secondary" onClick={() => navigate('settings')}>{t('নিজের সময় ও রুটিন মেলাও', 'Review availability & routine')}</button>} />
+    <section className="card"><h2>{bn(pending.length)} {t('টি অসমাপ্ত অংশ', 'unfinished segments')}</h2>
+      {deferred > 0 && <p className="personal-warning" role="status">{formatDurationBn(deferred)} {t('কাজ লক্ষ্য তারিখের আগে বসেনি—অসমাপ্তই আছে। সময় বাড়াও/লক্ষ্য বদলাও; সম্পন্ন ধরা হয়নি।', 'of work does not fit before the target and remains unfinished. Increase availability or revise the target; it was not counted as done.')}</p>}
+      {pending.length ? <div className="task-list">{pending.map(task => <div key={task.id}><p>{task.rescheduledFrom && <>{t('আগের বরাদ্দ', 'Previously allocated')}: {formatDate(task.rescheduledFrom)} → </>}{formatDate(task.date, 'long')} · {t('এখনকার খালি স্লট', 'Current free slot')}</p><TaskCard task={task} /></div>)}</div> : <p>{t('অতীতের নির্ধারিত অংশে কোনো অসমাপ্ত কাজ নেই। অজানা সময়ের বা এখনও বরাদ্দ না হওয়া অধ্যায় এতে সম্পন্ন ধরা হয় না।', 'No unfinished allocated segment in the past. Unknown or unallocated chapters are not counted as complete.')}</p>}
+    </section>
+  </div>;
+}
+function LegacyBacklogView() {
   const { plan, data, setData, today, navigate, notify, confirm } = usePlanner();
   const [horizon, setHorizon] = useState(BACKLOG_HORIZON_DEFAULT);
   const backlog = useMemo(() => planBacklog(plan, data, today, { horizonDays: horizon }), [plan, data, today, horizon]);

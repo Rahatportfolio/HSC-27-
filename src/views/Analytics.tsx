@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { Award, BarChart3, Check, ChevronRight, Flame, LibraryBig, Medal, ShieldAlert, Target, TrendingUp } from 'lucide-react';
 import { usePlanner } from '../context';
 import { SUBJECTS, chapterById, subjectById } from '../data';
-import { addDays, bn, formatDate, percent } from '../planner';
+import { addDays, bn, dailyTargetMinutes, formatDate, percent } from '../planner';
+import { personalChapterProgress, personalRoutineHealth } from '../personalRoutine';
 import { attemptStats, badgeList, currentStreak, dailySeries, longestStreak, minutesBetween, startOfWeek, studyDates, subjectAccuracy, subjectMinutes, weakChapters, weeklyReview } from '../analytics';
 import { learningDashboard } from '../learning';
-import { expectedPercentBy, overallTaskProgress, scheduleStatus } from '../prediction';
+import { expectedPercentBy, overallTaskProgress, recentTaskPace, scheduleStatus } from '../prediction';
 import { ProgressBar, PageHeading, ProgressRing } from '../components';
 import { weekReport } from '../backup';
 import { isEnglish, t } from '../i18n';
@@ -16,7 +17,9 @@ export default function AnalyticsView() {
   const [range, setRange] = useState<7 | 30 | 90>(30);
   const review = weeklyReview(plan, data, today);
   const series = dailySeries(data.studySessions, today, range);
-  const maxMinutes = Math.max(data.settings.dailyHours * 60, ...series.map(point => point.minutes), 1);
+  const routine = data.personalRoutine;
+  const todayGoal = routine ? today >= data.settings.startDate && today >= (routine.startsOn || data.settings.startDate) && today < data.settings.examDate ? dailyTargetMinutes(data, today) : 0 : data.settings.dailyHours * 60;
+  const maxMinutes = Math.max(todayGoal, ...series.map(point => point.minutes), 1);
   const totalMinutes = data.focus.minutes;
   const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), addDays(startOfWeek(today), 6));
   const last30 = addDays(today, -29);
@@ -30,11 +33,20 @@ export default function AnalyticsView() {
   const best = longestStreak(data);
   const gridStart = addDays(startOfWeek(today), -49);
   const gridDays = Array.from({ length: 56 }, (_, index) => addDays(gridStart, index));
-  // Smart syllabus dashboard: real A/B/C and subject progress from the student's own data.
+  // The headline and subject denominators are the CURRENT phase. A/B/C below
+  // are explicitly labelled library totals, never compulsory S assignments.
   const learning = useMemo(() => learningDashboard(data, plan), [data, plan]);
   const tasksOverall = useMemo(() => overallTaskProgress(plan, data), [plan, data]);
   const planStatus = useMemo(() => scheduleStatus(plan, data, today), [plan, data, today]);
   const expectedAtTest = useMemo(() => expectedPercentBy(plan, data, today, data.settings.testExamDate), [plan, data, today]);
+  const personalHealth = useMemo(() => routine ? personalRoutineHealth(data, plan) : undefined, [data, plan, routine]);
+  const recentPace = useMemo(() => recentTaskPace(plan, data, today), [plan, data, today]);
+  const personalMetrics = useMemo(() => {
+    if (!routine) return undefined;
+    const groups = routine.chapterIds.map(id => personalChapterProgress(routine, id, data.completed));
+    return { coverage: Math.round(groups.reduce((sum, item) => sum + item.coveragePercent, 0) / groups.length),
+      readiness: Math.round(groups.reduce((sum, item) => sum + item.readinessPercent, 0) / groups.length) };
+  }, [routine, data.completed]);
   const shareReport = async () => {
     const text = report.lines.join('\n');
     try {
@@ -61,7 +73,7 @@ export default function AnalyticsView() {
       <div className="card-heading">
         <div>
           <h2><LibraryBig size={19} />{t('স্মার্ট সিলেবাস ড্যাশবোর্ড', 'Smart syllabus dashboard')}</h2>
-          <p>{t('সত্যিকার অগ্রগতি — কোনো হার্ডকোডেড নম্বর নয়। কয়েক সেকেন্ডে বোঝা যায় কতটুকু বাকি, A শেষ কি না, কোন বিষয় পিছিয়ে।', 'Real progress — no hardcoded numbers. See in seconds how much remains, whether A is done, and which subject is behind.')}
+          <p>{routine ? t(`বর্তমান ${routine.scope} ধাপের নির্বাচিত অধ্যায় ও ছয়টি কাজের হিসাব। বাকি A/B/C বইয়ের তালিকায় আছে, এখনকার বাধ্যতামূলক কাজ নয়।`, `Selected chapters and six required groups in the current ${routine.scope} phase. Other A/B/C chapters remain in the library, not compulsory current work.`) : t('সত্যিকার অগ্রগতি — কোনো হার্ডকোডেড নম্বর নয়। কয়েক সেকেন্ডে বোঝা যায় কতটুকু বাকি, A শেষ কি না, কোন বিষয় পিছিয়ে।', 'Real progress — no hardcoded numbers. See in seconds how much remains, whether A is done, and which subject is behind.')}
           </p>
         </div>
         <button className="button secondary small" onClick={() => navigate('syllabus')}>{t('সিলেবাস খোলো', 'Open syllabus')}<ChevronRight size={14} /></button>
@@ -73,20 +85,22 @@ export default function AnalyticsView() {
             <span>{t('সম্পন্ন', 'done')}</span>
           </ProgressRing>
           <div className="syllabus-dash-overall-copy">
-            <strong>{t('সমগ্র সিলেবাস', 'Whole syllabus')}</strong>
+            <strong>{routine ? t(`বর্তমান ${routine.scope} ধাপ`, `Current ${routine.scope} phase`) : t('সমগ্র সিলেবাস', 'Whole syllabus')}</strong>
             <span>{bn(learning.overall.total)} {t('টি অধ্যায়/ইউনিট', ' chapters & units')}</span>
             <div className="syllabus-dash-chips">
               <em className="ok">{bn(learning.overall.completed)} {t('সম্পন্ন', 'done')}</em>
               <em>{bn(learning.overall.inProgress)} {t('চলছে', 'in progress')}</em>
               <em className="muted">{bn(learning.overall.remaining)} {t('বাকি', 'left')}</em>
             </div>
-            <small>{t('টাস্ক হিসাব', 'By tasks')}: {bn(tasksOverall.done)}/{bn(tasksOverall.total)} ({bn(tasksOverall.percent)}%) · {planStatus.status === 'ahead' ? t('সময়ের আগে', 'ahead of schedule') : planStatus.status === 'ontrack' ? t('সময়ের সঙ্গে', 'on track') : t(`${bn(planStatus.gapPercent)}% পিছিয়ে`, `${planStatus.gapPercent}% behind`)}</small>
+            <small>{t('বরাদ্দ করা সেশনের হিসাব', 'By allocated segments')}: {bn(tasksOverall.done)}/{bn(tasksOverall.total)} ({bn(tasksOverall.percent)}%) · {routine ? t('অসমাপ্ত কাজ খালি সময়ে সরেছে; এটি পুরো সিলেবাসের শতাংশ নয়।', 'Unfinished work reflows into free time; this is not whole-syllabus completion.') : planStatus.status === 'ahead' ? t('সময়ের আগে', 'ahead of schedule') : planStatus.status === 'ontrack' ? t('সময়ের সঙ্গে', 'on track') : t(`${bn(planStatus.gapPercent)}% পিছিয়ে`, `${planStatus.gapPercent}% behind`)}</small>
+            {personalMetrics && <div className="personal-metrics" role="group" aria-label={t('বর্তমান ধাপের কভারেজ ও প্রস্তুতি', 'Current-phase coverage and readiness')}><div><strong>{t('সিলেবাস কভারেজ', 'Syllabus Coverage')}: {bn(personalMetrics.coverage)}%</strong><ProgressBar value={personalMetrics.coverage} /></div><div><strong>{t('পরীক্ষার প্রস্তুতি', 'Exam Readiness')}: {bn(personalMetrics.readiness)}%</strong><ProgressBar value={personalMetrics.readiness} /><small>{t('ছয়টি কাজের হিসাব; নম্বরের নিশ্চয়তা নয়।', 'Six required groups, not a score guarantee.')}</small></div></div>}
           </div>
         </div>
         <div className="syllabus-dash-categories">
+          {routine && <p className="tiny-muted">{t('বইয়ের সম্পূর্ণ ক্যাটাগরির হিসাব—বর্তমান ধাপ নয়। A-তে S-ও অন্তর্ভুক্ত; এগুলো যোগ করে অতিরিক্ত কাজ ধরো না।', 'Library category totals—not the current phase. A includes S; do not add these as extra assignments.')}</p>}
           {(['A', 'B', 'C'] as const).map(key => (
-            <button key={key} className={`category-card cat-${key}`} onClick={() => navigate('testprep')}>
-              <span className="category-card-head"><strong>{key}</strong><em>{key === 'A' ? t('সর্বোচ্চ অগ্রাধিকার', 'Highest priority') : key === 'B' ? t('মাঝারি ধাপ', 'Medium step') : t('বাকি ধাপ', 'Remaining step')}</em></span>
+            <button key={key} className={`category-card cat-${key}`} onClick={() => navigate(routine ? 'syllabus' : 'testprep')}>
+              <span className="category-card-head"><strong>{key}</strong><em>{routine ? t('বইয়ের তালিকা', 'Library category') : key === 'A' ? t('সর্বোচ্চ অগ্রাধিকার', 'Highest priority') : key === 'B' ? t('মাঝারি ধাপ', 'Medium step') : t('বাকি ধাপ', 'Remaining step')}</em></span>
               <strong className="category-count">{bn(learning.category[key].completed)}/{bn(learning.category[key].total)}</strong>
               <ProgressBar value={learning.category[key].percent} color={key === 'A' ? '#236149' : key === 'B' ? '#9a6722' : '#5a4b82'} />
               <small>{bn(learning.category[key].percent)}% {t('সম্পন্ন', 'complete')} · {bn(learning.category[key].remaining)} {t('বাকি', 'left')}</small>
@@ -110,13 +124,18 @@ export default function AnalyticsView() {
         </div>
       </div>
       <div className="syllabus-dash-foot">
-        <span>{t('টেস্ট পরীক্ষায় প্রত্যাশিত', 'Expected by Test Exam')}: <strong>{bn(expectedAtTest)}%</strong></span>
-        <span>{t('A শেষ হওয়ার সম্ভাব্য তারিখ', 'Estimated A finish')}: <strong>{learning.category.A.remaining === 0 ? t('হয়ে গেছে', 'done') : t('প্ল্যান অনুযায়ী', 'as planned')}</strong></span>
+        {routine ? <>
+          <span>{t('বর্তমান ধাপের শেষ বরাদ্দ', 'Current phase’s last allocation')}: <strong>{personalHealth?.syllabusEnd ? formatDate(personalHealth.syllabusEnd, 'long') : t('সব কাজের সময় এখনও মেলেনি', 'Not all work has a valid allocation')}</strong></span>
+          <span>{t('টেস্টের ব্যক্তিগত লক্ষ্য পর্যন্ত সেশনের অনুমান', 'Estimated segment progress by personal test target')}: <strong>{personalHealth?.syllabusEnd && (recentPace > 0 || learning.overall.remaining === 0) ? `${bn(expectedAtTest)}%` : t('পর্যাপ্ত প্রমাণ নেই', 'Not enough evidence')}</strong> · {t('বরাদ্দ শেষ মানে পড়া শেষ নয়; এটি সিলেবাস বা পরীক্ষার ফলের নিশ্চয়তা নয়।', 'Allocation is not completion; this is not a syllabus or exam-result guarantee.')}</span>
+        </> : <>
+          <span>{t('টেস্ট পরীক্ষায় প্রত্যাশিত', 'Expected by Test Exam')}: <strong>{bn(expectedAtTest)}%</strong></span>
+          <span>{t('A শেষ হওয়ার সম্ভাব্য তারিখ', 'Estimated A finish')}: <strong>{learning.category.A.remaining === 0 ? t('হয়ে গেছে', 'done') : t('প্ল্যান অনুযায়ী', 'as planned')}</strong></span>
+        </>}
         <button className="text-button" onClick={() => navigate('testprep')}>{t('টেস্ট মোড খোলো', 'Open test mode')}<ChevronRight size={14} /></button>
       </div>
     </section>
     <div className="analytics-overview">
-      <section className="card weekly-hero"><span className="eyebrow">{t("এই সপ্তাহ", "This week")}</span><div className="weekly-hero-numbers"><strong>{bn(Math.floor(weekMinutes / 60))}<small>{t("ঘ", "h")}</small> {bn(weekMinutes % 60)}<small>{t("মি", "m")}</small></strong><span>{t("মাপা পড়ার সময়", "Measured study time")}</span></div><ProgressBar value={percent(weekMinutes, review.targetMinutes)} /><div className="weekly-hero-meta"><span>{t('লক্ষ্য','Goal')} {bn(Math.floor(review.targetMinutes / 60))} {t('ঘণ্টা','hours')}</span><span>{bn(review.daysStudied)} {t('দিন পড়া','days studied')}</span><span>{bn(review.tasksCompleted)} {t('কাজ সম্পন্ন','tasks done')}</span></div></section>
+      <section className="card weekly-hero"><span className="eyebrow">{t("এই সপ্তাহ", "This week")}</span><div className="weekly-hero-numbers"><strong>{bn(Math.floor(weekMinutes / 60))}<small>{t("ঘ", "h")}</small> {bn(weekMinutes % 60)}<small>{t("মি", "m")}</small></strong><span>{t("মাপা পড়ার সময়", "Measured study time")}</span></div><ProgressBar value={percent(weekMinutes, review.targetMinutes)} /><div className="weekly-hero-meta"><span>{t('লক্ষ্য','Goal')} {bn(Math.round(review.targetMinutes / 6) / 10)} {t('ঘণ্টা','hours')}</span><span>{bn(review.daysStudied)} {t('দিন পড়া','days studied')}</span><span>{bn(review.tasksCompleted)} {t('কাজ সম্পন্ন','tasks done')}</span></div></section>
       <div className="analytics-stat"><span className="stat-icon green"><Target size={19} /></span><div><span>{t("সর্বকালীন মাপা সময়", "All-time measured time")}</span><strong>{bn(Math.floor(totalMinutes / 60))}<small>{t("ঘণ্টা", "hours")}</small></strong><p>{bn(data.focus.sessions)}টি সেশন</p></div></div>
       <div className="analytics-stat"><span className="stat-icon peach"><Award size={19} /></span><div><span>{t("MCQ নির্ভুলতা", "MCQ accuracy")}</span><strong>{bn(attemptStats(data.attempts).accuracy)}<small>%</small></strong><p>{bn(attemptStats(data.attempts).total)}টি উত্তর</p></div></div>
       <div className="analytics-stat"><span className="stat-icon lavender"><BarChart3 size={19} /></span><div><span>{t("সম্পন্ন অধ্যায়", "Chapters finished")}</span><strong>{bn(review.chaptersCompleted.length)}<small>{t("এই সপ্তাহে", "this week")}</small></strong><p>{bn(weak.length)}টি দুর্বল চিহ্নিত</p></div></div>
@@ -125,16 +144,16 @@ export default function AnalyticsView() {
       <div className="card-heading"><div><h2><BarChart3 size={19} />{t("সাপ্তাহিক রিপোর্ট", "Weekly report")}</h2><p>{formatDate(report.from, 'long')} – {formatDate(report.to, 'long')} · {t('এই সাত দিনের হিসাব', 'these seven days')}</p></div><div className="report-actions"><button className="button secondary small" onClick={() => void shareReport()}>{t("শেয়ার / কপি", "Share / copy")}</button><button className="button ghost small" onClick={printReport}>{t("প্রিন্ট / PDF", "Print / PDF")}</button></div></div>
       <div className="report-grid">
         <div><span>{t("পড়ার সময়", "Study time")}</span><strong>{bn(Math.floor(report.minutes / 60))}{t('ঘ','h')} {bn(report.minutes % 60)}{t('মি','m')}</strong><small>{bn(report.sessions)}টি সেশন</small></div>
-        <div><span>{t("কাজ শেষ", "Work done")}</span><strong>{bn(report.tasksDone)}</strong><small>{bn(report.chaptersDone)}{t('টি অধ্যায় এগিয়েছে', ' chapters moved forward')}</small></div>
+        <div><span>{t("কাজ শেষ", "Work done")}</span><strong>{bn(report.tasksDone)}</strong><small>{bn(report.chaptersDone)}{routine ? t('টি অধ্যায়ের ছয়টি কাজ সম্পন্ন', ' chapters fully completed (six groups)') : t('টি অধ্যায় এগিয়েছে', ' chapters moved forward')}</small></div>
         <div><span>MCQ</span><strong>{bn(report.mcq)}</strong><small>{t('নির্ভুলতা', 'Accuracy')} {bn(report.accuracy)}%</small></div>
         <div><span>CQ</span><strong>{bn(report.cq)}</strong><small>{report.cq ? `${t('গড়', 'avg')} ${bn(report.cqAverage)}%` : t('এই সপ্তাহে লেখা হয়নি', 'none written this week')}</small></div>
         <div><span>{t("রিভিশন", "Revision")}</span><strong>{bn(report.revisions)}</strong><small>{t("সম্পন্ন কার্ড", "Cards done")}</small></div>
         <div><span>{t("টেস্ট", "Test")}</span><strong>{bn(report.tests)}</strong><small>{report.tests ? `গড় ${bn(report.testAverage)}%` : 'হয়নি'}</small></div>
       </div>
-      <p className="report-foot">{report.topSubject ? t(`সবচেয়ে বেশি সময় ${report.topSubject}-এ।`, `Most time went to ${report.topSubject}.`) : t('এখনও মাপা সময় নেই।', 'No measured time yet.')} {report.chaptersDone === 0 ? t('নতুন অধ্যায় শুরু করতে পারলে সপ্তাহটা আরও এগোবে।', 'Starting a new chapter would move this week along.') : t('এই গতি ধরে রাখলে সিলেবাস সময়ের আগেই শেষ হবে।', 'Keeping this pace finishes the syllabus early.')}</p>
+      <p className="report-foot">{report.topSubject ? t(`সবচেয়ে বেশি সময় ${report.topSubject}-এ।`, `Most time went to ${report.topSubject}.`) : t('এখনও মাপা সময় নেই।', 'No measured time yet.')} {report.chaptersDone === 0 ? t('নতুন অধ্যায় শুরু করতে পারলে সপ্তাহটা আরও এগোবে।', 'Starting a new chapter would move this week along.') : t('সম্পন্ন কাজ অগ্রগতি দেখায়, সময়ের আগে সিলেবাস শেষের নিশ্চয়তা দেয় না।', 'Completed work shows progress, not a guarantee of finishing the syllabus early.')}</p>
     </section>
     <div className="analytics-grid">
-      <section className="card study-chart-card"><div className="card-heading"><div><h2>{t("পড়ার ছন্দ", "Study rhythm")}</h2><p>{t('টাইমারে মাপা মিনিট। ধূসর রেখা দৈনিক লক্ষ্য।', 'Minutes measured by the timer. The grey line is your daily goal.')}</p></div><div className="segmented small">{([7, 30, 90] as const).map(value => <button key={value} className={range === value ? 'active' : ''} onClick={() => setRange(value)}>{value === 7 ? t('৭ দিন', '7 days') : value === 30 ? t('৩০ দিন', '30 days') : t('৯০ দিন', '90 days')}</button>)}</div></div><div className={`study-bars range-${range}`}>{series.map(point => <div className={`study-bar ${point.date === today ? 'today' : ''} ${point.minutes === 0 ? 'empty' : ''}`} key={point.date} title={`${formatDate(point.date, 'long')}: ${bn(point.minutes)} মিনিট`}><span style={{ height: `${Math.max(point.minutes ? 4 : 1, point.minutes / maxMinutes * 100)}%` }} />{range === 7 && <small>{formatDate(point.date).split(' ')[0]}</small>}</div>)}</div><div className="chart-footer"><span>{t('সর্বোচ্চ', 'Peak')} {bn(Math.round(maxMinutes))} {t('মি.', 'min')} · {t('গড়', 'avg')} {bn(Math.round(series.reduce((sum, point) => sum + point.minutes, 0) / series.length))} {t('মি.', 'min')}</span><span>{t('দৈনিক লক্ষ্য','Daily goal')} {bn(data.settings.dailyHours * 60)} {t('মি.','min')}</span></div></section>
+      <section className="card study-chart-card"><div className="card-heading"><div><h2>{t("পড়ার ছন্দ", "Study rhythm")}</h2><p>{routine ? t('টাইমারে মাপা মিনিট। আজকের সীমা তোমার দেওয়া সময় থেকে; সময় মানে কাজ সম্পন্ন নয়।', 'Minutes measured by the timer. Today’s cap comes from your availability; time is not task completion.') : t('টাইমারে মাপা মিনিট। ধূসর রেখা দৈনিক লক্ষ্য।', 'Minutes measured by the timer. The grey line is your daily goal.')}</p></div><div className="segmented small">{([7, 30, 90] as const).map(value => <button key={value} className={range === value ? 'active' : ''} onClick={() => setRange(value)}>{value === 7 ? t('৭ দিন', '7 days') : value === 30 ? t('৩০ দিন', '30 days') : t('৯০ দিন', '90 days')}</button>)}</div></div><div className={`study-bars range-${range}`}>{series.map(point => <div className={`study-bar ${point.date === today ? 'today' : ''} ${point.minutes === 0 ? 'empty' : ''}`} key={point.date} title={`${formatDate(point.date, 'long')}: ${bn(point.minutes)} মিনিট`}><span style={{ height: `${Math.max(point.minutes ? 4 : 1, point.minutes / maxMinutes * 100)}%` }} />{range === 7 && <small>{formatDate(point.date).split(' ')[0]}</small>}</div>)}</div><div className="chart-footer"><span>{t('সর্বোচ্চ', 'Peak')} {bn(Math.round(maxMinutes))} {t('মি.', 'min')} · {t('গড়', 'avg')} {bn(Math.round(series.reduce((sum, point) => sum + point.minutes, 0) / series.length))} {t('মি.', 'min')}</span><span>{routine ? t('আজকের সময়ের সীমা', 'Today’s availability cap') : t('দৈনিক লক্ষ্য','Daily goal')} {bn(todayGoal)} {t('মি.','min')}</span></div></section>
       <section className="card subject-time-card"><div className="card-heading"><h2>{t("শেষ ৩০ দিনে বিষয়ভিত্তিক সময়", "Time by subject, last 30 days")}</h2><span className="tiny-muted">{t('মোট','Total')} {bn(Math.round(Object.values(bySubject).reduce((sum, value) => sum + value, 0) / 60))} {t('ঘণ্টা','hours')}</span></div>{SUBJECTS.map(subject => <div className="subject-time-row" key={subject.id}><span style={{ color: subject.color }}>{subject.short}</span><ProgressBar value={percent(bySubject[subject.id], Math.max(...Object.values(bySubject), 1))} color={subject.color} /><small>{bn(Math.floor(bySubject[subject.id] / 60))}{t('ঘ','h')} {bn(bySubject[subject.id] % 60)}{t('মি','m')}</small></div>)}</section>
     </div>
     <div className="analytics-grid second">
