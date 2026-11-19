@@ -8,9 +8,14 @@ not be triggered as delivery of the S/Brain/performance rework.
 
 ## Required checks and immutable bytes
 
-- Only the active delivery branch `arena/5f160f83-hsc-27`, a push carrying the explicit
-  `[current-dev-apk]` acknowledgement, and the development-only confirmation
-  can request publication. Normal builds do not publish downloads.
+- Only a session delivery branch matching `arena/<12 hex>-hsc-27`, a push
+  carrying the explicit `[current-dev-apk]` acknowledgement, and the
+  development-only confirmation can request publication. `main`, tags, other
+  branches, and near-miss names such as `arena/<hex>-hsc-27-extra` or a nested
+  `.../child` are rejected by the same rule in the workflow and the publisher.
+  Branch names change every session, and a literal pin silently disabled
+  delivery twice; the rule is the narrow shape, never a movable constant.
+  Normal builds do not publish downloads.
 - Exact repository, full source SHA, workflow, run and attempt must match.
   **Build installable APK**, **API 34**, **API 35**, and **Built web acceptance**
   must each have one completed successful job. Missing/skipped/failed checks

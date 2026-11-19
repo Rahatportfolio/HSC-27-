@@ -1,31 +1,41 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { CURRENT_POLICY, requireCurrentSource, requireCurrentArchive, requireCurrentUploadedAssets, requireCurrentRecovery } from './publish-current-development-apk.mjs';
+import { CURRENT_POLICY, isDeliveryBranch, requireCurrentSource, requireCurrentArchive, requireCurrentUploadedAssets, requireCurrentRecovery } from './publish-current-development-apk.mjs';
 
 const sha = 'a'.repeat(40), hash = 'b'.repeat(64);
+// A session branch of this exact shape; the policy accepts any one of them.
+const BRANCH = 'arena/0123456789ab-hsc-27';
 function fixture() {
-  const env = { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: CURRENT_POLICY.repo, GITHUB_REF: `refs/heads/${CURRENT_POLICY.branch}`, GITHUB_SHA: sha, GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', GITHUB_EVENT_NAME: 'push', CURRENT_DEV_APK_CONFIRMATION: CURRENT_POLICY.confirmation };
-  const run = { id: 123, run_attempt: 1, repository: { full_name: CURRENT_POLICY.repo }, path: CURRENT_POLICY.workflow, event: 'push', head_branch: CURRENT_POLICY.branch, head_sha: sha, head_commit: { message: '[current-dev-apk] Explicit development installer request' }, status: 'in_progress' };
+  const env = { GITHUB_ACTIONS: 'true', GITHUB_REPOSITORY: CURRENT_POLICY.repo, GITHUB_REF: `refs/heads/${BRANCH}`, GITHUB_SHA: sha, GITHUB_RUN_ID: '123', GITHUB_RUN_ATTEMPT: '1', GITHUB_EVENT_NAME: 'push', CURRENT_DEV_APK_CONFIRMATION: CURRENT_POLICY.confirmation };
+  const run = { id: 123, run_attempt: 1, repository: { full_name: CURRENT_POLICY.repo }, path: CURRENT_POLICY.workflow, event: 'push', head_branch: BRANCH, head_sha: sha, head_commit: { message: '[current-dev-apk] Explicit development installer request' }, status: 'in_progress' };
   const jobs = { jobs: CURRENT_POLICY.jobs.map(name => ({ name, status: 'completed', conclusion: 'success' })) };
-  const artifact = { id: 456, name: 'prostuti-hsc27-apk', expired: false, size_in_bytes: 100, digest: `sha256:${hash}`, workflow_run: { id: 123, head_branch: CURRENT_POLICY.branch, head_sha: sha } };
+  const artifact = { id: 456, name: 'prostuti-hsc27-apk', expired: false, size_in_bytes: 100, digest: `sha256:${hash}`, workflow_run: { id: 123, head_branch: BRANCH, head_sha: sha } };
   return { env, run, jobs, artifact };
 }
 function source(f = fixture()) { return requireCurrentSource(f.env, f.run, f.jobs, f.artifact); }
 test('accepts only this exact tested run and returns an explicitly development-only immutable name', () => {
   assert.deepEqual(source(), { tag: `dev-apk-${sha.slice(0, 12)}`, assetName: `prostuti-hsc27-${sha.slice(0, 12)}-development.apk`, sourceSha: sha, runId: 123, artifactId: 456 });
 });
-test('pins this delivery branch in both the publisher and workflow without weakening any prerequisite', () => {
-  assert.equal(CURRENT_POLICY.branch, 'arena/5f160f83-hsc-27');
+test('keeps the publisher and the workflow on the same session-branch rule without weakening any prerequisite', () => {
+  // A literal branch name dies with every merge, which silently disabled delivery
+  // twice. Both sides must instead share one explicit, narrow rule.
+  assert.ok(isDeliveryBranch(BRANCH));
+  for (const ok of ['arena/abcdefabcdef-hsc-27', 'arena/000000000000-hsc-27']) assert.ok(isDeliveryBranch(ok), ok);
+  for (const bad of ['main', 'master', 'arena/5f160f83-hsc-27-extra', 'arena/XYZ-hsc-27', 'arena/5f160f83-hsc-27/other', 'feature/arena/5f160f83-hsc-27', '', null, undefined, 'arena/short-hsc-27'])
+    assert.equal(isDeliveryBranch(bad), false, String(bad));
   const workflow = readFileSync(new URL('../.github/workflows/android-apk.yml', import.meta.url), 'utf8');
   const job = workflow.slice(workflow.indexOf('\n  current-development-download:'));
   assert.match(job, /needs: \[apk, device-checks, built-web\]/);
-  assert.ok(job.includes(`github.ref == 'refs/heads/${CURRENT_POLICY.branch}'`));
+  // The workflow guard must be the same non-main session-branch rule.
+  assert.match(job, /startsWith\(github\.ref, 'refs\/heads\/arena\/'\s*\)|startsWith\(github\.ref, 'refs\/heads\/arena\/'/);
+  assert.ok(job.includes("endsWith(github.ref, '-hsc-27')"), 'workflow must restrict the suffix');
+  assert.ok(!/refs\/heads\/main/.test(job));
   assert.match(job, /github\.event_name == 'push'/);
   assert.ok(job.includes("contains(github.event.head_commit.message, '[current-dev-apk]')"));
   assert.ok(job.includes(`CURRENT_DEV_APK_CONFIRMATION: ${CURRENT_POLICY.confirmation}`));
 });
-for (const branch of ['main', 'arena/80a86bf2-hsc-27', 'arena/25b5228c-hsc-27']) test(`rejects a coherent successful run from the non-current branch ${branch}`, () => {
+for (const branch of ['main', 'master', 'arena/5f160f83-hsc-27-extra', 'arena/nonhex12345-hsc-27', 'arena/5f160f83-hsc-27/child']) test(`rejects a coherent successful run from the invalid branch ${branch}`, () => {
   const f = fixture();
   f.env.GITHUB_REF = `refs/heads/${branch}`;
   f.run.head_branch = branch; f.artifact.workflow_run.head_branch = branch;
@@ -55,7 +65,7 @@ test('does not accept an unfinished or duplicated dependency job', () => {
   const f = fixture(); f.jobs.jobs[0].status = 'in_progress'; assert.throws(() => source(f));
   const duplicate = fixture(); duplicate.jobs.jobs.push({ ...duplicate.jobs.jobs[0] }); assert.throws(() => source(duplicate));
 });
-const debug = `prostuti-hsc27-${CURRENT_POLICY.branch.replaceAll('/', '-')}-debug.apk`;
+const debug = 'prostuti-hsc27-arena-0123456789ab-hsc-27-debug.apk';
 test('checks ZIP bytes separately from APK bytes and accepts only exact flat build outputs', () => {
   const { artifact } = fixture(); assert.equal(requireCurrentArchive(artifact, 100, hash, [debug]), debug);
   for (const entries of [[`../${debug}`], [debug, 'unexpected.apk'], [debug, debug], []]) assert.throws(() => requireCurrentArchive(artifact, 100, hash, entries));

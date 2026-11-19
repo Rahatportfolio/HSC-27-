@@ -10,16 +10,24 @@ import { pathToFileURL } from 'node:url';
 import { requireDevelopmentApk } from './publish-development-apk.mjs';
 import { evidenceAnnotation } from './summarize-browser-evidence.mjs';
 
+/**
+ * The delivery branch is per-session, so a literal name would break after every
+ * merge. Accept only this repository's own `arena/<12 hex>-hsc-27` session
+ * branches; main and every other branch stay rejected by the ref check itself.
+ */
+const DELIVERY_BRANCH = /^arena\/[a-f0-9]{12}-hsc-27$/;
 export const CURRENT_POLICY = Object.freeze({
-  repo: 'Rahatportfolio/HSC-27-', branch: 'arena/5f160f83-hsc-27',
+  repo: 'Rahatportfolio/HSC-27-', branchPattern: DELIVERY_BRANCH,
   workflow: '.github/workflows/android-apk.yml',
   confirmation: 'current-development-only-no-compatible-update',
   jobs: ['Build installable APK', 'Android WebView device checks (API 34)', 'Android WebView device checks (API 35)', 'Built web acceptance'],
 });
+export function isDeliveryBranch(branch) { return typeof branch === 'string' && DELIVERY_BRANCH.test(branch); }
 export function requireCurrentSource(env, run, jobs, artifact) {
   assert.equal(env.GITHUB_ACTIONS, 'true');
   assert.equal(env.GITHUB_REPOSITORY, CURRENT_POLICY.repo, 'Wrong repository');
-  assert.equal(env.GITHUB_REF, `refs/heads/${CURRENT_POLICY.branch}`, 'Wrong branch');
+  const branch = env.GITHUB_REF?.startsWith('refs/heads/') ? env.GITHUB_REF.slice('refs/heads/'.length) : '';
+  assert.ok(isDeliveryBranch(branch), 'Wrong branch');
   assert.equal(env.GITHUB_EVENT_NAME, 'push', 'Only the explicit push acknowledgement is accepted');
   assert.equal(env.CURRENT_DEV_APK_CONFIRMATION, CURRENT_POLICY.confirmation, 'Explicit development-only acknowledgement required');
   assert.match(env.GITHUB_SHA || '', /^[a-f0-9]{40}$/);
@@ -30,7 +38,7 @@ export function requireCurrentSource(env, run, jobs, artifact) {
   assert.equal(run.repository?.full_name, CURRENT_POLICY.repo, 'Wrong run repository');
   assert.equal(run.path, CURRENT_POLICY.workflow, 'Wrong source workflow');
   assert.equal(run.event, 'push');
-  assert.equal(run.head_branch, CURRENT_POLICY.branch);
+  assert.equal(run.head_branch, branch, 'Wrong branch');
   assert.equal(run.head_sha, env.GITHUB_SHA, 'Wrong source commit');
   assert.match(run.head_commit?.message || '', /\[current-dev-apk\]/, 'Commit must explicitly request this development download');
   assert.ok(['in_progress', 'completed'].includes(run.status), 'Source run is not active/completed');
@@ -43,7 +51,7 @@ export function requireCurrentSource(env, run, jobs, artifact) {
   assert.equal(artifact.name, 'prostuti-hsc27-apk');
   assert.equal(artifact.expired, false);
   assert.equal(artifact.workflow_run?.id, run.id);
-  assert.equal(artifact.workflow_run?.head_branch, CURRENT_POLICY.branch);
+  assert.equal(artifact.workflow_run?.head_branch, run.head_branch, 'Artifact built for a different branch');
   assert.equal(artifact.workflow_run?.head_sha, env.GITHUB_SHA);
   assert.ok(Number.isSafeInteger(artifact.id) && artifact.id > 0);
   assert.ok(Number.isSafeInteger(artifact.size_in_bytes) && artifact.size_in_bytes > 0);
@@ -53,7 +61,14 @@ export function requireCurrentSource(env, run, jobs, artifact) {
 export function requireCurrentArchive(artifact, size, sha256, entries) {
   assert.equal(size, artifact.size_in_bytes, 'Downloaded archive size differs');
   assert.equal(`sha256:${sha256}`, artifact.digest, 'Downloaded archive hash differs');
-  const prefix = `prostuti-hsc27-${CURRENT_POLICY.branch.replaceAll('/', '-')}`;
+  // Entries are the exact flat build outputs from the Collect artifacts step and
+  // must name the branch the run came from, so one run cannot deliver bytes
+  // labelled for another branch. No nested paths are accepted.
+  const prefixes = new Set(entries.map(entry => entry.match(/^(prostuti-hsc27-[A-Za-z0-9._-]+?)-(?:debug|release)\.apk$/)?.[1]).filter(Boolean));
+  assert.equal(prefixes.size, 1, 'Ambiguous build output prefix');
+  const prefix = [...prefixes][0];
+  const expected = `prostuti-hsc27-${artifact.workflow_run.head_branch.replaceAll('/', '-')}`;
+  assert.equal(prefix, expected, 'Artifact bytes belong to another branch');
   const debug = `${prefix}-debug.apk`, allowed = [debug, `${prefix}-release.apk`, `${prefix}.aab`];
   assert.equal(new Set(entries).size, entries.length, 'Duplicate archive entries');
   assert.ok(entries.includes(debug), 'Missing exact debug APK');
@@ -94,7 +109,7 @@ function main() {
   assert.equal(env.GITHUB_ACTIONS, 'true');
   assert.equal(env.CURRENT_DEV_APK_CONFIRMATION, CURRENT_POLICY.confirmation);
   assert.equal(env.GITHUB_REPOSITORY, CURRENT_POLICY.repo);
-  assert.equal(env.GITHUB_REF, `refs/heads/${CURRENT_POLICY.branch}`);
+  assert.ok(isDeliveryBranch(env.GITHUB_REF?.replace('refs/heads/', '')));
   assert.match(env.GITHUB_RUN_ID || '', /^[1-9]\d*$/);
   const api = (path, method = 'GET', body) => JSON.parse(execFileSync('gh', ['api', `repos/${CURRENT_POLICY.repo}/${path}`, '--method', method, ...(body ? ['--input', '-'] : [])], { encoding: 'utf8', input: body ? JSON.stringify(body) : undefined, maxBuffer: 8 * 1024 * 1024 }));
   const run = api(`actions/runs/${env.GITHUB_RUN_ID}`), jobs = api(`actions/runs/${env.GITHUB_RUN_ID}/jobs?per_page=100`);
