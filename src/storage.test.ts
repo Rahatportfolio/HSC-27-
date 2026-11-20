@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { freshData } from './planner';
+import { addDays, buildPlan, freshData, scheduleDateError } from './planner';
 import { parseBackup, sanitizeSettings } from './storage';
 
 describe('validated local backups', () => {
@@ -126,5 +126,38 @@ describe('previously accepted user data', () => {
     expect(restored.libraryNotes[0].tags[0]).toHaveLength(80);
     expect(restored.tests[0].durationMin).toBe(30.5);
     expect(restored.cq[0].total).toBe(1200);
+  });
+});
+
+describe('an impossible date order stays repairable but never looks like ordinary empty work', () => {
+  const profile = () => { const data = freshData(); data.settings.language = 'en'; return data; };
+  it('retains the old profile and explains the exact date problem instead of returning 197 blank days', () => {
+    const data = profile();
+    for (const patch of [{ testExamDate: data.settings.startDate }, { examDate: '2020-01-01' }, { testExamDate: data.settings.examDate }]) {
+      const restored = parseBackup(JSON.stringify({ ...data, settings: { ...data.settings, ...patch } }));
+      expect(buildPlan(restored.settings)).toEqual([]);
+      expect(scheduleDateError(restored.settings)).toBeTruthy();
+      expect(restored.notes).toBeDefined();
+    }
+  });
+  it('rejects a boost date outside the plan instead of silently ignoring the boost', () => {
+    const data = profile();
+    for (const boostStartDate of ['2020-01-01', data.settings.examDate]) {
+      const restored = parseBackup(JSON.stringify({ ...data, settings: { ...data.settings, boostEnabled: true, boostStartDate } }));
+      expect(scheduleDateError(restored.settings)).toBeTruthy();
+    }
+  });
+  it('still restores a valid profile with a boost inside the plan', () => {
+    const data = profile();
+    const restored = parseBackup(JSON.stringify({ ...data, settings: { ...data.settings, boostEnabled: true, boostStartDate: addDays(data.settings.startDate, 10) } }));
+    expect(restored.settings.boostStartDate).toBe(addDays(data.settings.startDate, 10));
+    expect(scheduleDateError(restored.settings)).toBeNull();
+  });
+  it('falls back to a safe board/name for older drafts instead of keeping empty values', () => {
+    const data = profile();
+    const restored = parseBackup(JSON.stringify({ ...data, settings: { ...data.settings, board: '   ', name: '' } }));
+    expect(restored.settings.board).toBe(freshData().settings.board);
+    expect(restored.settings.board.length).toBeGreaterThan(0);
+    expect(restored.settings.name).toBe('');
   });
 });

@@ -152,10 +152,15 @@ describe('personal routine evidence and backup safety', () => {
     expect(isPersonalTaskComplete(rest, undone)).toBe(true);
     expect(Object.values(undone)).toEqual([at]);
   });
-  it('cannot inherit completion from a different video/duration/speed', () => {
+  it('cannot inherit completion from a different video, a rewritten duration or a new speed', () => {
     const data = dataFor(); const old = tasksFor(data)[0]; data.completed[old.id] = '2026-11-20T08:00:00Z';
+    // Doubling the class is different work: the old tick cannot certify 480 minutes.
     data.personalRoutine!.workloads[ids[0]].class.minutes = 480;
     const next = tasksFor(data)[0]; expect(next.originalTaskId).not.toBe(old.originalTaskId); expect(isPersonalTaskComplete(next, data.completed)).toBe(false);
+    // A different video at the same length is also different work.
+    const replaced = dataFor(); replaced.completed[old.id] = '2026-11-20T08:00:00Z';
+    replaced.personalRoutine!.workloads[ids[0]].class.url = 'https://www.youtube.com/watch?v=othervideo1';
+    expect(isPersonalTaskComplete(tasksFor(replaced)[0], replaced.completed)).toBe(false);
   });
   it('round-trips S selection, availability and duration provenance without losing old study/media/history', () => {
     const data = dataFor(); data.notes['2026-11-16'] = 'Keep this'; data.completed['physics-1-2:part-1'] = '2026-11-16T08:00:00Z';
