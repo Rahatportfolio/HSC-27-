@@ -20,8 +20,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - name: Start Vite and exercise real model in Chromium
+      - name: Build production app
+        run: npm run build
+      - name: Exercise real model in production Chromium
         run: |
-          npm run dev > /tmp/ai-vite.log 2>&1 &
+          npm run preview > /tmp/ai-vite.log 2>&1 &
           for i in {1..30}; do curl -fsS http://127.0.0.1:3000/ > /dev/null && break; sleep 1; done
           node scripts/check-ai-model-browser.mjs
