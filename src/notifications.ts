@@ -2,6 +2,7 @@ import { isPersonalTaskComplete } from './personalRoutine';
 import { chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import {
+  addDays,
   bn,
   formatDurationBn,
   formatTime,
@@ -260,5 +261,35 @@ export function buildEveningCheckinNotification(plan: Day[], data: AppData, date
   return {
     title: `🌙 রাতের রিমাইন্ডার · আজ কমপ্লিট করতে বাকি ${formatDurationBn(digest.remainingMinutes)}`,
     body: `আজ কী পড়া: ${digest.whatToStudy} (মোট ${digest.totalSummary})\nসম্পন্ন: ${digest.completedSummary} · বাকি আছে: ${digest.remainingSummary}${remItems ? ` — ${remItems}` : ''}`,
+  };
+}
+
+/**
+ * Evening preview of the NEXT study day: which subjects/chapters, the first
+ * session time and the total planned minutes. Sent in the evening so the
+ * student knows what tomorrow holds before sleeping. Returns null when
+ * tomorrow has no scheduled work.
+ */
+export function buildTomorrowPreviewNotification(plan: Day[], data: AppData, date: string): NotificationPayload | null {
+  const tomorrow = addDays(date, 1);
+  const day = plan.find(d => d.date === tomorrow);
+  if (!day || day.tasks.length === 0) return null;
+  const open = day.tasks.filter(tk => !isPersonalTaskComplete(tk, data.completed));
+  const tasks = open.length ? open : day.tasks;
+  const totalMinutes = tasks.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
+  const sessions = tasks.length;
+  const firstStart = Math.min(...tasks.map(tk => tk.startMinute));
+  const what = describeDayStudy(day);
+
+  if (isEnglish()) {
+    return {
+      title: `📅 Tomorrow: ${formatDurationBn(totalMinutes)} · ${sessions} session(s)`,
+      body: `Tomorrow's classes: ${what}\nFirst session: ${formatTime(firstStart)} · Total: ${formatDurationBn(totalMinutes)} (${sessions} sessions)`,
+    };
+  }
+
+  return {
+    title: `📅 আগামীকালের ক্লাস · ${formatDurationBn(totalMinutes)} (${bn(sessions)}টি সেশন)`,
+    body: `আগামীকাল কী পড়া: ${what}\nপ্রথম সেশন: ${formatTime(firstStart)} · মোট: ${formatDurationBn(totalMinutes)} (${bn(sessions)}টি সেশন)`,
   };
 }

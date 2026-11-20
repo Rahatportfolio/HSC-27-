@@ -1,6 +1,10 @@
 import DailyGoals from '../components/DailyGoals';
+import DailyWorkCard from '../components/DailyWorkCard';
 import StudyBrainTeaser from '../components/StudyBrainTeaser';
-import PersonalStudyHome from './PersonalStudyHome';
+import { Suspense, lazy } from 'react';
+// The personal S-syllabus home (and its heavy setup components) loads on demand;
+// Home shell stays instant and inside the entry budget. Offline precache covers it.
+const PersonalStudyHome = lazy(() => import('./PersonalStudyHome'));
 import { PersonalRoutineSettings } from '../components/PersonalRoutineSetup';
 import { StudyOverview } from '../components/StudyOverview';
 import { learningDashboard } from '../learning';
@@ -107,7 +111,8 @@ function buildUnfinishedGroups(tasks: Task[]): UnfinishedGroup[] {
 
 export default function TodayView() {
   const { data } = usePlanner();
-  return data.personalRoutine ? <PersonalStudyHome /> : <LegacyTodayView />;
+  if (!data.personalRoutine) return <LegacyTodayView />;
+  return <Suspense fallback={<section className="card route-loading" role="status" aria-busy="true" aria-live="polite"><p>{t('হোম খুলছি…', 'Opening Home…')}</p></section>}><PersonalStudyHome /></Suspense>;
 }
 function LegacyTodayView() {
   const {
@@ -404,7 +409,7 @@ function LegacyTodayView() {
   const mockPart = mockAvg * 0.3;
   const mcqPart = mcqAcc * 0.2;
   const examReadiness = Math.round(syllabusPart + mockPart + mcqPart);
-  return <div className="view today-view"><PersonalRoutineSettings /><StudyBrainTeaser /><StudyOverview /><DailyGoals key={today}/>
+  return <div className="view today-view"><DailyWorkCard /><PersonalRoutineSettings /><StudyBrainTeaser /><StudyOverview /><DailyGoals key={today}/>
     {weakness.total > 0 && <div className="home-weakness-alert" role="status">
       <ShieldAlert size={20} />
       <div>

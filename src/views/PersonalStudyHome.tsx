@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import DailyWorkCard from '../components/DailyWorkCard';
 import PersonalAllocationHistory from '../components/PersonalAllocationHistory';
 import PersonalRoutineSetup from '../components/PersonalRoutineSetup';
 import type { PersonalRoutine } from '../personalRoutine';
@@ -39,6 +40,7 @@ export default function PersonalStudyHome() {
   const changeDate = (value: string) => { if (isValidDate(value) && value >= data.settings.startDate && value < data.settings.examDate) setSelectedDate(value); };
   if (phaseDraft) return <PersonalRoutineSetup initialRoutine={phaseDraft} onDone={() => setPhaseDraft(null)} onCancel={() => setPhaseDraft(null)} />;
   return <div className="view personal-home">
+    <DailyWorkCard />
     <PageHeading eyebrow="S CATEGORY FIRST" title="আগে গুরুত্বপূর্ণ অধ্যায়গুলো শেষ করি।" titleEn="Finish the important chapters first."
       description={routine.scope === 'S' ? 'A থেকে বাছাই করা S অধ্যায়ই এখন লক্ষ্য। প্রতিদিন দুই বইয়ের একই অধ্যায়ের অংশ; পুরো ক্লাস, MCQ/CQ ক্লাস ও নিজের অনুশীলনের সময় আলাদা।' : `S শেষ করে এখন ${routine.scope} ধাপ। একই জোড়া, নিজের সময় ও ছয়টি প্রয়োজনীয় কাজের নিয়ম অটুট আছে।`}
       descriptionEn={routine.scope === 'S' ? 'Your selected S chapters from A are the goal. Keep the same two-book pair across study days, with separate class, MCQ/CQ and practice durations.' : `After completing S, you are now in phase ${routine.scope}. The same-pair, availability and six-required-group rules still apply.`}
