@@ -242,18 +242,9 @@ jobs:
             adb shell svc data disable
             # A freshly booted image can still ANR its launcher once. Dismiss
             # only a system-owned ANR (never this app) so the ordinary boot can
-            # finish; no app focus is faked, no permission/keyguard dialog is
-            # bypassed. The instrumentation repeats this check itself.
-            for attempt in 1 2 3 4 5 6; do
-              win="$(adb shell dumpsys window | grep mCurrentFocus || true)"
-              if echo "$win" | grep -q "Application Not Responding" && ! echo "$win" | grep -q "com.prostuti.hsc27"; then
-                echo "Dismissing system ANR before tests: $win"
-                adb shell input keyevent KEYCODE_ENTER
-                sleep 5
-              else
-                break
-              fi
-            done
+            # finish. The instrumentation repeats and owns the real check; this
+            # line only clears the dialog before gradle starts.
+            adb shell dumpsys window | grep -q "Application Not Responding" && adb shell input keyevent KEYCODE_ENTER || true
             bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log) || status=$?; adb pull /sdcard/Download/prostuti-instrumented-shell ./android-shell-evidence || true; exit "$status"'
       - name: Surface device failure details
         if: failure()
