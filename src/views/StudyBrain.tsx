@@ -1,5 +1,5 @@
 import { brainChapterGuide, studyBrainPlaybook } from '../studyBrainPlaybook';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Bot, BrainCircuit, CalendarDays, Check, ChevronRight, Download, Loader2, MessageCircle, Pause, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeading } from '../components';
@@ -11,7 +11,7 @@ import { personalBookLabel, weeklyWindows, WORK_STAGES } from '../personalRoutin
 import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, forgetStudyBrain, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
 import { interpretBrainMessage } from '../studyBrainIntents';
 import { answerAiQuestion, checkQuizAnswer, loadQuizQuestion, quizMessage } from '../aiBrain';
-import { aiErrorMessage, chatWithAi, loadAiModel, AI_MODEL_SIZE_MB } from '../aiModel';
+import { aiErrorMessage, chatWithAi, loadAiModel, unloadAiModel, AI_MODEL_SIZE_MB } from '../aiModel';
 import type { QuizQuestion } from '../types';
 import type { BrainSuggestion } from '../studyBrain';
 import { brainStatusText } from '../studyBrainText';
@@ -366,6 +366,9 @@ function AiAssistant() {
   const [modelState, setModelState] = useState<ModelState>('idle');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+
+  // The model can use substantial RAM. Release it when this panel unmounts.
+  useEffect(() => () => unloadAiModel(), []);
 
   const switchMode = (next: AiMode) => {
     setMode(next);

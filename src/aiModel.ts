@@ -97,6 +97,14 @@ function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?:
   });
 }
 
+/** Release the model and reject in-flight requests when leaving Study Brain. */
+export function unloadAiModel(): void {
+  worker?.terminate();
+  worker = null;
+  for (const task of pending.values()) task.reject(new Error('AI worker stopped'));
+  pending.clear();
+}
+
 /** Download/load the model in a worker. A failed request can be retried. */
 export async function loadAiModel(onProgress?: (progress: AiProgress) => void): Promise<void> {
   await request('load', undefined, onProgress);
