@@ -709,7 +709,7 @@ export default function App() {
                 >
                   {data.settings.language === 'en' ? 'বাং' : 'EN'}
                 </button>
-                <button className="icon-button notification-button" onClick={() => navigate('reminders')} aria-label={t('রিমাইন্ডার', 'Reminders')}><Bell size={18} strokeWidth={1.75} />{data.settings.reminderEnabled && <span />}</button>
+                <button className="icon-button notification-button" onClick={() => navigate('reminders')} aria-label={data.settings.reminderEnabled ? t('রিমাইন্ডার', 'Reminders') : t('রিমাইন্ডার বন্ধ—চালু করো', 'Reminders are off — turn them on')} title={data.settings.reminderEnabled ? t('রিমাইন্ডার', 'Reminders') : t('রিমাইন্ডার বন্ধ—চালু করো', 'Reminders are off — turn them on')}><Bell size={18} strokeWidth={1.75} /><span className={`bell-dot ${data.settings.reminderEnabled ? 'on' : 'off'}`} aria-hidden="true" /></button>
               </div>
               <button className="topbar-avatar" onClick={() => navigate('settings')} aria-label={t('প্রোফাইল ও সেটিংস', 'Profile & settings')} title={t('প্রোফাইল ও সেটিংস', 'Profile & settings')}><UserRound size={17} aria-hidden="true" /></button>
             </div>

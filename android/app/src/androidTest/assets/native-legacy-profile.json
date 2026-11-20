@@ -11,7 +11,7 @@
     "adaptiveBuffer": 30,
     "board": "সিলেট",
     "name": "",
-    "reminderEnabled": false,
+    "reminderEnabled": true,
     "reminderLead": 10,
     "syllabusChecked": false,
     "calendarRevision": 0,

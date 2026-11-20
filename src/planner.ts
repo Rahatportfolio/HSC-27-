@@ -43,7 +43,7 @@ export const DEFAULT_SETTINGS: Settings = {
   adaptiveBuffer: 30,
   board: 'সিলেট',
   name: '',
-  reminderEnabled: false,
+  reminderEnabled: true,
   reminderLead: 10,
   syllabusChecked: false,
   calendarRevision: 0,
