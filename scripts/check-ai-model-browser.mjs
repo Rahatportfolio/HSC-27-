@@ -28,6 +28,9 @@ try {
   });
   if (!offline || offline.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('Offline model returned an empty answer');
   console.log('Fresh offline model inference returned a nonempty answer:', offline.slice(0, 300));
+} catch (error) {
+  console.error('::error::AI integration failed: ' + String(error).replaceAll('\n', ' '));
+  throw error;
 } finally {
   await browser.close();
 }
