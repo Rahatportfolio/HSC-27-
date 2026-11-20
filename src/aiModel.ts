@@ -78,10 +78,10 @@ function getWorker(): Worker {
       if (reply.kind === 'error') task.reject(new Error(reply.message || 'AI worker failed'));
       else task.resolve(reply.text || '');
     };
-    instance.onerror = () => {
+    instance.onerror = event => {
       instance.terminate();
       if (worker === instance) worker = null;
-      for (const task of pending.values()) task.reject(new Error('AI worker failed to start'));
+      for (const task of pending.values()) task.reject(new Error('AI worker failed to start: ' + (event.message || 'unknown worker error')));
       pending.clear();
     };
     worker = instance;

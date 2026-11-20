@@ -7,6 +7,7 @@ import { join } from 'node:path';
 const profile = await mkdtemp(join(tmpdir(), 'ai-model-test-'));
 const options = { executablePath: process.env.CHROMIUM_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] };
 let context;
+let stage = 'online';
 try {
   context = await chromium.launchPersistentContext(profile, options);
   const page = await context.newPage();
@@ -27,6 +28,7 @@ try {
   const fresh = await context.newPage();
   await fresh.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
   await fresh.evaluate(async () => { window.__ai = await import('/src/aiModel.ts'); });
+  stage = 'offline after browser restart';
   await context.setOffline(true);
   const offline = await fresh.evaluate(async () => {
     await window.__ai.loadAiModel();
@@ -35,7 +37,7 @@ try {
   if (!offline || offline.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('Offline model returned an empty answer');
   console.log('Fresh offline model inference returned a nonempty answer:', offline.slice(0, 300));
 } catch (error) {
-  console.error('::error::AI integration failed: ' + String(error).replaceAll('\n', ' '));
+  console.error('::error::AI integration failed during ' + stage + ': ' + String(error).replaceAll('\n', ' '));
   throw error;
 } finally {
   await context?.close();
