@@ -123,10 +123,15 @@ describe('read-only, S/pair/source-aware local reasoning', () => {
     expect(suggest(data).status).toBe('rest'); expect(data.completed).toEqual({});
     data.studyBrain!.checkIns[0].date = '2026-11-19'; expect(suggest(data).status).toBe('ready');
   });
-  it('won’t invent durations or skip the current pair for a configured later chapter', () => {
+  it('starts on a blank chapter with the 20-hour estimate instead of blocking the pair', () => {
     const ids = [...PERSONAL_IDS, ...RECOMMENDED_S_IDS.filter(id => !PERSONAL_IDS.includes(id)).slice(0, 2)];
     const data = personalDataFixture(ids); data.studyBrain = newStudyBrain(); data.personalRoutine!.workloads[PERSONAL_IDS[0]] = defaultChapterWorkload(PERSONAL_IDS[0]);
-    expect(suggest(data)).toMatchObject({ status: 'duration', pair: PERSONAL_IDS, canStart: false, focusMinutes: 0 });
+    const suggestion = suggest(data);
+    expect(suggestion.status).not.toBe('duration');
+    expect(suggestion.status).toBe('ready');
+    expect(suggestion.pair).toEqual(PERSONAL_IDS);
+    expect(suggestion.canStart).toBe(true);
+    expect(suggestion.focusMinutes).toBeGreaterThan(0);
   });
   it('does not migrate a legacy profile or bypass first-launch setup', () => {
     const data = freshData(); data.studyBrain = newStudyBrain(); expect(suggest(data, now, []).status).toBe('legacy');

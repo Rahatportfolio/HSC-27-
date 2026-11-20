@@ -22,7 +22,7 @@ export const WORK_STAGES = [
   { id: 'revision', bn: 'অধ্যায়ের রিভিশন', en: 'Chapter revision', media: false },
 ] as const;
 export type WorkStage = typeof WORK_STAGES[number]['id'];
-export type DurationSource = 'unknown' | 'student' | 'youtube-player' | 'reference-metadata' | 'planned';
+export type DurationSource = 'unknown' | 'student' | 'youtube-player' | 'reference-metadata' | 'planned' | 'default24';
 export interface WorkBudget {
   /** Source video minutes, NOT a fixed session length. Null is genuinely unknown. */
   minutes: number | null;
@@ -85,6 +85,33 @@ const fail = (): never => { throw new Error(t('নিজের পড়ার স�
 export const isSChapter = (data: AppData, id: string): boolean => !!(data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds.includes(id);
 export const personalRoutineForChapter = (data: AppData, id: string): PersonalRoutine | undefined => data.personalRoutine?.chapterIds.includes(id) ? data.personalRoutine : Object.values(data.personalPhases || {}).find(routine => routine.chapterIds.includes(id));
 
+/** 20 hours (1,200 minutes) of study per chapter, used when the student has not
+ * measured anything yet. It is an editable ESTIMATE, never a claim about a real
+ * video length: the class share is what is left after the independent work below.
+ * Distribution: class 480 · reading 240 · notes 120 · MCQ 120 · CQ 180 · revision 60.
+ */
+export const DEFAULT_CHAPTER_MINUTES = 1200;
+const DEFAULT_INDEPENDENT: Record<Exclude<WorkStage, 'class' | 'mcqClass' | 'cqClass'>, number> = {
+  reading: 240, notes: 120, mcqPractice: 120, cqPractice: 180, revision: 60,
+};
+export function defaultChapterStudyPlan(_chapterId: string): Record<WorkStage, number> {
+  // Exactly 20 hours for every chapter, as the student asked, until they edit it.
+  const total = DEFAULT_CHAPTER_MINUTES;
+  const independent = WORK_STAGES.filter(stage => !stage.media).reduce((sum, stage) => sum + DEFAULT_INDEPENDENT[stage.id as keyof typeof DEFAULT_INDEPENDENT], 0);
+  return { class: Math.max(120, total - independent), reading: DEFAULT_INDEPENDENT.reading, notes: DEFAULT_INDEPENDENT.notes,
+    mcqClass: 0, cqClass: 0, mcqPractice: DEFAULT_INDEPENDENT.mcqPractice, cqPractice: DEFAULT_INDEPENDENT.cqPractice, revision: DEFAULT_INDEPENDENT.revision } as Record<WorkStage, number>;
+}
+/** A complete, honest estimate workload. Used as the starting value so a student
+ * sees a real schedule immediately, and stays editable per stage/source later. */
+export function estimatedChapterWorkload(chapterId: string): ChapterWorkload {
+  const plan = defaultChapterStudyPlan(chapterId);
+  const base = defaultChapterWorkload(chapterId);
+  return Object.fromEntries(WORK_STAGES.map(stage => [stage.id, {
+    ...base[stage.id],
+    minutes: plan[stage.id],
+    source: 'default24' as DurationSource,
+  }])) as ChapterWorkload;
+}
 export function defaultChapterWorkload(chapterId: string): ChapterWorkload {
   const links = CHAPTER_CLASSES[chapterId];
   const first = (key: 'oneShot' | 'mcq' | 'cq') => {
@@ -134,7 +161,7 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
     const entries = WORK_STAGES.map(stage => {
       // Older six-stage profiles retain every old budget; new steps remain honestly unknown.
       const budget = value[stage.id] ?? (['notes', 'revision'].includes(stage.id) ? { minutes: null, source: 'unknown' } : undefined);
-      if (!object(budget) || !['unknown', 'student', 'youtube-player', 'reference-metadata', 'planned'].includes(budget.source as string) ||
+      if (!object(budget) || !['unknown', 'student', 'youtube-player', 'reference-metadata', 'planned', 'default24'].includes(budget.source as string) ||
         (budget.minutes !== null && (typeof budget.minutes !== 'number' || !Number.isFinite(budget.minutes) || budget.minutes < 0 || budget.minutes > 10080)) ||
         (budget.minutes === null) !== (budget.source === 'unknown') ||
         (stage.media && budget.source === 'planned') || (!stage.media && ['youtube-player', 'reference-metadata'].includes(budget.source as string))) return fail();
@@ -155,6 +182,18 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
         ...(budget.url ? { url: budget.url } : {}), ...(budget.observedAt ? { observedAt: budget.observedAt } : {}), ...(budget.acceptedAt ? { acceptedAt: budget.acceptedAt } : {}) }];
     });
     workloads[id] = Object.fromEntries(entries) as ChapterWorkload;
+  }
+  // A routine must never be saved with an empty plan. Chapters the student never
+  // configured receive the editable 20-hour estimate instead of unknown work.
+  for (const id of raw.chapterIds as string[]) if (!workloads[id]) workloads[id] = estimatedChapterWorkload(id);
+  // Older profiles were saved with every duration unknown (the plan then rendered
+  // blank). Fill only chapters that are still entirely unknown, so a real
+  // student/probe/player duration is never overwritten. Settings can edit later.
+  for (const [id, work] of Object.entries(workloads)) {
+    if (WORK_STAGES.some(stage => work[stage.id].minutes !== null)) continue;
+    const estimate = estimatedChapterWorkload(id);
+    const required = WORK_STAGES.filter(stage => !['mcqClass', 'cqClass'].includes(stage.id));
+    workloads[id] = required.every(stage => work[stage.id].source === 'unknown') ? estimate : work;
   }
   if (raw.startsOn !== undefined && (typeof raw.startsOn !== 'string' || !isValidDate(raw.startsOn))) return fail();
   const exclusions = raw.exclusions === undefined ? undefined : parseAvailabilityList(raw.exclusions);
@@ -248,7 +287,10 @@ export function workloadFor(routine: PersonalRoutine, id: string): ChapterWorklo
   // In-memory v1 objects and stored six-stage profiles both acquire the new
   // required steps as UNKNOWN, without converting old checklists into evidence.
   const saved = routine.workloads[id];
-  return saved && WORK_STAGES.every(stage => saved[stage.id]) ? saved : { ...defaultChapterWorkload(id), ...saved };
+  // A chapter whose every duration is still unknown is not "configured": it gets
+  // the editable 20-hour default so the plan, progress and picker never render blank.
+  if (!saved || WORK_STAGES.every(stage => !saved[stage.id] || saved[stage.id].minutes === null)) return estimatedChapterWorkload(id);
+  return WORK_STAGES.every(stage => saved[stage.id]) ? saved : { ...defaultChapterWorkload(id), ...saved };
 }
 export function chapterWorkEstimate(routine: PersonalRoutine, id: string) {
   const workload = workloadFor(routine, id);
@@ -443,6 +485,17 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
       break;
     }
     plannedChapterIds.push(...known);
+  }
+  // Every chapter now carries a budget, so a long pair usually needs extra days.
+  // That is ONE fact about the schedule, not one warning per chapter pair.
+  const spill = issues.filter(issue => issue.code === 'two-day-capacity');
+  if (spill.length > 1) {
+    // Keep every other issue in its original order; drop only the duplicates.
+    const merged: RoutineIssue = { code: 'two-day-capacity', chapterIds: [...new Set(spill.flatMap(issue => issue.chapterIds))], minutes: spill.reduce((sum, issue) => sum + issue.minutes, 0) };
+    const kept = issues.filter(issue => issue.code !== 'two-day-capacity');
+    const at = issues.findIndex(issue => issue.code === 'two-day-capacity');
+    kept.splice(kept.filter(issue => issues.indexOf(issue) < at).length, 0, merged);
+    issues.splice(0, issues.length, ...kept);
   }
   return { plan, issues, unknownChapters, plannedChapterIds };
 }

@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CHAPTERS, chapterById } from './data';
+import { CHAPTERS } from './data';
 import { addDays, buildPlan, chapterStudyTasks, freshData, getStats, isChapterDone, isDayComplete } from './planner';
 import { buildStudyPlan } from './studyPlan';
-import { WORK_STAGES, defaultChapterWorkload, buildPersonalStudyProjection, hasFullPersonalAllocation, isPersonalChapterDone, isPersonalTaskComplete, personalMediaUrl, personalCompletionEvidence, personalRoutineHealth, personalScheduleDateError, personalChapterProgress } from './personalRoutine';
+import { WORK_STAGES, defaultChapterWorkload, workloadFor, buildPersonalStudyProjection, hasFullPersonalAllocation, isPersonalChapterDone, isPersonalTaskComplete, personalMediaUrl, personalCompletionEvidence, personalRoutineHealth, personalScheduleDateError, personalChapterProgress } from './personalRoutine';
 import { PERSONAL_IDS, personalDataFixture, personalRoutineFixture, personalWorkload } from './test/personalRoutineFixture';
 import { setLanguage } from './i18n';
 import { learningDashboard, chapterStage } from './learning';
@@ -227,45 +227,50 @@ it('does not invent new completion times by bulk-ticking already-covered regener
   expect(new Set(personalCompletionEvidence(data, PERSONAL_IDS[0]))).toEqual(new Set(['2026-11-16T08:00:00Z']));
 });
 
-describe('unknown durations never blank out the whole plan', () => {
+describe('missing durations never blank out the whole plan', () => {
   beforeEach(() => setLanguage('bn'));
   // Reproduces the 2026-11-20 report: every selected chapter still on the
   // default unknown workload produced "0/0 tasks done" and "No work left".
+  // The fix is a visible, editable 20-hour estimate — never a blank plan and
+  // never a fabricated measured duration.
   const unknownData = (knownIds: string[] = []) => {
     const data = personalDataFixture(['physics-1-3', 'chemistry-1-3']);
     const routine = data.personalRoutine!;
     for (const id of routine.chapterIds) if (!knownIds.includes(id)) routine.workloads[id] = defaultChapterWorkload(id);
     return data;
   };
-  it('schedules the chapters that have real durations even when the rest are unknown', () => {
+  it('gives an all-unknown chapter the 20-hour estimate instead of no work at all', () => {
+    const data = unknownData();
+    expect(workloadFor(data.personalRoutine!, 'chemistry-1-3').class).toMatchObject({ minutes: 480, source: 'default24' });
+    const plan = planFor(data), health = personalRoutineHealth(data, plan);
+    expect(minutes(plan.flatMap(day => day.tasks))).toBeGreaterThan(0);
+    expect(health.missingDurations).toBe(false);
+    expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('chemistry-1-3'))).toBe(true);
+  });
+  it('keeps a configured chapter exactly as entered while the unknown one gets the estimate', () => {
     const data = unknownData(['physics-1-3']);
-    const health = personalRoutineHealth(data, planFor(data));
-    expect(health.issues.some(issue => issue.code === 'unknown-duration')).toBe(true);
-    expect(health.missingDurations).toBe(true);
-    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual(['chemistry-1-3']);
-    expect(health.warnings.join(' ')).toContain(chapterById['chemistry-1-3'].title);
+    expect(data.personalRoutine!.workloads['physics-1-3'].class).toEqual(personalWorkload(240).class);
+    expect(workloadFor(data.personalRoutine!, 'chemistry-1-3').class.source).toBe('default24');
     const plan = planFor(data);
-    expect(plan[0].tasks.length).toBeGreaterThan(0);
-    expect(plan.flatMap(day => day.tasks).every(task => task.chapterIds.includes('physics-1-3'))).toBe(true);
+    expect(minutes(plan.flatMap(day => day.tasks).filter(task => task.chapterIds.includes('physics-1-3')))).toBeGreaterThan(0);
+    expect(minutes(plan.flatMap(day => day.tasks).filter(task => task.chapterIds.includes('chemistry-1-3')))).toBeGreaterThan(0);
   });
-  it('keeps the plan empty but explains the missing input when every chapter is unknown', () => {
-    const data = unknownData(); const plan = planFor(data); const health = personalRoutineHealth(data, plan);
-    expect(plan.flatMap(day => day.tasks)).toHaveLength(0);
-    expect(health.missingDurations).toBe(true);
-    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual(['physics-1-3', 'chemistry-1-3']);
-    expect(health.warnings.some(warning => warning.includes(chapterById['chemistry-1-3'].title) && warning.includes('অজানা'))).toBe(true);
-  });
-  it('names the still-unknown chapter of a mixed pair instead of silently dropping it', () => {
+  it('fills a mixed pair so the missing chapter is scheduled, not silently dropped', () => {
     const data = personalDataFixture(['physics-1-3']);
     const routine = data.personalRoutine!;
     // Same book, so both chapters form one pair: one known, one still unknown.
     routine.chapterIds = ['physics-1-3', 'physics-1-1'];
     routine.workloads = { 'physics-1-3': personalWorkload(240), 'physics-1-1': defaultChapterWorkload('physics-1-1') };
     const plan = planFor(data); const health = personalRoutineHealth(data, plan);
-    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual(['physics-1-1']);
-    expect(health.warnings.join(' ')).toContain(chapterById['physics-1-1'].title);
+    expect(health.issues.find(issue => issue.code === 'unknown-duration')).toBeUndefined();
+    expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-1'))).toBe(true);
     expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-3'))).toBe(true);
-    expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-1'))).toBe(false);
+  });
+  it('reports the extra days the 20-hour default needs instead of inventing a finish date', () => {
+    const data = unknownData();
+    const health = personalRoutineHealth(data, planFor(data));
+    expect(health.issues.filter(issue => issue.code === 'two-day-capacity')).toHaveLength(1);
+    expect(health.warnings.join(' ')).toContain('বাড়তি দিনে চলবে');
   });
 });
 

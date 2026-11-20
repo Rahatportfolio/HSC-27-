@@ -10,7 +10,7 @@ import { buildStudyPlan } from './studyPlan';
 import { setLanguage } from './i18n';
 import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture';
 import { classDurationReference } from './classDurationReferences';
-import { defaultChapterWorkload, parsePersonalRoutine, personalRoutineHealth } from './personalRoutine';
+import { defaultChapterWorkload, parsePersonalRoutine, personalRoutineHealth, workloadFor } from './personalRoutine';
 
 beforeEach(() => { localStorage.clear(); setLanguage('en'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -38,15 +38,24 @@ const toPreview = () => { next(); next(); next(); };
 const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save this availability & S routine' }));
 
 describe('availability-first setup transaction', () => {
-  it('asks instead of imposing a default, rejects empty availability, then saves only S/availability when durations are unknown', () => {
+  it('asks for availability first, rejects an empty window, then saves a real 20-hour-per-chapter plan without any duration entry', () => {
     const data = { ...freshData(), routineSetupRequired: true }; const h = setup(data);
     expect(screen.getByRole('heading', { level: 1, name: 'First, when can you study?' })).toBeTruthy();
     expect((screen.getByLabelText('Window 1 start') as HTMLInputElement).value).toBe(''); next();
     expect(screen.getByRole('alert').textContent).toContain('Choose your study days'); expect(h.setData).not.toHaveBeenCalled();
-    availability(); toPreview(); expect(screen.getByText(/No fake 80-minute routine/)).toBeTruthy(); save();
+    availability(); next(); next();
+    // The time step now opens on the editable 20-hour estimate, not on blanks.
+    expect(screen.getByText(/Even if you change nothing, each chapter gets/)).toBeTruthy();
+    // 20 h is stated in the copy (letter/currency spacing is font-dependent,
+    // so assert on the sentence rather than the digits).
+    expect(screen.getByText(/These are estimates, not measured video lengths/)).toBeTruthy();
+    // Step 3 is optional: entering no duration must still produce dated work.
+    next(); save();
     expect(h.confirm()).toBeUndefined(); expect(h.onDone).toHaveBeenCalledOnce();
     expect(h.data().routineSetupRequired).toBe(false); expect(h.data().personalRoutine!.scope).toBe('S'); expect(h.data().personalRoutine!.windows).toHaveLength(7);
-    expect(buildStudyPlan(h.data(), data.settings.startDate).every(day => !day.tasks.length)).toBe(true);
+    const plan = buildStudyPlan(h.data(), data.settings.startDate);
+    expect(plan.flatMap(day => day.tasks).length).toBeGreaterThan(0);
+    for (const id of h.data().personalRoutine!.chapterIds) expect(workloadFor(h.data().personalRoutine!, id).class.source).toBe('default24');
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).personalRoutine.chapterIds).toEqual(h.data().personalRoutine!.chapterIds);
   });
   it('accepts overnight availability on adjacent weekdays without losing a minute or scheduling outside it', () => {
