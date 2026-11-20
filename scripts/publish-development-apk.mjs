@@ -12,19 +12,19 @@ import { signingFingerprint } from './verify-release-asset.mjs';
 
 export const DELIVERY = Object.freeze({
   repo: 'Rahatportfolio/HSC-27-',
-  sourceSha: '14e6640e9ae4046372fb0f97ebe89b489de93934',
-  sourceRun: 44377968065,
-  artifactId: 14463465347,
-  artifactSize: 10922621,
-  artifactDigest: '16ddb0801b48b464dab0861e8c4791c56736dfe25a8220cf1c9ee84e39d93853',
+  sourceSha: '2a15f6332fbaf78a4406d15abc7fac40bb0c8595',
+  sourceRun: 44766160740,
+  artifactId: 14645316793,
+  artifactSize: 11046641,
+  artifactDigest: 'b405ec207ebbb5b869eb8937589bfee626718b0d0461a0a8ffba82aea31fc510',
   inputName: 'prostuti-hsc27-main-debug.apk',
-  tag: 'dev-apk-14e6640e9ae4',
-  assetName: 'prostuti-hsc27-14e6640-development.apk',
+  tag: 'dev-apk-2a15f6332fba',
+  assetName: 'prostuti-hsc27-2a15f6332fba-development.apk',
   packageName: 'com.prostuti.hsc27',
   versionName: '2.44.0',
   versionCode: 24,
-  mainSha256: '9c83e73874ba39d334cf234a844a7ab2011ae4c0003e54d7932972f3ef0e4849',
-  cssSha256: 'a85e88df7b01b2559554420b25bf70f7f23b7442f48fb5c680b73751ae2e16e4',
+  mainSha256: 'b9a9431b57964e3370fe1d3c4e30efb05736caf35029019537811fc35f0c0571',
+  cssSha256: 'a62a2bea1ad862cc67ceee5ff583bc2b8013deebb7c011f2cdaff564261fafab',
   heldReleaseId: 449690511,
   heldAssetId: 762550392,
   heldAssetDigest: 'sha256:6bc0b311fabda582b9f9a4c67c1e873ecb7cbf216e1d1060943e69ab90dbfec0',
@@ -115,7 +115,7 @@ function main() {
   const api = (path, method = 'GET', body) => JSON.parse(execFileSync('gh', ['api', `repos/${DELIVERY.repo}/${path}`, '--method', method, ...(body ? ['--input', '-'] : [])], {
     encoding: 'utf8', input: body ? JSON.stringify(body) : undefined, maxBuffer: 8 * 1024 * 1024,
   }));
-  const notice = (title, value) => console.log(`::notice title=${title}::${JSON.stringify(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')}`);
+  const notice = (title, value) => console.log(`: notice title=${title}: ${JSON.stringify(value).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')}`);
   const run = api(`actions/runs/${DELIVERY.sourceRun}`);
   const jobs = api(`actions/runs/${DELIVERY.sourceRun}/jobs?per_page=100`);
   const artifact = api(`actions/artifacts/${DELIVERY.artifactId}`);
@@ -197,7 +197,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   try { main(); }
   catch (error) {
     const message = String(error.stack || error).slice(0, 3500).replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A');
-    console.error(`::error title=Development APK download blocked::${message}`);
+    console.error(`: error title=Development APK download blocked: ${message}`);
     process.exitCode = 1;
   }
 }
