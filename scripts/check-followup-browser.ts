@@ -45,7 +45,7 @@ try {
     const page = await context.newPage(); page.setDefaultTimeout(8000);
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', route => new URL(route.request().url()).origin === new URL(base).origin ? route.continue() : route.abort('internetdisconnected'));
-    const data = freshData(); data.settings.language = scenario.language; data.settings.theme = scenario.theme; data.settings.fontScale = 'lg';
+    const data = freshData(); data.settings.startDate = '2026-11-20'; data.settings.boostStartDate = '2026-12-07'; data.settings.language = scenario.language; data.settings.theme = scenario.theme; data.settings.fontScale = 'lg';
     data.notes['2026-11-19'] = 'Preserve actual study history';
     const questions = Array.from({ length: 5 }, (_, index) => ({ id: `followup-browser-${index}`, question: `Original synthetic history question ${index}`, subject: 'physics' as const, chapterId: 'physics-1-7', options: ['A', 'B', 'C', 'D'], answer: 0, createdAt: '2026-11-19T03:00:00Z' }));
     const fixture = saveExamSession(data, { id: 'followup-browser-paper', mode: 'subject', subject: 'physics', title: 'Original five-question paper', questions, answers: Object.fromEntries(questions.map(question => [question.id, 0])), durationMin: 5, timeTakenSec: 120, date: '2026-11-19' });

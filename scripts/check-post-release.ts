@@ -17,6 +17,7 @@ await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 const checks: string[] = [], errors: string[] = [];
 const seed = freshData();
+seed.settings.startDate = '2026-11-20'; seed.settings.boostStartDate = '2026-12-07';
 seed.settings = { ...seed.settings, language: 'en', name: 'Browser audit profile', boostEnabled: false, adaptiveEnabled: false };
 seed.notes['2026-11-19'] = 'A real dated journal must not move';
 const state = async (page: Page): Promise<AppData> => page.evaluate(key => JSON.parse(localStorage.getItem(key)!), STORAGE_KEY);
