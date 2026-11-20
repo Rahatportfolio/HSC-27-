@@ -240,26 +240,20 @@ jobs:
             adb shell settings get global anr_show_background
             adb shell svc wifi disable
             adb shell svc data disable
-            # A freshly booted API 35 image can still ANR its launcher once. If
-            # a system ANR window is present (never one owned by this app),
-            # dismiss it with OK and let the ordinary boot complete. No app
-            # focus is faked and no permission/keyguard dialog is bypassed.
-            sh -e -c '
-              for attempt in 1 2 3 4 5 6; do
-                win=$(adb shell dumpsys window | grep mCurrentFocus || true)
-                case "$win" in
-                  *"Application Not Responding"*)
-                    case "$win" in
-                      *com.prostuti.hsc27*) break ;;
-                    esac
-                    echo "Dismissing system ANR before tests: $win"
-                    adb shell input keyevent KEYCODE_ENTER
-                    sleep 5
-                    ;;
-                  *) break ;;
-                esac
-              done
-            '
+            # A freshly booted image can still ANR its launcher once. Dismiss
+            # only a system-owned ANR (never this app) so the ordinary boot can
+            # finish; no app focus is faked, no permission/keyguard dialog is
+            # bypassed. The instrumentation repeats this check itself.
+            for attempt in 1 2 3 4 5 6; do
+              win="$(adb shell dumpsys window | grep mCurrentFocus || true)"
+              if echo "$win" | grep -q "Application Not Responding" && ! echo "$win" | grep -q "com.prostuti.hsc27"; then
+                echo "Dismissing system ANR before tests: $win"
+                adb shell input keyevent KEYCODE_ENTER
+                sleep 5
+              else
+                break
+              fi
+            done
             bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace 2>&1 | tee ../android-device.log) || status=$?; adb pull /sdcard/Download/prostuti-instrumented-shell ./android-shell-evidence || true; exit "$status"'
       - name: Surface device failure details
         if: failure()
