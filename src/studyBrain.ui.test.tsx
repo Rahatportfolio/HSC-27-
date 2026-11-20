@@ -32,9 +32,9 @@ const interpret = (text: string) => { fireEvent.change(screen.getByLabelText('Sa
 const remember = () => fireEvent.click(screen.getByRole('button', { name: 'Remember check-in' }));
 
 describe('Study Brain controls, consent and truthful suggestions', () => {
-  it('is opt-in and explicitly describes a local rule-based, non-general-AI helper', () => {
+  it('is opt-in and explicitly describes a local smart brain plus an optional on-device AI model', () => {
     const initial = personalDataFixture(), h = setup(initial);
-    expect(screen.getByText(/Not a general AI chatbot/)).toBeTruthy(); expect(screen.getByText(/does not read notes or scans/)).toBeTruthy();
+    expect(screen.getByText(/smart brain recognises a small set/)).toBeTruthy(); expect(screen.getByText(/does not read notes or scans/)).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'Daily brain check-in' })).toBeNull(); expect(h.setData).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Enable local Study Brain' }));
     expect(h.data().studyBrain?.enabled).toBe(true); expect(h.data().studyBrain!.checkIns).toEqual([]);

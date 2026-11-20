@@ -1,7 +1,7 @@
 import { brainChapterGuide, studyBrainPlaybook } from '../studyBrainPlaybook';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { BrainCircuit, CalendarDays, Check, ChevronRight, MessageCircle, Pause, Play, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { Bot, BrainCircuit, CalendarDays, Check, ChevronRight, Download, Loader2, MessageCircle, Pause, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeading } from '../components';
 import { usePlanner } from '../context';
 import { chapterById } from '../data';
@@ -10,6 +10,9 @@ import { brainConsistency, brainEnergyOutput, brainPaceProjection, brainPrefligh
 import { personalBookLabel, weeklyWindows, WORK_STAGES } from '../personalRoutine';
 import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, forgetStudyBrain, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
 import { interpretBrainMessage } from '../studyBrainIntents';
+import { answerAiQuestion, checkQuizAnswer } from '../aiBrain';
+import { aiErrorMessage, chatWithAi, isAiModelCached, loadAiModel, AI_MODEL_SIZE_MB } from '../aiModel';
+import type { QuizQuestion } from '../types';
 import type { BrainSuggestion } from '../studyBrain';
 import { brainStatusText } from '../studyBrainText';
 import type { BrainCheckInDraft, BrainEnergy, BrainObstacle } from '../studyBrainTypes';
@@ -34,8 +37,8 @@ export default function StudyBrainView() {
     <PageHeading eyebrow="LOCAL STUDY BRAIN" title="একটু বলো, পরের কাজটা সহজ করি।" titleEn="A little context. A better next step."
       description="তোমার সময়, ক্লান্তি, ছোট ফিডব্যাক আর সংরক্ষিত পড়ার রেকর্ড মিলিয়ে পরামর্শ। তোমার হয়ে সিদ্ধান্ত নেওয়া নয়।"
       descriptionEn="Suggestions from your availability, energy, quick feedback and saved study records. You stay in charge."
-      action={<span className="brain-local-badge"><ShieldCheck size={16} aria-hidden="true" />{t('ডিভাইসেই · নিয়মভিত্তিক', 'ON-DEVICE · RULE-BASED')}</span>} />
-    <div className="brain-boundary"><BrainCircuit size={21} aria-hidden="true" /><p>{t('এটি সাধারণ AI চ্যাট নয়; অল্প কিছু বাংলা, Banglish ও English পড়াশোনার কথা বোঝে। কোনো সার্ভারে তোমার লেখা/তথ্য পাঠায় না, নোট বা স্ক্যান পড়ে না। ভিডিওর দৈর্ঘ্য বা পরীক্ষার নিশ্চয়তা বানায় না।', 'Not a general AI chatbot: it recognises a small set of Bengali, Banglish and English study requests. This feature sends no text or profile data to a server and does not read notes or scans. It cannot invent video durations or guarantee exam results.')}</p></div>
+      action={<span className="brain-local-badge"><ShieldCheck size={16} aria-hidden="true" />{t('ডিভাইসেই · AI', 'ON-DEVICE · AI')}</span>} />
+    <div className="brain-boundary"><BrainCircuit size={21} aria-hidden="true" /><p>{t('স্মার্ট ব্রেইন অল্প কিছু বাংলা, Banglish ও English পড়াশোনার কথা বোঝে। চাইলে ~১৪০ MB AI মডেল একবার ডাউনলোড করে খোলামেলা প্রশ্নও করতে পারো — মডেল ডিভাইসেই চলে, কোনো সার্ভারে তোমার লেখা/তথ্য পাঠায় না, নোট বা স্ক্যান পড়ে না। ভিডিওর দৈর্ঘ্য বা পরীক্ষার নিশ্চয়তা বানায় না।', 'The smart brain recognises a small set of Bengali, Banglish and English study requests. Optionally download the ~140 MB AI model once for open-ended questions — it runs on this device, sends no text or profile data to a server, and does not read notes or scans. It cannot invent video durations or guarantee exam results.')}</p></div>
     {!ready ? <section className="card brain-panel" role="status"><p>{t('আগের ডিভাইসের তথ্য লোড হওয়া পর্যন্ত ব্রেইন বদলানো বন্ধ আছে।', 'Brain changes are paused until saved device data has loaded.')}</p></section> : <>
       {!memory?.enabled ? <section className="card brain-panel brain-welcome">
         <span className="brain-mark" aria-hidden="true"><BrainCircuit size={32} /></span>
@@ -49,6 +52,7 @@ export default function StudyBrainView() {
         <div className="brain-layout">
           <div className="brain-main">
             <BrainCheckInForm key={today} pair={brainCurrentPair(data, plan)} reportAvailable={!!data.personalRoutine && !data.routineSetupRequired} />
+            <AiAssistant />
             <BrainRecommendation suggestion={suggestion} />
             <BrainWeeklyReview />
             <BrainInsights />
@@ -339,5 +343,141 @@ function BrainPreflight() {
     </li>)}</ol>
       : <p className="brain-notice">{t('এখনকার রেকর্ডে জরুরি কিছু নেই। নতুন কাজ চাপানো হয়নি।', 'Nothing urgent in your records. No extra work was queued.')}</p>}
     <small>{t('ভুলের ইতিহাস গুণগত মানের প্রমাণ নয়; বারবার ভুল মানে আবার চেষ্টা করা, অধ্যায় বাদ দেওয়া নয়।', 'A miss history is not a judgement of quality; a recurring miss means retry it, not drop the chapter.')}</small>
+  </section>;
+}
+
+type AiMode = 'brain' | 'model';
+type AiMessage = { role: 'user' | 'assistant'; content: string };
+type ModelState = 'checking' | 'not-cached' | 'cached' | 'loading' | 'ready' | 'error';
+
+/**
+ * AI assistant: the instant built-in smart brain, plus an optional on-device
+ * AI model (~140 MB, downloaded once, then fully offline). Chat text is kept
+ * only in this session — never saved, never sent to a server.
+ */
+function AiAssistant() {
+  const { data } = usePlanner();
+  const [mode, setMode] = useState<AiMode>('brain');
+  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [quiz, setQuiz] = useState<QuizQuestion | null>(null);
+  const [picked, setPicked] = useState<number | null>(null);
+  const [modelState, setModelState] = useState<ModelState>('checking');
+  const [progress, setProgress] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let active = true;
+    isAiModelCached()
+      .then(cached => { if (active) setModelState(cached ? 'cached' : 'not-cached'); })
+      .catch(() => { if (active) setModelState('not-cached'); });
+    return () => { active = false; };
+  }, []);
+
+  const switchMode = (next: AiMode) => {
+    setMode(next);
+    setError('');
+    if (next === 'model') { setQuiz(null); setPicked(null); }
+  };
+
+  const downloadModel = async () => {
+    setModelState('loading'); setError(''); setProgress(0);
+    try {
+      await loadAiModel(item => setProgress(Math.round(item.progress ?? 0)));
+      setModelState('ready');
+    } catch (cause) {
+      setModelState('error');
+      setError(aiErrorMessage(cause));
+    }
+  };
+
+  const askQuiz = () => {
+    const answer = answerAiQuestion('কুইজ দাও', data);
+    if (answer.kind === 'quiz') { setQuiz(answer.question); setPicked(null); }
+    setMessages(current => [...current, { role: 'assistant', content: answer.text }]);
+  };
+
+  const send = async (event: FormEvent) => {
+    event.preventDefault();
+    const text = input.trim();
+    if (!text || busy) return;
+    setInput(''); setError('');
+    if (mode === 'brain') {
+      setMessages(current => [...current, { role: 'user', content: text }]);
+      const answer = answerAiQuestion(text, data);
+      if (answer.kind === 'quiz') { setQuiz(answer.question); setPicked(null); }
+      setMessages(current => [...current, { role: 'assistant', content: answer.text }]);
+      return;
+    }
+    const history: AiMessage[] = [...messages, { role: 'user', content: text }];
+    setMessages(history);
+    setBusy(true);
+    try {
+      const reply = await chatWithAi(history, item => setProgress(Math.round(item.progress ?? 0)));
+      setMessages(current => [...current, { role: 'assistant', content: reply }]);
+    } catch (cause) {
+      setError(aiErrorMessage(cause));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const answerQuiz = (index: number) => {
+    if (!quiz || picked !== null) return;
+    setPicked(index);
+    const result = checkQuizAnswer(quiz, index);
+    setMessages(current => [...current, { role: 'assistant', content: result.text }]);
+  };
+
+  const modelReady = modelState === 'cached' || modelState === 'ready';
+  return <section className="card brain-panel ai-panel" aria-labelledby="ai-title">
+    <h2 id="ai-title"><Bot size={20} aria-hidden="true" />{t('ডিভাইস AI সহকারী', 'On-device AI assistant')}</h2>
+    <p>{t('স্মার্ট ব্রেইন এখনই উত্তর দেয় — অধ্যায়, কুইজ, টিপস, অগ্রগতি। AI মডেল মোডে খোলামেলা প্রশ্ন করতে পারো; মডেল একবার ডাউনলোড হলে সম্পূর্ণ অফলাইনে চলে। চ্যাটের লেখা সেভ হয় না।', 'The smart brain answers instantly — chapters, quizzes, tips, progress. In AI model mode you can ask open-ended questions; once downloaded the model runs fully offline. Chat text is never saved.')}</p>
+    <div className="ai-modes" role="group" aria-label={t('AI মোড', 'AI mode')}>
+      <button type="button" className={`button secondary ${mode === 'brain' ? 'selected' : ''}`} aria-pressed={mode === 'brain'} onClick={() => switchMode('brain')}><BrainCircuit size={16} aria-hidden="true" />{t('স্মার্ট ব্রেইন', 'Smart brain')}</button>
+      <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t(`AI মডেল (~${bn(AI_MODEL_SIZE_MB)} MB)`, `AI model (~${AI_MODEL_SIZE_MB} MB)`)}</button>
+    </div>
+
+    {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
+      <p>{modelState === 'checking'
+        ? t('মডেল ডাউনলোড করা আছে কি না দেখছি…', 'Checking whether the model is already downloaded…')
+        : t(`প্রথমবার ~${bn(AI_MODEL_SIZE_MB)} MB ডাউনলোড হবে (SmolLM2-135M, Q8)। তারপর আর ইন্টারনেট লাগবে না; মডেল ডিভাইসেই চলবে।`, `The first time downloads ~${AI_MODEL_SIZE_MB} MB (SmolLM2-135M, Q8). After that no internet is needed; the model runs on this device.`)}</p>
+      <button type="button" className="button primary" disabled={modelState === 'checking'} onClick={() => void downloadModel()}><Download size={16} aria-hidden="true" />{t('AI মডেল ডাউনলোড করো', 'Download AI model')}</button>
+    </div>}
+
+    {mode === 'model' && modelState === 'loading' && <div className="ai-download" role="status" aria-live="polite">
+      <p>{t('AI মডেল ডাউনলোড ও চালু হচ্ছে… ইন্টারনেট বন্ধ কোরো না।', 'Downloading and starting the AI model… keep the internet on.')}</p>
+      <div className="ai-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
+      <small>{bn(progress)}%</small>
+    </div>}
+
+    {mode === 'model' && modelReady && <p className="ai-ready" role="status">{t('মডেল প্রস্তুত — প্রশ্ন পাঠালেই ডিভাইসেই উত্তর আসবে।', 'Model ready — send a question and the answer comes from this device.')}</p>}
+
+    {messages.length > 0 && <div className="ai-messages" aria-live="polite">
+      {messages.map((message, index) => <p key={index} className={`ai-message ${message.role}`}>{message.content}</p>)}
+    </div>}
+
+    {mode === 'brain' && quiz && picked === null && <div className="ai-quiz" role="group" aria-label={t('কুইজের অপশন', 'Quiz options')}>
+      {quiz.options.map((option, index) => <button type="button" key={index} className="button secondary" onClick={() => answerQuiz(index)}>{option}</button>)}
+    </div>}
+    {mode === 'brain' && quiz && picked !== null && <div className="ai-quiz">
+      <button type="button" className="button secondary" onClick={askQuiz}><RotateCcw size={16} aria-hidden="true" />{t('আরেকটা কুইজ দাও', 'Give me another quiz')}</button>
+    </div>}
+
+    {error && <p className="field-error" role="alert">{error}</p>}
+
+    <form className="ai-input" onSubmit={event => void send(event)}>
+      <label htmlFor="ai-input">{mode === 'brain'
+        ? t('জিজ্ঞেস করো — যেমন “পদার্থের অধ্যায়গুলো কী?”, “কুইজ দাও”, “আমার অগ্রগতি?”', 'Ask — for example “What are the Physics chapters?”, “Give me a quiz”, “My progress?”')
+        : t('AI-কে জিজ্ঞেস করো (বাংলা / Banglish / English)', 'Ask the AI (Bengali / Banglish / English)')}</label>
+      <div>
+        <input id="ai-input" value={input} maxLength={500} autoComplete="off" disabled={busy || (mode === 'model' && !modelReady)} placeholder={t('এখানে লেখো…', 'Type here…')} onChange={event => setInput(event.target.value)} />
+        <button type="submit" className="button primary" disabled={!input.trim() || busy || (mode === 'model' && !modelReady)}>
+          {busy ? <Loader2 size={16} aria-hidden="true" className="ai-spin" /> : <Send size={16} aria-hidden="true" />}
+          {t('পাঠাও', 'Send')}
+        </button>
+      </div>
+    </form>
   </section>;
 }
