@@ -116,6 +116,26 @@ public class MobileShellInstrumentedTest {
     assertTrue("Could not retain emulator evidence: " + files, files.contains(".png") || files.contains("measurements.jsonl"));
   }
 
+  /** Dismisses a SYSTEM ANR dialog ("Wait" = keep it running) with two
+   * strategies, since a disposable emulator must never kill the launcher and
+   * uiautomator cannot always see the dialog. Returns true if it acted. */
+  private boolean dismissSystemAnr() throws Exception {
+    // 1) The dialog's default action is Wait; ENTER usually selects it.
+    shell("input keyevent KEYCODE_ENTER");
+    SystemClock.sleep(200);
+    if (!focusedWindowLines(shell("dumpsys window")).contains("Application Not Responding")) return true;
+    // 2) Fall back to the bottom-right button band of the dialog, which is
+    //    where "Wait" lives on both API 34 and 35 at every density. This tap is
+    //    only ever issued while a system ANR (not this app) owns the window.
+    String size = shell("wm size").trim();
+    java.util.regex.Matcher m = java.util.regex.Pattern.compile("(\\d+)x(\\d+)").matcher(size);
+    if (m.find()) {
+      int w = Integer.parseInt(m.group(1)), h = Integer.parseInt(m.group(2));
+      shell("input tap " + (w * 3 / 4) + " " + (h * 3 / 4));
+    }
+    return true;
+  }
+
   private String shell(String command) throws Exception {
     try (InputStream stream = new ParcelFileDescriptor.AutoCloseInputStream(
       InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand(command)
@@ -177,36 +197,36 @@ public class MobileShellInstrumentedTest {
       SystemClock.sleep(100);
     }
     // On API 35 the system launcher can throw its own ANR dialog while the
-    // WebView is still settling. That dialog takes the input focus away from
-    // our window, so every later tap would be refused. Dismiss only that
-    // system-owned ANR (never our app, never a permission/keyguard dialog),
-    // then let the ordinary focus wait finish on its own.
-    String owner = focusedWindowLines(shell("dumpsys window"));
-    if (owner.contains("Application Not Responding") && !owner.contains("com.prostuti.hsc27")) {
-      record("system-anr-dismissed", new JSONObject().put("windowOwner", owner));
-      shell("input keyevent KEYCODE_ENTER");
-      long retryUntil = SystemClock.elapsedRealtime() + 15000;
-      while (SystemClock.elapsedRealtime() < retryUntil) {
-        boolean[] focused = new boolean[1];
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> focused[0] = web.hasWindowFocus());
-        if (focused[0]) return;
+    // WebView is still settling — sometimes only after the first wait above.
+    // That dialog takes the input focus away from our window, so every later
+    // tap would be refused. Dismiss ONLY a system-owned ANR (never our app,
+    // never a permission/keyguard dialog) and keep checking, because the
+    // dialog can reappear. Nothing about our own window is bypassed.
+    long anrUntil = SystemClock.elapsedRealtime() + 45000;
+    int dismissals = 0;
+    while (SystemClock.elapsedRealtime() < anrUntil) {
+      boolean[] focused = new boolean[1];
+      InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> focused[0] = web.isAttachedToWindow() && web.isShown() && web.hasWindowFocus());
+      if (focused[0]) {
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> { });
         SystemClock.sleep(150);
-        // A second ANR can appear while the first is closing; keep pressing OK.
-        String again = focusedWindowLines(shell("dumpsys window"));
-        // Our Activity may also just take longer than this loop once the dialog
-        // is gone; do not press OK a second time merely because focus is slow.
-        if (again.contains("Application Not Responding") && !again.contains("com.prostuti.hsc27")) shell("input keyevent KEYCODE_ENTER");
+        boolean[] again = new boolean[1];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> again[0] = web.hasWindowFocus());
+        if (again[0]) return;
+        continue;
       }
-      // One unpressured wait for the window that the dialog was covering.
-      long graceUntil = SystemClock.elapsedRealtime() + 15000;
-      while (SystemClock.elapsedRealtime() < graceUntil) {
-        boolean[] focused = new boolean[1];
-        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> focused[0] = web.hasWindowFocus());
-        if (focused[0]) return;
-        SystemClock.sleep(100);
+      String owner = focusedWindowLines(shell("dumpsys window"));
+      if (owner.contains("Application Not Responding") && !owner.contains("com.prostuti.hsc27")) {
+        if (dismissals == 0) record("system-anr-dismissed", new JSONObject().put("windowOwner", owner));
+        dismissals++;
+        // The ANR dialog's default action is "Wait" (keep the app running) —
+        // exactly what a disposable emulator needs.
+        dismissSystemAnr();
       }
-      owner = focusedWindowLines(shell("dumpsys window"));
+      SystemClock.sleep(250);
     }
+    String owner = focusedWindowLines(shell("dumpsys window"));
+    if (dismissals > 0) record("system-anr-attempts", new JSONObject().put("dismissals", dismissals).put("windowOwner", owner));
     PowerManager power = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(PowerManager.class);
     KeyguardManager keyguard = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(KeyguardManager.class);
     record("unfocused-input", new JSONObject().put("interactive", power.isInteractive()).put("keyguardLocked", keyguard.isKeyguardLocked()).put("windowOwner", owner));

@@ -24,7 +24,7 @@ jobs:
   direct-download:
     name: Inspect and publish direct development download
     if: >-
-      ${{ github.ref == 'refs/heads/arena/80a86bf2-hsc-27' && (
+      ${{ (github.ref == 'refs/heads/arena/80a86bf2-hsc-27' || github.ref == 'refs/heads/main') && (
         (github.event_name == 'workflow_dispatch' && inputs.confirm_development_download == true) ||
         (github.event_name == 'push' && contains(github.event.head_commit.message, '[direct-apk]'))
       ) }}
