@@ -1,3 +1,4 @@
+import './test/pinnedDate';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CHAPTERS } from './data';
 import { emptyAdvanced } from './advanced';

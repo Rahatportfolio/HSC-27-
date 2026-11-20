@@ -1,3 +1,4 @@
+import './test/pinnedDate';
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS, CORE, PAPERS } from './data';
 import {

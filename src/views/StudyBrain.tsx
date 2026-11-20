@@ -1,17 +1,19 @@
 import { brainChapterGuide, studyBrainPlaybook } from '../studyBrainPlaybook';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
-import { BrainCircuit, CalendarDays, Check, MessageCircle, Pause, Play, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
+import { BrainCircuit, CalendarDays, Check, ChevronRight, MessageCircle, Pause, Play, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeading } from '../components';
 import { usePlanner } from '../context';
 import { chapterById } from '../data';
 import { bn, formatDate, formatTime } from '../planner';
+import { brainConsistency, brainEnergyOutput, brainPaceProjection, brainPreflight, brainTimeOfDay } from '../brainInsights';
 import { personalBookLabel, weeklyWindows, WORK_STAGES } from '../personalRoutine';
-import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, forgetStudyBrain, interpretBrainMessage, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
+import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, forgetStudyBrain, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
+import { interpretBrainMessage } from '../studyBrainIntents';
 import type { BrainSuggestion } from '../studyBrain';
 import { brainStatusText } from '../studyBrainText';
 import type { BrainCheckInDraft, BrainEnergy, BrainObstacle } from '../studyBrainTypes';
-import { t } from '../i18n';
+import { t, weekdayName } from '../i18n';
 
 const energyLabel = (value: BrainEnergy) => value === 'low' ? t('ক্লান্ত / শক্তি কম', 'Tired / low energy') : value === 'fresh' ? t('বেশ চনমনে', 'Feeling fresh') : t('মোটামুটি', 'Doing okay');
 const obstacleLabel = (value: BrainObstacle) => value === 'understanding' ? t('বুঝতে সমস্যা', 'Understanding') : value === 'remembering' ? t('মনে রাখতে সমস্যা', 'Remembering') : value === 'starting' ? t('শুরু করতে কষ্ট', 'Getting started') : t('নির্দিষ্ট বাধা নেই', 'No particular obstacle');
@@ -49,7 +51,9 @@ export default function StudyBrainView() {
             <BrainCheckInForm key={today} pair={brainCurrentPair(data, plan)} reportAvailable={!!data.personalRoutine && !data.routineSetupRequired} />
             <BrainRecommendation suggestion={suggestion} />
             <BrainWeeklyReview />
+            <BrainInsights />
             {suggestion.pair.length > 0 && data.personalRoutine && !data.routineSetupRequired && <BrainChapterGuides pair={suggestion.pair} />}
+            <BrainPreflight />
             {revision.length > 0 && <section className="card brain-panel" aria-labelledby="brain-revision-title">
               <h2 id="brain-revision-title">{t('ঝালাইয়ের তালিকা', 'Revision queue')}</h2>
               <p>{t('বর্তমান জোড়ার রেকর্ড। বেশি অমীমাংসিত ভুল আগে, তারপর সাম্প্রতিক MCQ-তে ভুল। এটি নতুন রুটিন নয়।', 'Current pair only. Unresolved mistakes first, then recent MCQ misses. This does not add anything to your schedule.')}</p>
@@ -89,7 +93,7 @@ export default function StudyBrainView() {
 }
 
 function BrainCheckInForm({ pair, reportAvailable }: { pair: string[]; reportAvailable: boolean }) {
-  const { data, setData, today, now, storageOk, notify } = usePlanner();
+  const { data, setData, today, now, storageOk, notify, plan: brainPlan } = usePlanner();
   const saved = data.studyBrain?.checkIns.find(item => item.date === today);
   const [energy, setEnergy] = useState<BrainEnergy>(saved?.energy || 'okay');
   const [minutes, setMinutes] = useState(saved?.availableMinutes === null || saved?.availableMinutes === undefined ? '' : String(saved.availableMinutes));
@@ -111,10 +115,29 @@ function BrainCheckInForm({ pair, reportAvailable }: { pair: string[]; reportAva
       setReply(reportAvailable ? t('নিচে সাপ্তাহিক রিপোর্ট ও ঝালাইয়ের নির্দেশনা দেখো। কিছু বদলাইনি।', 'See your weekly report and any available revision guidance below. Nothing was changed.') : t('রিপোর্টের আগে ব্যক্তিগত রুটিন সেটআপ শেষ করো।', 'Finish personal routine setup before opening the report.'));
       if (reportAvailable) scrollTo('brain-weekly-title');
     }
+    else if (result.kind === 'pace') {
+      const pace = reportAvailable ? brainPaceProjection(data, brainPlan, now) : null;
+      setReply(pace?.enough && pace.projectedFinish
+        ? t(`গত ২৮ পূর্ণ দিনের গতি ≈${bn(pace.minutesPerDay!)} মিনিট/দিন। এই গতিতে বাকি ≈${bn(pace.neededAfterToday)} মিনিট কাজ শেষ হতে পারে ≈${formatDate(pace.projectedFinish)} (${bn(pace.projectedDays!)} দিনে)। এটি রেকর্ড থেকে আনুমানিক; পরীক্ষার গ্যারান্টি নয়। রুটিন বদলাইনি।`, `At your recent pace (about ${pace.minutesPerDay} minutes per full day over 28 days), the remaining about ${pace.neededAfterToday} minutes could finish around ${formatDate(pace.projectedFinish)} (in ${pace.projectedDays} days). An estimate from saved records, not a guarantee; your routine is unchanged.`)
+        : t('এখনো pace ধরার মতো তথ্য কম (অন্তত ≈৫ মিনিট/দিন গড় দরকার)। পরের সেশনগুলো সেভ হতে থাকুক; কিছু বদলাইনি।', 'Not enough saved data for a pace estimate yet (needs at least about 5 minutes per full day). Keep logging sessions; nothing changed.'));
+      if (reportAvailable) scrollTo('brain-insights');
+    }
+    else if (result.kind === 'preflight') {
+      const rows = reportAvailable ? brainPreflight(data, brainPlan, now) : [];
+      setReply(rows.length
+        ? t(`${bn(rows.length)}টি অগ্রাধিকার সাজিয়েছি—নিচে “আগে এগুলো ঠিক করো” অংশে দেখো। নতুন কোনো কাজ বা রুটিন যোগ করিনি।`, `I arranged ${rows.length} priorit${rows.length === 1 ? 'y' : 'ies'}—see “Fix these first” below. No new work or routine was added.`)
+        : t('অমীমাংসিত ভুল বা বকেয়া ঝালাইয়ের রেকর্ড নেই। নতুন কিছু চাপাইনি; বর্তমান বরাদ্দ ধরে এগোও।', 'No unresolved-mistake or overdue-revision records. Nothing new was queued; keep the current allocation.'));
+      scrollTo('brain-preflight');
+    }
+    else if (result.kind === 'consistency') {
+      const streak = brainConsistency(data, now);
+      setReply(t(`গত ২৮ দিনের মধ্যে ${bn(streak.activeDays)} দিনে মোট ≈${bn(streak.minutes)} মিনিট পড়েছ${streak.bestWeekday !== null ? `; সবচেয়ে ভালো ${weekdayName(streak.bestWeekday)}` : ''}। বর্তমান ধারা ${bn(streak.currentStreak)} দিন। পূর্ণ ছবি “২৮ দিনের পূর্ণ ছবি”-তে দেখো।`, `In the last 28 days you logged about ${streak.minutes} minutes across ${streak.activeDays} days${streak.bestWeekday !== null ? `; best on ${weekdayName(streak.bestWeekday)}` : ''}; current streak ${streak.currentStreak} days. See the full picture in “The full 28-day picture”.`));
+      scrollTo('brain-insights');
+    }
     else if (result.kind === 'memory') { setReply(t('“তোমার হাতে স্মৃতি” অংশে কী রাখা আছে দেখো। চ্যাটের লেখা সেভ হয় না।', 'See “Memory you control” for retained choices. Chat text is not saved.')); scrollTo('brain-memory'); }
     else if (result.kind === 'invalid-time') setReply(t('সময়টা স্পষ্ট হয়নি। ০–৭২০ মিনিটের একটি সময় বলো; যেমন “আজ ৩০ মিনিট সময় আছে”। কোনো পরিবর্তন হয়নি।', 'The time is unclear. Give one duration from 0–720 minutes, for example “I have 30 minutes”. Nothing changed.'));
     else if (result.kind === 'unsupported') setReply(t('এ লেখা দিয়ে কাজ সম্পন্ন, লগ বা তথ্য মোছা হয় না। নির্দিষ্ট কাজের নিজস্ব নিয়ন্ত্রণ ব্যবহার করো।', 'Text cannot mark work complete, log a session or delete data. Use the specific task’s own controls.'));
-    else setReply(t('পুরোটা বুঝিনি। “aj 30 min time ache”, “ক্লান্ত”, “ki porbo” বা নিচের বাছাইগুলো চেষ্টা করো। অচেনা কথা থেকে কিছু আন্দাজ করিনি।', 'I did not understand all of that. Try “aj 30 min time ache”, “tired”, “what next”, or the choices below. I did not guess from an unknown request.'));
+    else setReply(t('পুরোটা বুঝিনি। “aj 30 min time ache”, “ক্লান্ত”, “ki porbo”, “pace”, “ki age thik korbo” বা “streak” চেষ্টা করো। অচেনা কথা থেকে কিছু আন্দাজ করিনি।', 'I did not understand all of that. Try “aj 30 min time ache”, “tired”, “what next”, “pace”, “what should I fix first”, or “streak”. I did not guess from an unknown request.'));
     setMessage('');
   };
   const save = (event: FormEvent) => {
@@ -130,7 +153,7 @@ function BrainCheckInForm({ pair, reportAvailable }: { pair: string[]; reportAva
     <h2><MessageCircle size={20} aria-hidden="true" />{t('আজ তোমার কী অবস্থা?', 'How is today feeling?')}</h2><p>{formatDate(today, 'long')} · {t('সেভ না করা পর্যন্ত সবটাই খসড়া।', 'Everything is a draft until you save.')}</p>
     <form className="brain-message" onSubmit={interpret}>
       <label htmlFor="brain-message">{t('ছোট করে বলো (বাংলা / Banglish / English)', 'Say it briefly (Bengali / Banglish / English)')}</label>
-      <div><input id="brain-message" value={message} maxLength={BRAIN_LIMITS.message} autoComplete="off" placeholder={t('aj 30 min ache, onek tired', 'I have 30 min, feeling tired')} onChange={event => setMessage(event.target.value)} /><button type="submit" className="button secondary" disabled={!message.trim()}><Send size={16} aria-hidden="true" />{t('বুঝে দেখো', 'Interpret')}</button></div>
+      <div><input id="brain-message" value={message} maxLength={BRAIN_LIMITS.message} autoComplete="off" placeholder={t('aj 30 min ache, onek tired / pace / ki age thik korbo', 'I have 30 min, tired / pace / what should I fix first')} onChange={event => setMessage(event.target.value)} /><button type="submit" className="button secondary" disabled={!message.trim()}><Send size={16} aria-hidden="true" />{t('বুঝে দেখো', 'Interpret')}</button></div>
     </form>
     {reply && <p className="brain-reply" role="status">{reply}</p>}
     <form className="brain-check-in-form" onSubmit={save} noValidate>
@@ -249,5 +272,72 @@ function BrainChapterGuides({ pair }: { pair: readonly string[] }) {
         <p><strong>{t('কীভাবে অনুশীলন করবে', 'How to practise')}:</strong> {t(...guide.method)}</p>
       </details>;
     })}
+  </section>;
+}
+
+const TIME_BUCKET_LABEL = (bucket: 'morning' | 'afternoon' | 'evening' | 'night') => ({
+  morning: t('সকাল (৫–১২)', 'Morning (5–12)'), afternoon: t('দুপুর–বিকেল (১২–৫)', 'Afternoon (12–5)'),
+  evening: t('সন্ধ্যা (৫–৯)', 'Evening (5–9)'), night: t('রাত (৯–৫)', 'Night (9–5)'),
+}[bucket]);
+
+function BrainInsights() {
+  const { data, plan, now } = usePlanner();
+  const consistency = useMemo(() => brainConsistency(data, now), [data, now]);
+  const timeOfDay = useMemo(() => brainTimeOfDay(data, now), [data, now]);
+  const energy = useMemo(() => brainEnergyOutput(data, now), [data, now]);
+  const routineReady = !!data.personalRoutine && !data.routineSetupRequired;
+  const pace = useMemo(() => routineReady ? brainPaceProjection(data, plan, now) : null, [routineReady, data, plan, now]);
+  const maxBucket = Math.max(1, ...timeOfDay.rows.map(row => row.minutes));
+  const weekdayLabel = consistency.bestWeekday !== null ? weekdayName(consistency.bestWeekday) : t('এখনও নেই', 'none yet');
+  return <section className="card brain-panel" id="brain-insights" aria-labelledby="brain-insights-title">
+    <h2 id="brain-insights-title">{t('২৮ দিনের পূর্ণ ছবি', 'The full 28-day picture')}</h2>
+    <p>{t('শুধু সেভ করা S সেশন ও নিজের চেক-ইন। ঢাকার ঘড়ি অনুযায়ী সময়। পড়ার ধরন দেখায়—ক্ষমতার বিচার নয়।', 'From saved S sessions and your own check-ins, on the Dhaka clock. It shows your rhythm; it does not judge your ability.')}</p>
+    <dl className="brain-facts">
+      <div><dt>{t('সক্রিয় পড়ার দিন / মোট মিনিট', 'Study days / total minutes')}</dt><dd>{t(`২৮ দিনের মধ্যে ${bn(consistency.activeDays)} দিন · ≈${bn(consistency.minutes)} মিনিট`, `${consistency.activeDays} of 28 days · ≈${consistency.minutes} minutes`)}</dd></div>
+      <div><dt>{t('সবচেয়ে শক্তিশালী দিন', 'Strongest weekday')}</dt><dd>{t(`${weekdayLabel} · ≈${bn(consistency.bestWeekdayMinutes)} মিনিট`, `${weekdayLabel} · ≈${consistency.bestWeekdayMinutes} minutes`)}</dd></div>
+      <div><dt>{t('টানা পড়ার ধারা', 'Study streaks')}</dt><dd>{t(`বর্তমান ${bn(consistency.currentStreak)} দিন · দীর্ঘতম ${bn(consistency.longestStreak)} দিন`, `Current ${consistency.currentStreak} days · longest ${consistency.longestStreak} days`)}</dd></div>
+    </dl>
+    <h3>{t('কোন সময়ে পড়ো', 'When you study')}</h3>
+    {timeOfDay.enough ? <ul className="brain-meter-list">{timeOfDay.rows.map(row => <li key={row.bucket} className="brain-meter-row">
+      <span>{TIME_BUCKET_LABEL(row.bucket)}</span>
+      <span className="brain-meter" aria-hidden="true"><span style={{ width: `${Math.round(row.minutes / maxBucket * 100)}%` }} /></span>
+      <small>{t(`≈${bn(row.minutes)} মি · ${bn(row.sessions)} সেশন`, `≈${row.minutes} min · ${row.sessions} sessions`)}</small>
+    </li>)}</ul>
+      : <p className="brain-notice">{t(`সময়ের ধরন ধরতে অন্তত ৫টি সেভ করা সেশন লাগবে; এখন ${bn(timeOfDay.total.sessions)}টি। কিছু অনুমান করিনি।`, `At least 5 saved sessions are needed to show a time-of-day pattern; you have ${timeOfDay.total.sessions}. Nothing guessed.`)}</p>}
+    <h3>{t('শক্তি বনাম আউটপুট', 'Energy vs output')}</h3>
+    {energy.enough ? <ul className="brain-memory-list">{energy.rows.map(row => <li key={row.energy}>
+      <strong>{row.energy === 'low' ? t('ক্লান্ত', 'Tired') : row.energy === 'fresh' ? t('চনমনে', 'Fresh') : t('মোটামুটি', 'Okay')}</strong>
+      <span>{t(`${bn(row.days)}টি চেক-ইন দিনে ≈${bn(row.minutes)} মিনিট · গড়ে দিনে ≈${row.avgMinutes === null ? '—' : bn(row.avgMinutes)} মিনিট`, `${row.days} check-in days · ≈${row.minutes} minutes · ≈${row.avgMinutes ?? '—'} minutes per day`)}</span>
+    </li>)}</ul>
+      : <p className="brain-notice">{t(`শক্তির সাথে পড়ার যোগ দেখতে অন্তত ৪টি চেক-ইন দিন লাগবে; এখন ${bn(energy.joinedDays)}টি। কিছু অনুমান করিনি।`, `At least 4 check-in days are needed to join energy with output; you have ${energy.joinedDays}. Nothing guessed.`)}</p>}
+    {pace && <><h3>{t('এই গতিতে কবে শেষ হতে পারে', 'Where this pace could take you')}</h3>
+      {pace.enough && pace.projectedFinish
+        ? <p className="brain-notice">{t(`গত ২৮ পূর্ণ দিনে গড়ে ≈${bn(pace.minutesPerDay!)} মিনিট/দিন। এই গতিতে বর্তমান S জোড়ার বাকি ≈${bn(pace.neededAfterToday)} মিনিট কাজ শেষ হতে পারে ≈${formatDate(pace.projectedFinish)} (${bn(pace.projectedDays!)} দিনে)। এটি তোমার রেকর্ড থেকে আনুমানিক—পরীক্ষার গ্যারান্টি নয়; রুটিন বদলাইনি।`, `About ${pace.minutesPerDay} minutes per full day over the last 28 days. At that pace the remaining about ${pace.neededAfterToday} minutes in the current S pair could finish around ${formatDate(pace.projectedFinish)} (in ${pace.projectedDays} days). An estimate from your records—not a guarantee; your routine is unchanged.`)}</p>
+        : <p className="brain-notice">{t(`Pace ধরার মতো তথ্য কম (অন্তত ≈৫ মিনিট/দিন গড় ও বাকি কাজ লাগবে)। বাকি কাজ ≈${bn(pace.neededAfterToday)} মিনিট। কিছু চাপিয়ে দিইনি।`, `Not enough data for a pace estimate (needs at least about 5 minutes per full day plus remaining work). Remaining work ≈${pace.neededAfterToday} minutes. Nothing was promised.`)}</p>}
+    </>}
+    <small>{t('আজকের অসম্পূর্ণ দিন জোড়ে গণা হয়নি। ব্রেইনের স্মৃতি মুছলেও মূল পড়ার লগ থেকে এই হিসাব দেখা যায়।', 'Today’s open day is excluded. These calculations read the original study log, so forgetting brain memory does not erase them.')}</small>
+  </section>;
+}
+
+const PRELIGHT_LABEL = (row: ReturnType<typeof brainPreflight>[number]) => ({
+  recurring: t(`বারবার ভুল MCQ · ${bn(row.count)}`, `Recurring MCQ misses · ${row.count}`),
+  'mcq-misses': t(`সাম্প্রতিক MCQ-তে ${bn(row.count)} ভুল`, `Recent MCQ misses · ${row.count}`),
+  mistakes: t(`অমীমাংসিত ভুল · ${bn(row.count)}`, `Open mistake records · ${row.count}`),
+  'revision-due': t(`বকেয়া ঝালাই · ${bn(row.count)} (${row.dueDate ? `${formatDate(row.dueDate)} থেকে` : ''})`, `Overdue revision · ${row.count}${row.dueDate ? ` (since ${formatDate(row.dueDate)})` : ''}`),
+}[row.kind]);
+
+function BrainPreflight() {
+  const { data, plan, now, navigate } = usePlanner();
+  const ready = !!data.personalRoutine && !data.routineSetupRequired;
+  const rows = useMemo(() => ready ? brainPreflight(data, plan, now) : [], [ready, data, plan, now]);
+  return <section className="card brain-panel" id="brain-preflight" aria-labelledby="brain-preflight-title">
+    <h2 id="brain-preflight-title">{t('পরের ঝালাইয়ের আগে এগুলো ঠিক করো', 'Fix these before your next review')}</h2>
+    <p>{t('বর্তমান S জোড়ার ভুল ও সব S তালিকার বকেয়া ঝালাই মিলিয়ে rule-based অগ্রাধিকার। নতুন কাজ/রুটিন তৈরি করে না।', 'Rule-based priorities merging current-pair mistakes with overdue revisions across your selected S list. Nothing is added to your schedule.')}</p>
+    {rows.length ? <ol className="brain-preflight-list">{rows.map(row => <li key={row.key}>
+      <span><strong>{chapterById[row.chapterId].title}</strong><small>{PRELIGHT_LABEL(row)}</small></span>
+      <button type="button" className="button secondary" onClick={() => navigate(row.route)}>{t(row.route === 'practice' ? 'অনুশীলন খুলো' : row.route === 'weakness' ? 'দুর্বলতা ডিটেক্টর খুলো' : 'রিভিশন খুলো', row.route === 'practice' ? 'Open practice' : row.route === 'weakness' ? 'Open weakness detector' : 'Open revision')}<ChevronRight size={16} aria-hidden="true" /></button>
+    </li>)}</ol>
+      : <p className="brain-notice">{t('এখনকার রেকর্ডে জরুরি কিছু নেই। নতুন কাজ চাপানো হয়নি।', 'Nothing urgent in your records. No extra work was queued.')}</p>}
+    <small>{t('ভুলের ইতিহাস গুণগত মানের প্রমাণ নয়; বারবার ভুল মানে আবার চেষ্টা করা, অধ্যায় বাদ দেওয়া নয়।', 'A miss history is not a judgement of quality; a recurring miss means retry it, not drop the chapter.')}</small>
   </section>;
 }

@@ -8,7 +8,8 @@ import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture
 import { defaultChapterWorkload, isPersonalTaskComplete, personalUnfinishedRanges, RECOMMENDED_S_IDS } from './personalRoutine';
 import { setTaskCompletion } from './study';
 import { STARTER_QUESTIONS } from './quiz-data';
-import { BRAIN_LIMITS, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, brainChapterEvidence, brainCurrentPair, brainStudyPattern, forgetStudyBrain, interpretBrainMessage, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from './studyBrain';
+import { BRAIN_LIMITS, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, brainChapterEvidence, brainCurrentPair, brainStudyPattern, forgetStudyBrain, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from './studyBrain';
+import { interpretBrainMessage } from './studyBrainIntents';
 import type { BrainCheckInDraft } from './studyBrainTypes';
 
 const now = new Date('2026-11-20T12:05:00.000Z'); // 18:05 Bangladesh, regardless of browser timezone

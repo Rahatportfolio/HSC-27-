@@ -63,7 +63,7 @@ describe('reported mobile clipping and missing clock regressions', () => {
     expect(document.documentElement.dataset.font).toBe('lg');
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     expect(saved.notes['2026-11-15']).toBe('Do not clear notes while repairing the shell');
-    expect(saved.settings.startDate).toBe('2026-11-20');
+    expect(saved.settings.startDate).toBe(freshData().settings.startDate);
   });
 
   it('updates focus/scroll clearance when timer or bottom navigation height changes', () => {
