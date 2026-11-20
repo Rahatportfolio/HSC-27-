@@ -1,3 +1,4 @@
+import { brainChapterGuide, studyBrainPlaybook } from '../studyBrainPlaybook';
 import { useMemo, useState } from 'react';
 import type { FormEvent } from 'react';
 import { BrainCircuit, CalendarDays, Check, MessageCircle, Pause, Play, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
@@ -6,7 +7,7 @@ import { usePlanner } from '../context';
 import { chapterById } from '../data';
 import { bn, formatDate, formatTime } from '../planner';
 import { personalBookLabel, weeklyWindows, WORK_STAGES } from '../personalRoutine';
-import { BRAIN_LIMITS, brainCurrentPair, forgetStudyBrain, interpretBrainMessage, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
+import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, forgetStudyBrain, interpretBrainMessage, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
 import type { BrainSuggestion } from '../studyBrain';
 import { brainStatusText } from '../studyBrainText';
 import type { BrainCheckInDraft, BrainEnergy, BrainObstacle } from '../studyBrainTypes';
@@ -22,6 +23,7 @@ export default function StudyBrainView() {
   const memory = data.studyBrain;
   const suggestion = useMemo(() => studyBrainSuggestion(data, plan, now), [data, plan, now]);
   const ready = routineSetupReady !== false;
+  const revision = useMemo(() => ready && data.personalRoutine && !data.routineSetupRequired ? brainRevisionQueue(data, suggestion.pair, now) : [], [ready, data, suggestion.pair, now]);
   const forget = () => confirm({ title: t('শুধু ব্রেইনের স্মৃতি মুছবে?', 'Forget only the brain’s memory?'),
     message: t('ব্রেইনের পছন্দ, চেক-ইন ও কঠিন/সহজ ফিডব্যাক মুছবে, ব্রেইন বন্ধ হবে। পড়ার ইতিহাস, নোট, স্ক্যান, S তালিকা ও রুটিন অক্ষত থাকবে। পুরোনো ব্যাকআপে এই স্মৃতি থাকতে পারে; এটি encrypted vault নয়।', 'This removes brain preferences, check-ins and difficulty feedback, then turns the brain off. Study history, notes, scans, S selection and routine stay intact. Earlier backups may still contain this memory; it is not an encrypted vault.'),
     label: t('শুধু ব্রেইনের স্মৃতি মুছো', 'Forget brain memory only'), danger: true,
@@ -44,8 +46,26 @@ export default function StudyBrainView() {
         {!storageOk && <p className="brain-notice" role="alert">{t('স্টোরেজে সেভ হচ্ছে না। নতুন স্মৃতি সেভ করা বন্ধ; আগে ব্যাকআপ/স্টোরেজ ঠিক করো।', 'Storage is not saving. New memory changes are disabled; review backup/storage first.')}</p>}
         <div className="brain-layout">
           <div className="brain-main">
-            <BrainCheckInForm key={today} pair={brainCurrentPair(data, plan)} />
+            <BrainCheckInForm key={today} pair={brainCurrentPair(data, plan)} reportAvailable={!!data.personalRoutine && !data.routineSetupRequired} />
             <BrainRecommendation suggestion={suggestion} />
+            <BrainWeeklyReview />
+            {suggestion.pair.length > 0 && data.personalRoutine && !data.routineSetupRequired && <BrainChapterGuides pair={suggestion.pair} />}
+            {revision.length > 0 && <section className="card brain-panel" aria-labelledby="brain-revision-title">
+              <h2 id="brain-revision-title">{t('ঝালাইয়ের তালিকা', 'Revision queue')}</h2>
+              <p>{t('বর্তমান জোড়ার রেকর্ড। বেশি অমীমাংসিত ভুল আগে, তারপর সাম্প্রতিক MCQ-তে ভুল। এটি নতুন রুটিন নয়।', 'Current pair only. Unresolved mistakes first, then recent MCQ misses. This does not add anything to your schedule.')}</p>
+              <BrainReport rows={revision} resting={suggestion.status === 'rest'} />
+              <ul className="brain-memory-list">{revision.map(row => <li key={row.chapterId}>
+                <strong>{chapterById[row.chapterId].title}</strong>
+                {row.oldestOpen && <span>{t(`${bn(row.open)}টি অমীমাংসিত ভুল · সবচেয়ে পুরোনো ${formatDate(row.oldestOpen)}`, `${row.open} unresolved mistakes · oldest ${formatDate(row.oldestOpen)}`)}</span>}
+                <span>{row.sampled ? t(`গত ১৪ দিনে ${bn(row.sampled)}টি আলাদা MCQ-এর সর্বশেষ উত্তরে ${bn(row.misses)}টি ভুল।`, `Last 14 days: ${row.misses} misses across the latest answers to ${row.sampled} distinct MCQs.`) : t('গত ১৪ দিনে এই অধ্যায়ের সংযুক্ত MCQ উত্তর নেই।', 'No mapped MCQ answers for this chapter in the last 14 days.')}</span>
+                <small>{row.comparison.matched ? t(
+                  `আগের ৭ দিনের সঙ্গে শেষ ৭ দিন: একই ${bn(row.comparison.matched)}টি MCQ-তে ${bn(row.comparison.corrected)}টি ভুল থেকে ঠিক, ${bn(row.comparison.stillMistaken)}টি দুইবারই ভুল, ${bn(row.comparison.slipped)}টি ঠিক থেকে ভুল।`,
+                  `Previous 7 days vs. latest 7 days: of ${row.comparison.matched} matched MCQs, ${row.comparison.corrected} went from wrong to right, ${row.comparison.stillMistaken} were wrong in both weeks, and ${row.comparison.slipped} went from right to wrong.`
+                ) : t('দুই সপ্তাহে একই প্রশ্নের উত্তর না থাকায় তুলনা করা যাচ্ছে না।', 'No matching questions across the two weeks to compare.')}</small>
+                {row.comparison.stillMistaken > 0 && <small>{t('ঝালাইয়ে আগে বারবার ভুল হওয়া প্রশ্নগুলোর সমাধান না দেখে চেষ্টা করো।', 'When you revise, try the recurring misses first without looking at the answer.')}</small>}
+                {!row.open && !row.misses && <small>{t('ভুলের সংকেত নেই; শেখা শেষের প্রমাণ নয়।', 'No recorded miss to prioritise; not proof of mastery.')}</small>}
+              </li>)}</ul>
+            </section>}
           </div>
           <aside className="card brain-panel brain-memory" id="brain-memory" aria-label={t('ব্রেইন কী মনে রেখেছে', 'What the brain remembers')}>
             <h2><ShieldCheck size={19} aria-hidden="true" />{t('তোমার হাতে স্মৃতি', 'Memory you control')}</h2>
@@ -68,7 +88,7 @@ export default function StudyBrainView() {
   </div>;
 }
 
-function BrainCheckInForm({ pair }: { pair: string[] }) {
+function BrainCheckInForm({ pair, reportAvailable }: { pair: string[]; reportAvailable: boolean }) {
   const { data, setData, today, now, storageOk, notify } = usePlanner();
   const saved = data.studyBrain?.checkIns.find(item => item.date === today);
   const [energy, setEnergy] = useState<BrainEnergy>(saved?.energy || 'okay');
@@ -87,6 +107,10 @@ function BrainCheckInForm({ pair }: { pair: string[] }) {
       if (result.patch.chapterId) setChapterId(result.patch.chapterId);
       setReply(t('বুঝে নিচের খসড়া বাছাই করেছি—এখনো সেভ হয়নি। মিলিয়ে “চেক-ইন মনে রাখো” চাপো।', 'I drafted the fields below—nothing saved yet. Review them, then tap “Remember check-in”.') + (result.outsidePair ? t(' বলা বিষয়টি এখনকার জোড়ায় নেই; নতুন অধ্যায় যোগ করিনি।', ' That subject is outside the current pair; no new chapter was added.') : ''));
     } else if (result.kind === 'next') { setReply(t('নিচে একই জোড়ার পরের কাজ ও কারণ দেখো। কিছু বদলাইনি।', 'Your next step and its reasons are below. Nothing was changed.')); scrollTo('brain-next-step'); }
+    else if (result.kind === 'report') {
+      setReply(reportAvailable ? t('নিচে সাপ্তাহিক রিপোর্ট ও ঝালাইয়ের নির্দেশনা দেখো। কিছু বদলাইনি।', 'See your weekly report and any available revision guidance below. Nothing was changed.') : t('রিপোর্টের আগে ব্যক্তিগত রুটিন সেটআপ শেষ করো।', 'Finish personal routine setup before opening the report.'));
+      if (reportAvailable) scrollTo('brain-weekly-title');
+    }
     else if (result.kind === 'memory') { setReply(t('“তোমার হাতে স্মৃতি” অংশে কী রাখা আছে দেখো। চ্যাটের লেখা সেভ হয় না।', 'See “Memory you control” for retained choices. Chat text is not saved.')); scrollTo('brain-memory'); }
     else if (result.kind === 'invalid-time') setReply(t('সময়টা স্পষ্ট হয়নি। ০–৭২০ মিনিটের একটি সময় বলো; যেমন “আজ ৩০ মিনিট সময় আছে”। কোনো পরিবর্তন হয়নি।', 'The time is unclear. Give one duration from 0–720 minutes, for example “I have 30 minutes”. Nothing changed.'));
     else if (result.kind === 'unsupported') setReply(t('এ লেখা দিয়ে কাজ সম্পন্ন, লগ বা তথ্য মোছা হয় না। নির্দিষ্ট কাজের নিজস্ব নিয়ন্ত্রণ ব্যবহার করো।', 'Text cannot mark work complete, log a session or delete data. Use the specific task’s own controls.'));
@@ -151,9 +175,79 @@ function BrainRecommendation({ suggestion }: { suggestion: BrainSuggestion }) {
     {task && <div className="brain-next-source"><small>{personalBookLabel(task.chapterIds[0])} · {stage ? t(stage.bn, stage.en) : ''}</small><h3>{chapterById[task.chapterIds[0]].title}</h3><p>{t('আসল বরাদ্দ', 'Actual allocation')}: {formatDate(task.date)} · {formatTime(task.startMinute)}–{formatTime(task.endMinute)}</p>{suggestion.range && <p className="brain-focus-length"><strong>{bn(suggestion.focusMinutes)}</strong> {t('মিনিট ছোট ফোকাস', 'minute small focus')}<span>{t('উৎসের বাকি অংশের ভেতর থেকে; পুরো কাজ নয়।', 'Within an uncovered source segment, not the entire task.')}</span></p>}
       {suggestion.range && task.personalWork && <small>{WORK_STAGES.find(item => item.id === task.personalWork!.stage)?.media ? t(`ভিডিও উৎসের প্রায় ${bn(Math.floor(suggestion.range.from / task.sourceMinutes! * task.personalWork.rawMinutes))}–${bn(Math.ceil(suggestion.range.to / task.sourceMinutes! * task.personalWork.rawMinutes))} মিনিট। চলার গতি বদলালেও পূর্ণ ভিডিও ছোট হয় না।`, `Approximately source-video minute ${Math.floor(suggestion.range.from / task.sourceMinutes! * task.personalWork.rawMinutes)}–${Math.ceil(suggestion.range.to / task.sourceMinutes! * task.personalWork.rawMinutes)}. Playback speed does not shorten the full source.`) : t(`কাজের ${bn(suggestion.range.from)}–${bn(suggestion.range.to)} মিনিটের অসমাপ্ত অংশ।`, `Uncovered work minute ${suggestion.range.from}–${suggestion.range.to}.`)}</small>}
     </div>}
-    {suggestion.range && <details className="brain-reasons" open><summary>{t('কেন এই পরামর্শ?', 'Why this suggestion?')}</summary><ul><li>{t(`তোমার পছন্দ সর্বোচ্চ ${bn(data.studyBrain!.focusMinutes)} মিনিট; উৎসের বাকি অংশ ও আসল স্লটের সীমা মানা হয়েছে।`, `Your preferred maximum is ${data.studyBrain!.focusMinutes} minutes, bounded by the uncovered source and actual slot.`)}</li>{suggestion.checkIn && <li>{t('আজ তোমার বলা অবস্থা', 'Your check-in today')}: {energyLabel(suggestion.checkIn.energy)}{suggestion.checkIn.availableMinutes !== null ? ` · ${bn(suggestion.checkIn.availableMinutes)} ${t('মিনিট সময়', 'minutes offered')}` : ''} · {obstacleLabel(suggestion.checkIn.obstacle)}</li>}{suggestion.evidence?.feedback && <li>{t('তোমার সাম্প্রতিক ফিডব্যাক', 'Your recent feedback')}: {difficultyLabel(suggestion.evidence.feedback.difficulty)} ({formatDate(suggestion.evidence.feedback.date)})</li>}{suggestion.evidence?.weakFlag && <li>{t('তুমি নিজে এই অধ্যায় দুর্বল চিহ্নিত করেছ।', 'You explicitly flagged this chapter as weak.')}</li>}{!!suggestion.evidence?.mistakes && <li>{t(`এই অধ্যায়ে ${bn(suggestion.evidence.mistakes)}টি অমীমাংসিত ভুলের রেকর্ড আছে।`, `${suggestion.evidence.mistakes} unresolved mistake records are tagged to this chapter.`)}</li>}{suggestion.evidence && suggestion.evidence.mcq.answers >= 5 && <li>{t('গত ১৪ দিনের এই অধ্যায়ের সেভ করা MCQ উত্তর', 'Saved MCQ answers tagged to this chapter in the last 14 days')}: {bn(suggestion.evidence.mcq.correct)}/{bn(suggestion.evidence.mcq.answers)} · {t('আসল পরীক্ষার সম্ভাবনার হিসাব নয়।', 'not an exam-probability estimate.')}</li>}{suggestion.pattern.enough && <li>{t('সাম্প্রতিক সেভ করা সেশনের মাঝামাঝি দৈর্ঘ্যও সীমা হিসেবে ব্যবহার হয়েছে; এটি তোমার সামর্থ্যের বিচার নয়।', 'Recent median logged session length is another limit—not a judgement of your ability.')}</li>}</ul></details>}
-    {suggestion.range && suggestion.checkIn?.obstacle !== undefined && suggestion.checkIn.obstacle !== 'none' && <p className="brain-notice">{suggestion.checkIn.obstacle === 'understanding' ? t('এই ফোকাসের মধ্যেই: যেটুকু বুঝছ না সেখানে থামো, নিজের ভাষায় একটি ছোট ব্যাখ্যা লেখো। না বুঝলে কঠিন ফিডব্যাক দাও; ক্লাস ছোট করে সম্পন্ন ধরা হবে না।', 'Within this focus: pause at the unclear idea and write a short explanation in your own words. Mark it hard if it is still unclear; no shortened class is certified.') : suggestion.checkIn.obstacle === 'remembering' ? t('এই ফোকাসের মধ্যেই: একটু পড়ে বই/ভিডিও বন্ধ করে মূল কথাটা মনে করার চেষ্টা করো, তারপর মিলিয়ে নাও। এটি ঐচ্ছিক কৌশল, নতুন বাধ্যতামূলক কাজ নয়।', 'Within this focus: close the book/video briefly, recall the main idea, then check it. An optional strategy, not another required task.') : t('শুরুটাই লক্ষ্য: ছোট ফোকাসটি নাও, তারপর কেমন লাগল জানাও। বাকি কাজ অক্ষত থাকবে।', 'Just start small, then tell the brain how it felt. All remaining work stays intact.')}</p>}
+    {suggestion.range && <details className="brain-reasons" open><summary>{t('কেন এই পরামর্শ?', 'Why this suggestion?')}</summary><ul>{suggestion.liveSlotPreferred && <li>{t('একই দিনের এই স্লট এখন চলছে। অন্য অধ্যায়ের স্লট পরে; রুটিন বদলায়নি।', 'This slot is open now. The other chapter is scheduled later on the same day; your routine is unchanged.')}</li>}<li>{t(`তোমার পছন্দ সর্বোচ্চ ${bn(data.studyBrain!.focusMinutes)} মিনিট; উৎসের বাকি অংশ ও আসল স্লটের সীমা মানা হয়েছে।`, `Your preferred maximum is ${data.studyBrain!.focusMinutes} minutes, bounded by the uncovered source and actual slot.`)}</li>{suggestion.checkIn && <li>{t('আজ তোমার বলা অবস্থা', 'Your check-in today')}: {energyLabel(suggestion.checkIn.energy)}{suggestion.checkIn.availableMinutes !== null ? ` · ${bn(suggestion.checkIn.availableMinutes)} ${t('মিনিট সময়', 'minutes offered')}` : ''} · {obstacleLabel(suggestion.checkIn.obstacle)}</li>}{suggestion.evidence?.feedback && <li>{t('তোমার সাম্প্রতিক ফিডব্যাক', 'Your recent feedback')}: {difficultyLabel(suggestion.evidence.feedback.difficulty)} ({formatDate(suggestion.evidence.feedback.date)})</li>}{suggestion.evidence?.weakFlag && <li>{t('তুমি নিজে এই অধ্যায় দুর্বল চিহ্নিত করেছ।', 'You explicitly flagged this chapter as weak.')}</li>}{!!suggestion.evidence?.mistakes && <li>{t(`এই অধ্যায়ে ${bn(suggestion.evidence.mistakes)}টি অমীমাংসিত ভুলের রেকর্ড আছে।`, `${suggestion.evidence.mistakes} unresolved mistake records are tagged to this chapter.`)}</li>}{suggestion.evidence && suggestion.evidence.mcq.answers >= 5 && <li>{t('গত ১৪ দিনের এই অধ্যায়ের সেভ করা MCQ উত্তর', 'Saved MCQ answers tagged to this chapter in the last 14 days')}: {bn(suggestion.evidence.mcq.correct)}/{bn(suggestion.evidence.mcq.answers)} · {t('আসল পরীক্ষার সম্ভাবনার হিসাব নয়।', 'not an exam-probability estimate.')}</li>}{suggestion.pattern.enough && <li>{t('সাম্প্রতিক সেভ করা সেশনের মাঝামাঝি দৈর্ঘ্যও সীমা হিসেবে ব্যবহার হয়েছে; এটি তোমার সামর্থ্যের বিচার নয়।', 'Recent median logged session length is another limit—not a judgement of your ability.')}</li>}</ul></details>}
+    <BrainCoach suggestion={suggestion} />
     <div className="brain-actions">{suggestion.canStart && <button type="button" className="button primary" disabled={!startPresetTimer || timerBusy || !storageOk} onClick={start}><Play size={16} aria-hidden="true" />{t(`${bn(suggestion.focusMinutes)} মিনিট ফোকাস শুরু`, `Start ${suggestion.focusMinutes}-minute focus`)}</button>}{task && <button type="button" className="button secondary" onClick={() => navigate('calendar', task.date)}><CalendarDays size={16} aria-hidden="true" />{t('আসল সেশন দেখো', 'Review original session')}</button>}{['setup', 'legacy', 'duration', 'missing', 'capacity'].includes(suggestion.status) && <button type="button" className="button secondary" onClick={() => navigate('settings')}>{t('সময় / রুটিন নিজে মিলিয়ে নাও', 'Review availability / routine')}</button>}{timerBusy && <button type="button" className="button secondary" onClick={() => navigate('timer')}>{t('আগের টাইমার আগে দেখো', 'Review existing timer first')}</button>}</div>
     {suggestion.chapterId && <div className="brain-feedback"><h3>{t('এই অধ্যায়ের সাম্প্রতিক পড়া কেমন হলো?', 'How did recent work on this chapter feel?')}</h3><p>{t('ফিডব্যাক শুধু ছোট ফোকাস/পরামর্শে কাজে লাগে। সেশন লগ, সময় বা অধ্যায় সম্পন্ন করে না।', 'Feedback only informs suggestions and focus length. It never logs a session, time or chapter completion.')}</p><div className="brain-actions">{(['hard', 'okay', 'easy'] as const).map(difficulty => <button type="button" className={`button secondary ${feedback?.difficulty === difficulty ? 'selected' : ''}`} key={difficulty} aria-pressed={feedback?.difficulty === difficulty} disabled={!storageOk} onClick={() => setData(current => saveBrainFeedback(current, suggestion.chapterId!, difficulty, today, now.toISOString()))}>{difficultyLabel(difficulty)}</button>)}</div></div>}
+  </section>;
+}
+
+function BrainCoach({ suggestion }: { suggestion: BrainSuggestion }) {
+  const method = brainFocusMethod(suggestion);
+  if (!method) return null;
+  const steps = {
+    start: t('বরাদ্দ অংশের প্রথম উদাহরণ বা প্রশ্ন দিয়ে শুরু করো। আজ পুরো অংশ শেষ করার চাপ নেই।', 'Start with the first example or question in the allocated segment. No pressure to finish the whole segment now.'),
+    explain: t('অস্পষ্ট ধারণায় থামো। নিজের ভাষায় এক বাক্যে বোঝাও, তারপর উৎসের সঙ্গে মিলিয়ে নাও।', 'Pause at the unclear idea. Explain it in one sentence in your own words, then check it against the source.'),
+    recall: t('একটু পড়ে উৎস বন্ধ করো। মূল ধারণাটি মনে করে বলো, তারপর মিলিয়ে নাও।', 'After a short stretch, close the source, recall the main idea, then check it.'),
+    retry: t('এই অংশের সঙ্গে মেলে এমন পুরোনো ভুল থাকলে উত্তর না দেখে আবার চেষ্টা করো। না মিললে বর্তমান অংশেই থাকো।', 'If an old mistake matches this segment, retry it without looking at the answer. Otherwise stick with the current segment.'),
+    continue: t('বরাদ্দ অংশে এগিয়ে যাও। থামার আগে কী শিখলে এক বাক্যে মনে করো।', 'Work through the allocated segment. Before stopping, recall one thing you learned in a sentence.'),
+  };
+  const stage = suggestion.task?.personalWork?.stage;
+  const play = stage && method !== 'start' ? studyBrainPlaybook[stage] : undefined;
+  return <div className="brain-notice"><h3>{t('এই ফোকাসে কী করবে', 'How to use this focus')}</h3><p>{steps[method]}</p>{suggestion.evidence?.feedback?.difficulty === 'hard' && suggestion.evidence.recentHardDays >= 2 && <p>{t(`গত ১৪ দিনে ${bn(suggestion.evidence.recentHardDays)} দিন এই অধ্যায় কঠিন বলেছ। তাই ফোকাস সর্বোচ্চ ১০ মিনিট; এটি সামর্থ্যের বিচার নয়।`, `You reported difficulty in this chapter on ${suggestion.evidence.recentHardDays} days in the last 14 days. That caps this focus at 10 minutes; it is not a judgement of ability.`)}</p>}{play && <p><strong>{t('এই কাজের কৌশল', 'Strategy for this task')}:</strong> {t(...play)}</p>}<small>{t('সময় কমে গেলে শুধু প্রথম ধাপটি করো। এটি বরাদ্দ সময়ের ভেতরের ঐচ্ছিক কৌশল, বাড়তি কাজ নয়।', 'If time runs short, do just the first step. This is an optional strategy inside the focus, not extra work.')}</small></div>;
+}
+
+function BrainReport({ rows, resting }: { rows: ReturnType<typeof brainRevisionQueue>; resting: boolean }) {
+  const direction = brainReportDirection(rows);
+  const title = direction.chapterId ? chapterById[direction.chapterId].title : '';
+  const advice = {
+    recurring: [t(`${title}-এ বারবার ভুল হওয়া পুরোনো প্রশ্নটি পরের ঝালাইয়ে উত্তর না দেখে চেষ্টা করো।`, `At your next review of ${title}, retry a recurring miss without looking at the answer.`), t('শুধু সমাধান পড়ে পরের প্রশ্নে যেও না।', 'Do not just reread the solution and move on.'), t('কোন ধাপে আটকে গেলে তা বলো, তারপর ওই ধাপটা উৎসের সঙ্গে মিলিয়ে নাও।', 'Name the step where you got stuck, then check that step against the source.')],
+    open: [t(`${title}-এর একটি অমীমাংসিত ভুল দিয়ে পরের ঝালাই শুরু করো।`, `Start your next review with one unresolved mistake in ${title}.`), t('এক বসায় সব ভুল ঠিক করতে যেও না।', 'Do not try to clear every mistake in one sitting.'), t('আগের উত্তর কেন ভুল ছিল নিজের ভাষায় বলো।', 'Explain in your own words why the previous answer was wrong.')],
+    missed: [t(`${title}-এর আগে করা একটি ভুল MCQ আবার চেষ্টা করো।`, `Retry one previously missed MCQ from ${title}.`), t('একটি ভুল থেকে পুরো অধ্যায়কে দুর্বল ধরে নিও না।', 'Do not label the whole chapter weak from one miss.'), t('উত্তর মেলানোর আগে কোন নিয়ম ব্যবহার করেছ বলো।', 'Say which rule you used before checking the answer.')],
+    steady: [t('বর্তমান রুটিন ধরে এগোও।', 'Keep going with the current routine.'), t('সঠিক উত্তরকে পুরো অধ্যায় শেখার প্রমাণ ভেবো না।', 'Do not treat correct answers as proof of mastery.'), t('পরের ঝালাইয়ে উৎস বন্ধ করে একটি ধারণা ব্যাখ্যা করো।', 'At your next review, explain one idea with the source closed.')],
+    limited: [t('পরের বরাদ্দ ফোকাস দিয়ে শুরু করো।', 'Start with your next allocated focus.'), t('রেকর্ড কম বলে নিজেকে পিছিয়ে ধরে নিও না।', 'Do not take a lack of records as a sign you are behind.'), t('পরের সেশনের পরে কোন অংশ কঠিন লেগেছে জানাও।', 'After your next session, note what felt hard.')],
+  }[direction.kind];
+  return <div className="brain-notice">
+    <h3>{t('রিপোর্ট থেকে পরের নির্দেশনা', 'What your report suggests')}</h3>
+    <dl className="brain-facts">
+      <div><dt>{t('এরপর কী করবে', 'What to do next')}</dt><dd>{resting ? t('আজ বিশ্রাম। পরের বরাদ্দ সময়ে: ', 'Rest today. At your next allocated time: ') : ''}{advice[0]}</dd></div>
+      <div><dt>{t('কী এড়িয়ে চলবে', 'What to avoid')}</dt><dd>{advice[1]}</dd></div>
+      <div><dt>{t('কীভাবে উন্নতি করবে', 'How to improve')}</dt><dd>{advice[2]}</dd></div>
+    </dl>
+  </div>;
+}
+
+function BrainWeeklyReview() {
+  const { data, now } = usePlanner();
+  const review = useMemo(() => brainWeeklyReview(data, now), [data, now]);
+  if (!review) return null;
+  const guidance = review.advice === 'restart'
+    ? t('শেষ ৭ পূর্ণ দিনে সেভ করা সেশন নেই। এর মানে এই নয় যে তুমি পড়োনি। চাইলে পরের বরাদ্দ সময়ে ছোট করে আবার শুরু করো।', 'No saved sessions in the last 7 full days. That does not mean you did not study. If you need a restart, keep your next allocated focus short.')
+    : review.advice === 'protect'
+    ? t('আগের চেয়ে কম দিনে সেশন সেভ হয়েছে। সময়ের ঘাটতি মেটাতে একদিনে সব চাপিও না; পরের বরাদ্দ ফোকাসটুকু ধরে রাখো।', 'Sessions were saved on fewer days. Instead of cramming to make up the difference, protect your next allocated focus.')
+    : t('পড়ার ছন্দ ধরে রাখো। বেশি মিনিটের পেছনে না ছুটে, পরের ফোকাস শেষে একটি ধারণা উৎস না দেখে মনে করো।', 'Keep the rhythm. Instead of chasing more minutes, recall one idea without the source at the end of your next focus.');
+  return <section className="card brain-panel" aria-labelledby="brain-weekly-title">
+    <h2 id="brain-weekly-title">{t('সাপ্তাহিক প্রস্তুতি রিপোর্ট', 'Weekly preparation report')}</h2>
+    <p>{t('নির্বাচিত অধ্যায়ের সেভ করা সেশন। আজকের অসম্পূর্ণ দিন তুলনায় নেই।', 'Saved sessions for selected chapters. Today is excluded so both windows cover full days.')}</p>
+    <dl className="brain-facts">
+      <div><dt>{t('শেষ ৭ পূর্ণ দিন', 'Last 7 full days')}</dt><dd>{t(`${bn(review.latestDays)} দিনে ${bn(review.latestMinutes)} মিনিট`, `${review.latestMinutes} minutes across ${review.latestDays} days`)}</dd></div>
+      <div><dt>{t('তার আগের ৭ দিন', 'Previous 7 days')}</dt><dd>{t(`${bn(review.previousDays)} দিনে ${bn(review.previousMinutes)} মিনিট`, `${review.previousMinutes} minutes across ${review.previousDays} days`)}</dd></div>
+    </dl>
+    <p className="brain-notice">{guidance}</p>
+  </section>;
+}
+
+function BrainChapterGuides({ pair }: { pair: readonly string[] }) {
+  return <section className="card brain-panel" aria-labelledby="brain-chapter-guides-title">
+    <h2 id="brain-chapter-guides-title">{t('অধ্যায় প্রস্তুতি গাইড', 'Chapter preparation guides')}</h2>
+    <p>{t('অধ্যায়ের ফোকাস ম্যাপ ও পড়ার কৌশল। নতুন কাজ বা পরীক্ষার পূর্বাভাস নয়।', 'Chapter focus and study methods. Not extra work or exam predictions.')}</p>
+    {pair.map(id => {
+      const guide = brainChapterGuide(id);
+      return guide && <details key={id}>
+        <summary>{guide.title}</summary>
+        <p><strong>{t('অধ্যায়ের ফোকাস', 'Chapter focus')}:</strong> {guide.focus}</p>
+        <p><strong>{t('কীভাবে অনুশীলন করবে', 'How to practise')}:</strong> {t(...guide.method)}</p>
+      </details>;
+    })}
   </section>;
 }

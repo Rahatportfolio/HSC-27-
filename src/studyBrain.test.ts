@@ -8,7 +8,7 @@ import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture
 import { defaultChapterWorkload, isPersonalTaskComplete, personalUnfinishedRanges, RECOMMENDED_S_IDS } from './personalRoutine';
 import { setTaskCompletion } from './study';
 import { STARTER_QUESTIONS } from './quiz-data';
-import { BRAIN_LIMITS, brainChapterEvidence, brainCurrentPair, brainStudyPattern, forgetStudyBrain, interpretBrainMessage, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from './studyBrain';
+import { BRAIN_LIMITS, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, brainChapterEvidence, brainCurrentPair, brainStudyPattern, forgetStudyBrain, interpretBrainMessage, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from './studyBrain';
 import type { BrainCheckInDraft } from './studyBrainTypes';
 
 const now = new Date('2026-11-20T12:05:00.000Z'); // 18:05 Bangladesh, regardless of browser timezone
@@ -145,9 +145,18 @@ describe('read-only, S/pair/source-aware local reasoning', () => {
   });
   it('allows focus preference only inside the same pair, same owed date and original book order', () => {
     const data = saveBrainCheckIn(fixture(), { ...draft, chapterId: PERSONAL_IDS[1] }, today, at);
-    expect(suggest(data)).toMatchObject({ chapterId: PERSONAL_IDS[1], status: 'scheduled', canStart: false });
-    expect(suggest(data).task!.startMinute).toBe(1200);
+    expect(suggest(data)).toMatchObject({ chapterId: PERSONAL_IDS[0], status: 'ready', canStart: true, liveSlotPreferred: true });
+    const preview = suggest(data, new Date('2026-11-20T11:59:00Z'));
+    // The check-in has not been confirmed yet at this earlier instant.
+    expect(preview).toMatchObject({ chapterId: PERSONAL_IDS[0], status: 'scheduled', canStart: false });
+    expect(suggest(data, new Date('2026-11-20T14:05:00Z'))).toMatchObject({ chapterId: PERSONAL_IDS[1], status: 'ready', canStart: true });
     expect(brainCurrentPair(data, buildStudyPlan(data, today))).toEqual(PERSONAL_IDS);
+  });
+  it('keeps the preferred preview when the alternate live slot overlaps another task', () => {
+    const data = saveBrainCheckIn(fixture(), { ...draft, chapterId: PERSONAL_IDS[1] }, today, at);
+    const plan = buildStudyPlan(data, today), task = plan[0].tasks[0];
+    plan[0].tasks.push({ ...task, id: 'custom-overlap', kind: 'custom', personalWork: undefined });
+    expect(suggest(data, now, plan)).toMatchObject({ chapterId: PERSONAL_IDS[1], status: 'scheduled', canStart: false });
   });
   it('uses old partition evidence, suggesting only the uncovered range without restamping it', () => {
     const data = fixture(), plan = buildStudyPlan(data, today), task = plan[0].tasks[0], source = encodeURIComponent(task.personalWork!.sourceId);
@@ -243,4 +252,62 @@ describe('small, non-destructive Bengali / Banglish / English intent parser', ()
   it.each([['ki porbo', 'next'], ['কী পড়ব', 'next'], ['what should I study next', 'next'], ['amar kotha mone ache', 'memory'], ['আমার সম্পর্কে কী জানো', 'memory'], ['make an image', 'help'], ['not tired', 'help'], ['a'.repeat(241), 'help']])('returns a bounded intent for %s', (message, kind) => {
     expect(interpretBrainMessage(message, PERSONAL_IDS).kind).toBe(kind);
   });
+});
+
+describe('Daily Coach and revision evidence', () => {
+  it('uses one latest valid answer per mapped question and ignores future or unmapped attempts', () => {
+    const data = fixture(), question = STARTER_QUESTIONS.find(item => item.chapterId === PERSONAL_IDS[0])!;
+    const wrong = { id: 'first', questionId: question.id, correct: false, chosen: 0, subject: 'physics' as const, date: today, at: `${today}T11:00:00Z` };
+    data.attempts.push({ ...wrong, id: 'retry', correct: true, at }, wrong, { ...wrong, id: 'future', at: `${today}T18:00:00Z` }, { ...wrong, id: 'unknown', questionId: 'unmapped' });
+    expect(brainRevisionQueue(data, PERSONAL_IDS, now)[0]).toMatchObject({ chapterId: PERSONAL_IDS[0], sampled: 1, misses: 0 });
+    data.studyBrain!.enabled = false;
+    expect(brainRevisionQueue(data, PERSONAL_IDS, now)).toEqual([]);
+  });
+  it('adapts the method without borrowing an obstacle from the other chapter', () => {
+    const data = saveBrainCheckIn(fixture(), { ...draft, chapterId: PERSONAL_IDS[1], obstacle: 'remembering' }, today, at);
+    expect(brainFocusMethod(suggest(data))).toBe('continue');
+    expect(brainFocusMethod(suggest(data, new Date('2026-11-20T14:05:00Z')))).toBe('recall');
+    expect(brainFocusMethod(suggest(data, new Date('2026-11-20T13:57:00Z')))).toBe('start');
+    expect(brainFocusMethod(suggest(data, new Date('2026-11-21T12:05:00Z')))).toBeUndefined();
+  });
+});
+
+it('compares the same question across two Bangladesh calendar weeks, not unrelated scores', () => {
+  const data = fixture(), question = STARTER_QUESTIONS.find(item => item.chapterId === PERSONAL_IDS[0])!;
+  const answer = { id: 'before', questionId: question.id, correct: false, chosen: 0, subject: 'physics' as const, date: '2026-11-13', at: '2026-11-13T11:00:00Z' };
+  data.attempts.push(answer, { ...answer, id: 'after', date: today, at });
+  expect(brainRevisionQueue(data, PERSONAL_IDS, now)[0].comparison).toEqual({ matched: 1, corrected: 0, stillMistaken: 1, slipped: 0 });
+  data.attempts[1].correct = true;
+  expect(brainRevisionQueue(data, PERSONAL_IDS, now)[0].comparison).toEqual({ matched: 1, corrected: 1, stillMistaken: 0, slipped: 0 });
+});
+
+it('turns evidence into directions without interpreting missing records as weakness', () => {
+  const rows = brainRevisionQueue(fixture(), PERSONAL_IDS, now);
+  expect(brainReportDirection(rows)).toEqual({ kind: 'limited' });
+  rows[0].open = 2;
+  expect(brainReportDirection(rows)).toEqual({ kind: 'open', chapterId: PERSONAL_IDS[0] });
+  rows[1].comparison.stillMistaken = 1;
+  expect(brainReportDirection(rows)).toEqual({ kind: 'recurring', chapterId: PERSONAL_IDS[1] });
+});
+
+it('compares full weeks without counting today, unselected chapters, or repeat logs as extra days', () => {
+  const data = fixture();
+  session(data, '2026-11-13', 20);
+  session(data, '2026-11-13', 10);
+  session(data, '2026-11-12', 30);
+  session(data, '2026-11-06', 10);
+  session(data, today, 65);
+  session(data, '2026-11-19', 60, 'unselected');
+  expect(brainWeeklyReview(data, now)).toEqual({ latestDays: 1, previousDays: 2, latestMinutes: 30, previousMinutes: 40, advice: 'protect' });
+});
+
+it('adapts to repeated confirmed difficulty without changing the source or plan', () => {
+  let data = saveBrainFeedback(fixture(), PERSONAL_IDS[0], 'hard', '2026-11-19', '2026-11-19T12:05:00Z');
+  expect(suggest(data).focusMinutes).toBe(15);
+  data = saveBrainFeedback(data, PERSONAL_IDS[0], 'hard', today, at);
+  const result = suggest(data);
+  expect(result).toMatchObject({ focusMinutes: 10, evidence: { recentHardDays: 2 } });
+  expect(brainFocusMethod(result)).toBe('explain');
+  expect(data.completed).toEqual({});
+  expect(interpretBrainMessage('report dekhao', PERSONAL_IDS)).toEqual({ kind: 'report' });
 });
