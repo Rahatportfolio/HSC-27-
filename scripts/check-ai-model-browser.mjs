@@ -1,9 +1,14 @@
 /** Explicit integration probe: real remote runtime, real model and local inference. */
 import { chromium } from 'playwright-core';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
-const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+const profile = await mkdtemp(join(tmpdir(), 'ai-model-test-'));
+const options = { executablePath: process.env.CHROMIUM_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] };
+let context;
 try {
-  const context = await browser.newContext();
+  context = await chromium.launchPersistentContext(profile, options);
   const page = await context.newPage();
   page.on('console', message => { if (message.type() === 'error') console.error('browser:', message.text()); });
   page.on('pageerror', error => console.error('browser error:', error.message));
@@ -15,12 +20,13 @@ try {
   });
   if (!result || result.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('Model returned an empty answer');
   console.log('Real model inference returned a nonempty answer:', result.slice(0, 300));
-  // Start a fresh JS realm in the same persistent browser context, then block
-  // the network. A model already in RAM does not prove offline startup.
+  // Close and reopen the browser with the same on-disk profile. A model or
+  // runtime held in RAM from the first session does not prove offline startup.
+  await context.close();
+  context = await chromium.launchPersistentContext(profile, options);
   const fresh = await context.newPage();
   await fresh.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
   await fresh.evaluate(async () => { window.__ai = await import('/src/aiModel.ts'); });
-  await page.close();
   await context.setOffline(true);
   const offline = await fresh.evaluate(async () => {
     await window.__ai.loadAiModel();
@@ -32,5 +38,6 @@ try {
   console.error('::error::AI integration failed: ' + String(error).replaceAll('\n', ' '));
   throw error;
 } finally {
-  await browser.close();
+  await context?.close();
+  await rm(profile, { recursive: true, force: true });
 }
