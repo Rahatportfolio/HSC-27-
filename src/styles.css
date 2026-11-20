@@ -5024,7 +5024,7 @@ body {
 .golden-facts strong small{font-size:9px;color:var(--muted);font-weight:500}
 .golden-rows{display:flex;flex-direction:column;gap:4px}
 .golden-row{display:grid;grid-template-columns:78px 1fr 62px minmax(76px,auto);align-items:center;gap:9px;font-size:10px;padding:3px 0}
-.golden-row.optional{opacity:.92}
+.golden-row.optional .golden-bar{opacity:.85}
 .golden-row.bad .golden-points{color:#b2402c}
 .golden-subject{display:flex;align-items:center;gap:4px;font-size:9.5px;font-weight:600;white-space:nowrap}
 .golden-subject em{font-style:normal;font-size:7.5px;background:#eef2e6;color:#5c6f4d;padding:0 4px;border-radius:5px}
