@@ -28,6 +28,13 @@ try {
   const fresh = await context.newPage();
   await fresh.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
   await fresh.evaluate(async () => { window.__ai = await import('/src/aiModel.ts'); });
+  // Supply only the app's own local files through the test host after going
+  // offline, as an installed APK (or a PWA precache) would. Remote runtime and
+  // model requests are NOT intercepted and must come from browser cache.
+  await context.route('http://127.0.0.1:3000/**', async route => {
+    const response = await fetch(route.request().url());
+    await route.fulfill({ status: response.status, headers: Object.fromEntries(response.headers), body: Buffer.from(await response.arrayBuffer()) });
+  });
   stage = 'offline after browser restart';
   await context.setOffline(true);
   const offline = await fresh.evaluate(async () => {
