@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { CHAPTERS, chapterById } from './data';
 import { addDays, buildPlan, chapterStudyTasks, freshData, getStats, isChapterDone, isDayComplete } from './planner';
 import { buildStudyPlan } from './studyPlan';
-import { WORK_STAGES, defaultChapterWorkload, buildPersonalStudyProjection, hasFullPersonalAllocation, isPersonalChapterDone, isPersonalTaskComplete, personalMediaUrl, personalCompletionEvidence, personalRoutineHealth, personalScheduleDateError } from './personalRoutine';
+import { WORK_STAGES, defaultChapterWorkload, buildPersonalStudyProjection, hasFullPersonalAllocation, isPersonalChapterDone, isPersonalTaskComplete, personalMediaUrl, personalCompletionEvidence, personalRoutineHealth, personalScheduleDateError, personalChapterProgress } from './personalRoutine';
 import { PERSONAL_IDS, personalDataFixture, personalRoutineFixture, personalWorkload } from './test/personalRoutineFixture';
 import { setLanguage } from './i18n';
 import { learningDashboard, chapterStage } from './learning';
@@ -266,5 +266,21 @@ describe('unknown durations never blank out the whole plan', () => {
     expect(health.warnings.join(' ')).toContain(chapterById['physics-1-1'].title);
     expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-3'))).toBe(true);
     expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-1'))).toBe(false);
+  });
+});
+
+describe('a changed source is reported instead of silently dropping progress', () => {
+  it('names the chapter when a replaced video no longer counts old ticks', () => {
+    let data = personalDataFixture(['physics-1-3']);
+    const plan = planFor(data);
+    data = setTaskCompletion(data, plan.flatMap(day => day.tasks).map(task => task.id), true, plan);
+    expect(personalChapterProgress(data.personalRoutine!, 'physics-1-3', data.completed).readinessPercent).toBe(100);
+    data.personalRoutine!.workloads['physics-1-3'].class.url = 'https://www.youtube.com/watch?v=replacedvid1';
+    const health = personalRoutineHealth(data, planFor(data));
+    const stale = health.issues.find(issue => issue.code === 'stale-evidence');
+    expect(stale?.chapterIds).toEqual(['physics-1-3']);
+    expect(health.warnings.some(warning => /ভিডিও\/গণনার উৎস|video\/calculation source/.test(warning))).toBe(true);
+    // The old timestamp is retained as history, never deleted behind the student's back.
+    expect(Object.keys(data.completed).length).toBeGreaterThan(0);
   });
 });

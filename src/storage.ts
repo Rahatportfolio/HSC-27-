@@ -96,11 +96,20 @@ export function sanitizeSettings(raw: unknown): Settings {
   const boostDailyHours = raw.boostDailyHours === undefined ? d.boostDailyHours : Number(raw.boostDailyHours);
   if (!int(boostDailyHours, 4, 18)) throw new Error('পরবর্তী ধাপের পড়ার সময় ৪ থেকে ১৮ ঘণ্টার মধ্যে হতে হবে।');
   if (![0, 5, 10, 15, 30].includes(Number(raw.reminderLead))) throw new Error('রিমাইন্ডারের সময় সঠিক নয়।');
-  if (!text(raw.board, 60) || !text(raw.name, 60)) throw new Error('নাম বা বোর্ডের লেখা সঠিক নয়।');
+  // A blank board/name is not evidence of corruption: older drafts left them empty
+  // and the app then showed an empty picker. Fall back to the safe defaults and
+  // record it, instead of either keeping garbage or rejecting the whole profile.
+  const board = typeof raw.board === 'string' && raw.board.trim() ? raw.board : d.board;
+  const name = typeof raw.name === 'string' ? raw.name : d.name;
+  if (!text(board, 60) || !text(name, 60)) throw new Error('নাম বা বোর্ডের লেখা সঠিক নয়।');
   const testExamDate = raw.testExamDate === undefined ? d.testExamDate : raw.testExamDate;
   if (!text(testExamDate, 10) || !isValidDate(testExamDate)) throw new Error('টেস্ট পরীক্ষার তারিখ সঠিক নয়।');
   const examDate = raw.examDate === undefined ? d.examDate : raw.examDate;
   if (!text(examDate, 10) || !isValidDate(examDate)) throw new Error('HSC পরীক্ষার লক্ষ্য তারিখ সঠিক নয়।');
+  // Dates out of order are retained on purpose so an older profile stays
+  // repairable in Settings, but they must never look like ordinary "no work":
+  // the planner returns zero days for them and the warning banner names the
+  // exact problem. `scheduleDateError` is the single owner of that message.
   const examDatePolicy = raw.examDatePolicy === undefined ? d.examDatePolicy : raw.examDatePolicy;
   if (examDatePolicy !== 'shift' && examDatePolicy !== 'fixed') throw new Error('পরীক্ষার তারিখ সরানোর নিয়ম সঠিক নয়।');
   const theme = raw.theme === undefined ? d.theme : raw.theme;
@@ -121,7 +130,7 @@ export function sanitizeSettings(raw: unknown): Settings {
   return {
     startDate: raw.startDate, startTime: raw.startTime, dailyHours: Number(raw.dailyHours),
     boostEnabled, boostStartDate, boostDailyHours, adaptiveEnabled, adaptiveBuffer,
-    board: raw.board, name: raw.name,
+    board, name,
     reminderEnabled: raw.reminderEnabled === true, reminderLead: Number(raw.reminderLead), syllabusChecked: raw.syllabusChecked === true,
     calendarRevision: int(raw.calendarRevision, 0, 999999) ? Number(raw.calendarRevision) : 0,
     testExamDate,

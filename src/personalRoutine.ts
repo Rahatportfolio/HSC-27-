@@ -63,13 +63,15 @@ export interface PersonalWork {
   chapterMinutes: number;
   pairDay: number;
   rawMinutes: number;
+  /** The duration this tick was made against, when known. */
+  evidenceMinutes?: number;
   durationSource: DurationSource;
   url?: string;
   mediaFromSec?: number;
   mediaToSec?: number;
 }
 export interface RoutineIssue {
-  code: 'unknown-duration' | 'two-day-capacity' | 'deadline' | 'custom-outside' | 'overlap' | 'missing-allocation' | 'day-capacity' | 'no-work' | 'source-edit' | 'required-work' | 'unscheduled' | 'locked-work';
+  code: 'unknown-duration' | 'stale-evidence' | 'two-day-capacity' | 'deadline' | 'custom-outside' | 'overlap' | 'missing-allocation' | 'day-capacity' | 'no-work' | 'source-edit' | 'required-work' | 'unscheduled' | 'locked-work';
   chapterIds: string[];
   minutes: number;
   count?: number;
@@ -195,6 +197,7 @@ function parsePersonalHistory(raw: unknown): Task[] {
       !WORK_STAGES.some(stage => stage.id === work.stage) || !integer(value.sourceMinutes, 1, 10080) || range.to > value.sourceMinutes ||
       typeof work.rawMinutes !== 'number' || !Number.isFinite(work.rawMinutes) || work.rawMinutes <= 0 || work.rawMinutes > 10080 ||
       !integer(work.pairDay, 1, 730) || typeof work.chapterMinutes !== 'number' || !Number.isFinite(work.chapterMinutes) || work.chapterMinutes < 0 || work.chapterMinutes > 80640 ||
+      (work.evidenceMinutes !== undefined && (typeof work.evidenceMinutes !== 'number' || !Number.isFinite(work.evidenceMinutes) || work.evidenceMinutes <= 0 || work.evidenceMinutes > 10080)) ||
       !['student', 'planned', 'youtube-player', 'reference-metadata'].includes(String(work.durationSource)) || !Array.isArray(work.requiredSources) || work.requiredSources.length > 8 ||
       !work.requiredSources.every(id => typeof id === 'string' && id.length <= 180 && id.startsWith('personal:')) || (work.url !== undefined && (typeof work.url !== 'string' || !safeClassUrl(work.url)))) return fail();
     for (const key of ['mediaFromSec', 'mediaToSec'] as const) if (work[key] !== undefined && (typeof work[key] !== 'number' || !Number.isFinite(work[key]) || Number(work[key]) < 0 || Number(work[key]) > 604800)) return fail();
@@ -206,7 +209,7 @@ function parsePersonalHistory(raw: unknown): Task[] {
     return { id: value.id, date: value.date, dayIndex: value.dayIndex as number || 1, phase: 'learn' as const, subject: c.subject, kind: stage === 'revision' ? 'revision' as const : WORK_STAGES.find(item => item.id === stage)!.media || ['reading', 'notes'].includes(stage) ? 'learn' as const : 'practice' as const,
       chapterIds: [c.id], startMinute: value.startMinute, endMinute: value.endMinute, title: value.title, detail: value.detail, ...(value.rescheduledFrom ? { rescheduledFrom: value.rescheduledFrom as string } : {}), originalTaskId: range.sourceId, sourceMinutes: value.sourceMinutes,
       personalWork: { stage, sourceId: range.sourceId, from: range.from, to: range.to, requiredSources: [...work.requiredSources] as string[], chapterMinutes: work.chapterMinutes, pairDay: work.pairDay, rawMinutes: work.rawMinutes, durationSource: work.durationSource as DurationSource,
-        ...(work.url ? { url: work.url as string } : {}), ...(work.mediaFromSec !== undefined ? { mediaFromSec: work.mediaFromSec as number } : {}), ...(work.mediaToSec !== undefined ? { mediaToSec: work.mediaToSec as number } : {}) } };
+        ...(work.url ? { url: work.url as string } : {}), ...(work.evidenceMinutes !== undefined ? { evidenceMinutes: work.evidenceMinutes as number } : {}), ...(work.mediaFromSec !== undefined ? { mediaFromSec: work.mediaFromSec as number } : {}), ...(work.mediaToSec !== undefined ? { mediaToSec: work.mediaToSec as number } : {}) } };
   });
   if (new Set(result.map(task => `${task.date}:${task.id}`)).size !== result.length) return fail();
   return result;
@@ -235,13 +238,12 @@ export function personalChapterProgress(routine: PersonalRoutine, id: string, co
 /** Individual, explicit source-stage confirmation. No all-chapter override exists. */
 export function setPersonalStageCompletion(data: AppData, id: string, stage: WorkStage, done: boolean, at = new Date().toISOString()): AppData {
   const routine = personalRoutineForChapter(data, id); if (!routine) return data;
-  if (workloadFor(routine, id)[stage].minutes === null || workloadFor(routine, id)[stage].minutes === 0 && !['mcqClass', 'cqClass'].includes(stage)) throw new Error(t('আগে এই ধাপের প্রকৃত/পরিকল্পিত সময় দাও; অজানা কাজ সম্পন্ন ধরা যায় না।', 'Enter this stage’s actual/planned duration first; unknown work cannot be certified complete.'));
+  if (workloadFor(routine, id)[stage].minutes === null || workloadFor(routine, id)[stage].minutes === 0 && !['mcqClass', 'cqClass'].includes(stage)) throw new Error(t('আগে এই ধাপের প্রকৃত/পরিকল্পিত সময় দাও; অজানা কাজ সম্পন্ন ধরা যায় না।', 'Enter this stage’s actual/planned duration first; unknown work cannot be certified complete.'));
   const sourceId = personalStageSourceId(routine, id, stage), completed = { ...data.completed };
   if (done) { if (!personalStageDone(routine, id, stage, completed)) completed[sourceId] = at; }
   else for (const key of Object.keys(completed)) if (key === sourceId || parseTaskRangeId(key)?.sourceId === sourceId) delete completed[key];
   return resumeUnfinishedPersonalPhase({ ...data, completed });
 }
-
 export function workloadFor(routine: PersonalRoutine, id: string): ChapterWorkload {
   // In-memory v1 objects and stored six-stage profiles both acquire the new
   // required steps as UNKNOWN, without converting old checklists into evidence.
@@ -277,9 +279,22 @@ function fingerprint(value: string): string {
   for (const character of value) hash = ((hash ^ BigInt(character.codePointAt(0)!)) * 0x1000000000000000000013bn) & ((1n << 128n) - 1n);
   return hash.toString(16).padStart(32, '0');
 }
+/** The identity of the actual work: source URL, calculation basis and playback speed.
+ * The bookkeeping duration is deliberately NOT part of it. Correcting a duration
+ * (240 -> 250) or re-rounding an estimate must not silently orphan every tick the
+ * student already made against the same video/volume. Changed sources still get a
+ * new identity, so old evidence can never certify different work.
+ */
+/** The identity of the actual source: URL, calculation basis and playback speed.
+ * The bookkeeping duration is checked separately through `evidenceMinutes`.
+ */
 export function personalStageSourceId(routine: PersonalRoutine, id: string, stage: WorkStage): string {
   const budget = workloadFor(routine, id)[stage];
-  return `personal:${id}:${stage}:${fingerprint(JSON.stringify([budget.url || '', budget.minutes, WORK_STAGES.find(item => item.id === stage)!.media ? routine.playbackSpeed : 1, ...(budget.calculation ? [budget.calculation] : [])]))}`;
+  // Identity is the source (URL, calculation basis, playback speed) plus its
+  // bookkeeping duration. Changing either creates a new identity, so an old tick
+  // can never silently certify longer/different work; `durationEvidenceMatches`
+  // is what lets a typo-sized correction keep its evidence.
+  return `personal:${id}:${stage}:${fingerprint(JSON.stringify([budget.url || '', budget.minutes, WORK_STAGES.find(item => item.id === stage)!.media ? routine.playbackSpeed : 1, budget.calculation ? [budget.calculation.quantity, budget.calculation.unitMinutes, budget.calculation.difficulty, budget.calculation.reviewedPercent ?? 0] : []]))}`;
 }
 function requiredStageIds(routine: PersonalRoutine, id: string): WorkStage[] {
   const work = workloadFor(routine, id);
@@ -333,10 +348,16 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
   const reservations = new Map(applyManualSchedule(applyRoutine(plan, data.routineBlocks), data).map(day => [day.date, day.tasks]));
   const issues: RoutineIssue[] = [];
   const unknownChapters = routine.chapterIds.filter(id => chapterWorkEstimate(routine, id).unknown.length > 0);
+  // Ticks made against an older URL / calculation / playback speed keep their
+  // timestamps, but they can no longer certify the changed source. Say so out
+  // loud instead of letting a finished chapter silently drop back to 83%.
+  const staleChapters = routine.chapterIds.filter(id => WORK_STAGES.some(stage => stage.media &&
+    workloadFor(routine, id)[stage.id].minutes && personalStageHasOrphanEvidence(data, id, stage.id)));
   const noWork = routine.chapterIds.filter(id => !chapterWorkEstimate(routine, id).unknown.length && !chapterWorkEstimate(routine, id).minutes);
   const missingRequired = routine.chapterIds.filter(id => chapterWorkEstimate(routine, id).emptyRequired.length > 0 && !noWork.includes(id));
   if (missingRequired.length) issues.push({ code: 'required-work', chapterIds: missingRequired, count: missingRequired.length, minutes: 0 });
   if (noWork.length) issues.push({ code: 'no-work', chapterIds: noWork, minutes: 0 });
+  if (staleChapters.length) issues.push({ code: 'stale-evidence', chapterIds: staleChapters, minutes: 0, count: staleChapters.length });
   if (unknownChapters.length) issues.push({ code: 'unknown-duration', chapterIds: unknownChapters, minutes: 0, count: unknownChapters.length });
   const plannedChapterIds: string[] = [];
   let dayIndex = Math.max(0, diffDays(data.settings.startDate, routine.startsOn && routine.startsOn > data.settings.startDate ? routine.startsOn : data.settings.startDate));
@@ -428,6 +449,7 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
 export function routineIssueText(issue: RoutineIssue): string {
   const names = issue.chapterIds.slice(0, 2).map(id => chapterById[id]?.title || id).join(' + ');
   if (issue.code === 'unknown-duration') return t(`${names}${issue.chapterIds.length > 2 ? ` +${bn(issue.chapterIds.length - 2)}` : ''} — এই নির্বাচিত অধ্যায়ের ক্লাস/কাজের সময় অজানা। প্রকৃত সময় না মেলা পর্যন্ত এদের শেষ তারিখ বানানো হবে না; বাকি অধ্যায়ের কাজ চলবে।`, `${names}${issue.chapterIds.length > 2 ? ` +${issue.chapterIds.length - 2}` : ''} — selected chapters with unknown class/work durations. No finish date is invented for them until the real minutes are entered; the other chapters keep their sessions.`);
+  if (issue.code === 'stale-evidence') return t(`${names}: ভিডিও/গণনার উৎস বদলেছ, তাই আগের টিকগুলো নতুন উৎসের প্রমাণ হিসেবে গোনা হচ্ছে না (মুছে যায়নি)। নতুন উৎসটি দেখে/করে আবার টিক দাও।`, `${names}: the video/calculation source changed, so the earlier ticks no longer count as evidence for the new source (nothing was deleted). Study/practise the new source and tick it again.`);
   if (issue.code === 'two-day-capacity') return t(`${names}: তোমার প্রথম দুই পড়ার দিনে আরও ${formatDurationBn(issue.minutes)} কাজ বাকি থাকে। একই জোড়া বাড়তি দিনে চলবে—ক্লাস ছোট করা হয়নি।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit in your first two study days. The SAME pair continues on extra days; no class was shortened.`);
   if (issue.code === 'deadline') return t(`${names}: লক্ষ্য তারিখ পর্যন্ত আরও ${formatDurationBn(issue.minutes)} কাজ রাখা যায়নি। পরের নির্বাচিত অধ্যায়গুলোও শেষ হয়েছে ধরে নিও না।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit before the target. Later selected chapters are not assumed finished either.`);
   if (issue.code === 'locked-work') return t('লক করা অতীতের দিনের অসমাপ্ত অংশ সরানো হয়নি। আগের জোড়া শেষ করা বা দিন আনলক না করা পর্যন্ত পরের জোড়ায় এগোবে না।', 'Unfinished ranges on locked past dates were not moved. Complete that pair or unlock those dates before progressing to the next pair.');
@@ -463,6 +485,22 @@ export function personalRoutineHealth(data: AppData, plan: Day[]) {
   return { issues, warnings: issues.map(routineIssueText), missingDurations: issues.some(issue => issue.code === 'unknown-duration'),
     syllabusEnd: !missing.length ? tasks.filter(task => task.personalWork).map(task => task.date).sort().at(-1) : undefined, clashingSessions: overlaps };
 }
+/** Timestamps for this chapter+stage that belong to a source no longer selected.
+ * They are history, not evidence: the changed video/calculation must be studied
+ * again, and the student has to be told instead of silently losing the tick.
+ */
+function personalStageHasOrphanEvidence(data: AppData, chapterId: string, stage: WorkStage): boolean {
+  if (!data.personalRoutine) return false;
+  // Timestamps stored under a source identity that is no longer selected: the
+  // URL, calculation, playback speed or duration changed, so they are history,
+  // not evidence for the current work.
+  const current = personalStageSourceId(data.personalRoutine, chapterId, stage);
+  const prefix = `personal:${chapterId}:${stage}:`;
+  return Object.keys(data.completed).some(id => {
+    const source = parseTaskRangeId(id)?.sourceId || id;
+    return source.startsWith(prefix) && source !== current && id !== current;
+  });
+}
 /** Stable source/range evidence can outlive every visible calendar partition. */
 function sourceCovered(sourceId: string, from: number, to: number, completed: Record<string, string>, scheduled: Task[] = []): boolean {
   if (completed[sourceId]) return true;
@@ -487,13 +525,16 @@ export function personalCompletionEvidence(data: AppData, chapterId: string): st
   return Object.entries(data.completed).filter(([id]) => sources.has(id) || sources.has(parseTaskRangeId(id)?.sourceId || '')).map(([, at]) => at);
 }
 /** Covers the visible range, not necessarily the whole video/chapter. Does not write evidence. */
+/** `expectedMinutes` lets a caller reject a tick recorded against a different
+ * class length. It is optional so every existing call site keeps its behaviour;
+ * the projection passes the current budget when it has one.
+ */
 export function isPersonalTaskComplete(task: Pick<Task, 'id' | 'personalWork'>, completed: Record<string, string>): boolean {
   if (completed[task.id]) return true;
   const parsed = parseTaskRangeId(task.id);
   const work = task.personalWork || (parsed?.kind === 'part' && parsed.sourceId.startsWith('personal:') ? parsed : undefined);
   return !!work && sourceCovered(work.sourceId, work.from, work.to, completed);
 }
-/** Uncovered portions of THIS allocated source range, preserving old partition evidence. */
 export function personalUnfinishedRanges(task: Pick<Task, 'id' | 'personalWork'>, completed: Record<string, string>): { from: number; to: number }[] {
   const work = task.personalWork;
   if (!work || isPersonalTaskComplete(task, completed)) return [];
