@@ -2,6 +2,8 @@ package com.prostuti.hsc27;
 
 import static org.junit.Assert.*;
 
+import android.Manifest;
+import android.os.Build;
 import android.os.SystemClock;
 import android.webkit.WebView;
 import androidx.test.core.app.ActivityScenario;
@@ -17,12 +19,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONObject;
 import org.junit.Assume;
+import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
 /** Slow network/model probe: run explicitly on a disposable Android emulator only. */
 @RunWith(AndroidJUnit4.class)
 public class AiModelIntegrationTest {
+  @BeforeClass public static void dismissNotificationPrecondition() {
+    if (Build.VERSION.SDK_INT >= 33) {
+      InstrumentationRegistry.getInstrumentation().getUiAutomation().grantRuntimePermission(
+        InstrumentationRegistry.getInstrumentation().getTargetContext().getPackageName(), Manifest.permission.POST_NOTIFICATIONS);
+    }
+  }
   private String eval(WebView web, String js) throws Exception {
     AtomicReference<String> result = new AtomicReference<>();
     CountDownLatch done = new CountDownLatch(1);
