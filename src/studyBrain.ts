@@ -65,16 +65,19 @@ export interface BrainEvidence {
   mistakes: number;
   mcq: { answers: number; correct: number };
   feedback?: BrainFeedback;
+  recentHardDays: number;
 }
 export function brainChapterEvidence(data: AppData, chapterId: string, now: Date): BrainEvidence {
   const today = todayKey(now), start = addDays(today, -13);
   // Attempts carry question IDs, not chapters. Unknown/deleted question mappings are not guessed.
   const questions = questionChapters(data);
   const attempts = data.attempts.filter(attempt => attempt.date >= start && attempt.date <= today && Date.parse(attempt.at) <= now.getTime() && questions.get(attempt.questionId) === chapterId);
-  const feedback = data.studyBrain?.feedback.filter(item => item.chapterId === chapterId && item.date >= start && item.date <= today && Date.parse(item.at) <= now.getTime()).sort((a, b) => Date.parse(b.at) - Date.parse(a.at))[0];
+  const feedbackHistory = data.studyBrain?.feedback.filter(item => item.chapterId === chapterId && item.date >= start && item.date <= today && Date.parse(item.at) <= now.getTime()).sort((a, b) => Date.parse(b.at) - Date.parse(a.at)) ?? [];
+  const feedback = feedbackHistory[0];
   return { weakFlag: data.chapterMeta[chapterId]?.weak === true || data.confidence[chapterId] === 'weak',
     mistakes: data.mistakes.filter(item => item.chapterId === chapterId && !item.resolved && item.date <= today).length,
-    mcq: { answers: attempts.length, correct: attempts.filter(attempt => attempt.correct).length }, feedback };
+    mcq: { answers: attempts.length, correct: attempts.filter(attempt => attempt.correct).length }, feedback,
+    recentHardDays: new Set(feedbackHistory.filter(item => item.difficulty === 'hard').map(item => item.date)).size };
 }
 export type BrainStatus = 'off' | 'setup' | 'legacy' | 'rest' | 'complete' | 'duration' | 'missing' | 'review' | 'scheduled' | 'ready' | 'capacity' | 'conflict' | 'outside';
 export interface BrainSuggestion {
@@ -90,6 +93,7 @@ export interface BrainSuggestion {
   /** Optional timer only. No schedule writes or completion action exists here. */
   timerTaskId?: string;
   canStart: boolean;
+  liveSlotPreferred?: boolean;
 }
 /** Read-only bounded reasoning. Never calls a legacy adaptive planner, remote service or storage. */
 export function studyBrainSuggestion(data: AppData, plan: Day[], now: Date): BrainSuggestion {
@@ -110,39 +114,53 @@ export function studyBrainSuggestion(data: AppData, plan: Day[], now: Date): Bra
   // Only choose the earliest owed day, and the earliest outstanding segment in each book.
   // A preference may select the other book, never skip a day/stage or import a third chapter.
   const earliest = pending[0].date;
+  const revision = brainRevisionQueue(data, pair, now);
   const options = pair.flatMap(id => {
     const task = pending.find(item => item.date === earliest && item.chapterIds[0] === id);
     if (!task) return [];
     const evidence = brainChapterEvidence(data, id, now);
+    const repeated = revision.find(row => row.chapterId === id)?.comparison.stillMistaken ?? 0;
     const score = (checkIn?.chapterId === id ? 100 : 0) + (evidence.feedback?.difficulty === 'hard' ? 10 : 0) + (evidence.weakFlag ? 5 : 0)
-      + Math.min(3, evidence.mistakes) + (evidence.mcq.answers >= 5 && evidence.mcq.correct / evidence.mcq.answers < .6 ? 4 : 0);
+      + Math.min(3, repeated) + Math.min(3, evidence.mistakes) + (evidence.mcq.answers >= 5 && evidence.mcq.correct / evidence.mcq.answers < .6 ? 4 : 0);
     return [{ task, evidence, score }];
   }).sort((a, b) => b.score - a.score || a.task.startMinute - b.task.startMinute);
-  const { task, evidence } = options[0];
-  const chapterId = task.chapterIds[0], remaining = personalUnfinishedRanges(task, data.completed)[0];
-  let focusMinutes = Math.min(data.studyBrain.focusMinutes, data.personalRoutine.sessionMinutes, remaining.to - remaining.from);
-  if (pattern.enough && pattern.median !== null) focusMinutes = Math.min(focusMinutes, Math.max(5, pattern.median));
-  if (checkIn?.availableMinutes !== null && checkIn?.availableMinutes !== undefined) focusMinutes = Math.min(focusMinutes, checkIn.availableMinutes);
-  if (checkIn?.energy === 'low' || evidence.feedback?.difficulty === 'hard' || checkIn?.obstacle === 'starting') focusMinutes = Math.min(focusMinutes, 15);
-  const selected = { ...base, task, chapterId, evidence };
-  if (earliest < today || (earliest === today && task.endMinute <= minute)) return { ...selected, status: 'review' };
-  if (!weeklyWindows(data.personalRoutine, task.date).some(window => task.startMinute >= Math.max(window.startMinute, data.dayOverrides[task.date]?.startMinute ?? 0) && task.endMinute <= window.endMinute)) return { ...selected, status: 'outside' };
-  const overlap = plan.find(day => day.date === earliest)?.tasks.some(other => other.id !== task.id && other.startMinute < task.endMinute && other.endMinute > task.startMinute);
-  if (overlap) return { ...selected, status: 'conflict' };
-  if (earliest === today) {
-    const logged = data.studySessions.filter(session => session.date === today && Date.parse(session.at) <= now.getTime()).reduce((sum, session) => sum + session.minutes, 0);
-    focusMinutes = Math.min(focusMinutes, Math.max(0, personalCapacity(data, today) - logged), Math.max(0, task.endMinute - Math.max(task.startMinute, minute)));
+  const routine = data.personalRoutine;
+  const preferredFocus = data.studyBrain.focusMinutes;
+  function evaluate({ task, evidence }: typeof options[number]): BrainSuggestion {
+    const chapterId = task.chapterIds[0], remaining = personalUnfinishedRanges(task, data.completed)[0];
+    let focusMinutes = Math.min(preferredFocus, routine.sessionMinutes, remaining.to - remaining.from);
+    if (pattern.enough && pattern.median !== null) focusMinutes = Math.min(focusMinutes, Math.max(5, pattern.median));
+    if (checkIn?.availableMinutes !== null && checkIn?.availableMinutes !== undefined) focusMinutes = Math.min(focusMinutes, checkIn.availableMinutes);
+    const relevantObstacle = !checkIn?.chapterId || checkIn.chapterId === chapterId ? checkIn?.obstacle : undefined;
+    if (evidence.feedback?.difficulty === 'hard' && evidence.recentHardDays >= 2) focusMinutes = Math.min(focusMinutes, 10);
+    if (checkIn?.energy === 'low' || evidence.feedback?.difficulty === 'hard' || relevantObstacle === 'starting') focusMinutes = Math.min(focusMinutes, 15);
+    const selected = { ...base, task, chapterId, evidence };
+    if (earliest < today || (earliest === today && task.endMinute <= minute)) return { ...selected, status: 'review' };
+    if (!weeklyWindows(routine, task.date).some(window => task.startMinute >= Math.max(window.startMinute, data.dayOverrides[task.date]?.startMinute ?? 0) && task.endMinute <= window.endMinute)) return { ...selected, status: 'outside' };
+    const overlap = plan.find(day => day.date === earliest)?.tasks.some(other => other.id !== task.id && other.startMinute < task.endMinute && other.endMinute > task.startMinute);
+    if (overlap) return { ...selected, status: 'conflict' };
+    if (earliest === today) {
+      const logged = data.studySessions.filter(session => session.date === today && Date.parse(session.at) <= now.getTime()).reduce((sum, session) => sum + session.minutes, 0);
+      focusMinutes = Math.min(focusMinutes, Math.max(0, personalCapacity(data, today) - logged), Math.max(0, task.endMinute - Math.max(task.startMinute, minute)));
+    }
+    focusMinutes = Math.floor(focusMinutes);
+    if (focusMinutes < 1) return { ...selected, status: 'capacity' };
+    const range = { from: remaining.from, to: remaining.from + focusMinutes };
+    const timerTaskId = `smart-part|${encodeURIComponent(task.personalWork!.sourceId)}|${range.from}|${range.to}`;
+    const canStart = earliest === today && task.startMinute <= minute && task.endMinute > minute;
+    return { ...selected, status: canStart ? 'ready' : 'scheduled', focusMinutes, range, timerTaskId, canStart };
   }
-  focusMinutes = Math.floor(focusMinutes);
-  if (focusMinutes < 1) return { ...selected, status: 'capacity' };
-  const range = { from: remaining.from, to: remaining.from + focusMinutes };
-  const timerTaskId = `smart-part|${encodeURIComponent(task.personalWork!.sourceId)}|${range.from}|${range.to}`;
-  const canStart = earliest === today && task.startMinute <= minute && task.endMinute > minute;
-  return { ...selected, status: canStart ? 'ready' : 'scheduled', focusMinutes, range, timerTaskId, canStart };
+  const first = evaluate(options[0]);
+  // A live slot can beat a preview, but never hide an overdue or unsafe higher-ranked task.
+  if (first.status === 'scheduled') {
+    const live = options.slice(1).map(evaluate).find(option => option.status === 'ready');
+    if (live) return { ...live, liveSlotPreferred: true };
+  }
+  return first;
 }
 
 export type BrainMessageResult = { kind: 'draft'; patch: Partial<BrainCheckInDraft>; outsidePair: boolean }
-  | { kind: 'next' | 'memory' | 'help' | 'unsupported' | 'invalid-time' };
+  | { kind: 'next' | 'report' | 'memory' | 'help' | 'unsupported' | 'invalid-time' };
 /** Deliberately small bilingual/Banglish intent parser, not a general chatbot.
  * Natural text only drafts fields. It is never executed or stored as an instruction.
  */
@@ -151,6 +169,7 @@ export function interpretBrainMessage(message: string, pair: string[]): BrainMes
   const text = message.normalize('NFKC').toLowerCase().replace(/[০-৯]/g, digit => String('০১২৩৪৫৬৭৮৯'.indexOf(digit))).trim();
   if (/(?:delete|erase|clear|uninstall|মুছ|মুছে|ডিলিট|complete|finished|watched|studied|পড়েছি|পড়েছি|শেষ করেছি|porechi|porsi|dekhechi)/u.test(text)) return { kind: 'unsupported' };
   if (/(?:remember about me|what.*know.*me|memory|আমার সম্পর্কে|মনে রেখেছ|mone (?:ache|rekhecho))/u.test(text)) return { kind: 'memory' };
+  if (/^(?:my report|show (?:my )?(?:report|progress)|how (?:can i improve|am i doing)|amar report|report dekhao|kivabe improve korbo|আমার রিপোর্ট|রিপোর্ট দেখাও|কীভাবে উন্নতি করব)[.!?।]?$/u.test(text)) return { kind: 'report' };
   const patch: Partial<BrainCheckInDraft> = {};
   const noTime = /(?:পড়তে পারব না|পড়তে পারব না|আজ ছুটি|আজ বিশ্রাম|porte parbo na|aj (?:off|chuti)|no time|cannot study|can't study|rest today)/u.test(text);
   if (noTime) patch.availableMinutes = 0;
@@ -183,4 +202,80 @@ export function interpretBrainMessage(message: string, pair: string[]): BrainMes
   if (Object.keys(patch).length) return { kind: 'draft', patch, outsidePair: !!subjects.length && !matching.length };
   if (/(?:কি পড়ব|কী পড়ব|কি পড়ব|কী পড়ব|ki porbo|what.*(?:study|next)|next|পরের কাজ)/u.test(text)) return { kind: 'next' };
   return { kind: 'help' };
+}
+
+/** Derived review hints only: no additional tasks, persistence, or mastery claims. */
+export function brainRevisionQueue(data: AppData, pair: readonly string[], now: Date) {
+  if (!data.studyBrain?.enabled || !pair.length) return [];
+  const today = todayKey(now), cutoff = addDays(today, -13), timestamp = now.getTime();
+  const chapters = questionChapters(data);
+  const recentStart = addDays(today, -6);
+  const latest = new Map<string, AppData['attempts'][number]>();
+  const earlier = new Map<string, AppData['attempts'][number]>();
+  const recent = new Map<string, AppData['attempts'][number]>();
+  for (const attempt of data.attempts) {
+    const id = chapters.get(attempt.questionId), time = Date.parse(attempt.at);
+    if (!id || !pair.includes(id) || attempt.date < cutoff || attempt.date > today || !Number.isFinite(time) || time > timestamp) continue;
+    for (const window of [latest, attempt.date < recentStart ? earlier : recent]) {
+      const previous = window.get(attempt.questionId);
+      if (!previous || time > Date.parse(previous.at) || (time === Date.parse(previous.at) && attempt.id > previous.id)) window.set(attempt.questionId, attempt);
+    }
+  }
+  const attempts = [...latest.values()];
+  return pair.map(chapterId => {
+    const questions = attempts.filter(attempt => chapters.get(attempt.questionId) === chapterId);
+    const misses = questions.filter(attempt => !attempt.correct).length;
+    const open = data.mistakes.filter(item => item.chapterId === chapterId && !item.resolved && item.date <= today);
+    const oldestOpen = open.reduce<string | undefined>((oldest, item) => !oldest || item.date < oldest ? item.date : oldest, undefined);
+    const comparison = { matched: 0, corrected: 0, stillMistaken: 0, slipped: 0 };
+    for (const { questionId } of questions) {
+      const before = earlier.get(questionId), after = recent.get(questionId);
+      if (!before || !after) continue;
+      comparison.matched++;
+      if (!before.correct && after.correct) comparison.corrected++;
+      if (!before.correct && !after.correct) comparison.stillMistaken++;
+      if (before.correct && !after.correct) comparison.slipped++;
+    }
+    return { chapterId, misses, sampled: questions.length, open: open.length, oldestOpen, comparison };
+  }).sort((a, b) => b.open - a.open || b.misses - a.misses);
+}
+
+export function brainFocusMethod(suggestion: BrainSuggestion): 'start' | 'explain' | 'recall' | 'retry' | 'continue' | undefined {
+  if (!suggestion.range) return undefined;
+  const { checkIn, evidence, chapterId } = suggestion;
+  const obstacle = !checkIn?.chapterId || checkIn.chapterId === chapterId ? checkIn?.obstacle : undefined;
+  if (suggestion.focusMinutes <= 5 || checkIn?.energy === 'low' || obstacle === 'starting') return 'start';
+  if (obstacle === 'understanding' || (evidence?.feedback?.difficulty === 'hard' && evidence.recentHardDays >= 2)) return 'explain';
+  if (obstacle === 'remembering') return 'recall';
+  return evidence?.mistakes ? 'retry' : 'continue';
+}
+
+/** Pick an actionable report direction, without generating questions or changing the plan. */
+export function brainReportDirection(rows: ReturnType<typeof brainRevisionQueue>) {
+  const recurring = rows.find(row => row.comparison.stillMistaken > 0);
+  if (recurring) return { kind: 'recurring', chapterId: recurring.chapterId } as const;
+  const open = rows.find(row => row.open > 0);
+  if (open) return { kind: 'open', chapterId: open.chapterId } as const;
+  const missed = rows.find(row => row.misses > 0);
+  if (missed) return { kind: 'missed', chapterId: missed.chapterId } as const;
+  if (rows.some(row => row.sampled > 0)) return { kind: 'steady' } as const;
+  return { kind: 'limited' } as const;
+}
+
+/** Compare equal completed-day windows; today's partial record is intentionally excluded. */
+export function brainWeeklyReview(data: AppData, now: Date) {
+  if (!data.studyBrain?.enabled || !data.personalRoutine || data.routineSetupRequired) return undefined;
+  const today = todayKey(now), start = addDays(today, -7), previousStart = addDays(today, -14);
+  const selected = new Set(data.personalRoutine.chapterIds);
+  const makeWindow = () => ({ minutes: 0, dates: new Set<string>() });
+  const latest = makeWindow(), previous = makeWindow();
+  for (const log of data.studySessions) {
+    const time = Date.parse(log.at);
+    if (!log.chapterId || !selected.has(log.chapterId) || log.date >= today || log.date < previousStart || !Number.isFinite(time) || time > now.getTime() || !Number.isFinite(log.minutes) || log.minutes <= 0) continue;
+    const window = log.date >= start ? latest : previous;
+    window.minutes += log.minutes;
+    window.dates.add(log.date);
+  }
+  const advice = !latest.dates.size ? 'restart' : latest.dates.size < previous.dates.size ? 'protect' : 'maintain';
+  return { latestDays: latest.dates.size, previousDays: previous.dates.size, latestMinutes: latest.minutes, previousMinutes: previous.minutes, advice } as const;
 }

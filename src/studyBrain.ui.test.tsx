@@ -60,8 +60,8 @@ describe('Study Brain controls, consent and truthful suggestions', () => {
     const h = setup(enabled()); interpret('chemistry mone thake na');
     expect((screen.getByLabelText('Which chapter in this pair needs attention?') as HTMLSelectElement).value).toBe(PERSONAL_IDS[1]); remember();
     expect(h.data().studyBrain!.checkIns[0]).toMatchObject({ obstacle: 'remembering', chapterId: PERSONAL_IDS[1] });
-    expect(within(nextStep()).getByText('A small next step at your scheduled time.')).toBeTruthy();
-    expect(within(nextStep()).queryByRole('button', { name: /Start .*focus/ })).toBeNull();
+    expect(within(nextStep()).getByText(/This slot is open now/)).toBeTruthy();
+    expect(within(nextStep()).getByRole('button', { name: 'Start 25-minute focus' })).toBeTruthy();
     interpret('math bujhi na'); expect(within(checkIn()).getByRole('status').textContent).toContain('outside the current pair');
     expect(h.data().personalRoutine!.chapterIds).toEqual(PERSONAL_IDS);
   });
