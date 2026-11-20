@@ -3,7 +3,8 @@ import { chromium } from 'playwright-core';
 
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 try {
-  const page = await browser.newPage();
+  const context = await browser.newContext();
+  const page = await context.newPage();
   page.on('console', message => { if (message.type() === 'error') console.error('browser:', message.text()); });
   page.on('pageerror', error => console.error('browser error:', error.message));
   await page.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
@@ -16,7 +17,6 @@ try {
   console.log('Real model inference returned a nonempty answer:', result.slice(0, 300));
   // Start a fresh JS realm in the same persistent browser context, then block
   // the network. A model already in RAM does not prove offline startup.
-  const context = page.context();
   const fresh = await context.newPage();
   await fresh.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
   await fresh.evaluate(async () => { window.__ai = await import('/src/aiModel.ts'); });
