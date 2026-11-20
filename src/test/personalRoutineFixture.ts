@@ -20,5 +20,8 @@ export function personalRoutineFixture(ids = PERSONAL_IDS): PersonalRoutine {
     workloads: Object.fromEntries(ids.map(id => [id, personalWorkload()])), updatedAt: '2026-11-16T10:00:00.000Z' };
 }
 export function personalDataFixture(ids = PERSONAL_IDS): AppData {
-  const data = freshData(); data.settings.language = 'en'; data.personalRoutine = personalRoutineFixture(ids); return data;
+  const data = freshData(); data.settings.language = 'en';
+  // Keep the synthetic fixture deterministic and independent of the current date.
+  data.settings.startDate = '2026-11-20'; data.settings.boostStartDate = '2026-12-07';
+  data.personalRoutine = personalRoutineFixture(ids); return data;
 }

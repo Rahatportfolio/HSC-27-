@@ -3,7 +3,7 @@ import { CHAPTERS, CORE, PAPERS } from './data';
 import { setLanguage } from './i18n';
 import {
   addDays, applyDayOverrides, buildPlan, chapterStudyTasks, DEFAULT_SETTINGS, diffDays, freshData,
-  getPhases, hasFullTaskAllocation, isChapterDone, scheduleDateError, shiftPlanStart,
+  getPhases, hasFullTaskAllocation, isChapterDone, scheduleDateError, shiftPlanStart, todayKey,
 } from './planner';
 import type { Settings } from './planner';
 import { applyScheduleSettings } from './reschedule';
@@ -22,31 +22,35 @@ import { buildDailyNotificationDigest } from './notifications';
 import { setTaskCompletion } from './study';
 
 beforeEach(() => setLanguage('en'));
-const base = buildPlan();
+/** Pin the settings the contract assertions were written against; the shipped default is today-relative. */
+const PIN = { ...DEFAULT_SETTINGS, startDate: '2026-11-20', boostStartDate: '2026-12-07' };
+const base = buildPlan(PIN);
 const allIds = (settings: Settings) => buildPlan(settings).flatMap(day => day.tasks.map(task => task.id));
 const endAt = (task: { date: string; endMinute: number }) => Date.parse(`${task.date}T00:00:00Z`) + task.endMinute * 60000;
 const midnight = (date: string) => Date.parse(`${date}T00:00:00Z`);
 
 describe('date-cascade contract', () => {
   it('starts on 20 November and fits all promised work before the two personal targets', () => {
-    expect(DEFAULT_SETTINGS.startDate).toBe('2026-11-20');
-    expect(DEFAULT_SETTINGS.boostStartDate).toBe('2026-12-07');
+    expect(DEFAULT_SETTINGS.startDate).toBe(todayKey());
+    expect(DEFAULT_SETTINGS.boostStartDate).toBe(addDays(todayKey(), 17));
+    expect(PIN.startDate).toBe('2026-11-20');
+    expect(PIN.boostStartDate).toBe('2026-12-07');
     expect(base).toHaveLength(198);
     expect(base.at(-1)?.date).toBe('2027-06-05');
-    expect(planHealth(base, DEFAULT_SETTINGS)).toMatchObject({
+    expect(planHealth(base, PIN)).toMatchObject({
       syllabusEnd: '2027-01-29', missingParts: 0, missingMocks: 0, missingRevisionPasses: 0, warnings: [],
     });
   });
 
   it('moves all linked targets and every generated task by the same calendar-day offset', () => {
-    const shifted = shiftPlanStart(DEFAULT_SETTINGS, '2026-11-26');
+    const shifted = shiftPlanStart(PIN, '2026-11-26');
     expect(shifted).toMatchObject({ boostStartDate: '2026-12-13', testExamDate: '2027-02-07', examDate: '2027-06-12' });
     const plan = buildPlan(shifted);
     const md = makeMarkdown(plan, { ...freshData(), settings: shifted });
     expect(md).toContain(`**বাড়তি পর্যায়:** ${shifted.boostStartDate}`);
     expect(md).toContain(shifted.testExamDate);
     expect(md).toContain(shifted.examDate);
-    expect(plan.flatMap(day => day.tasks.map(task => task.id))).toEqual(allIds(DEFAULT_SETTINGS));
+    expect(plan.flatMap(day => day.tasks.map(task => task.id))).toEqual(allIds(PIN));
     base.forEach((day, i) => expect(plan[i]).toMatchObject({ date: addDays(day.date, 6), phase: day.phase, index: day.index }));
   });
 
@@ -73,7 +77,7 @@ describe('date-cascade contract', () => {
   });
 
   it('keeps externally set exam deadlines fixed while moving the boost and recomputing phases', () => {
-    const fixed = shiftPlanStart({ ...DEFAULT_SETTINGS, examDatePolicy: 'fixed' }, '2026-12-01');
+    const fixed = shiftPlanStart({ ...PIN, examDatePolicy: 'fixed' }, '2026-12-01');
     expect(fixed).toMatchObject({ boostStartDate: '2026-12-18', testExamDate: '2027-02-01', examDate: '2027-06-06' });
     const phases = getPhases(fixed);
     expect(phases[0]).toMatchObject({ start: '2026-12-01', end: '2027-01-31', days: 62 });
@@ -83,7 +87,7 @@ describe('date-cascade contract', () => {
 
   it.each(['2020-01-01', '2024-01-31', '2024-02-29', '2026-12-31', '2028-02-29', '2040-12-31'])(
     'keeps a contiguous, unique, complete plan across month/year/leap boundaries: %s', start => {
-      const settings = shiftPlanStart(DEFAULT_SETTINGS, start);
+      const settings = shiftPlanStart(PIN, start);
       const phases = getPhases(settings);
       const plan = buildPlan(settings);
       expect(phases.reduce((n, phase) => n + phase.days, 0)).toBe(plan.length);
@@ -95,14 +99,14 @@ describe('date-cascade contract', () => {
       expect(plan.every((day, i) => day.date === addDays(start, i) && day.index === i + 1)).toBe(true);
       const ids = plan.flatMap(day => day.tasks.map(task => task.id));
       expect(new Set(ids).size).toBe(ids.length);
-      expect(ids).toEqual(allIds(DEFAULT_SETTINGS));
+      expect(ids).toEqual(allIds(PIN));
       expect(planHealth(plan, settings).warnings).toEqual([]);
     },
   );
 
   it('keeps exact daily minutes and all task instants before the test/board cutoffs, including late starts', () => {
     for (const hours of [4, 8, 12, 16, 18]) for (const startTime of ['00:00', '04:55', '06:30', '22:00', '23:59']) {
-      const settings = { ...DEFAULT_SETTINGS, startTime, dailyHours: hours, boostEnabled: false };
+      const settings = { ...PIN, startTime, dailyHours: hours, boostEnabled: false };
       const plan = buildPlan(settings);
       expect(plan.length, `${hours}h ${startTime}`).toBeGreaterThan(0);
       for (const day of plan) {
@@ -123,15 +127,15 @@ describe('date-cascade contract', () => {
     { examDate: '2026-12-01' }, { boostStartDate: '2026-11-19' }, { boostStartDate: '2027-06-06' },
     { examDate: '2030-01-01' }, { startTime: '' }, { dailyHours: 99 },
   ])('rejects an invalid or reversed schedule without fabricating dates: %j', patch => {
-    const settings = { ...DEFAULT_SETTINGS, ...patch };
+    const settings = { ...PIN, ...patch };
     expect(scheduleDateError(settings)).toBeTruthy();
     expect(buildPlan(settings)).toEqual([]);
     expect(() => applyScheduleSettings(freshData(), settings)).toThrow();
   });
 
   it('allows clearing a dependent draft field without crashing a subsequent start-date edit', () => {
-    expect(shiftPlanStart({ ...DEFAULT_SETTINGS, boostStartDate: '' }, '2026-11-21').boostStartDate).toBe('');
-    expect(() => shiftPlanStart(DEFAULT_SETTINGS, '')).toThrow();
+    expect(shiftPlanStart({ ...PIN, boostStartDate: '' }, '2026-11-21').boostStartDate).toBe('');
+    expect(() => shiftPlanStart(PIN, '')).toThrow();
   });
 });
 
@@ -336,7 +340,7 @@ describe('date-dependent progress and metadata', () => {
     expect(hasFullTaskAllocation([first, first], task.id)).toBe(false);
     expect(hasFullTaskAllocation([segment(0, half - 1), segment(half, total)], task.id)).toBe(false);
     expect(isChapterDone(partial, task.chapterIds[0], completed)).toBe(false);
-    expect(planHealth(partial, DEFAULT_SETTINGS, completed).missingParts).toBe(1);
+    expect(planHealth(partial, PIN, completed).missingParts).toBe(1);
     const last = segment(half, total);
     expect(hasFullTaskAllocation([first, last], task.id)).toBe(true);
     expect(hasFullTaskAllocation([last], task.id, { [first.id]: completed[first.id] }, true)).toBe(true);
@@ -370,7 +374,7 @@ describe('date-dependent progress and metadata', () => {
   it('warns about removed chapter practice even when every learning part remains allocated', () => {
     const chapter = CHAPTERS.find(item => item.effort === 1)!;
     const plan = base.map(day => ({ ...day, tasks: day.tasks.filter(task => !task.id.startsWith(`chap-practice-${chapter.id}-`)) }));
-    const health = planHealth(plan, DEFAULT_SETTINGS);
+    const health = planHealth(plan, PIN);
     expect(health.missingParts).toBe(0);
     expect(health.missingPractice).toBe(1);
     expect(health.syllabusEnd).toBeUndefined();
@@ -406,7 +410,7 @@ describe('date-dependent progress and metadata', () => {
   });
 
   it('derives chapter hours/dates and category completion from live initial study, not the old static schedule or later revision', () => {
-    const settings = { ...shiftPlanStart(DEFAULT_SETTINGS, '2026-12-01'), dailyHours: 6, boostEnabled: false };
+    const settings = { ...shiftPlanStart(PIN, '2026-12-01'), dailyHours: 6, boostEnabled: false };
     const plan = buildPlan(settings);
     const chapter = CHAPTERS[0];
     const tasks = chapterStudyTasks(plan, chapter.id);
@@ -450,13 +454,13 @@ describe('date-dependent progress and metadata', () => {
   });
 
   it('shows an explicit warning when a manual time override spills past the board target', () => {
-    const plan = applyDayOverrides(base, { '2027-06-05': { startMinute: 1430 } }, DEFAULT_SETTINGS);
-    expect(planHealth(plan, DEFAULT_SETTINGS).deadlineOverruns).toBeGreaterThan(0);
-    expect(planHealth(plan, DEFAULT_SETTINGS).warnings.join(' ')).toContain('past the board target');
+    const plan = applyDayOverrides(base, { '2027-06-05': { startMinute: 1430 } }, PIN);
+    expect(planHealth(plan, PIN).deadlineOverruns).toBeGreaterThan(0);
+    expect(planHealth(plan, PIN).warnings.join(' ')).toContain('past the board target');
   });
 
   it('reports missing model tests and revision passes in a genuinely short final preparation window', () => {
-    const settings = { ...DEFAULT_SETTINGS, examDate: '2027-02-04' };
+    const settings = { ...PIN, examDate: '2027-02-04' };
     const health = planHealth(buildPlan(settings), settings);
     expect(health.missingRevisionPasses).toBeGreaterThan(0);
     expect(health.missingMocks).toBeGreaterThan(0);

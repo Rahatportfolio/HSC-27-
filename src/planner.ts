@@ -31,13 +31,25 @@ export interface Settings extends SettingsExtras {
   examDatePolicy: 'shift' | 'fixed';
 }
 
+/** Asia/Dhaka is the planning timezone; declared early so fresh installs derive from it. */
+export const TIMEZONE = 'Asia/Dhaka';
+/** Today as YYYY-MM-DD in Asia/Dhaka. */
+export function dhakaToday(now: Date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
+  const value = (type: string) => parts.find(p => p.type === type)!.value;
+  return `${value('year')}-${value('month')}-${value('day')}`;
+}
+/** A fresh install starts its routine today, in Asia/Dhaka. */
+const DEFAULT_START = dhakaToday();
+/** …and steps into the boost seventeen days later. */
+const DEFAULT_BOOST = new Date(new Date(`${DEFAULT_START}T00:00:00Z`).getTime() + 17 * 86400000).toISOString().slice(0, 10);
 /** Defaults are personal planning targets; see EXAM_DATE_INFORMATION for verification limits. */
 export const DEFAULT_SETTINGS: Settings = {
-  startDate: '2026-11-20',
+  startDate: DEFAULT_START,
   startTime: '06:30',
   dailyHours: 8,
   boostEnabled: true,
-  boostStartDate: '2026-12-07',
+  boostStartDate: DEFAULT_BOOST,
   boostDailyHours: 16,
   adaptiveEnabled: true,
   adaptiveBuffer: 30,
@@ -330,7 +342,6 @@ export function applyRoutine(plan: Day[], blocks: RoutineBlock[]): Day[] {
 }
 
 export const STORAGE_KEY = 'hsc27-prostuti-v1';
-export const TIMEZONE = 'Asia/Dhaka';
 
 const DAY_MS = 86400000;
 export function isValidDate(value: string): boolean {
@@ -350,10 +361,7 @@ export function addMonths(date: string, count: number): string {
   return d.toISOString().slice(0, 10);
 }
 export function diffDays(a: string, b: string): number { return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS); }
-export function todayKey(now = new Date()): string {
-  const parts = new Intl.DateTimeFormat('en-CA', { timeZone: TIMEZONE, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(now);
-  return `${parts.find(p => p.type === 'year')!.value}-${parts.find(p => p.type === 'month')!.value}-${parts.find(p => p.type === 'day')!.value}`;
-}
+export function todayKey(now = new Date()): string { return dhakaToday(now); }
 export function dhakaMinutes(now = new Date()): number {
   const parts = new Intl.DateTimeFormat('en-GB', { timeZone: TIMEZONE, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(now);
   return Number(parts.find(p => p.type === 'hour')!.value) * 60 + Number(parts.find(p => p.type === 'minute')!.value);

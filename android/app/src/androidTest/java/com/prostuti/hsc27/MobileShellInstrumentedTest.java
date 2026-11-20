@@ -321,7 +321,11 @@ public class MobileShellInstrumentedTest {
     JSONObject saved = object(web, "JSON.parse(localStorage.getItem('hsc27-prostuti-v1'))");
     JSONObject routine = saved.getJSONObject("personalRoutine");
     assertFalse("Setup flag was not completed", saved.getBoolean("routineSetupRequired"));
-    assertEquals("2026-11-20", saved.getJSONObject("settings").getString("startDate"));
+    // A fresh install starts its routine on the current Asia/Dhaka date; compute it the same way the app does.
+    String expectedStart = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US) {
+      { setTimeZone(java.util.TimeZone.getTimeZone("Asia/Dhaka")); }
+    }.format(new java.util.Date());
+    assertEquals(expectedStart, saved.getJSONObject("settings").getString("startDate"));
     assertEquals("S", routine.getString("scope"));
     assertEquals(2, routine.getJSONArray("chapterIds").length());
     assertEquals(7, routine.getJSONArray("windows").length());

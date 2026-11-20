@@ -61,7 +61,7 @@ async function flow() {
   const context = await browser.newContext({ viewport: { width: 320, height: 800 }, isMobile: true, hasTouch: true, timezoneId: 'Asia/Dhaka', reducedMotion: 'reduce' });
   try {
     const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-    await page.clock.setFixedTime(new Date('2026-11-16T06:00:00Z'));
+    await page.clock.setFixedTime(new Date('2026-11-20T06:00:00Z'));
     await go(page, 'today');
     assert.equal(await page.locator('main h1').innerText(), 'অ্যাপ খুলে পড়া শুরু করো — ফর্ম পূরণ নয়');
     await page.getByRole('button', { name: /সব আমি নিজে সাজিয়ে নিতে চাই/ }).click();
