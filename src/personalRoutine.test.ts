@@ -5,7 +5,7 @@ import { parseBackup } from './storage';
 import { buildStudyPlan } from './studyPlan';
 import { setTaskCompletion } from './study';
 import { learningDashboard } from './learning';
-import { RECOMMENDED_S_IDS, WORK_STAGES, applyPersonalRoutine, buildPersonalStudyProjection, chapterWorkEstimate, defaultChapterWorkload, isPersonalTaskComplete, newPersonalRoutine, parsePersonalRoutine, personalChapterPairs, personalRoutineHealth, undoPersonalRange } from './personalRoutine';
+import { DEFAULT_CHAPTER_MINUTES, RECOMMENDED_S_IDS, WORK_STAGES, workloadFor, applyPersonalRoutine, buildPersonalStudyProjection, chapterWorkEstimate, defaultChapterWorkload, isPersonalTaskComplete, newPersonalRoutine, parsePersonalRoutine, personalChapterPairs, personalRoutineHealth, undoPersonalRange } from './personalRoutine';
 import type { ChapterWorkload, PersonalRoutine } from './personalRoutine';
 
 const ids = ['physics-1-3', 'chemistry-1-3', 'math-1-1', 'physics-1-4'];
@@ -192,6 +192,11 @@ for (const [name, mutate] of Object.entries({
 })) it(`rejects invalid personal routine: ${name}`, () => { const r = routine(); mutate(r); expect(() => parsePersonalRoutine(r)).toThrow(); });
 
 it('default videos and independent workloads stay unknown until explicitly configured, never fixed 30/45/60 guesses', () => {
+  // The raw six-stage default is still honestly unknown; `workloadFor` is what
+  // supplies the visible, editable 20-hour estimate for a blank chapter.
   const r = newPersonalRoutine(); const w = defaultChapterWorkload(RECOMMENDED_S_IDS[0]); expect(w.class.minutes).toBeNull(); expect(w.mcqClass.minutes).toBeNull(); expect(w.cqClass.minutes).toBeNull();
-  expect([w.reading.minutes, w.notes.minutes, w.mcqPractice.minutes, w.cqPractice.minutes, w.revision.minutes]).toEqual([null, null, null, null, null]); expect(chapterWorkEstimate(r, RECOMMENDED_S_IDS[0]).complete).toBe(false);
+  expect([w.reading.minutes, w.notes.minutes, w.mcqPractice.minutes, w.cqPractice.minutes, w.revision.minutes]).toEqual([null, null, null, null, null]);
+  expect(r.workloads).toEqual({});
+  expect(chapterWorkEstimate(r, RECOMMENDED_S_IDS[0])).toMatchObject({ complete: true, unknown: [], minutes: DEFAULT_CHAPTER_MINUTES });
+  expect(WORK_STAGES.every(stage => workloadFor(r, RECOMMENDED_S_IDS[0])[stage.id].source === 'default24')).toBe(true);
 });

@@ -293,6 +293,10 @@ public class MobileShellInstrumentedTest {
     tap(web, ".personal-chapter-choices input[value='chemistry-1-3']");
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-workload-editor')");
+    // Step 3 opens on the editable 20-hour estimate and is optional: the plan is
+    // already dated before any minute is typed here.
+    assertEquals("Step 3 must open on the editable 20-hour estimate, not a blank plan", "true",
+        evaluate(web, "(()=>{const t=document.querySelector('.personal-workload-editor').textContent;return t.includes('The schedule already works')&&t.includes('each chapter gets');})()"));
     // The two first-pair buttons select different chapters without feeding a
     // prebuilt profile into storage. Long durations must NOT become 80 minutes.
     for (int chapter = 1; chapter <= 2; chapter++) {

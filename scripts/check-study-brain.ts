@@ -112,6 +112,8 @@ async function matrix() {
     if (state !== 'off') data.studyBrain = newStudyBrain();
     if (state === 'paused') data.studyBrain!.enabled = false;
     if (state === 'rest') data = saveBrainCheckIn(data, { energy: 'low', availableMinutes: 0, obstacle: 'starting' }, '2026-11-20', now.toISOString());
+    // 'duration' used to be a blocked state. Blank chapters now get the editable
+    // 20-hour estimate, so this state must show ordinary ready work, not a wall.
     if (state === 'duration') data.personalRoutine!.workloads[PERSONAL_IDS[0]] = defaultChapterWorkload(PERSONAL_IDS[0]);
     if (state === 'setup') data.routineSetupRequired = true;
     data.settings = { ...data.settings, language: viewport.language, theme: viewport.theme, fontScale: viewport.fontScale };
@@ -125,12 +127,12 @@ async function matrix() {
       if (['off', 'paused'].includes(state)) assert.equal(await page.locator('.brain-check-in').count(), 0);
       else {
         const heading = await page.locator('.brain-recommendation h2').innerText();
-        const expected = state === 'ready' ? /এখন ছোট|manageable next step/ : state === 'rest' ? /আজ বিরতি|break today/ : state === 'duration' ? /আসল সময়|real work durations/ : state === 'review' ? /আগের অংশ|earlier segment/ : state === 'legacy' ? /পুরোনো রুটিন|existing routine/ : /পড়ার সময়|when you can study/;
+        const expected = state === 'ready' || state === 'duration' ? /এখন ছোট|manageable next step/ : state === 'rest' ? /আজ বিরতি|break today/ : state === 'review' ? /আগের অংশ|earlier segment/ : state === 'legacy' ? /পুরোনো রুটিন|existing routine/ : /পড়ার সময়|when you can study/;
         assert.match(heading, expected);
-        if (state !== 'ready') assert.equal(await page.locator('.brain-recommendation .button.primary').count(), 0, `${name}: no invalid timer`);
+        if (!['ready', 'duration'].includes(state)) assert.equal(await page.locator('.brain-recommendation .button.primary').count(), 0, `${name}: no invalid timer`);
       }
       assert.deepEqual(await read(page), before, `${name}: viewing never writes memory, task ranges or completion timestamps`);
-      if (['ready', 'off'].includes(state)) await page.screenshot({ path: `${output}/${name}.png`, fullPage: true });
+      if (['ready', 'duration', 'off'].includes(state)) await page.screenshot({ path: `${output}/${name}.png`, fullPage: true });
       assert.deepEqual(errors, []); results.push({ scenario: name, status: 'passed' });
     } finally { await context.close(); }
   }
