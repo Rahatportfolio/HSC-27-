@@ -32,14 +32,6 @@ export interface AiChatMessage {
   content: string;
 }
 
-interface AiGenerator {
-  (messages: AiChatMessage[], options?: Record<string, unknown>): Promise<Array<{ generated_text: AiChatMessage[] }>>;
-}
-
-interface TransformersModule {
-  pipeline: (task: string, model: string, options?: Record<string, unknown>) => Promise<AiGenerator>;
-}
-
 export const AI_SYSTEM_PROMPT = [
   'You are Prostuti, a friendly HSC (Higher Secondary Certificate, Bangladesh) study assistant inside a study-planner app.',
   'Answer in the same language the student writes: Bengali, Banglish (Bengali in Latin letters), or English.',
@@ -63,51 +55,58 @@ export function aiErrorMessage(error: unknown): string {
   return 'AI চালু করা যায়নি। স্মার্ট ব্রেইন মোডে তোমার প্রশ্নের উত্তর এখনই পাবে; মডেলের জন্য পরে আবার চেষ্টা করো।';
 }
 
-let generatorPromise: Promise<AiGenerator> | null = null;
+interface WorkerReply {
+  id: number;
+  kind: 'progress' | 'result' | 'error';
+  progress?: AiProgress;
+  text?: string;
+  message?: string;
+}
+type Pending = { resolve: (text: string) => void; reject: (error: Error) => void; onProgress?: (progress: AiProgress) => void };
+let worker: Worker | null = null;
+let nextId = 0;
+const pending = new Map<number, Pending>();
 
-/**
- * Load (and, on first use, download) the on-device model.
- * The engine itself is fetched from the CDN only when this is called, so the
- * main app bundle never carries it. Rejects with a Bengali-friendly error.
- */
-export function loadAiModel(onProgress?: (progress: AiProgress) => void): Promise<AiGenerator> {
-  if (!generatorPromise) {
-    generatorPromise = (async (): Promise<AiGenerator> => {
-      let mod: TransformersModule;
-      try {
-        mod = await import(/* @vite-ignore */ TRANSFORMERS_CDN) as TransformersModule;
-      } catch {
-        throw new Error('Failed to fetch the AI engine.');
-      }
-      const options: Record<string, unknown> = {
-        dtype: AI_MODEL_DTYPE,
-        progress_callback: (progress: AiProgress) => onProgress?.(progress),
-      };
-      try {
-        return await mod.pipeline('text-generation', AI_MODEL_ID, options);
-      } catch (firstError) {
-        // WebGPU can exist but fail in some WebViews; retry once on plain WASM.
-        try {
-          return await mod.pipeline('text-generation', AI_MODEL_ID, { ...options, device: 'wasm' });
-        } catch {
-          throw firstError;
-        }
-      }
-    })();
-    // Allow a later retry after a failure instead of caching the rejection.
-    generatorPromise.catch(() => { generatorPromise = null; });
+function getWorker(): Worker {
+  if (!worker) {
+    const instance = new Worker(new URL('./aiModel.worker.ts', import.meta.url), { type: 'module' });
+    instance.onmessage = (event: MessageEvent<WorkerReply>) => {
+      const reply = event.data, task = pending.get(reply.id);
+      if (!task) return;
+      if (reply.kind === 'progress') { if (reply.progress) task.onProgress?.(reply.progress); return; }
+      pending.delete(reply.id);
+      if (reply.kind === 'error') task.reject(new Error(reply.message || 'AI worker failed'));
+      else task.resolve(reply.text || '');
+    };
+    instance.onerror = () => {
+      instance.terminate();
+      if (worker === instance) worker = null;
+      for (const task of pending.values()) task.reject(new Error('AI worker failed to start'));
+      pending.clear();
+    };
+    worker = instance;
   }
-  return generatorPromise;
+  return worker;
 }
 
-/** One chat turn against the on-device model. Returns the assistant reply text. */
+function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?: (progress: AiProgress) => void): Promise<string> {
+  return new Promise((resolve, reject) => {
+    try {
+      const instance = getWorker(), id = ++nextId;
+      pending.set(id, { resolve, reject, onProgress });
+      try { instance.postMessage({ id, kind, messages, cdn: TRANSFORMERS_CDN, model: AI_MODEL_ID, dtype: AI_MODEL_DTYPE }); }
+      catch (error) { pending.delete(id); throw error; }
+    } catch (error) { reject(error instanceof Error ? error : new Error(String(error))); }
+  });
+}
+
+/** Download/load the model in a worker. A failed request can be retried. */
+export async function loadAiModel(onProgress?: (progress: AiProgress) => void): Promise<void> {
+  await request('load', undefined, onProgress);
+}
+
+/** One chat turn against the on-device model; inference never blocks the UI thread. */
 export async function chatWithAi(history: AiChatMessage[], onProgress?: (progress: AiProgress) => void): Promise<string> {
-  const generator = await loadAiModel(onProgress);
-  const output = await generator(
-    [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history],
-    { max_new_tokens: 256, temperature: 0.7, top_p: 0.9, do_sample: true },
-  );
-  const messages = output?.[0]?.generated_text ?? [];
-  const last = messages[messages.length - 1];
-  return last?.content?.trim() || 'মডেল কোনো উত্তর দিতে পারেনি। আবার চেষ্টা করো, অথবা স্মার্ট ব্রেইন মোড ব্যবহার করো।';
+  const reply = await request('chat', [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history], onProgress);
+  return reply || 'মডেল কোনো উত্তর দিতে পারেনি। আবার চেষ্টা করো, অথবা স্মার্ট ব্রেইন মোড ব্যবহার করো।';
 }
