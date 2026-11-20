@@ -193,7 +193,17 @@ public class MobileShellInstrumentedTest {
         SystemClock.sleep(150);
         // A second ANR can appear while the first is closing; keep pressing OK.
         String again = focusedWindowLines(shell("dumpsys window"));
+        // Our Activity may also just take longer than this loop once the dialog
+        // is gone; do not press OK a second time merely because focus is slow.
         if (again.contains("Application Not Responding") && !again.contains("com.prostuti.hsc27")) shell("input keyevent KEYCODE_ENTER");
+      }
+      // One unpressured wait for the window that the dialog was covering.
+      long graceUntil = SystemClock.elapsedRealtime() + 15000;
+      while (SystemClock.elapsedRealtime() < graceUntil) {
+        boolean[] focused = new boolean[1];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> focused[0] = web.hasWindowFocus());
+        if (focused[0]) return;
+        SystemClock.sleep(100);
       }
       owner = focusedWindowLines(shell("dumpsys window"));
     }
