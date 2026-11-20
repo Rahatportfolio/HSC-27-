@@ -80,7 +80,7 @@ export default function DailyWorkCard() {
     )}
 
     {tomorrowOpen.length > 0 && (
-      <button type="button" className="daily-work-tomorrow" onClick={() => setSelectedDate(tomorrowKey)} aria-label={t('আগামীকালের রুটিন দেখো', 'See tomorrow’s routine')}>
+      <button type="button" className="daily-work-tomorrow" onClick={() => setSelectedDate(tomorrowKey)}>
         <CalendarDays size={19} aria-hidden="true" />
         <div>
           <strong>{t('আগামীকালের ক্লাস', 'Tomorrow’s classes')} · {formatDate(tomorrowKey, 'weekday')}</strong>
