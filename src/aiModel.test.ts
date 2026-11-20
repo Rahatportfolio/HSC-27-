@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AI_MODEL_DTYPE, AI_MODEL_ID, AI_MODEL_SIZE_MB, TRANSFORMERS_CDN,
+  AI_MODEL_DTYPE, AI_MODEL_ID, AI_MODEL_SIZE_MB,
   aiErrorMessage,
 } from './aiModel';
 
@@ -12,10 +12,6 @@ describe('on-device AI model configuration', () => {
     expect(AI_MODEL_SIZE_MB).toBeLessThanOrEqual(200);
   });
 
-  it('loads the engine from the pinned transformers.js CDN', () => {
-    expect(TRANSFORMERS_CDN).toContain('@huggingface/transformers@3.8.1');
-    expect(TRANSFORMERS_CDN.startsWith('https://cdn.jsdelivr.net/npm/')).toBe(true);
-  });
 
 });
 

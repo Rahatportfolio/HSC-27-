@@ -4,9 +4,8 @@
  * The weights are deliberately NOT bundled. GitHub cannot store a single file
  * larger than 100 MB, and shipping 140 MB inside the site would slow every
  * first visit. Instead the app downloads the model once from Hugging Face
- * through the transformers.js engine (loaded from a CDN, only when this
- * feature is opened), the browser may cache it. Generation runs locally, but the remote runtime
- * and cache eviction mean offline startup is not guaranteed.
+ * through the bundled transformers.js runtime. The browser may cache model
+ * files; cache eviction can require downloading the model again.
  *
  * The built-in rule-based brain in aiBrain.ts answers instantly with no
  * download at all; this module is only for open-ended chat.
@@ -16,8 +15,6 @@ export const AI_MODEL_ID = 'HuggingFaceTB/SmolLM2-135M-Instruct';
 export const AI_MODEL_DTYPE = 'q8';
 /** Approximate size of the Q8 weights on disk, in megabytes. */
 export const AI_MODEL_SIZE_MB = 140;
-/** transformers.js v3 engine, loaded on demand so the app bundle stays lean. */
-export const TRANSFORMERS_CDN = 'https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/+esm';
 
 export interface AiProgress {
   status: string;
@@ -94,7 +91,7 @@ function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?:
     try {
       const instance = getWorker(), id = ++nextId;
       pending.set(id, { resolve, reject, onProgress });
-      try { instance.postMessage({ id, kind, messages, cdn: TRANSFORMERS_CDN, model: AI_MODEL_ID, dtype: AI_MODEL_DTYPE }); }
+      try { instance.postMessage({ id, kind, messages, model: AI_MODEL_ID, dtype: AI_MODEL_DTYPE }); }
       catch (error) { pending.delete(id); throw error; }
     } catch (error) { reject(error instanceof Error ? error : new Error(String(error))); }
   });
