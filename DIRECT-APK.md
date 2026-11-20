@@ -8,7 +8,7 @@ not be triggered as delivery of the S/Brain/performance rework.
 
 ## Required checks and immutable bytes
 
-- Only a session delivery branch matching `arena/<12 hex>-hsc-27`, a push
+- Only a session delivery branch matching `arena/<8 hex>-hsc-27` (8–12 hex accepted), a push
   carrying the explicit `[current-dev-apk]` acknowledgement, and the
   development-only confirmation can request publication. `main`, tags, other
   branches, and near-miss names such as `arena/<hex>-hsc-27-extra` or a nested

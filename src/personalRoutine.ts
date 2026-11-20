@@ -340,10 +340,15 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
   if (unknownChapters.length) issues.push({ code: 'unknown-duration', chapterIds: unknownChapters, minutes: 0, count: unknownChapters.length });
   const plannedChapterIds: string[] = [];
   let dayIndex = Math.max(0, diffDays(data.settings.startDate, routine.startsOn && routine.startsOn > data.settings.startDate ? routine.startsOn : data.settings.startDate));
+  // A chapter whose durations are still unknown can never be scheduled or given
+  // an invented finish date, but it must not blank out the whole plan either:
+  // every chapter that HAS real durations is placed from the first day, even
+  // when it shares a pair with, or follows, an unknown chapter. Unknown
+  // chapters stay visibly pending through the unknown-duration issue.
   for (const pair of personalChapterPairs(routine)) {
-    // Do not skip an unknown chapter or fabricate a completion date for later work.
-    if (pair.some(id => !chapterWorkEstimate(routine, id).complete)) break;
-    const chapters = pair.map(id => {
+    const known = pair.filter(id => chapterWorkEstimate(routine, id).complete);
+    if (!known.length) continue; // Nothing schedulable yet; the unknown-duration issue names it.
+    const chapters = known.map(id => {
       const sources = sourcesFor(routine, id);
       // First part of teaching/reading/notes first; the rest plus practice/revision
       // on day two or later. No practice/revision is certified by day one's video.
@@ -408,21 +413,21 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
         const index = quotas[turn] > 0 ? turn : quotas.findIndex(n => n > 0);
         if (!appendSegment(index)) break;
       }
-      if (pairDay === 2 && chapters.some(c => c.used < c.total)) issues.push({ code: 'two-day-capacity', chapterIds: pair, minutes: chapters.reduce((sum, c) => sum + c.total - c.used, 0) });
+      if (pairDay === 2 && chapters.some(c => c.used < c.total)) issues.push({ code: 'two-day-capacity', chapterIds: known, minutes: chapters.reduce((sum, c) => sum + c.total - c.used, 0) });
     }
     if (chapters.some(c => c.used < c.total)) {
       const remaining = chapters.reduce((sum, c) => sum + c.total - c.used, 0);
-      issues.push({ code: 'deadline', chapterIds: pair, minutes: remaining });
+      issues.push({ code: 'deadline', chapterIds: known, minutes: remaining });
       if (plan.length) plan[plan.length - 1].deferredMinutes = remaining;
       break;
     }
-    plannedChapterIds.push(...pair);
+    plannedChapterIds.push(...known);
   }
   return { plan, issues, unknownChapters, plannedChapterIds };
 }
 export function routineIssueText(issue: RoutineIssue): string {
   const names = issue.chapterIds.slice(0, 2).map(id => chapterById[id]?.title || id).join(' + ');
-  if (issue.code === 'unknown-duration') return t(`${bn(issue.count || issue.chapterIds.length)}টি নির্বাচিত অধ্যায়ের ক্লাস/কাজের সময় অজানা। প্রকৃত সময় না মেলা পর্যন্ত ওই জোড়া ও পরের অধ্যায়ের শেষ তারিখ বানানো হবে না।`, `${issue.count || issue.chapterIds.length} selected chapters have unknown class/work durations. No finish date is invented for that pair or later chapters.`);
+  if (issue.code === 'unknown-duration') return t(`${names}${issue.chapterIds.length > 2 ? ` +${bn(issue.chapterIds.length - 2)}` : ''} — এই নির্বাচিত অধ্যায়ের ক্লাস/কাজের সময় অজানা। প্রকৃত সময় না মেলা পর্যন্ত এদের শেষ তারিখ বানানো হবে না; বাকি অধ্যায়ের কাজ চলবে।`, `${names}${issue.chapterIds.length > 2 ? ` +${issue.chapterIds.length - 2}` : ''} — selected chapters with unknown class/work durations. No finish date is invented for them until the real minutes are entered; the other chapters keep their sessions.`);
   if (issue.code === 'two-day-capacity') return t(`${names}: তোমার প্রথম দুই পড়ার দিনে আরও ${formatDurationBn(issue.minutes)} কাজ বাকি থাকে। একই জোড়া বাড়তি দিনে চলবে—ক্লাস ছোট করা হয়নি।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit in your first two study days. The SAME pair continues on extra days; no class was shortened.`);
   if (issue.code === 'deadline') return t(`${names}: লক্ষ্য তারিখ পর্যন্ত আরও ${formatDurationBn(issue.minutes)} কাজ রাখা যায়নি। পরের নির্বাচিত অধ্যায়গুলোও শেষ হয়েছে ধরে নিও না।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit before the target. Later selected chapters are not assumed finished either.`);
   if (issue.code === 'locked-work') return t('লক করা অতীতের দিনের অসমাপ্ত অংশ সরানো হয়নি। আগের জোড়া শেষ করা বা দিন আনলক না করা পর্যন্ত পরের জোড়ায় এগোবে না।', 'Unfinished ranges on locked past dates were not moved. Complete that pair or unlock those dates before progressing to the next pair.');
@@ -455,7 +460,8 @@ export function personalRoutineHealth(data: AppData, plan: Day[]) {
   if (deferredMinutes && newlyMissing.length) issues.push({ code: 'deadline', chapterIds: newlyMissing.slice(0, 2), minutes: deferredMinutes });
   if (tasks.some(task => task.personalWork && (data.taskEdits[task.id]?.chapterIds?.some(id => !task.chapterIds.includes(id)) ||
       (data.dayOverrides[task.date]?.taskMinutes?.[task.id] !== undefined && data.dayOverrides[task.date].taskMinutes![task.id] !== task.endMinute - task.startMinute)))) issues.push({ code: 'source-edit', chapterIds: [], minutes: 0 });
-  return { issues, warnings: issues.map(routineIssueText), syllabusEnd: !missing.length ? tasks.filter(task => task.personalWork).map(task => task.date).sort().at(-1) : undefined, clashingSessions: overlaps };
+  return { issues, warnings: issues.map(routineIssueText), missingDurations: issues.some(issue => issue.code === 'unknown-duration'),
+    syllabusEnd: !missing.length ? tasks.filter(task => task.personalWork).map(task => task.date).sort().at(-1) : undefined, clashingSessions: overlaps };
 }
 /** Stable source/range evidence can outlive every visible calendar partition. */
 function sourceCovered(sourceId: string, from: number, to: number, completed: Record<string, string>, scheduled: Task[] = []): boolean {
