@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AI_MODEL_DTYPE, AI_MODEL_ID, AI_MODEL_SIZE_MB, TRANSFORMERS_CDN,
-  aiErrorMessage, isAiModelCached,
+  aiErrorMessage,
 } from './aiModel';
 
 describe('on-device AI model configuration', () => {
@@ -17,9 +17,6 @@ describe('on-device AI model configuration', () => {
     expect(TRANSFORMERS_CDN.startsWith('https://cdn.jsdelivr.net/npm/')).toBe(true);
   });
 
-  it('reports not-cached when the Cache API is unavailable', async () => {
-    await expect(isAiModelCached()).resolves.toBe(false);
-  });
 });
 
 describe('aiErrorMessage', () => {

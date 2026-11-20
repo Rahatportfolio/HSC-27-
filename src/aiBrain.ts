@@ -7,7 +7,6 @@
  */
 import { CHAPTERS, SUBJECTS, chapterById, subjectById } from './data';
 import type { Chapter, SubjectId } from './data';
-import { STARTER_QUESTIONS } from './quiz-data';
 import type { QuizQuestion } from './types';
 import type { AppData } from './planner';
 import { bn } from './planner';
@@ -17,7 +16,7 @@ export type AiBrainAnswer =
   | { kind: 'chapters'; subject: SubjectId; paper?: 1 | 2; text: string }
   | { kind: 'chapter'; chapter: Chapter; text: string }
   | { kind: 'subjects'; text: string }
-  | { kind: 'quiz'; question: QuizQuestion; text: string }
+  | { kind: 'quiz'; subject?: SubjectId }
   | { kind: 'tip'; text: string }
   | { kind: 'progress'; text: string }
   | { kind: 'motivation'; text: string }
@@ -89,22 +88,32 @@ function subjectsAnswer(): AiBrainAnswer {
 }
 
 let quizCursor = 0;
-/** Rotating pick so consecutive quizzes differ; deterministic for tests. */
-export function pickQuizQuestion(subject?: SubjectId, cursor = quizCursor): { question: QuizQuestion; nextCursor: number } {
+/**
+ * Load one quiz question from the starter bank. The bank (quiz-data) is
+ * dynamically imported so the Brain route never eagerly pulls the full
+ * question engine — it loads only when a quiz is actually requested.
+ * Rotating pick so consecutive quizzes differ.
+ */
+export async function loadQuizQuestion(subject?: SubjectId): Promise<QuizQuestion> {
+  const { STARTER_QUESTIONS } = await import('./quiz-data');
   const pool = subject ? STARTER_QUESTIONS.filter(question => question.subject === subject) : STARTER_QUESTIONS;
   const list = pool.length ? pool : STARTER_QUESTIONS;
-  const index = ((cursor % list.length) + list.length) % list.length;
-  return { question: list[index], nextCursor: cursor + 1 };
+  const question = list[quizCursor % list.length];
+  quizCursor += 1;
+  return question;
+}
+
+/** Prompt text shown above the quiz options. */
+export function quizMessage(question: QuizQuestion): string {
+  const subjectInfo = subjectById[question.subject];
+  return t(
+    `কুইজ · ${subjectInfo.name}${question.chapterId ? ` · ${chapterById[question.chapterId]?.title ?? ''}` : ''}\n${question.question}\nনিচের অপশনগুলো থেকে একটা বেছে নাও।`,
+    `Quiz · ${subjectInfo.english}${question.chapterId ? ` · ${chapterById[question.chapterId]?.title ?? ''}` : ''}\n${question.question}\nPick one of the options below.`,
+  );
 }
 
 function quizAnswer(subject?: SubjectId): AiBrainAnswer {
-  const { question, nextCursor } = pickQuizQuestion(subject);
-  quizCursor = nextCursor;
-  const subjectInfo = subjectById[question.subject];
-  return {
-    kind: 'quiz', question,
-    text: t(`কুইজ · ${subjectInfo.name}${question.chapterId ? ` · ${chapterById[question.chapterId]?.title ?? ''}` : ''}\n${question.question}\nনিচের অপশনগুলো থেকে একটা বেছে নাও।`, `Quiz · ${subjectInfo.english}${question.chapterId ? ` · ${chapterById[question.chapterId]?.title ?? ''}` : ''}\n${question.question}\nPick one of the options below.`),
-  };
+  return { kind: 'quiz', subject };
 }
 
 export function checkQuizAnswer(question: QuizQuestion, picked: number): { correct: boolean; text: string } {
@@ -125,7 +134,7 @@ const TIPS: [string, string][] = [
   ['MCQ প্র্যাকটিসের সময় উত্তরের পেছনের নিয়মটি নিজেকে জিজ্ঞেস করো।', 'During MCQ practice, ask yourself which rule the answer uses.'],
   ['কঠিন অধ্যায়কে ছোট ছোট অংশে ভাগ করে প্রতিটা শেষে এক বাক্যে সারাংশ লেখো।', 'Split hard chapters into small parts and write a one-sentence summary after each.'],
   ['পরীক্ষার আগে শুধু নতুন পড়া নয়, পুরোনো ঝালাইকেও সময় দাও।', 'Before the exam, give time to old revisions too, not only new reading.'],
-  ['ফোন পাশে রাখলে পড়ার সময় অর্ধেক হয়ে যায়; অন্য ঘরে রাখো।', 'Keeping the phone nearby halves your study time; leave it in another room.'],
+  ['মনোযোগে সমস্যা হলে ফোন দূরে বা নীরব মোডে রাখো।', 'If your phone distracts you, keep it away or put it on silent.'],
   ['ঘুম কমিয়ে পড়লে মনে রাখা কমে; নিয়মিত ঘুম HSC-এর সবচেয়ে বড় অস্ত্র।', 'Cutting sleep to study reduces memory; regular sleep is your biggest HSC weapon.'],
   ['প্রতিটা সেশনের শেষে কী শিখলে এক বাক্যে মনে করো — পরের সেশনে এটাই ভিত্তি।', 'At the end of each session, recall one thing you learned — it becomes the base of the next session.'],
   ['দুর্বল অধ্যায় এড়িয়ে যেও না; প্রতিদিন অল্প করে হলেও ওই অধ্যায়ে ফিরে যাও।', 'Do not avoid weak chapters; return to them a little every day.'],
@@ -171,8 +180,8 @@ function motivationAnswer(): AiBrainAnswer {
 }
 
 const HELP_TEXT = (): string => t(
-  'আমি এই প্রশ্নগুলোর উত্তর দিতে পারি:\n· “পদার্থের অধ্যায়গুলো কী?” — বিষয়ের অধ্যায় তালিকা\n· “ভেক্টর অধ্যায়ের ফোকাস কী?” — একটি অধ্যায়ের বিস্তারিত\n· “কুইজ দাও” — MCQ কুইজ\n· “টিপস দাও” — পড়ার টিপস\n· “আমার অগ্রগতি?” — তোমার সেভ করা অগ্রগতি\n· “মোটিভেশন দাও” — উৎসাহ\nখোলামেলা প্রশ্নের জন্য “AI মডেল” মোড ব্যবহার করো (একবার ~১৪০ MB ডাউনলোড লাগবে)।',
-  'I can answer:\n· “What are the Physics chapters?” — chapter lists by subject\n· “What is the focus of the Vector chapter?” — one chapter in detail\n· “Give me a quiz” — MCQ quiz\n· “Give me tips” — study tips\n· “My progress?” — your saved progress\n· “Motivate me” — encouragement\nFor open-ended questions, use “AI model” mode (one-time ~140 MB download).',
+  'আমি এই প্রশ্নগুলোর উত্তর দিতে পারি:\n· “পদার্থের অধ্যায়গুলো কী?” — বিষয়ের অধ্যায় তালিকা\n· “ভেক্টর অধ্যায়ের ফোকাস কী?” — একটি অধ্যায়ের বিস্তারিত\n· “কুইজ দাও” — MCQ কুইজ\n· “টিপস দাও” — পড়ার টিপস\n· “আমার অগ্রগতি?” — তোমার সেভ করা অগ্রগতি\n· “মোটিভেশন দাও” — উৎসাহ\nখোলামেলা প্রশ্নের জন্য “AI মডেল” মোড ব্যবহার করো (প্রায় ১৪০ MB ডাউনলোড লাগবে)।',
+  'I can answer:\n· “What are the Physics chapters?” — chapter lists by subject\n· “What is the focus of the Vector chapter?” — one chapter in detail\n· “Give me a quiz” — MCQ quiz\n· “Give me tips” — study tips\n· “My progress?” — your saved progress\n· “Motivate me” — encouragement\nFor open-ended questions, use “AI model” mode (approximately 140 MB download).',
 );
 
 /** Answer a study question from the app's own data. Pure and testable. */

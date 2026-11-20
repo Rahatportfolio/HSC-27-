@@ -5,8 +5,8 @@
  * larger than 100 MB, and shipping 140 MB inside the site would slow every
  * first visit. Instead the app downloads the model once from Hugging Face
  * through the transformers.js engine (loaded from a CDN, only when this
- * feature is opened), the browser caches it, and afterwards the AI runs
- * fully offline on the device (WebGPU when available, WASM fallback).
+ * feature is opened), the browser may cache it. Generation runs locally, but the remote runtime
+ * and cache eviction mean offline startup is not guaranteed.
  *
  * The built-in rule-based brain in aiBrain.ts answers instantly with no
  * download at all; this module is only for open-ended chat.
@@ -52,7 +52,7 @@ export const AI_SYSTEM_PROMPT = [
 export function aiErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
   if (/failed to fetch|network|offline|load failed|net::/i.test(message)) {
-    return 'ইন্টারনেট সংযোগ নেই বা ডাউনলোড ব্যর্থ হয়েছে। সংযোগ ঠিক করে আবার চেষ্টা করো। মডেল একবার ডাউনলোড হয়ে গেলে আর ইন্টারনেট লাগবে না।';
+    return 'ইন্টারনেট সংযোগ নেই বা ডাউনলোড ব্যর্থ হয়েছে। সংযোগ ঠিক করে আবার চেষ্টা করো।';
   }
   if (/webgpu|wasm|backend|onnx/i.test(message)) {
     return 'এই ডিভাইসে AI চালানোর সুবিধা পাওয়া যায়নি (WebGPU/WASM)। অন্য ব্রাউজার বা নতুন ডিভাইসে চেষ্টা করো। স্মার্ট ব্রেইন মোড তো সবসময় কাজ করবে।';
@@ -61,22 +61,6 @@ export function aiErrorMessage(error: unknown): string {
     return 'AI মডেলের ফাইল পাওয়া যায়নি। পরে আবার চেষ্টা করো; স্মার্ট ব্রেইন মোড এখনই ব্যবহার করতে পারো।';
   }
   return 'AI চালু করা যায়নি। স্মার্ট ব্রেইন মোডে তোমার প্রশ্নের উত্তর এখনই পাবে; মডেলের জন্য পরে আবার চেষ্টা করো।';
-}
-
-/** True when the model files are already in the browser cache (no download needed). */
-export async function isAiModelCached(): Promise<boolean> {
-  if (typeof caches === 'undefined') return false;
-  try {
-    const keys = await caches.keys();
-    for (const key of keys) {
-      const cache = await caches.open(key);
-      const requests = await cache.keys();
-      if (requests.some(request => request.url.includes('SmolLM2-135M-Instruct'))) return true;
-    }
-  } catch {
-    return false;
-  }
-  return false;
 }
 
 let generatorPromise: Promise<AiGenerator> | null = null;

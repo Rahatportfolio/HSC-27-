@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { answerAiQuestion, checkQuizAnswer, pickQuizQuestion } from './aiBrain';
+import { answerAiQuestion, checkQuizAnswer, loadQuizQuestion, quizMessage } from './aiBrain';
 import { CHAPTERS, SUBJECTS } from './data';
 import { STARTER_QUESTIONS } from './quiz-data';
 import { bn } from './planner';
@@ -45,34 +45,36 @@ describe('answerAiQuestion', () => {
   it('lists all subjects', () => {
     const answer = answerAiQuestion('কয়টা বিষয় আছে?', data);
     expect(answer.kind).toBe('subjects');
+    if (answer.kind !== 'subjects') return;
     expect(answer.text).toContain(bn(SUBJECTS.length));
     expect(answer.text).toContain('পদার্থবিজ্ঞান');
   });
 
-  it('returns a quiz question from the starter bank', () => {
+  it('requests a quiz question', () => {
     const answer = answerAiQuestion('কুইজ দাও', data);
     expect(answer.kind).toBe('quiz');
     if (answer.kind !== 'quiz') return;
-    expect(STARTER_QUESTIONS).toContain(answer.question);
-    expect(answer.question.options).toHaveLength(4);
+    expect(answer.subject).toBeUndefined();
   });
 
-  it('filters quiz questions by subject', () => {
+  it('requests a quiz filtered by subject', () => {
     const answer = answerAiQuestion('chemistry quiz দাও', data);
     expect(answer.kind).toBe('quiz');
     if (answer.kind !== 'quiz') return;
-    expect(answer.question.subject).toBe('chemistry');
+    expect(answer.subject).toBe('chemistry');
   });
 
   it('gives a study tip', () => {
     const answer = answerAiQuestion('টিপস দাও', data);
     expect(answer.kind).toBe('tip');
+    if (answer.kind !== 'tip') return;
     expect(answer.text.length).toBeGreaterThan(10);
   });
 
   it('summarises saved progress', () => {
     const answer = answerAiQuestion('আমার অগ্রগতি?', data);
     expect(answer.kind).toBe('progress');
+    if (answer.kind !== 'progress') return;
     expect(answer.text).toContain(bn(2));
     expect(answer.text).toContain(bn(75));
   });
@@ -80,12 +82,14 @@ describe('answerAiQuestion', () => {
   it('motivates', () => {
     const answer = answerAiQuestion('মোটিভেশন দাও', data);
     expect(answer.kind).toBe('motivation');
+    if (answer.kind !== 'motivation') return;
     expect(answer.text.length).toBeGreaterThan(10);
   });
 
   it('falls back to help for unknown text', () => {
     const answer = answerAiQuestion('xyzzy plugh', data);
     expect(answer.kind).toBe('unknown');
+    if (answer.kind !== 'unknown') return;
     expect(answer.text).toContain('কুইজ');
   });
 
@@ -94,18 +98,27 @@ describe('answerAiQuestion', () => {
   });
 });
 
-describe('pickQuizQuestion', () => {
-  it('rotates through the bank without immediate repeats', () => {
-    const first = pickQuizQuestion(undefined, 0);
-    const second = pickQuizQuestion(undefined, first.nextCursor);
-    expect(second.question.id).not.toBe(first.question.id);
-    expect(second.nextCursor).toBe(2);
+describe('loadQuizQuestion', () => {
+  it('returns a question from the starter bank', async () => {
+    const question = await loadQuizQuestion();
+    expect(STARTER_QUESTIONS).toContain(question);
+    expect(question.options).toHaveLength(4);
   });
 
-  it('wraps around the pool', () => {
-    const pool = STARTER_QUESTIONS;
-    const wrapped = pickQuizQuestion(undefined, pool.length);
-    expect(wrapped.question.id).toBe(pool[0].id);
+  it('filters by subject', async () => {
+    const question = await loadQuizQuestion('chemistry');
+    expect(question.subject).toBe('chemistry');
+  });
+
+  it('rotates without immediate repeats', async () => {
+    const first = await loadQuizQuestion();
+    const second = await loadQuizQuestion();
+    expect(second.id).not.toBe(first.id);
+  });
+
+  it('composes a prompt with the question text', async () => {
+    const question = await loadQuizQuestion();
+    expect(quizMessage(question)).toContain(question.question);
   });
 });
 
