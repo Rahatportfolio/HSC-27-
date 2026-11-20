@@ -15,7 +15,8 @@ import { evidenceAnnotation } from './summarize-browser-evidence.mjs';
  * merge. Accept only this repository's own `arena/<12 hex>-hsc-27` session
  * branches; main and every other branch stay rejected by the ref check itself.
  */
-const DELIVERY_BRANCH = /^arena\/[a-f0-9]{12}-hsc-27$/;
+// Arena session branches use an 8-hex id; accept 8–12 so older 12-hex names keep working.
+const DELIVERY_BRANCH = /^arena\/[a-f0-9]{8,12}-hsc-27$/;
 export const CURRENT_POLICY = Object.freeze({
   repo: 'Rahatportfolio/HSC-27-', branchPattern: DELIVERY_BRANCH,
   workflow: '.github/workflows/android-apk.yml',

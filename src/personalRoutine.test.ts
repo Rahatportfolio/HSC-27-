@@ -77,8 +77,16 @@ describe('personal S-only routine', () => {
     const r = routine(ids); r.workloads[ids[1]].class = { minutes: null, source: 'unknown', url: 'https://www.youtube.com/playlist?list=PLexample123456' };
     const projection = buildPersonalStudyProjection(dataFor(r));
     expect(projection.unknownChapters).toEqual([ids[1]]);
-    expect(projection.plan.every(day => !day.tasks.length)).toBe(true);
-    expect(personalRoutineHealth(dataFor(r), projection.plan).syllabusEnd).toBeUndefined();
+    // The unknown chapter is never scheduled or given a finish date, but the
+    // chapter with real durations must still appear (an empty whole plan was the bug).
+    const tasks = projection.plan.flatMap(day => day.tasks);
+    expect(tasks.length).toBeGreaterThan(0);
+    expect(tasks.some(task => task.chapterIds.includes(ids[1]))).toBe(false);
+    expect(tasks.every(task => task.personalWork && task.personalWork.rawMinutes > 0)).toBe(true);
+    const health = personalRoutineHealth(dataFor(r), projection.plan);
+    expect(health.syllabusEnd).toBeUndefined();
+    expect(health.missingDurations).toBe(true);
+    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual([ids[1]]);
   });
   it('honours short availability instead of legacy 8h/16h defaults and leaves off days empty', () => {
     const r = routine(); r.windows = [{ weekday: 5, startMinute: 1200, endMinute: 1260 }, { weekday: 6, startMinute: 600, endMinute: 660 }];

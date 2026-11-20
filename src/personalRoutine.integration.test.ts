@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { CHAPTERS } from './data';
+import { CHAPTERS, chapterById } from './data';
 import { addDays, buildPlan, chapterStudyTasks, freshData, getStats, isChapterDone, isDayComplete } from './planner';
 import { buildStudyPlan } from './studyPlan';
-import { WORK_STAGES, buildPersonalStudyProjection, hasFullPersonalAllocation, isPersonalChapterDone, isPersonalTaskComplete, personalMediaUrl, personalCompletionEvidence, personalRoutineHealth, personalScheduleDateError } from './personalRoutine';
+import { WORK_STAGES, defaultChapterWorkload, buildPersonalStudyProjection, hasFullPersonalAllocation, isPersonalChapterDone, isPersonalTaskComplete, personalMediaUrl, personalCompletionEvidence, personalRoutineHealth, personalScheduleDateError } from './personalRoutine';
 import { PERSONAL_IDS, personalDataFixture, personalRoutineFixture, personalWorkload } from './test/personalRoutineFixture';
 import { setLanguage } from './i18n';
 import { learningDashboard, chapterStage } from './learning';
@@ -225,4 +225,46 @@ it('does not invent new completion times by bulk-ticking already-covered regener
   data = setTaskCompletion(data, plan.flatMap(day => day.tasks).map(task => task.id), true, plan);
   expect(data.completed).toEqual(original);
   expect(new Set(personalCompletionEvidence(data, PERSONAL_IDS[0]))).toEqual(new Set(['2026-11-16T08:00:00Z']));
+});
+
+describe('unknown durations never blank out the whole plan', () => {
+  beforeEach(() => setLanguage('bn'));
+  // Reproduces the 2026-11-20 report: every selected chapter still on the
+  // default unknown workload produced "0/0 tasks done" and "No work left".
+  const unknownData = (knownIds: string[] = []) => {
+    const data = personalDataFixture(['physics-1-3', 'chemistry-1-3']);
+    const routine = data.personalRoutine!;
+    for (const id of routine.chapterIds) if (!knownIds.includes(id)) routine.workloads[id] = defaultChapterWorkload(id);
+    return data;
+  };
+  it('schedules the chapters that have real durations even when the rest are unknown', () => {
+    const data = unknownData(['physics-1-3']);
+    const health = personalRoutineHealth(data, planFor(data));
+    expect(health.issues.some(issue => issue.code === 'unknown-duration')).toBe(true);
+    expect(health.missingDurations).toBe(true);
+    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual(['chemistry-1-3']);
+    expect(health.warnings.join(' ')).toContain(chapterById['chemistry-1-3'].title);
+    const plan = planFor(data);
+    expect(plan[0].tasks.length).toBeGreaterThan(0);
+    expect(plan.flatMap(day => day.tasks).every(task => task.chapterIds.includes('physics-1-3'))).toBe(true);
+  });
+  it('keeps the plan empty but explains the missing input when every chapter is unknown', () => {
+    const data = unknownData(); const plan = planFor(data); const health = personalRoutineHealth(data, plan);
+    expect(plan.flatMap(day => day.tasks)).toHaveLength(0);
+    expect(health.missingDurations).toBe(true);
+    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual(['physics-1-3', 'chemistry-1-3']);
+    expect(health.warnings.some(warning => warning.includes(chapterById['chemistry-1-3'].title) && warning.includes('অজানা'))).toBe(true);
+  });
+  it('names the still-unknown chapter of a mixed pair instead of silently dropping it', () => {
+    const data = personalDataFixture(['physics-1-3']);
+    const routine = data.personalRoutine!;
+    // Same book, so both chapters form one pair: one known, one still unknown.
+    routine.chapterIds = ['physics-1-3', 'physics-1-1'];
+    routine.workloads = { 'physics-1-3': personalWorkload(240), 'physics-1-1': defaultChapterWorkload('physics-1-1') };
+    const plan = planFor(data); const health = personalRoutineHealth(data, plan);
+    expect(health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds).toEqual(['physics-1-1']);
+    expect(health.warnings.join(' ')).toContain(chapterById['physics-1-1'].title);
+    expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-3'))).toBe(true);
+    expect(plan.flatMap(day => day.tasks).some(task => task.chapterIds.includes('physics-1-1'))).toBe(false);
+  });
 });
