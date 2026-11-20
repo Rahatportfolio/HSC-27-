@@ -1,0 +1,61 @@
+name: Android AI integration
+on:
+  pull_request:
+    paths:
+      - 'src/aiModel.ts'
+      - 'src/views/StudyBrain.tsx'
+      - 'android/app/src/androidTest/java/com/prostuti/hsc27/AiModelIntegrationTest.java'
+      - '.github/workflows/ai-android-integration.yml'
+permissions:
+  contents: read
+jobs:
+  ai-on-webview:
+    name: Real AI in Android WebView online and offline
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Build instrumented Android app
+        run: |
+          npm ci
+          npm run android:assets
+          npm run android:sync
+          cd android
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest --no-daemon --max-workers=2
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Download and run AI, restart offline
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: |
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
+            bash -o pipefail -c 'cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.prostuti.hsc27.AiModelIntegrationTest -Pandroid.testInstrumentationRunnerArguments.aiIntegration=true 2>&1 | tee ../ai-android.log'
+      - name: Surface failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const file = 'ai-android.log';
+            if (fs.existsSync(file)) core.error(fs.readFileSync(file, 'utf8').split('\n').filter(line => /failed|failure|exception|error|timed out/i.test(line)).join('\n').slice(-3500));
+            const root = 'android/app/build/outputs/androidTest-results';
+            function inspect(dir) { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir,{withFileTypes:true})) { const p=`${dir}/${e.name}`; if(e.isDirectory()) inspect(p); else if(p.endsWith('.xml')) for(const m of fs.readFileSync(p,'utf8').matchAll(/<failure[\s\S]*?<\/failure>/g)) core.error(m[0].slice(0,3500)); } }
+            inspect(root);
