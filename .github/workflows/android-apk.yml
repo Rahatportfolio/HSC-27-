@@ -238,6 +238,11 @@ jobs:
             adb shell settings put global anr_show_background 0
             adb shell settings get global hide_error_dialogs
             adb shell settings get global anr_show_background
+            # Disposable emulator only: keep the launcher from going unresponsive
+            # in the first place. This is emulator hygiene, not an app behaviour.
+            adb shell settings put global wifi_watchdog_on 0 || true
+            adb shell settings put global wifi_scan_always_enabled 0 || true
+            adb shell am set-inactive com.google.android.apps.nexuslauncher true || true
             adb shell svc wifi disable
             adb shell svc data disable
             # A freshly booted API 35 image can still ANR its launcher once. If
