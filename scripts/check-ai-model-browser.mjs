@@ -14,6 +14,20 @@ try {
   });
   if (!result || result.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('Model returned an empty answer');
   console.log('Real model inference returned a nonempty answer:', result.slice(0, 300));
+  // Start a fresh JS realm in the same persistent browser context, then block
+  // the network. A model already in RAM does not prove offline startup.
+  const context = page.context();
+  const fresh = await context.newPage();
+  await fresh.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
+  await fresh.evaluate(async () => { window.__ai = await import('/src/aiModel.ts'); });
+  await page.close();
+  await context.setOffline(true);
+  const offline = await fresh.evaluate(async () => {
+    await window.__ai.loadAiModel();
+    return window.__ai.chatWithAi([{ role: 'user', content: 'What is water made of? Answer briefly.' }]);
+  });
+  if (!offline || offline.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('Offline model returned an empty answer');
+  console.log('Fresh offline model inference returned a nonempty answer:', offline.slice(0, 300));
 } finally {
   await browser.close();
 }
