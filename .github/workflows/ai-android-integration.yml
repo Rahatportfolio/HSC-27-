@@ -45,9 +45,14 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            adb shell svc power stayon true
+            adb shell settings put system screen_off_timeout 2147483647
             adb shell input keyevent KEYCODE_WAKEUP
             adb shell wm dismiss-keyguard
-            bash -o pipefail -c 'cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.prostuti.hsc27.AiModelIntegrationTest -Pandroid.testInstrumentationRunnerArguments.aiIntegration=true 2>&1 | tee ../ai-android.log'
+            adb shell settings put global hide_error_dialogs 1
+            adb shell settings put global anr_show_background 0
+            adb shell dumpsys window | grep -q "Application Not Responding" && adb shell input keyevent KEYCODE_ENTER || true
+            bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.prostuti.hsc27.AiModelIntegrationTest -Pandroid.testInstrumentationRunnerArguments.aiIntegration=true 2>&1 | tee ../ai-android.log) || status=$?; adb shell dumpsys window | grep -E "mCurrentFocus|mFocusedApp" >> ai-android.log || true; exit "$status"'
       - name: Surface failure
         if: failure()
         uses: actions/github-script@v7
@@ -55,7 +60,7 @@ jobs:
           script: |
             const fs = require('fs');
             const file = 'ai-android.log';
-            if (fs.existsSync(file)) core.error(fs.readFileSync(file, 'utf8').split('\n').filter(line => /failed|failure|exception|error|timed out/i.test(line)).join('\n').slice(-3500));
+            if (fs.existsSync(file)) core.error(fs.readFileSync(file, 'utf8').split('\n').filter(line => /failed|failure|exception|error|timed out|mCurrentFocus|mFocusedApp/i.test(line)).join('\n').slice(-3500));
             const root = 'android/app/build/outputs/androidTest-results';
             function inspect(dir) { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir,{withFileTypes:true})) { const p=`${dir}/${e.name}`; if(e.isDirectory()) inspect(p); else if(p.endsWith('.xml')) for(const m of fs.readFileSync(p,'utf8').matchAll(/<failure[\s\S]*?<\/failure>/g)) core.error(m[0].slice(0,3500)); } }
             inspect(root);
