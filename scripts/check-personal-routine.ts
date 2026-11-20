@@ -40,7 +40,13 @@ async function accessibility(page: Page, name: string) {
   incomplete.push(...result.incomplete.map(value => ({ name, ...value })));
   if (process.env.REVIEW_INCOMPLETE === '1') {
     const review = await reviewIncomplete(page, name, result.incomplete); supplementalReviews.push(...review);
-    assert.equal(review.filter(row => row.status !== 'verified').length, 0, `${name}: supplemental text/label measurement failed or unresolved; inspect report`);
+    const rows = review.filter(row => row.status !== 'verified');
+    const detail = rows.map(row => {
+      const d = row.detail as { measured?: number; unresolved?: string[]; measurements?: { text?: string; ratio?: number | null; unsupported?: string[]; clipped?: boolean; reliable?: boolean; opacity?: number }[] } | undefined;
+      const bad = d?.measurements?.filter(m => !m.reliable || (m.ratio ?? 99) + .001 < 4.5).map(m => ({ text: (m.text || '').slice(0, 60), ratio: m.ratio != null ? Number(m.ratio.toFixed(2)) : null, unsupported: m.unsupported, clipped: m.clipped, reliable: m.reliable, opacity: m.opacity }));
+      return { rule: row.rule, target: row.target, status: row.status, method: row.method, measured: d?.measured, unresolved: d?.unresolved, bad };
+    });
+    assert.equal(rows.length, 0, `${name}: supplemental text/label measurement failed or unresolved: ${JSON.stringify(detail)}`);
   }
   assert.equal(result.violations.length, 0, `${name}: ${result.violations.map(value => `${value.id}: ${value.nodes.map(node => node.target.join(' ')).join(',')}`).join('; ')}`);
 }
@@ -55,8 +61,11 @@ async function flow() {
   const context = await browser.newContext({ viewport: { width: 320, height: 800 }, isMobile: true, hasTouch: true, timezoneId: 'Asia/Dhaka', reducedMotion: 'reduce' });
   try {
     const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
-    await page.clock.setFixedTime(new Date('2026-11-16T06:00:00Z'));
+    await page.clock.setFixedTime(new Date('2026-11-20T06:00:00Z'));
     await go(page, 'today');
+    assert.equal(await page.locator('main h1').innerText(), 'অ্যাপ খুলে পড়া শুরু করো — ফর্ম পূরণ নয়');
+    await page.getByRole('button', { name: /সব আমি নিজে সাজিয়ে নিতে চাই/ }).click();
+    await page.getByRole('heading', { name: 'আগে বলো, কখন পড়তে পারবে?' }).waitFor();
     assert.equal(await page.locator('main h1').innerText(), 'আগে বলো, কখন পড়তে পারবে?');
     assert.equal(await page.locator('.task-card').count(), 0);
     assert.equal(await page.getByLabel('সময় 1 শুরু').inputValue(), '');

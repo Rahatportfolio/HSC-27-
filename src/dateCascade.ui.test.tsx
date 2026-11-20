@@ -12,7 +12,13 @@ beforeAll(() => {
   Object.defineProperty(window, 'matchMedia', { writable: true, value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })) });
   window.scrollTo = vi.fn();
 });
-beforeEach(() => { localStorage.clear(); window.location.hash = '#settings'; });
+beforeEach(() => {
+  // Fake only the clock (storage and timers stay real) so the today-relative default start is stable in this suite.
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-11-20T06:00:00Z'));
+  localStorage.clear();
+  window.location.hash = '#settings';
+});
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 const stored = (): AppData => JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
 const change = (label: RegExp, value: string) => fireEvent.change(screen.getByLabelText(label), { target: { value } });
@@ -43,9 +49,11 @@ describe('real Settings date cascade', () => {
   }, 30000);
 
   it('distinguishes a future routine preview from an assigned target for today', async () => {
-    vi.useFakeTimers({ toFake: ['Date'] });
+    const future = freshData();
+    future.settings.startDate = '2026-11-20';
+    future.settings.boostStartDate = '2026-12-07';
     vi.setSystemTime(new Date('2026-11-16T06:00:00Z'));
-    await open();
+    await open(future);
     act(() => { window.location.hash = '#today'; window.dispatchEvent(new HashChangeEvent('hashchange')); });
     const notice = await screen.findByRole('region', { name: 'Plan has not started' });
     expect(within(notice).getByRole('heading', { name: 'Routine starts · 20 November 2026' })).toBeTruthy();

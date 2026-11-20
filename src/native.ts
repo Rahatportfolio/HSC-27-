@@ -1,8 +1,10 @@
 import { chapterById } from './data';
+import { isPersonalTaskComplete } from './personalRoutine';
 import {
   buildDailyStatusNotification,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
+  buildTomorrowPreviewNotification,
 } from './notifications';
 import type { AppData, Day } from './planner';
 import { addDays, taskStart } from './planner';
@@ -253,7 +255,9 @@ export async function stopStudyTimerService(): Promise<boolean> {
 }
 
 const WINDOW_DAYS = 14;
-const LIMIT = 64;
+// Well below Android's ~500 pending-notification cap; leaves headroom for the
+// nightly 9 PM tomorrow-preview on top of briefs, session alerts and check-ins.
+const LIMIT = 96;
 
 export async function syncNativeReminders(plan: Day[], data: AppData, today: string, options: { requestPermission?: boolean } = {}): Promise<NativeSyncResult> {
   if (!isNativeApp()) return { scheduled: 0, permission: 'unavailable' };
@@ -285,7 +289,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
     if (day.date > lastDate) break;
 
     // 1. Morning daily briefing (20 min before first session, clamped >= 5:45 AM): what to study + total hours + remaining work
-    const incompleteDayTasks = day.tasks.filter(t => !data.completed[t.id]);
+    const incompleteDayTasks = day.tasks.filter(t => !isPersonalTaskComplete(t, data.completed));
     if (day.date >= today && incompleteDayTasks.length > 0) {
       const firstStart = Math.min(...incompleteDayTasks.map(t => t.startMinute));
       const briefMinute = Math.max(5 * 60 + 45, firstStart - 20);
@@ -305,7 +309,7 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
 
     // 2. Per-session reminder with full daily context (today's study, total hours, completed vs remaining)
     for (const task of day.tasks) {
-      if (data.completed[task.id]) continue;
+      if (isPersonalTaskComplete(task, data.completed)) continue;
       const start = taskStart(task);
       const at = instant(start.date, start.minute - data.settings.reminderLead);
       if (at <= now || at > instant(lastDate, 24 * 60)) continue;
@@ -333,6 +337,24 @@ export async function syncNativeReminders(plan: Day[], data: AppData, today: str
             largeBody: checkin.body,
             channelId: REMINDER_CHANNEL,
             schedule: { at: new Date(eveAt), allowWhileIdle: true },
+          });
+        }
+      }
+    }
+
+    // 4. Night-before preview: at 9 PM each day, announce the NEXT day's classes
+    if (day.date >= today && day.date < lastDate) {
+      const previewAt = instant(day.date, 21 * 60);
+      if (previewAt > now) {
+        const preview = buildTomorrowPreviewNotification(plan, data, day.date);
+        if (preview) {
+          notifications.push({
+            id: idFor(`tomorrow-preview:${day.date}`),
+            title: preview.title,
+            body: preview.body,
+            largeBody: preview.body,
+            channelId: REMINDER_CHANNEL,
+            schedule: { at: new Date(previewAt), allowWhileIdle: true },
           });
         }
       }

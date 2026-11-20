@@ -127,6 +127,10 @@ describe('smart study notifications (what to study, total study, and remaining t
     }
     vi.stubGlobal('Notification', MockNotification);
 
+    // This test exercises the *enable* flow, so seed a legacy profile with reminders off.
+    const seeded = freshData();
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...seeded, settings: { ...seeded.settings, reminderEnabled: false } }));
+
     render(<App />);
 
     // Click the 1-click enable & send button on TodayView

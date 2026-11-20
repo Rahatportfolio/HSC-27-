@@ -118,7 +118,7 @@ try {
       for (const route of routes) {
         active = `${profile}/${scenario.id}/${route}`; await go(route);
         if (profile === 'onboarding' && ['today', 'calendar', 'testprep', 'backlog'].includes(route)) {
-          assert.equal(await page.locator('.personal-setup').count(), 1, 'Unfinished availability must not produce an assumed legacy timetable');
+          assert.equal(await page.locator('.quick-start').count(), 1, 'Unfinished availability must not produce an assumed legacy timetable');
           assert.equal(await page.locator('.task-card').count(), 0);
         }
         if (route === 'today' && profile !== 'onboarding') assert.equal(await page.locator(profile === 'personal' ? '.personal-home' : '.today-view').count(), 1, 'Wrong saved-profile home');

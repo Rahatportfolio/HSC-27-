@@ -8,7 +8,10 @@ import { parseBackup } from '../src/storage';
 import { personalDataFixture } from '../src/test/personalRoutineFixture';
 
 export function nativeTestProfiles() {
-  const legacy = freshData(), personal = personalDataFixture();
+  const legacy = freshData();
+  // Synthetic fixture stays pinned to the stable November 2026 window, never "today".
+  legacy.settings.startDate = '2026-11-20'; legacy.settings.boostStartDate = '2026-12-07';
+  const personal = personalDataFixture();
   return Object.fromEntries(Object.entries({ legacy, personal }).map(([name, data]) => {
     data.routineSetupRequired = false;
     data.settings.language = 'en'; data.settings.fontScale = 'lg';

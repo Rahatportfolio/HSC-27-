@@ -6,9 +6,11 @@ import {
   buildExamRoutineLine,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
+  buildTomorrowPreviewNotification,
 } from './notifications';
 import { t } from './i18n';
 import { addDays, dhakaMinutes, todayKey } from './planner';
+import { isPersonalTaskComplete } from './personalRoutine';
 import type { AppData, Day, Settings } from './planner';
 import type { FontScale, StudyMode, ThemeMode } from './types';
 
@@ -411,7 +413,7 @@ export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpe
         const startMs = Date.parse(`${task.date}T00:00:00Z`) + task.startMinute * 60000;
         const due = startMs - data.settings.reminderLead * 60000;
         const key = `${task.date}:${task.startMinute}:${task.id}`;
-        if (data.completed[task.id] || nowMs < due || nowMs >= startMs + 120000 || sent.includes(key)) continue;
+        if (isPersonalTaskComplete(task, data.completed) || nowMs < due || nowMs >= startMs + 120000 || sent.includes(key)) continue;
         try {
           const reminder = buildTaskReminderNotification(plan, data, task);
           await showNotification(reminder.title, reminder.body, { tag: `prostuti-task-${task.id}` });
@@ -430,6 +432,18 @@ export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpe
             await showNotification(checkin.title, checkin.body, { tag: 'prostuti-evening-checkin' });
           }
           localStorage.setItem(eveKey, date);
+        }
+      } catch { /* ignore */ }
+
+      // 4. Tomorrow's classes preview (once per evening after 9:00 PM Dhaka time)
+      const tomKey = 'hsc27-tomorrow-preview-v1';
+      try {
+        if (minute >= 21 * 60 && localStorage.getItem(tomKey) !== date) {
+          const preview = buildTomorrowPreviewNotification(plan, data, date);
+          if (preview) {
+            await showNotification(preview.title, preview.body, { tag: 'prostuti-tomorrow-preview' });
+          }
+          localStorage.setItem(tomKey, date);
         }
       } catch { /* ignore */ }
     };

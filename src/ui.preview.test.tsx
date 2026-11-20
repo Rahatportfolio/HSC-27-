@@ -29,7 +29,7 @@ describe('the app a first-time visitor sees', () => {
     expect(JSON.parse(saved!).version).toBeGreaterThanOrEqual(1);
     // A new student must be asked for availability, never silently given 8/16h.
     expect(JSON.parse(saved!).routineSetupRequired).toBe(true);
-    expect(screen.getByRole('heading', { name: 'আগে বলো, কখন পড়তে পারবে?' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /অ্যাপ খুলে পড়া শুরু করো/ })).toBeTruthy();
     expect(document.querySelector('.task-card')).toBeNull();
     const view = document.querySelector('.view') as HTMLElement;
     expect((view.textContent ?? '').length).toBeGreaterThan(500);
@@ -44,8 +44,13 @@ describe('the app a first-time visitor sees', () => {
     const blank: string[] = [];
     for (const item of items) {
       await act(async () => { fireEvent.click(item); });
-      await settle(3);
-      const view = document.querySelector('.view') as HTMLElement | null;
+      // Wait for the lazily loaded chunk to mount instead of a fixed settle time.
+      let view: HTMLElement | null = null;
+      for (let attempt = 0; attempt < 40; attempt += 1) {
+        view = document.querySelector('.view') as HTMLElement | null;
+        if (view && (view.textContent ?? '').length >= 40) break;
+        await settle(1);
+      }
       if (!view || (view.textContent ?? '').length < 40) blank.push((item.textContent ?? '').trim().slice(0, 24));
     }
     expect(blank).toEqual([]);

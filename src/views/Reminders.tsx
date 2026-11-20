@@ -2,7 +2,7 @@ import { isPersonalTaskComplete } from '../personalRoutine';
 import { useEffect, useState } from 'react';
 import { ArrowDownToLine, ArrowUpRight, Bell, BellRing, CalendarDays, CheckCircle2, ChevronDown, Clock3, Info, MonitorSmartphone, ShieldCheck, Sparkles } from 'lucide-react';
 import { usePlanner } from '../context';
-import { buildDailyNotificationDigest, buildDailyStatusNotification } from '../notifications';
+import { buildDailyNotificationDigest, buildDailyStatusNotification, buildTomorrowPreviewNotification } from '../notifications';
 import { addDays, bn, formatDate, formatTime, taskStart } from '../planner';
 import { revisionBuckets, revisionDueCount } from '../revision';
 import { showNotification } from '../hooks';
@@ -49,6 +49,16 @@ export default function RemindersView() {
     if (typeof Notification !== 'undefined') setPermission(Notification.permission);
     if (!ok && permission === 'granted') void test();
   };
+  const tomorrowPreview = buildTomorrowPreviewNotification(plan, data, today);
+  const sendTomorrow = async () => {
+    if (!tomorrowPreview) { notify(t('আগামীকালের জন্য কোনো নির্ধারিত ক্লাস নেই।', 'No classes scheduled for tomorrow.'), 'info'); return; }
+    try {
+      await showNotification(tomorrowPreview.title, tomorrowPreview.body, { tag: 'prostuti-tomorrow-preview' });
+      notify(t('আগামীকালের ক্লাসের তালিকা নোটিফিকেশনে পাঠানো হয়েছে!', 'Tomorrow’s classes sent to notifications!'));
+    } catch {
+      notify(t('নোটিফিকেশন পাঠানো যায়নি। অনুমতি ও ডিভাইসের সেটিংস যাচাই করো।', 'The notification could not be sent. Check permission and device settings.'), 'error');
+    }
+  };
   const count = (start: string, end?: string) => plan.flatMap(d => d.tasks).filter(t => !isPersonalTaskComplete(t, data.completed) && taskStart(t).date >= start && (!end || taskStart(t).date < end)).length;
   // "0 pending today" is ambiguous: it can mean "finished" or "the next session is
   // later". Name the next real session so the empty number is never a dead end.
@@ -66,10 +76,13 @@ export default function RemindersView() {
         <div>
           <span className="eyebrow"><Sparkles size={13} /> {t('স্মার্ট স্টাডি ডাইজেস্ট নোটিফিকেশন', 'SMART STUDY DIGEST NOTIFICATION')}</span>
           <h2>{t('নোটিফিকেশনেই সম্পূর্ণ হিসাব', 'Everything inside your notification')}</h2>
-          <p>{t('সকালের ব্রিফিং, সেশন শুরুর আগে, পড়া টিক দেওয়ার সাথে সাথে এবং রাত ৮টায় — সব নোটিফিকেশনে নিচের তথ্যগুলো অটো আপডেট হয়ে আসবে।', 'Morning briefing, pre-session alerts, live completion updates, and 8 PM evening check-ins all include this full study breakdown.')}</p>
+          <p>{t('সকালের ব্রিফিং, সেশন শুরুর আগে, পড়া টিক দেওয়ার সাথে সাথে, রাত ৮:৩০টায় আর রাত ৯টায় কালকের ক্লাসের তালিকা — সব নোটিফিকেশনে নিচের তথ্যগুলো অটো আপডেট হয়ে আসবে।', 'Morning briefing, pre-session alerts, live completion updates, 8:30 PM check-ins and 9 PM previews of tomorrow’s classes all include this full study breakdown.')}</p>
         </div>
         <button type="button" className="button primary" onClick={() => void sendNow()}>
           <BellRing size={16} />{t('এখনই নোটিফিকেশনে পাঠাও', 'Send notification now')}
+        </button>
+        <button type="button" className="button secondary" onClick={() => void sendTomorrow()}>
+          <CalendarDays size={16} />{t('কালকের ক্লাস পাঠাও', 'Send tomorrow’s classes')}
         </button>
       </div>
       <div className="os-notif-mockup">
@@ -107,8 +120,10 @@ export default function RemindersView() {
         <span><CheckCircle2 size={14} />{t('১. সকালের ডেইলি ব্রিফিং', '1. Morning daily briefing')}</span>
         <span><CheckCircle2 size={14} />{t('২. প্রতিটি সেশন শুরুর আগে', '2. Before every session')}</span>
         <span><CheckCircle2 size={14} />{t('৩. পড়া সম্পন্ন করলে লাইভ আপডেট', '3. Live update on task tick')}</span>
-        <span><CheckCircle2 size={14} />{t('৪. রাত ৮টায় বাকি পড়ার রিমাইন্ডার', '4. 8 PM remaining study check-in')}</span>
+        <span><CheckCircle2 size={14} />{t('৪. রাত ৮:৩০টায় বাকি পড়ার রিমাইন্ডার', '4. 8:30 PM remaining study check-in')}</span>
+        <span><CheckCircle2 size={14} />{t('৫. রাত ৯টায় আগামীকালের ক্লাসের তালিকা', '5. 9 PM preview of tomorrow’s classes')}</span>
       </div>
+      {tomorrowPreview && <div className="tomorrow-preview-strip" role="status"><CalendarDays size={16} /><div><strong>{tomorrowPreview.title}</strong><small>{tomorrowPreview.body.split('\n')[1] || tomorrowPreview.body}</small></div></div>}
     </section>
     {native ? <NativeReminderCard /> : <section className="card browser-reminder-card"><div className="reminder-card-main"><span className="large-icon green"><BellRing size={27} /></span><div><h2>{t("ব্রাউজার রিমাইন্ডার", "Browser reminders")}</h2><p>{t('অ্যাপ খোলা থাকা অবস্থায় প্রতিটি সেশনের আগে মনে করিয়ে দেবে।', 'While the app stays open, you get a reminder before each session.')}</p><span className={`permission-status ${permission === 'granted' ? 'granted' : ''}`}><span className="status-dot" />{permission === 'granted' ? t('ব্রাউজারের অনুমতি আছে', 'Browser permission granted') : permission === 'denied' ? t('ব্রাউজারে অনুমতি বন্ধ আছে', 'Browser permission blocked') : permission === 'unsupported' ? t('এই ব্রাউজারে সমর্থিত নয়', 'Not supported in this browser') : t('এখনও অনুমতি দেওয়া হয়নি', 'Permission not given yet')}</span></div><button className={`switch ${data.settings.reminderEnabled ? 'on' : ''}`} role="switch" aria-checked={data.settings.reminderEnabled} aria-label={t("ব্রাউজার রিমাইন্ডার", "Browser reminders")} onClick={() => void toggle()} disabled={busy}><span /></button></div><div className="reminder-controls"><label>{t("কত মিনিট আগে?", "How many minutes before?")}<select value={data.settings.reminderLead} onChange={e => setData(d => ({ ...d, settings: { ...d.settings, reminderLead: Number(e.target.value), calendarRevision: d.settings.calendarRevision + 1 } }))}>{[0, 5, 10, 15, 30].map(n => <option key={n} value={n}>{n === 0 ? t('সেশন শুরুর সময়', 'At session start') : `${bn(n)} ${t('মিনিট আগে', 'minutes before')}`}</option>)}</select></label><button className="button secondary" disabled={permission !== 'granted'} onClick={() => void test()}><Bell size={16} />{t("টেস্ট নোটিফিকেশন", "Test notification")}</button>{permission === 'default' && <button className="text-button" disabled={busy} onClick={() => void request()}>{t("অনুমতি দাও", "Grant permission")}<ArrowUpRight size={14} /></button>}</div><div className="inline-note"><Info size={16} /><p>{t('অ্যাপ বা ট্যাব পুরো বন্ধ থাকলে এই ব্রাউজার রিমাইন্ডার কাজ করবে না। সেই সময়ে নিচের ক্যালেন্ডার অ্যালার্ম ব্যবহার করো।', 'If the app or tab is fully closed, browser reminders will not fire. Use the calendar alarms below for those times.')}</p></div></section>}
     <section className="card revision-reminder-card"><div className="reminder-card-main"><span className="large-icon peach"><Bell size={26} /></span><div><h2>{t("রিভিশন রিমাইন্ডার", "Revision reminders")}</h2><p>{t('রিভিশন কার্ড দরকার হলে অ্যাপ খোলা অবস্থায় দিনে একবার নোটিফিকেশন আসে।', 'While the app stays open you get one notification a day when revision cards are due.')} {t('এখন', 'Right now')} {bn(revisionDue)}{t('টি রিভিশন দরকার', 'revisions are due')}{revisionLate ? `, ${bn(revisionLate)} ${t('টি ওভারডিউ', 'overdue')}` : ''}।</p><span className="permission-status"><span className="status-dot" />{t("ব্রাউজার রিমাইন্ডার চালু থাকলেই কাজ করবে", "Works only while browser reminders stay on")}</span></div><button className="button secondary small" onClick={() => navigate('revision')}>{t("রিভিশন দেখো", "See revision")}<ArrowUpRight size={15} /></button></div></section>
@@ -160,7 +175,7 @@ function NativeReminderCard() {
   const exactOff = health?.exact === 'denied';
 
   return <section className="card browser-reminder-card">
-    <div className="reminder-card-main"><span className="large-icon green"><BellRing size={27} /></span><div><h2>{t("ডিভাইস নোটিফিকেশন", "Device notifications")}</h2><p>{t('অ্যাপ বন্ধ থাকলেও Android ফোনে সেশন, রিভিশন আর টাইমার শেষের অ্যালার্ম আসবে। পরের ১৪ দিনের রিমাইন্ডার একবারে সেট হয়।', 'On an Android phone the session, revision and timer-end alarms still arrive with the app closed. The next 14 days of reminders are set at once.')}</p><span className={`permission-status ${health?.permission === 'granted' ? 'granted' : ''}`}><span className="status-dot" />{permissionLabel}{data.settings.reminderEnabled && status ? ` · ${status}` : ''}</span></div><button className={`switch ${data.settings.reminderEnabled ? 'on' : ''}`} role="switch" aria-checked={data.settings.reminderEnabled} aria-label={t("ডিভাইস নোটিফিকেশন", "Device notifications")} onClick={() => data.settings.reminderEnabled ? disable() : void run()} disabled={busy}><span /></button></div>
+    <div className="reminder-card-main"><span className="large-icon green"><BellRing size={27} /></span><div><h2>{t("ডিভাইস নোটিফিকেশন", "Device notifications")}</h2><p>{t('অ্যাপ বন্ধ থাকলেও Android ফোনে সেশন, রিভিশন, রাত ৯টায় কালকের ক্লাসের তালিকা আর টাইমার শেষের অ্যালার্ম আসবে। পরের ১৪ দিনের রিমাইন্ডার একবারে সেট হয়।', 'On an Android phone the session, revision, 9 PM previews of tomorrow’s classes and timer-end alarms still arrive with the app closed. The next 14 days of reminders are set at once.')}</p><span className={`permission-status ${health?.permission === 'granted' ? 'granted' : ''}`}><span className="status-dot" />{permissionLabel}{data.settings.reminderEnabled && status ? ` · ${status}` : ''}</span></div><button className={`switch ${data.settings.reminderEnabled ? 'on' : ''}`} role="switch" aria-checked={data.settings.reminderEnabled} aria-label={t("ডিভাইস নোটিফিকেশন", "Device notifications")} onClick={() => data.settings.reminderEnabled ? disable() : void run()} disabled={busy}><span /></button></div>
     <div className="reminder-controls">
       <button className="button secondary" disabled={busy} onClick={() => void run()}><Bell size={16} />{busy ? 'সেট হচ্ছে…' : 'এখনই সিঙ্ক করো'}</button>
       <button className="button secondary" disabled={busy} onClick={() => void test()}><BellRing size={16} />{t("টেস্ট নোটিফিকেশন", "Test notification")}</button>
