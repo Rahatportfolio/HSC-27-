@@ -35,7 +35,7 @@ async function verifyStartShortcut(timezoneId: string) {
   try {
     const page = await context.newPage();
     const errors: string[] = []; page.on('pageerror', e => errors.push(e.message));
-    await page.clock.setFixedTime(new Date('2026-11-16T06:00:00Z'));
+    await page.clock.setFixedTime(new Date('2026-11-20T06:00:00Z'));
     await page.addInitScript(({ key, data }) => { if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(data)); }, { key: STORAGE_KEY, data });
     await page.goto(`${base}#settings`, { waitUntil: 'networkidle' });
     await page.evaluate(() => document.fonts.ready);
@@ -83,7 +83,7 @@ try {
     const page = await context.newPage();
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
-    await page.clock.setFixedTime(new Date('2026-11-16T06:00:00Z'));
+    await page.clock.setFixedTime(new Date('2026-11-20T06:00:00Z'));
     await page.goto(`${base}#settings`, { waitUntil: 'networkidle' });
     // A completely new user starts on the 20th; no private fixture is needed for this assertion.
     assert.equal(await page.getByLabel(/^রুটিন শুরুর তারিখ/).inputValue(), '2026-11-20');
