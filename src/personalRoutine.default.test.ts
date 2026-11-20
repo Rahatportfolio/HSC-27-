@@ -131,4 +131,21 @@ describe('default 20-hour chapter budget', () => {
     expect(spill!.missingDurations).toBe(false);
     expect(spill!.syllabusEnd).toBeDefined();
   });
+
+  it('survives a save/reload with the estimate already in the completed history', () => {
+    // The 2026-11-20 Android reload failure: saved tasks carried
+    // durationSource 'default24' but the history parser only knew the old four,
+    // so the whole AppData was rejected and the home screen never appeared.
+    const data = freshData();
+    data.personalRoutine = { ...newPersonalRoutine(), windows: WINDOWS, sessionMinutes: 60, breakMinutes: 5 };
+    const first = buildStudyPlan(data, data.settings.startDate).flatMap(day => day.tasks).slice(0, 40);
+    expect(first.every(task => task.personalWork!.durationSource === 'default24')).toBe(true);
+    data.personalRoutine.history = first.map(task => ({ ...task, sourceMinutes: task.personalWork!.rawMinutes }));
+    const restored = parsePersonalRoutine(JSON.parse(JSON.stringify(data.personalRoutine)));
+    expect(restored.history).toHaveLength(first.length);
+    expect(restored.history!.every(task => task.personalWork!.durationSource === 'default24')).toBe(true);
+    const again = buildStudyPlan({ ...data, personalRoutine: restored }, data.settings.startDate).flatMap(day => day.tasks);
+    expect(again).toHaveLength(933);
+    expect(again.reduce((sum, task) => sum + task.endMinute - task.startMinute, 0)).toBe(RECOMMENDED_S_IDS.length * DEFAULT_CHAPTER_MINUTES);
+  });
 });

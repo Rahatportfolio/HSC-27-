@@ -237,7 +237,7 @@ function parsePersonalHistory(raw: unknown): Task[] {
       typeof work.rawMinutes !== 'number' || !Number.isFinite(work.rawMinutes) || work.rawMinutes <= 0 || work.rawMinutes > 10080 ||
       !integer(work.pairDay, 1, 730) || typeof work.chapterMinutes !== 'number' || !Number.isFinite(work.chapterMinutes) || work.chapterMinutes < 0 || work.chapterMinutes > 80640 ||
       (work.evidenceMinutes !== undefined && (typeof work.evidenceMinutes !== 'number' || !Number.isFinite(work.evidenceMinutes) || work.evidenceMinutes <= 0 || work.evidenceMinutes > 10080)) ||
-      !['student', 'planned', 'youtube-player', 'reference-metadata'].includes(String(work.durationSource)) || !Array.isArray(work.requiredSources) || work.requiredSources.length > 8 ||
+      !['student', 'planned', 'youtube-player', 'reference-metadata', 'default24'].includes(String(work.durationSource)) || !Array.isArray(work.requiredSources) || work.requiredSources.length > 8 ||
       !work.requiredSources.every(id => typeof id === 'string' && id.length <= 180 && id.startsWith('personal:')) || (work.url !== undefined && (typeof work.url !== 'string' || !safeClassUrl(work.url)))) return fail();
     for (const key of ['mediaFromSec', 'mediaToSec'] as const) if (work[key] !== undefined && (typeof work[key] !== 'number' || !Number.isFinite(work[key]) || Number(work[key]) < 0 || Number(work[key]) > 604800)) return fail();
     if (!range.sourceId.startsWith(`personal:${value.chapterIds[0]}:${work.stage}:`) || !/:[a-f0-9]{32}$/.test(range.sourceId)) return fail();
