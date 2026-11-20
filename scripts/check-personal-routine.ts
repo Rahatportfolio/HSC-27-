@@ -57,6 +57,9 @@ async function flow() {
     const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await page.clock.setFixedTime(new Date('2026-11-16T06:00:00Z'));
     await go(page, 'today');
+    assert.equal(await page.locator('main h1').innerText(), 'অ্যাপ খুলে পড়া শুরু করো — ফর্ম পূরণ নয়');
+    await page.getByRole('button', { name: /সব আমি নিজে সাজিয়ে নিতে চাই/ }).click();
+    await page.getByRole('heading', { name: 'আগে বলো, কখন পড়তে পারবে?' }).waitFor();
     assert.equal(await page.locator('main h1').innerText(), 'আগে বলো, কখন পড়তে পারবে?');
     assert.equal(await page.locator('.task-card').count(), 0);
     assert.equal(await page.getByLabel('সময় 1 শুরু').inputValue(), '');

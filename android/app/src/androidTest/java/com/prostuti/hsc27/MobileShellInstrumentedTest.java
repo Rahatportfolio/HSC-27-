@@ -234,8 +234,8 @@ public class MobileShellInstrumentedTest {
     try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
       AtomicReference<WebView> ref = new AtomicReference<>();
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
-      waitFor(ref.get(), "!!document.querySelector('.personal-setup form')");
-      assertEquals("Fresh Android users must give availability before receiving a routine", "true", evaluate(ref.get(), "!document.querySelector('.today-view')&&!document.querySelector('.personal-home')&&!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
+      waitFor(ref.get(), "!!document.querySelector('.quick-start')");
+      assertEquals("Fresh Android users must give availability before receiving a routine", "true", evaluate(ref.get(), "!document.querySelector('.today-view')&&!document.querySelector('.personal-home')&&!document.querySelector('.personal-setup')&&!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
       record("availability-first", new JSONObject().put("freshSetupVisible", true).put("automaticRoutineCreated", false));
       screenshot("startup");
       AtomicReference<String> chrome = new AtomicReference<>();
@@ -251,7 +251,7 @@ public class MobileShellInstrumentedTest {
       // Wait for this Activity's own WebView, not whichever document finishing
       // load happened last. Then prove the fresh availability-first form is
       // still the visible screen rather than a partially mounted shell.
-      waitFor(ref.get(), "!!document.querySelector('.topbar') && !!document.querySelector('.personal-setup form')");
+      waitFor(ref.get(), "!!document.querySelector('.topbar') && !!document.querySelector('.quick-start')");
       assertEquals("Recreation must not create a routine for a fresh user",
         "true", evaluate(ref.get(), "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine&&!!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).routineSetupRequired"));
       screenshot("recreated");
@@ -272,6 +272,8 @@ public class MobileShellInstrumentedTest {
   }
 
   private void completeFreshSetupAndRecover(ActivityScenario<MainActivity> scenario, WebView web) throws Exception {
+    waitFor(web, "!!document.querySelector('.quick-start')");
+    tap(web, ".quick-start-footer .text-button");
     waitFor(web, "!!document.querySelector('.personal-setup form')");
     tap(web, ".lang-toggle-chip");
     waitFor(web, "document.documentElement.lang==='en'");

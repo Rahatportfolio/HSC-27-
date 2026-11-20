@@ -293,6 +293,8 @@ try {
         event.prompt = async () => {}; event.userChoice = Promise.resolve({ outcome: 'dismissed' }); window.dispatchEvent(event);
       });
       await page.waitForSelector('.install-app-btn');
+      // The personal S-home is code-split and may mount just after chrome does.
+      await page.waitForSelector(profile.data.personalRoutine ? '.personal-home' : '.today-view');
       assert.equal(await page.locator('.personal-home').count(), profile.data.personalRoutine ? 1 : 0, 'Wrong first-study-day profile');
       assert.equal(await page.locator('.topbar-progress-pill').count(), 1, 'First-day progress state was not exercised');
       const layout = await page.locator('.topbar').evaluate(bar => [...bar.querySelectorAll('button')].map(e => ({ name: e.getAttribute('aria-label') || e.className, rect: e.getBoundingClientRect().toJSON() })).filter(e => e.rect.width && e.rect.height));
