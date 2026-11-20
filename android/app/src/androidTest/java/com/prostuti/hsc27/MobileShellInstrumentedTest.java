@@ -176,9 +176,29 @@ public class MobileShellInstrumentedTest {
       if (stable >= 2) return;
       SystemClock.sleep(100);
     }
+    // On API 35 the system launcher can throw its own ANR dialog while the
+    // WebView is still settling. That dialog takes the input focus away from
+    // our window, so every later tap would be refused. Dismiss only that
+    // system-owned ANR (never our app, never a permission/keyguard dialog),
+    // then let the ordinary focus wait finish on its own.
+    String owner = focusedWindowLines(shell("dumpsys window"));
+    if (owner.contains("Application Not Responding") && !owner.contains("com.prostuti.hsc27")) {
+      record("system-anr-dismissed", new JSONObject().put("windowOwner", owner));
+      shell("input keyevent KEYCODE_ENTER");
+      long retryUntil = SystemClock.elapsedRealtime() + 15000;
+      while (SystemClock.elapsedRealtime() < retryUntil) {
+        boolean[] focused = new boolean[1];
+        InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> focused[0] = web.hasWindowFocus());
+        if (focused[0]) return;
+        SystemClock.sleep(150);
+        // A second ANR can appear while the first is closing; keep pressing OK.
+        String again = focusedWindowLines(shell("dumpsys window"));
+        if (again.contains("Application Not Responding") && !again.contains("com.prostuti.hsc27")) shell("input keyevent KEYCODE_ENTER");
+      }
+      owner = focusedWindowLines(shell("dumpsys window"));
+    }
     PowerManager power = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(PowerManager.class);
     KeyguardManager keyguard = InstrumentationRegistry.getInstrumentation().getTargetContext().getSystemService(KeyguardManager.class);
-    String owner = focusedWindowLines(shell("dumpsys window"));
     record("unfocused-input", new JSONObject().put("interactive", power.isInteractive()).put("keyguardLocked", keyguard.isKeyguardLocked()).put("windowOwner", owner));
     screenshot("unfocused-input");
     fail("App window never gained input focus; refusing an unowned screen tap. interactive=" + power.isInteractive() + ", keyguardLocked=" + keyguard.isKeyguardLocked() + ", owner=" + owner);
