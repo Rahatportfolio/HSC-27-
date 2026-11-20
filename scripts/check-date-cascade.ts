@@ -27,7 +27,7 @@ const shortcutFaults: Record<string, string> = {
 if (process.env.DATE_SHORTCUT_FAULT && !shortcutFaults[process.env.DATE_SHORTCUT_FAULT]) throw new Error('Unknown DATE_SHORTCUT_FAULT');
 async function verifyStartShortcut(timezoneId: string) {
   const english = timezoneId !== 'Asia/Dhaka';
-  const data = freshData();
+  const data = freshData(); data.settings.startDate = '2026-11-20'; data.settings.boostStartDate = '2026-12-07';
   data.settings = { ...data.settings, language: english ? 'en' : 'bn', fontScale: 'lg', adaptiveEnabled: false, name: 'Keep my profile', dailyHours: 6, startDate: '2026-11-14', boostStartDate: '2026-12-01' };
   data.notes['2026-11-15'] = 'Keep this real dated note';
   data.completed['physics-1-2:part-1'] = '2026-11-15T08:00:00Z';
@@ -87,7 +87,7 @@ try {
     await page.goto(`${base}#settings`, { waitUntil: 'networkidle' });
     // A completely new user starts on the 20th; no private fixture is needed for this assertion.
     assert.equal(await page.getByLabel(/^রুটিন শুরুর তারিখ/).inputValue(), '2026-11-20');
-    const data = freshData();
+    const data = freshData(); data.settings.startDate = '2026-11-20'; data.settings.boostStartDate = '2026-12-07';
     data.settings.language = 'en';
     data.settings.adaptiveEnabled = false;
     const originalId = 'custom-2026-11-22-one';
@@ -166,7 +166,7 @@ try {
     if (timezoneId === 'Asia/Dhaka') await page.screenshot({ path: `${output}/fixed-target-warning-mobile.png`, fullPage: true });
     // Imported legacy references must neither blank the app nor duplicate a promoted
     // source's completed minutes. Exercise the final UI, not just a pure projection.
-    const recovered = freshData();
+    const recovered = freshData(); recovered.settings.startDate = '2026-11-20'; recovered.settings.boostStartDate = '2026-12-07';
     recovered.settings = { ...recovered.settings, language: 'en', dailyHours: 4, boostEnabled: false, adaptiveEnabled: false };
     recovered.advanced = { ...emptyAdvanced(), classes: [{
       id: 'recheck', title: 'Completed lecture', url: 'https://example.org/a.mp4', chapterId: CHAPTERS[0].id,

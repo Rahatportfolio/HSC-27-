@@ -90,6 +90,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PAT
 try {
   for (const scenario of scenarios) {
     const data = freshData();
+    data.settings.startDate = '2026-11-20'; data.settings.boostStartDate = '2026-12-07';
     data.settings.theme = scenario.theme; data.settings.language = scenario.language; data.settings.fontScale = 'lg';
     data.notes['2026-11-19'] = 'Accessibility fixture: unrelated history must stay intact.';
     if (scenario.populated) {

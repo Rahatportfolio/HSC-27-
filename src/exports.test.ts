@@ -1,3 +1,4 @@
+import './test/pinnedDate';
 import { describe, expect, it } from 'vitest';
 import { buildPlan, freshData } from './planner';
 import { foldICSLine, makeCsv, makeICS, makeMarkdown } from './exports';

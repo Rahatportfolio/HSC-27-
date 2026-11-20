@@ -139,3 +139,41 @@ describe('Study Brain controls, consent and truthful suggestions', () => {
     expect(screen.getByRole('option', { name: chapterById[PERSONAL_IDS[0]].title })).toBeTruthy();
   });
 });
+
+describe('Study Brain full-strength insights and pre-flight', () => {
+  it('shows low-data honesty in the 28-day picture and pre-flight, and coach answers never mutate anything', () => {
+    const initial = enabled(), h = setup(initial);
+    const insights = screen.getByRole('region', { name: 'The full 28-day picture' });
+    expect(within(insights).getByText('When you study')).toBeTruthy();
+    expect(within(insights).getByText(/At least 5 saved sessions/)).toBeTruthy();
+    expect(within(insights).getByText(/At least 4 check-in days/)).toBeTruthy();
+    expect(within(insights).getByText(/Not enough data for a pace estimate/)).toBeTruthy();
+    const preflight = screen.getByRole('region', { name: 'Fix these before your next review' });
+    expect(within(preflight).getByText(/Nothing urgent in your records/)).toBeTruthy();
+    expect(within(preflight).queryByRole('button', { name: /Open/ })).toBeNull();
+    interpret('pace');
+    expect(within(checkIn()).getByRole('status').textContent).toContain('Not enough saved data for a pace estimate');
+    expect(h.setData).not.toHaveBeenCalled();
+    interpret('ki age thik korbo');
+    expect(within(checkIn()).getByRole('status').textContent).toContain('No unresolved-mistake');
+    expect(h.setData).not.toHaveBeenCalled();
+    interpret('streak');
+    expect(within(checkIn()).getByRole('status').textContent).toContain('last 28 days');
+    expect(h.setData).not.toHaveBeenCalled();
+    expect(h.data().completed).toBe(initial.completed);
+    expect(h.data().personalRoutine).toBe(initial.personalRoutine);
+  });
+  it('lists real priorities with route buttons and never adds work to the plan', () => {
+    const initial = enabled();
+    initial.mistakes.push({ id: 'm1', subject: 'chemistry', text: 'হার চাপ', date: '2026-11-15', category: 'careless', retryStatus: 'pending', resolved: false, chapterId: PERSONAL_IDS[1] });
+    const h = setup(initial);
+    const preflight = screen.getByRole('region', { name: 'Fix these before your next review' });
+    expect(within(preflight).getByText(/Open mistake records · 1/)).toBeTruthy();
+    expect(within(preflight).queryByText(/Nothing urgent/)).toBeNull();
+    fireEvent.click(within(preflight).getByRole('button', { name: /Open weakness detector/ }));
+    expect(h.navigate).toHaveBeenCalledWith('weakness');
+    expect(h.data().completed).toBe(initial.completed);
+    expect(h.data().personalRoutine).toBe(initial.personalRoutine);
+    expect(buildStudyPlan(h.data(), today)).toEqual(buildStudyPlan(initial, today));
+  });
+});

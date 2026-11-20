@@ -275,7 +275,8 @@ try {
     });
     await context.close();
   }
-  for (const profile of [{ name: 'first-study-day-toolbar', data: freshData() }, { name: 'first-study-day-toolbar-personal', data: personalDataFixture() }]) await probe(profile.name, async () => {
+  const legacyFirstDay = freshData(); legacyFirstDay.settings.startDate = '2026-11-20'; legacyFirstDay.settings.boostStartDate = '2026-12-07';
+  for (const profile of [{ name: 'first-study-day-toolbar', data: legacyFirstDay }, { name: 'first-study-day-toolbar-personal', data: personalDataFixture() }]) await probe(profile.name, async () => {
     // Before-start profiles do not show the daily progress pill. Exercise saved
     // legacy AND S profiles on their first study day, with the PWA install button.
     // Empty storage correctly opens availability setup and has no assigned work;

@@ -1,3 +1,4 @@
+import './test/pinnedDate';
 import { describe, expect, it } from 'vitest';
 import { CHAPTERS, chapterById } from './data';
 import { addDays, freshData, getStats } from './planner';

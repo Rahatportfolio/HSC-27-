@@ -43,7 +43,7 @@ try {
     const page = await context.newPage(); page.setDefaultTimeout(8000);
     const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await page.route('**/*', request => new URL(request.request().url()).origin === new URL(base).origin ? request.continue() : request.abort('internetdisconnected'));
-    const data = freshData(); data.settings.language = scenario.language; data.settings.theme = scenario.theme; data.settings.fontScale = 'lg';
+    const data = freshData(); data.settings.startDate = '2026-11-20'; data.settings.boostStartDate = '2026-12-07'; data.settings.language = scenario.language; data.settings.theme = scenario.theme; data.settings.fontScale = 'lg';
     data.notes['2026-11-19'] = 'Keep unrelated actual-history note';
     data.flashcards = ['Alpha synthetic front', 'Beta synthetic front'].map((front, index) => ({ id: `native-field-${index}`, subject: 'physics', chapterId: 'physics-1-7', front, back: `Synthetic answer ${index}`, category: 'definition', interval: 1, dueDate: '2020-01-01', repetitions: 0, easeFactor: 2.5, createdAt: '2020-01-01T03:00:00Z' }));
     assert.equal(parseBackup(JSON.stringify(data)).flashcards.length, 2, 'Fixture must survive validation');
