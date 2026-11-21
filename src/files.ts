@@ -163,8 +163,14 @@ export async function getFile(id: string): Promise<StoredFile | null> {
 export async function deleteFile(id: string): Promise<boolean> {
   if (hasNativeFiles())
     try {
+      // Older app versions may have a second copy in IndexedDB. Check that
+      // store first so a temporary failure cannot erase the native copy while
+      // leaving the UI pointing at an inaccessible legacy file.
+      if (typeof indexedDB !== "undefined") {
+        const legacy = await tx<undefined>("readwrite", (store) => store.delete(id));
+        if (!legacy.ok) return false;
+      }
       await NativeFiles.remove({ id });
-      await tx<undefined>("readwrite", (store) => store.delete(id));
       return true;
     } catch {
       return false;

@@ -120,13 +120,13 @@ export async function idbKeys(): Promise<string[]> {
 }
 
 /** Total bytes occupied by this IndexedDB store. */
-export async function idbSizeBytes(): Promise<number> {
+export async function idbSizeBytes(): Promise<number | null> {
   const rows = await withStore('readonly', store => {
     const request = store.getAll();
     return { request };
   });
   const value = rows?.request.result as Stored[] | undefined;
-  return value ? value.reduce((sum, row) => sum + row.sizeBytes, 0) : 0;
+  return value ? value.reduce((sum, row) => sum + row.sizeBytes, 0) : null;
 }
 
 /** Remove expired and temporary entries. */
@@ -161,11 +161,13 @@ export async function clearScanImages(): Promise<boolean> {
 
 /** Quota estimate for the origin (IndexedDB + CacheStorage + localStorage roughly). */
 export async function storageEstimate(): Promise<{ quota: number; usage: number; usagePercent: number } | null> {
-  if (!navigator.storage || !navigator.storage.estimate) return null;
-  const estimate = await navigator.storage.estimate();
-  const usage = estimate.usage ?? 0;
-  const quota = estimate.quota ?? 0;
-  return { quota, usage, usagePercent: quota ? Math.round((usage / quota) * 100) : 0 };
+  try {
+    if (typeof navigator === 'undefined' || !navigator.storage?.estimate) return null;
+    const estimate = await navigator.storage.estimate();
+    if (estimate.usage === undefined || estimate.quota === undefined || estimate.quota <= 0) return null;
+    const { usage, quota } = estimate;
+    return { quota, usage, usagePercent: Math.round((usage / quota) * 100) };
+  } catch { return null; }
 }
 
 /** Approximate localStorage byte size for this origin. */
@@ -174,7 +176,8 @@ export function localStorageSizeBytes(): number {
   let size = 0;
   for (const key in localStorage) {
     if (Object.prototype.hasOwnProperty.call(localStorage, key)) {
-      size += key.length + localStorage.getItem(key)!.length;
+      const value = localStorage.getItem(key);
+      if (value !== null) size += new TextEncoder().encode(key).length + new TextEncoder().encode(value).length;
     }
   }
   return size;
@@ -188,12 +191,13 @@ export async function getStorageUsage(): Promise<{
   totalBytes: number;
   estimate: { quota: number; usage: number; usagePercent: number } | null;
 }> {
-  const [database, indexedDBBytes, estimate] = await Promise.all([openDb(), idbSizeBytes(), storageEstimate()]);
+  const [measuredBytes, estimate] = await Promise.all([idbSizeBytes(), storageEstimate()]);
+  const indexedDBBytes = measuredBytes ?? 0;
   const localStorageBytes = localStorageSizeBytes();
   return {
     localStorageBytes,
     indexedDBBytes,
-    indexedDBAvailable: database !== null,
+    indexedDBAvailable: measuredBytes !== null,
     totalBytes: localStorageBytes + indexedDBBytes,
     estimate,
   };

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { freshData } from "./planner";
 import { emptyAdvanced } from "./advanced";
 import { CHAPTERS } from "./data";
+import { applyManualSchedule } from "./scheduleEdit";
+import type { Day, Task } from "./planner";
 import {
   createMediaBackup,
   inspectMediaBackup,
@@ -204,4 +206,38 @@ describe('full backup includes the actual handwritten pages, not just their titl
     expect([...store.keys()]).toEqual(['pdf', 'video']);
     expect([...scanStore.keys()]).toEqual(['scan:one', 'scan:two']);
   });
+});
+
+it('remaps every saved reference to a restored video task, not just its completion', async () => {
+  const data = setup();
+  const task = 'smart-video|video|0|50000';
+  const other = 'smart-video|%|0|50000';
+  data.completed = { [task]: '2026-11-20T08:00:00Z', [other]: '2026-11-20T08:00:00Z' };
+  data.taskEdits = { [task]: { date: '2026-11-22', title: 'My changed class' }, [other]: { title: 'Keep malformed' } };
+  data.removedTasks = [task, other];
+  data.dayOverrides = { '2026-11-22': { taskMinutes: { [task]: 30, [other]: 25 }, taskStartMinutes: { [task]: 480 } } };
+  data.carryovers = [{ id: 'carry', taskId: task, title: 'Class', subject: 'physics', minutes: 30, fromDate: '2026-11-20', date: '2026-11-22', createdAt: '2026-11-20T08:00:00Z' }];
+  data.revisions = [{ id: 'r', chapterId: CHAPTERS[0].id, subject: CHAPTERS[0].subject, dueDate: '2026-11-22', interval: 1, createdAt: '2026-11-20T08:00:00Z', sourceTaskId: task }];
+  const parsed = await inspectMediaBackup(await createMediaBackup(data));
+  const staged = await stageMediaRestore(parsed);
+  const id = staged.data.advanced!.classes[0].id;
+  const remapped = `smart-video|${encodeURIComponent(id)}|0|50000`;
+  expect(staged.data.completed[remapped]).toBe(data.completed[task]);
+  expect(staged.data.taskEdits[remapped]).toEqual(data.taskEdits[task]);
+  expect(staged.data.removedTasks).toEqual([remapped, other]);
+  expect(staged.data.dayOverrides['2026-11-22'].taskMinutes).toEqual({ [remapped]: 30, [other]: 25 });
+  expect(staged.data.dayOverrides['2026-11-22'].taskStartMinutes).toEqual({ [remapped]: 480 });
+  expect(staged.data.carryovers[0].taskId).toBe(remapped);
+  expect(staged.data.revisions[0].sourceTaskId).toBe(remapped);
+  expect(staged.data.taskEdits[other]).toEqual(data.taskEdits[other]);
+  const taskAfter: Task = { id: remapped, date: '2026-11-20', dayIndex: 1, phase: 'learn', subject: 'physics', kind: 'learn', title: 'Original', detail: '', chapterIds: [CHAPTERS[0].id], startMinute: 480, endMinute: 510 };
+  const days: Day[] = [
+    { date: '2026-11-20', index: 1, phase: 'learn', tasks: [taskAfter], isCatchup: false },
+    { date: '2026-11-22', index: 2, phase: 'learn', tasks: [], isCatchup: false },
+  ];
+  expect(applyManualSchedule(days, staged.data).flatMap(day => day.tasks)).toEqual([]);
+  const visible = applyManualSchedule(days, { ...staged.data, removedTasks: [] });
+  expect(visible[1].tasks[0]).toMatchObject({ id: remapped, title: 'My changed class', date: '2026-11-22' });
+  expect(data.taskEdits[task].title).toBe('My changed class');
+  await staged.rollback();
 });

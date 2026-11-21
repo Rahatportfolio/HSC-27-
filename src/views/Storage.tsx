@@ -59,7 +59,7 @@ export default function StorageView() {
         descriptionEn=""
       />
       <div className="stat-row">
-        <div className="stat-card"><div className="stat-value">{usage ? bytesLabel(usage.totalBytes) : '—'}</div><div className="stat-label">{t('অ্যাপ ডেটা ও ইনডেক্স', 'App data and index')}</div></div>
+        <div className="stat-card"><div className="stat-value">{usage?.indexedDBAvailable ? bytesLabel(usage.totalBytes) : '—'}</div><div className="stat-label">{t('অ্যাপ ডেটা ও ইনডেক্স', 'App data and index')}</div></div>
         <div className="stat-card"><div className="stat-value">{usage ? bn(usage.localStorageBytes) : '—'}</div><div className="stat-label">{t('অ্যাপ ডাটা (লোকাল)', 'App data')}</div></div>
         <div className="stat-card"><div className="stat-value">{!usage ? '—' : usage.indexedDBAvailable ? bytesLabel(usage.indexedDBBytes) : t('নেই', 'n/a')}</div><div className="stat-label">{t('ক্যাশে ও ইনডেক্স', 'Cache & indexes')}</div></div>
         <div className="stat-card"><div className="stat-value">{usage?.estimate ? bn(usage.estimate.usagePercent) + '%' : '—'}</div><div className="stat-label">{t('কোটার ব্যবহার', 'Quota used')}</div></div>
@@ -74,6 +74,7 @@ export default function StorageView() {
 
       {usage && (
         <div className="usage-detail">
+          <p>{t('এটি আনুমানিক localStorage ও cache-এর হিসাব; অফলাইন PDF/ভিডিও, AI model ও Android ফাইল এতে ধরা নেই।', 'This is an approximate localStorage and cache count; offline PDF/video, AI model and Android files are not included.')}</p>
           <p><HardDrive size={16} /> {t('লোকাল স্টোরেজে অ্যাপ ডাটা', 'App data in local storage')}: {bytesLabel(usage.localStorageBytes)}</p>
           {usage.indexedDBAvailable ? <p><BarChart3 size={16} /> {t('ইনডেক্সডডিবিতে ক্যাশে', 'Cache in IndexedDB')}: {bytesLabel(usage.indexedDBBytes)}</p> : <p><AlertCircle size={16} /> {t('এই ব্রাউজারে ইনডেক্সডডিবি উপলব্ধ নয়।', 'IndexedDB unavailable in this browser.')}</p>}
           {usage.estimate && <p>{t('ব্রাউজার স্টোরেজ ব্যবহার: ', 'Browser storage usage: ')}{bn(usage.estimate.usage)} বাইট / {bytesLabel(usage.estimate.quota)} ({bn(usage.estimate.usagePercent)}%)</p>}
