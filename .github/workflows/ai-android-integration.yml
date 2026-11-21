@@ -75,6 +75,10 @@ jobs:
             const fs = require('fs');
             const file = 'ai-android.log';
             if (fs.existsSync(file)) core.error(fs.readFileSync(file, 'utf8').split('\n').filter(line => /failed|failure|exception|error|timed out|mCurrentFocus|mFocusedApp|lowmemorykiller|OutOfMemory|chromium.*(crash|kill)|ActivityManager.*(kill|died)|RenderProcessGone|ANR in com.prostuti/i.test(line)).join('\n').slice(-3500));
+            if (fs.existsSync('ai-android-logcat.log')) {
+              const stages = fs.readFileSync('ai-android-logcat.log', 'utf8').split('\n').filter(line => line.includes('AiModelProbe'));
+              if (stages.length) core.error('AI probe stages:\n' + stages.join('\n').slice(-3500));
+            }
             const root = 'android/app/build/outputs/androidTest-results';
             function inspect(dir) { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir,{withFileTypes:true})) { const p=`${dir}/${e.name}`; if(e.isDirectory()) inspect(p); else if(p.endsWith('.xml')) for(const m of fs.readFileSync(p,'utf8').matchAll(/<failure[\s\S]*?<\/failure>/g)) core.error(m[0].slice(0,3500)); } }
             inspect(root);

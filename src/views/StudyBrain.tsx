@@ -377,6 +377,11 @@ function AiAssistant() {
   useEffect(() => () => unloadAiModel(), []);
 
   const switchMode = (next: AiMode) => {
+    if (mode === 'model' && next === 'brain') {
+      unloadAiModel();
+      setModelState('idle');
+      setProgress(0);
+    }
     setMode(next);
     setError('');
     if (next === 'model') { setQuiz(null); setPicked(null); }
@@ -462,6 +467,7 @@ function AiAssistant() {
 
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
       <p>{t(`প্রথমবার প্রায় ${bn(AI_MODEL_SIZE_MB)} MB মডেল এবং চালানোর ফাইল ডাউনলোড হবে (SmolLM2-135M, Q8)। ডিভাইস ও ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The first use downloads an approximately ${AI_MODEL_SIZE_MB} MB model plus runtime files (SmolLM2-135M, Q8). Depending on your device and cache, internet may be needed again.`)}</p>
+      <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। চাইলে স্মার্ট ব্রেইন ব্যবহার করো। স্মার্ট ব্রেইনে ফিরলে মডেলের মেমোরি ছাড়া হয়; আবার মডেলে গেলে সেটি লোড করতে হবে।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. You can use Smart brain instead. Switching back releases the model from memory; returning to model mode requires loading it again.')}</p>
       <button type="button" className="button primary" onClick={() => void downloadModel()}><Download size={16} aria-hidden="true" />{t('AI মডেল ডাউনলোড করো', 'Download AI model')}</button>
     </div>}
 

@@ -209,6 +209,21 @@ describe('AI assistant regression checks', () => {
     expect(within(panel()).queryByText('Model reply')).toBeNull();
   });
 
+  it('warns about RAM and releases the optional model when switching back to smart brain', async () => {
+    const unload = vi.spyOn(aiModel, 'unloadAiModel');
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect(within(panel()).getByText(/requires much more RAM than the download size/)).toBeTruthy();
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    expect(within(panel()).getByText(/Model ready/)).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Smart brain' }));
+    expect(unload).toHaveBeenCalledOnce();
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect(within(panel()).queryByText(/Model ready/)).toBeNull();
+    expect(within(panel()).getByRole('button', { name: 'Download AI model' })).toBeTruthy();
+  });
+
   it('prevents mode changes while a model download is in progress', async () => {
     let finish!: () => void;
     vi.spyOn(aiModel, 'loadAiModel').mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
