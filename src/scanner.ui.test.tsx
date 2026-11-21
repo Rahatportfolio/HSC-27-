@@ -287,3 +287,16 @@ describe('scanner library follows the actual backed-up app data', () => {
     expect(latest.scannedNotes).toEqual([]);
   });
 });
+
+it('keeps shared image pages that are still referenced by another restored note', async () => {
+  const initial = freshData();
+  initial.scannedNotes = [{ ...note(), pageKeys: ['scan:restored', 'scan:unique'], pageCount: 2 }, { ...note(), id: 'second', title: 'Second note', pageKeys: ['scan:restored', 'scan:second'], pageCount: 2 }];
+  render(<Harness initial={initial} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Saved notes' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Delete scanned note: Restored scan' }));
+  await act(async () => mock.confirm.mock.calls[0][0].action());
+  await waitFor(() => expect(latest.scannedNotes).toHaveLength(1));
+  expect(latest.scannedNotes[0].pageKeys).toEqual(['scan:restored', 'scan:second']);
+  expect(mock.remove).toHaveBeenCalledWith(['scan:unique']);
+  expect(mock.remove).not.toHaveBeenCalledWith(expect.arrayContaining(['scan:restored']));
+});

@@ -219,7 +219,11 @@ export default function NotesScannerView() {
     const next = { ...current, scannedNotes: current.scannedNotes.filter(n => n.id !== note.id) };
     if (!saveData(next, true)) { notify(t('নোট মুছতে পারিনি। ছবিগুলো অক্ষত আছে।', 'The note could not be deleted. Its images are unchanged.'), 'error'); return; }
     setData(next);
-    const imagesRemoved = await deletePagesFromDb(note.pageKeys);
+    // Restored or imported notes can share page keys. Only erase a page when
+    // the last surviving note no longer refers to it.
+    const retained = new Set(next.scannedNotes.flatMap(item => item.pageKeys));
+    const unreferenced = [...new Set(note.pageKeys)].filter(key => !retained.has(key));
+    const imagesRemoved = await deletePagesFromDb(unreferenced);
     if (!imagesRemoved) {
       notify(t('নোটের তালিকা থেকে সরানো হয়েছে, কিন্তু কিছু ছবির ডেটা মুছতে পারিনি। ডিভাইস স্টোরেজ যাচাই করো।', 'The note was removed from the list, but some image data could not be erased. Check device storage.'), 'error');
       return;
@@ -320,7 +324,7 @@ export default function NotesScannerView() {
                             <button type="button" className="button secondary small" onClick={() => void exportPdf(note)}>
                               <Download size={14} />{t('পিডিএফ', 'PDF')}
                             </button>
-                            <button type="button" className="button danger small" aria-label={t(`স্ক্যান করা নোট মুছো: ${note.title}`, `Delete scanned note: ${note.title}`)} onClick={() => confirm({ title: t('স্ক্যান করা নোট মুছবে?', 'Delete scanned note?'), message: t('এই নোটের পৃষ্ঠাগুলোও মুছবে। আগে PDF বা full backup রাখো।', 'This also deletes the note images. Keep a PDF or full backup first.'), danger: true, label: t('মুছে ফেলো', 'Delete'), action: () => { void deleteNote(note); } })}>
+                            <button type="button" className="button danger small" aria-label={t(`স্ক্যান করা নোট মুছো: ${note.title}`, `Delete scanned note: ${note.title}`)} onClick={() => confirm({ title: t('স্ক্যান করা নোট মুছবে?', 'Delete scanned note?'), message: t('শুধু এই নোটের পৃষ্ঠাগুলোও মুছবে; অন্য নোটে ব্যবহৃত পৃষ্ঠা থাকবে। আগে PDF বা full backup রাখো।', 'Pages used only by this note will also be deleted; pages shared with other notes will be kept. Keep a PDF or full backup first.'), danger: true, label: t('মুছে ফেলো', 'Delete'), action: () => { void deleteNote(note); } })}>
                               <Trash2 size={14} />
                             </button>
                           </div>
