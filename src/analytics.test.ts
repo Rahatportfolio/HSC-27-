@@ -50,3 +50,16 @@ describe('study analytics', () => {
     expect(weeklyReview(plan, data, '2026-11-14').tasksCompleted).toBe(1);
   });
 });
+
+it('excludes future records from the current weekly review so far', () => {
+  const data = freshData();
+  data.studySessions.push(session('2026-11-16', 30), session('2026-11-18', 120));
+  data.tests.push({ id: 'future', kind: 'subject', title: 'Future', subject: 'physics', chapterIds: [], score: 80, total: 100, durationMin: 60, date: '2026-11-18', at: '2026-11-16T08:00:00Z', notes: '' });
+  data.attempts.push({ id: 'future', questionId: 'q', subject: 'physics', chosen: 0, correct: true, date: '2026-11-18', at: '2026-11-16T08:00:00Z' });
+  const review = weeklyReview(plan, data, '2026-11-16');
+  expect(review.minutes).toBe(30);
+  expect(review.bySubject.physics).toBe(30);
+  expect(review.daysStudied).toBe(1);
+  expect(review.tests).toBe(0);
+  expect(review.mcq.total).toBe(0);
+});

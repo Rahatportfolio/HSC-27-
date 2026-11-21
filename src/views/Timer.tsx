@@ -4,7 +4,7 @@ import { AlarmClock, BellRing, CheckCircle2, Clock3, Coffee, Maximize2, Minimize
 import { usePlanner } from '../context';
 import { CHAPTERS, SUBJECTS, chapterById, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
-import { addDays, bn, formatDate, percent } from '../planner';
+import { bn, formatDate, percent } from '../planner';
 import { minutesBetween, minutesOn, startOfWeek } from '../analytics';
 import { deleteStudySession } from '../study';
 import { CHAPTER_CLASSES } from '../classLinks';
@@ -64,7 +64,7 @@ export default function TimerView() {
   const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === timer.subject));
   const todaySessions = data.studySessions.filter(session => session.date === today).sort((a, b) => b.at.localeCompare(a.at));
   const todayMinutes = minutesOn(data.studySessions, today);
-  const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), addDays(startOfWeek(today), 6));
+  const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), today);
   const streakWithTimer = new Set(data.studySessions.map(session => session.date)).size;
   const ringProgress = timer.mode === 'stopwatch' ? (timer.elapsedSec % 3600) / 36 : timer.progress;
   const canSaveStopwatch = timer.mode === 'stopwatch' && timer.elapsedSec >= 60;

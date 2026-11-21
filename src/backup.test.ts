@@ -71,3 +71,23 @@ describe('weekly report', () => {
     expect(report.lines.join('\n')).toContain('CQ: এই সপ্তাহে লেখা হয়নি');
   });
 });
+
+it('uses Dhaka dates for task and revision completions in the weekly report', async () => {
+  const { buildPlan } = await import('./planner');
+  const plan = buildPlan();
+  const data = freshData();
+  const [first, second] = plan.flatMap(day => day.tasks).filter(task => task.chapterIds.length);
+  data.completed[first.id] = '2026-11-13T20:00:00Z'; // Nov 14 in Dhaka, first day of the report
+  data.revisions = [
+    { id: 'boundary', chapterId: first.chapterIds[0], subject: first.subject, dueDate: '2026-11-14', interval: 1, createdAt: '2026-11-13T00:00:00Z', completedAt: '2026-11-13T20:00:00Z' },
+  ];
+  const report = weekReport(data, plan, '2026-11-20');
+  expect(report.tasksDone).toBe(1);
+  expect(report.chaptersDone).toBe(new Set(first.chapterIds).size);
+  expect(report.revisions).toBe(1);
+  data.completed[second.id] = '2026-11-20T20:00:00Z'; // Nov 21 in Dhaka, outside report
+  data.revisions.push({ ...data.revisions[0], id: 'future', completedAt: '2026-11-20T20:00:00Z' });
+  const updated = weekReport(data, plan, '2026-11-20');
+  expect(updated.tasksDone).toBe(1);
+  expect(updated.revisions).toBe(1);
+});

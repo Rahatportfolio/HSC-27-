@@ -151,10 +151,10 @@ function NativeReminderCard() {
       const result = await syncNativeReminders(plan, { ...data, settings: { ...data.settings, reminderEnabled: true } }, today, { requestPermission: true });
       if (result.permission !== 'granted') { setStatus(t('অনুমতি দেওয়া হয়নি', 'Permission not given')); notify(t('রিমাইন্ডার সেট করা যায়নি—অনুমতি দরকার।', 'The reminder could not be set — permission is needed.'), 'info'); return; }
       setData(current => ({ ...current, settings: { ...current.settings, reminderEnabled: true } }));
-      setStatus(`${bn(result.scheduled)}টি সেট`);
+      setStatus(t(`${bn(result.scheduled)}টি সেট`, `${result.scheduled} scheduled`));
       notify(result.scheduled
-        ? `${bn(result.scheduled)}টি রিমাইন্ডার ডিভাইসে সেট হয়েছে।`
-        : 'এই ১৪ দিনে নতুন রিমাইন্ডার নেই—সব সেশন তো আগেই সেট করা আছে।', 'success');
+        ? t(`${bn(result.scheduled)}টি রিমাইন্ডার ডিভাইসে সেট হয়েছে।`, `${result.scheduled} reminders scheduled on this device.`)
+        : t('আগামী ১৪ দিনে কোনো রিমাইন্ডার নির্ধারিত নেই।', 'No reminders are scheduled for the next 14 days.'), result.scheduled ? 'success' : 'info');
     } catch { notify(t('রিমাইন্ডার সেট করা যায়নি। অ্যাপ আপডেট করে আবার চেষ্টা করো।', 'The reminder could not be set. Update the app and try again.'), 'error'); }
     finally { setBusy(false); void refresh(); }
   };
