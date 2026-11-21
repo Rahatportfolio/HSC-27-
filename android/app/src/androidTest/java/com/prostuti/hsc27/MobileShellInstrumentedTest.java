@@ -386,7 +386,17 @@ public class MobileShellInstrumentedTest {
     enterField(web, "textarea[aria-label='Day note']", "Native fresh setup note: retain after restart and recovery");
     waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.keys(d.completed).length===1&&Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery');})()");
     assertEquals("A single segment must not finish a chapter", "0/114", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
-    String retained = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
+    // Capture the actual edited snapshot atomically. A pending older React effect
+    // can briefly write between the readiness probe and this read on a slow device;
+    // never compare a stale pre-edit snapshot to the recreated app.
+    String retained = null;
+    long captureDeadline = SystemClock.elapsedRealtime() + 5000;
+    while (SystemClock.elapsedRealtime() < captureDeadline) {
+      String candidate = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery')&&Object.keys(d.completed).length===1?JSON.stringify([d.personalRoutine,d.notes,d.completed]):'';})()");
+      if (candidate != null && !candidate.equals("\"\"")) { retained = candidate; break; }
+      SystemClock.sleep(50);
+    }
+    assertNotNull("Edited note and completion never reached local storage", retained);
     scenario.recreate();
     AtomicReference<WebView> ref = new AtomicReference<>();
     scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
@@ -423,6 +433,10 @@ public class MobileShellInstrumentedTest {
     // users to finish availability setup. Do not add a production test hook or
     // weaken that rule merely to make this legacy-dashboard regression pass.
     String raw = syntheticProfile(profile);
+    // Leave the old React document before injecting a fixture: its pending
+    // effects must not overwrite the synthetic data during the navigation.
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.loadUrl("https://localhost/recovery.html"));
+    waitFor(web, "!!document.querySelector('#recovery-profile')");
     // Replace the durable SQLite mirror together with local storage. Without
     // this the mount-time restore can re-apply an older real snapshot over the
     // synthetic profile: a newer mirror stamp wins by design in production.
@@ -436,7 +450,7 @@ public class MobileShellInstrumentedTest {
       "localStorage.setItem(stampKey," + JSONObject.quote(iso) + ");" +
       "localStorage.setItem(key," + JSONObject.quote(raw) + ");history.replaceState(null,'','#today');return true;})()"
     );
-    InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.loadUrl("https://localhost/#today"));
     waitFor(web, "!!document.querySelector('" + (profile.equals("personal") ? ".personal-home" : ".today-view") + "')");
   }
 

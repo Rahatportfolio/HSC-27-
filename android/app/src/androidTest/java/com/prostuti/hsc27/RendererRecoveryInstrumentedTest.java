@@ -56,13 +56,16 @@ public class RendererRecoveryInstrumentedTest {
       AtomicReference<WebView> web = new AtomicReference<>();
       scenario.onActivity(a -> { first.set(a); web.set(a.getBridge().getWebView()); });
       waitFor(web.get(), "document.readyState === 'complete'");
+      // Fixture writes must not race the old React document and its teardown.
+      InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.get().loadUrl("https://localhost/recovery.html"));
+      waitFor(web.get(), "!!document.querySelector('#recovery-profile')");
       String profile;
       try (java.io.InputStream in = InstrumentationRegistry.getInstrumentation().getContext().getAssets().open("native-personal-profile.json")) {
         profile = new String(in.readAllBytes(), StandardCharsets.UTF_8);
       }
       assertEquals("true", eval(web.get(), "localStorage.setItem('hsc27-prostuti-v1-saved-at','2099-01-01T00:00:00.000Z');localStorage.setItem('hsc27-prostuti-v1'," + JSONObject.quote(profile) + ");localStorage.setItem('renderer-recovery-test','saved synthetic value');true"));
-      InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.get().reload());
-      waitFor(web.get(), "!!document.querySelector('.personal-home')");
+      InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.get().loadUrl("https://localhost/#today"));
+      waitFor(web.get(), "!!document.querySelector('.personal-home') && JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).notes['2026-11-20'] === 'Synthetic native test note — keep through navigation and restart'");
       scenario.onActivity(a -> a.getBridge().getWebView().loadUrl("chrome://crash"));
 
       long deadline = SystemClock.elapsedRealtime() + 60000;
