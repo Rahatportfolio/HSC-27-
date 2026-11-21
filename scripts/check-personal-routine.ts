@@ -96,7 +96,7 @@ async function flow() {
     for (const id of firstPair) {
       await chapter.selectOption(id);
       const lecture = page.locator('.workload-stage').filter({ has: page.getByText('Chapter class', { exact: true }) });
-      await lecture.getByLabel('Chapter class minutes', { exact: true }).fill('480');
+      await lecture.getByLabel('Chapter class minutes', { exact: true }).fill('481');
       for (const stage of WORK_STAGES.filter(stage => stage.id !== 'class')) {
         const budget = ({ reading: 25, notes: 20, mcqPractice: 45, cqPractice: 60, revision: 20 } as Partial<Record<typeof stage.id, number>>)[stage.id] || 0;
         await page.getByLabel(`${stage.en} minutes`, { exact: true }).fill(String(budget));
@@ -112,7 +112,7 @@ async function flow() {
     await page.locator('.personal-home').waitFor();
     const data = await read(page); assert.equal(data.settings.startDate, '2026-11-20'); assert.equal(data.routineSetupRequired, false); assert.deepEqual(data.personalRoutine!.chapterIds, CHAPTERS.map(chapter => chapter.id));
     assert.equal(data.personalRoutine!.scope, 'ALL');
-    for (const id of firstPair) { assert.equal(data.personalRoutine!.workloads[id].class.minutes, 480); assert.equal(data.personalRoutine!.workloads[id].class.source, 'student'); }
+    for (const id of firstPair) { assert.equal(data.personalRoutine!.workloads[id].class.minutes, 481); assert.equal(data.personalRoutine!.workloads[id].class.source, 'student'); }
     assert.match(await page.locator('.personal-home .backup-nudge').innerText(), /No backup recorded yet/);
     assert.equal(await page.locator('.personal-home .backup-nudge').getByRole('button', { name: 'Save backup', exact: true }).count(), 1);
     const plan = buildStudyPlan(data, data.settings.startDate), active = plan.filter(day => day.tasks.length);
@@ -192,6 +192,7 @@ async function nextPhaseAndUndo() {
     assert.deepEqual(saved.personalPhases!.S!.workloads, sWork); assert.deepEqual(saved.completed, completed);
     assert.ok(saved.personalRoutine!.chapterIds.every(id => !PERSONAL_IDS.includes(id)));
     assert.equal(saved.notes['2026-11-20'], data.notes['2026-11-20']);
+    await page.locator('.personal-more > summary').click();
     assert.equal(await page.locator('.personal-goal .card-heading > strong').innerText(), '2/2');
     await layout(page, 'archived S/current A 390 dark'); await accessibility(page, 'archived S/current A 390 dark');
     await go(page, 'syllabus'); await page.locator('.chapter-card-item .chapter-row').first().click();

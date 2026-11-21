@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import PersonalSessionCard from '../components/PersonalSessionCard';
+import StudyBrainTeaser from '../components/StudyBrainTeaser';
 import PersonalAllocationHistory from '../components/PersonalAllocationHistory';
 import PersonalRoutineSetup from '../components/PersonalRoutineSetup';
 import type { PersonalRoutine } from '../personalRoutine';
@@ -43,6 +44,7 @@ export default function PersonalStudyHome() {
   return <div className="view personal-home">
     <PersonalSessionCard main />
     {routine.scope !== 'ALL' && <section className="card personal-session"><h2>{t('সব অধ্যায়ে তিন-সেশন রুটিন', 'Three sessions for every chapter')}</h2><p>{t('পুরোনো নির্বাচনের বাইরে থাকা অধ্যায়ও যোগ করো। আগের সময়, নোট, টিক ও সংরক্ষিত ধাপ থাকবে; সব কাজ লক্ষ্য তারিখে নাও কুলাতে পারে।', 'Add chapters outside your old selection. Existing availability, notes, ticks and saved phases stay; not all work may fit before the target.')}</p><button type="button" className="button primary" onClick={() => { const original = JSON.stringify(data); confirm({ title: t('সব অধ্যায় যোগ করবে?', 'Add all chapters?'), message: t('পুরোনো অগ্রগতি ও ধাপ রাখা হবে। সময় না কুলালে ঘাটতি দেখাবে।', 'Old progress and phases are retained. Any capacity shortfall will be shown.'), label: t('সব অধ্যায় যোগ করো', 'Add all chapters'), action: () => { try { if (JSON.stringify(latest.current.data) !== original) throw new Error(t('তথ্য বদলেছে; আবার চেষ্টা করো। নতুন পরিবর্তন অক্ষত আছে।', 'Data changed; try again. Newer changes were not overwritten.')); const next = applyAllChapterRoutine(latest.current.data, latest.current.plan); parseBackup(JSON.stringify(next)); if (!saveData(next, true)) throw new Error(t('সেভ হয়নি; আগের তথ্য অক্ষত আছে।', 'Could not save; existing data is unchanged.')); setData(next); notify(t('সব অধ্যায় যোগ হয়েছে।', 'All chapters added.'), 'success'); } catch (error) { notify((error as Error).message, 'error'); } } }); }} title={t('পুরোনো রুটিন বদলাতে নিশ্চিতকরণ লাগবে', 'Confirmation required to change your saved routine')}>{t('সব অধ্যায় যোগ করো', 'Add all chapters')}</button></section>}
+    <StudyBrainTeaser />
     <BackupNudge />
     <section className="card personal-day-controls" aria-label={t('পড়ার দিন নির্বাচন', 'Choose study day')}>
       <button type="button" className="icon-button" aria-label={t('আগের দিন', 'Previous day')} disabled={selectedDate <= data.settings.startDate} onClick={() => changeDate(addDays(selectedDate, -1))}><ArrowLeft size={18} /></button>

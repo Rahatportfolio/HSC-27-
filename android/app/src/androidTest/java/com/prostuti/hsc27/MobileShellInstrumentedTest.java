@@ -379,6 +379,7 @@ public class MobileShellInstrumentedTest {
     assertEquals(240, routine.getInt("dailyLimitMinutes"));
     assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-2").getJSONObject("class").getInt("minutes"));
     assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-2").getJSONObject("class").getInt("minutes"));
+    waitFor(web, "!document.querySelector('.toast')");
     tap(web, ".personal-more > summary");
     tap(web, ".personal-more > details > summary");
     tap(web, ".personal-tasks .task-check");
@@ -480,6 +481,10 @@ public class MobileShellInstrumentedTest {
           // otherwise a clock check would silently run against another student's
           // data. This is a real precondition, not an artifact-tolerance retry.
           waitFor(web, "(()=>{const raw=localStorage.getItem('hsc27-prostuti-v1');if(!raw)return false;const actual=JSON.parse(raw),expected=" + syntheticProfile(profile) + ";return JSON.stringify(actual.notes)===JSON.stringify(expected.notes)&&JSON.stringify(actual.completed)===JSON.stringify(expected.completed);})()");
+          if (profile.equals("personal")) {
+            waitFor(web, "!document.querySelector('.toast')");
+            tap(web, ".personal-more > summary");
+          }
           for (int zoom : new int[] {100, 130}) {
             scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(zoom));
             evaluate(web, "document.documentElement.dataset.font='lg';window.scrollTo({top:0,behavior:'instant'});true");
