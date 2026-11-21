@@ -5,6 +5,7 @@ import { Bot, BrainCircuit, CalendarDays, Check, ChevronRight, Download, Loader2
 import { PageHeading } from '../components';
 import { usePlanner } from '../context';
 import { chapterById } from '../data';
+import type { SubjectId } from '../data';
 import { bn, formatDate, formatTime } from '../planner';
 import { brainConsistency, brainEnergyOutput, brainPaceProjection, brainPreflight, brainTimeOfDay } from '../brainInsights';
 import { personalBookLabel, weeklyWindows, WORK_STAGES } from '../personalRoutine';
@@ -358,11 +359,16 @@ type ModelState = 'idle' | 'loading' | 'ready' | 'error';
 function AiAssistant() {
   const { data } = usePlanner();
   const [mode, setMode] = useState<AiMode>('brain');
-  const [messages, setMessages] = useState<AiMessage[]>([]);
+  const [conversations, setConversations] = useState<Record<AiMode, AiMessage[]>>({ brain: [], model: [] });
+  const messages = conversations[mode];
+  const setMessages = (update: AiMessage[] | ((current: AiMessage[]) => AiMessage[])) => {
+    setConversations(current => ({ ...current, [mode]: typeof update === 'function' ? update(current[mode]) : update }));
+  };
   const [input, setInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [quiz, setQuiz] = useState<QuizQuestion | null>(null);
   const [picked, setPicked] = useState<number | null>(null);
+  const [quizSubject, setQuizSubject] = useState<SubjectId | undefined>();
   const [modelState, setModelState] = useState<ModelState>('idle');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
@@ -390,7 +396,7 @@ function AiAssistant() {
   const askQuiz = async () => {
     setBusy(true); setError('');
     try {
-      const question = await loadQuizQuestion();
+      const question = await loadQuizQuestion(quizSubject);
       setQuiz(question); setPicked(null);
       setMessages(current => [...current, { role: 'assistant', content: quizMessage(question) }]);
     } catch {
@@ -410,12 +416,13 @@ function AiAssistant() {
         setBusy(true);
         try {
           const question = await loadQuizQuestion(answer.subject);
-          setQuiz(question); setPicked(null);
+          setQuiz(question); setQuizSubject(answer.subject); setPicked(null);
           setMessages(current => [...current, { role: 'assistant', content: quizMessage(question) }]);
         } catch {
           setError(t('কুইজ লোড করা যায়নি। সংযোগ পরীক্ষা করে আবার চেষ্টা করো।', 'Could not load the quiz. Check your connection and try again.'));
         } finally { setBusy(false); }
       } else {
+        setQuiz(null); setPicked(null);
         setMessages(current => [...current, { role: 'assistant', content: answer.text }]);
       }
       return;
@@ -424,9 +431,13 @@ function AiAssistant() {
     setMessages(history);
     setBusy(true);
     try {
-      const reply = await chatWithAi(history, item => setProgress(Math.round(item.progress ?? 0)));
+      // A successful conversation alternates user/assistant and ends in a user
+      // turn. Keep an odd number so a truncated context still starts with user.
+      const reply = await chatWithAi(history.slice(-11), item => setProgress(Math.round(item.progress ?? 0)));
       setMessages(current => [...current, { role: 'assistant', content: reply }]);
     } catch (cause) {
+      setMessages(current => current.slice(0, -1));
+      setInput(text);
       setError(aiErrorMessage(cause));
     } finally {
       setBusy(false);
@@ -445,8 +456,8 @@ function AiAssistant() {
     <h2 id="ai-title"><Bot size={20} aria-hidden="true" />{t('ডিভাইস AI সহকারী', 'On-device AI assistant')}</h2>
     <p>{t('স্মার্ট ব্রেইন এখনই উত্তর দেয় — অধ্যায়, কুইজ, টিপস, অগ্রগতি। AI মডেল মোডে খোলামেলা প্রশ্ন করতে পারো; মডেল ডিভাইসে চলে, তবে আবার চালু করতে ইন্টারনেট লাগতে পারে। এটি ইংরেজিতে ভালো কাজ করতে পারে; ভুল উত্তর যাচাই করো। চ্যাটের লেখা সেভ হয় না।', 'The smart brain answers instantly — chapters, quizzes, tips, progress. In AI model mode you can ask open-ended questions; the model runs on your device, but restarting it may require internet. It works best in English and can make mistakes. Chat text is never saved.')}</p>
     <div className="ai-modes" role="group" aria-label={t('AI মোড', 'AI mode')}>
-      <button type="button" className={`button secondary ${mode === 'brain' ? 'selected' : ''}`} aria-pressed={mode === 'brain'} onClick={() => switchMode('brain')}><BrainCircuit size={16} aria-hidden="true" />{t('স্মার্ট ব্রেইন', 'Smart brain')}</button>
-      <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t(`AI মডেল (~${bn(AI_MODEL_SIZE_MB)} MB)`, `AI model (~${AI_MODEL_SIZE_MB} MB)`)}</button>
+      <button type="button" className={`button secondary ${mode === 'brain' ? 'selected' : ''}`} aria-pressed={mode === 'brain'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('brain')}><BrainCircuit size={16} aria-hidden="true" />{t('স্মার্ট ব্রেইন', 'Smart brain')}</button>
+      <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t(`AI মডেল (~${bn(AI_MODEL_SIZE_MB)} MB)`, `AI model (~${AI_MODEL_SIZE_MB} MB)`)}</button>
     </div>
 
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">

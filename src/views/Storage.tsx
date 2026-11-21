@@ -4,7 +4,7 @@ import { usePlanner } from '../context';
 import { todayKey } from '../planner';
 import { bn } from '../planner';
 import { clearTempCache, findDuplicates, getStorageUsage } from '../storage-manager';
-import { downloadBackup, needsBackup } from '../backup';
+import { backupAgeDays, downloadBackup } from '../backup';
 import { EmptyState, PageHeading } from '../components';
 import { t } from '../i18n';
 
@@ -19,10 +19,11 @@ export default function StorageView() {
   const { data, notify } = usePlanner();
   const [usage, setUsage] = useState<{ localStorageBytes: number; indexedDBBytes: number; indexedDBAvailable: boolean; totalBytes: number; estimate: { quota: number; usage: number; usagePercent: number } | null } | null>(null);
   const [loading, setLoading] = useState(false);
-  const [duplicates, setDuplicates] = useState<{ kind: string; id: string; title: string; url: string; subject?: string }[]>([]);
+  const [duplicates, setDuplicates] = useState<{ kind: string; id: string; title: string; url: string; subject?: string }[] | null>(null);
+  const [checked, setChecked] = useState(false);
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    setLoading(true); setChecked(true);
     try { setUsage(await getStorageUsage()); } catch { setUsage(null); }
     finally { setLoading(false); }
   }, []);
@@ -30,6 +31,7 @@ export default function StorageView() {
   const clearCache = async () => {
     const removed = await clearTempCache(7);
     await refresh();
+    if (removed === null) { notify(t('ক্যাশে যাচাই বা পরিষ্কার করা যায়নি। স্টোরেজ অ্যাক্সেস পরীক্ষা করো।', 'Could not check or clear the cache. Check storage access.'), 'error'); return; }
     notify(removed ? `${bn(removed)} ${t('পুরোনো ক্যাশে এন্ট্রি মুছে ফেলা হয়েছে।', 'old cache entries cleared.')}` : t('ক্যাশে ইতিমধ্যে পরিষ্কার।', 'Cache already clean.'));
   };
 
@@ -57,9 +59,9 @@ export default function StorageView() {
         descriptionEn=""
       />
       <div className="stat-row">
-        <div className="stat-card"><div className="stat-value">{usage ? bytesLabel(usage.totalBytes) : '—'}</div><div className="stat-label">{t('ব্যবহৃত জায়গা', 'Space used')}</div></div>
-        <div className="stat-card"><div className="stat-value">{bn(usage?.localStorageBytes || 0)}</div><div className="stat-label">{t('অ্যাপ ডাটা (লোকাল)', 'App data')}</div></div>
-        <div className="stat-card"><div className="stat-value">{usage?.indexedDBAvailable ? bytesLabel(usage.indexedDBBytes) : t('নেই', 'n/a')}</div><div className="stat-label">{t('ক্যাশে ও ইনডেক্স', 'Cache & indexes')}</div></div>
+        <div className="stat-card"><div className="stat-value">{usage ? bytesLabel(usage.totalBytes) : '—'}</div><div className="stat-label">{t('অ্যাপ ডেটা ও ইনডেক্স', 'App data and index')}</div></div>
+        <div className="stat-card"><div className="stat-value">{usage ? bn(usage.localStorageBytes) : '—'}</div><div className="stat-label">{t('অ্যাপ ডাটা (লোকাল)', 'App data')}</div></div>
+        <div className="stat-card"><div className="stat-value">{!usage ? '—' : usage.indexedDBAvailable ? bytesLabel(usage.indexedDBBytes) : t('নেই', 'n/a')}</div><div className="stat-label">{t('ক্যাশে ও ইনডেক্স', 'Cache & indexes')}</div></div>
         <div className="stat-card"><div className="stat-value">{usage?.estimate ? bn(usage.estimate.usagePercent) + '%' : '—'}</div><div className="stat-label">{t('কোটার ব্যবহার', 'Quota used')}</div></div>
       </div>
 
@@ -75,11 +77,11 @@ export default function StorageView() {
           <p><HardDrive size={16} /> {t('লোকাল স্টোরেজে অ্যাপ ডাটা', 'App data in local storage')}: {bytesLabel(usage.localStorageBytes)}</p>
           {usage.indexedDBAvailable ? <p><BarChart3 size={16} /> {t('ইনডেক্সডডিবিতে ক্যাশে', 'Cache in IndexedDB')}: {bytesLabel(usage.indexedDBBytes)}</p> : <p><AlertCircle size={16} /> {t('এই ব্রাউজারে ইনডেক্সডডিবি উপলব্ধ নয়।', 'IndexedDB unavailable in this browser.')}</p>}
           {usage.estimate && <p>{t('ব্রাউজার স্টোরেজ ব্যবহার: ', 'Browser storage usage: ')}{bn(usage.estimate.usage)} বাইট / {bytesLabel(usage.estimate.quota)} ({bn(usage.estimate.usagePercent)}%)</p>}
-          <p>{needsBackup(data, todayKey()) ? t('এক সপ্তাহ ধরে ব্যাকআপ নেওয়া হয়নি।', 'No backup for a week.') : t('নিরাপদ ব্যাকআপ আছে।', 'A safe backup exists.')}</p>
+          <p>{backupAgeDays(todayKey()) === null ? t('কোনো ব্যাকআপের রেকর্ড নেই। ফাইলটি আলাদা নিরাপদ স্থানে রাখো; JSON-এ স্ক্যানের ছবি থাকে না।', 'No backup record was found. Keep the file separately; JSON does not include scanned images.') : t('ব্যাকআপের রেকর্ড আছে; ফাইলটি নিরাপদ স্থানে আছে কি না নিজে যাচাই করো। JSON-এ স্ক্যানের ছবি থাকে না।', 'A backup action was recorded; check that the file is stored safely. JSON does not include scanned images.')}</p>
         </div>
       )}
 
-      {duplicates.length > 0 && (
+      {duplicates && duplicates.length > 0 && (
         <div className="duplicate-list">
           <h3>{t('ডুপ্লিকেট লিংক', 'Duplicate links')}</h3>
           <p>{t('একই উৎসের লিংক একাধিকবার যোগ করা হয়েছে।', 'Same source added more than once.')}</p>
@@ -92,7 +94,9 @@ export default function StorageView() {
         </div>
       )}
 
-      {!usage && !loading && (
+      {duplicates && duplicates.length === 0 && <p role="status">{t('ডুপ্লিকেট লিংক পাওয়া যায়নি।', 'No duplicate links found.')}</p>}
+
+      {!usage && !loading && checked && (
         <EmptyState title={t('স্টোরেজ তথ্য পাওয়ா যায়নি', 'Storage info unavailable')} description={t('ব্রাউজার স্টোরেজ APIs এই ডিভাইসে সীমাবদ্ধ হতে পারে।', 'Browser storage APIs may be limited on this device.')} />
       )}
     </div>

@@ -8,7 +8,7 @@ import { freshData } from './planner';
 import type { AppData } from './planner';
 import { setLanguage } from './i18n';
 const mock = vi.hoisted(() => ({
-  save: vi.fn(async () => ['scan:new']), remove: vi.fn(async () => {}), persist: vi.fn(() => true),
+  save: vi.fn(async () => ['scan:new']), remove: vi.fn(async () => true), persist: vi.fn(() => true),
   loadPages: vi.fn(async () => ['data:image/png;base64,aGVsbG8=']), exportFile: vi.fn(async (_blob: Blob, _name: string) => {}),
   load: vi.fn(async (_source: string | File) => ({ width: 2, height: 1 })),
   encode: vi.fn((_canvas: unknown): string => ''),
@@ -42,6 +42,7 @@ const note = () => ({ id: 'restored', title: 'Restored scan', subject: 'physics'
 beforeEach(() => {
   localStorage.clear(); setLanguage('en'); vi.clearAllMocks();
   mock.persist.mockReturnValue(true);
+  mock.remove.mockReset().mockResolvedValue(true);
   mock.load.mockReset().mockResolvedValue({ width: 2, height: 1 });
   let image = 0;
   mock.encode.mockImplementation(() => `data:image/png;base64,${btoa(String(++image))}`);
@@ -85,6 +86,17 @@ describe('scanner library follows the actual backed-up app data', () => {
     await waitFor(() => expect(screen.queryByText('New saved scan')).toBeNull());
     expect(mock.remove).toHaveBeenCalledWith(['scan:new']);
     expect(latest.scannedNotes).toEqual([]);
+  });
+  it('warns when metadata is deleted but stored scan images could not be erased', async () => {
+    mock.remove.mockResolvedValue(false);
+    const initial = freshData(); initial.scannedNotes = [note()];
+    render(<Harness initial={initial} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Saved notes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Delete scanned note: Restored scan' }));
+    await act(async () => mock.confirm.mock.calls[0][0].action());
+    await waitFor(() => expect(mock.notify).toHaveBeenCalledWith(expect.stringContaining('image data could not be erased'), 'error'));
+    expect(latest.scannedNotes).toEqual([]);
+    expect(mock.notify).not.toHaveBeenCalledWith('Note deleted.', 'success');
   });
   it('keeps the editable page and removes staged images when note metadata cannot be saved', async () => {
     mock.persist.mockReturnValue(false);

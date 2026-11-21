@@ -219,7 +219,11 @@ export default function NotesScannerView() {
     const next = { ...current, scannedNotes: current.scannedNotes.filter(n => n.id !== note.id) };
     if (!saveData(next, true)) { notify(t('নোট মুছতে পারিনি। ছবিগুলো অক্ষত আছে।', 'The note could not be deleted. Its images are unchanged.'), 'error'); return; }
     setData(next);
-    await deletePagesFromDb(note.pageKeys);
+    const imagesRemoved = await deletePagesFromDb(note.pageKeys);
+    if (!imagesRemoved) {
+      notify(t('নোটের তালিকা থেকে সরানো হয়েছে, কিন্তু কিছু ছবির ডেটা মুছতে পারিনি। ডিভাইস স্টোরেজ যাচাই করো।', 'The note was removed from the list, but some image data could not be erased. Check device storage.'), 'error');
+      return;
+    }
     notify(t('নোট মুছে ফেলা হয়েছে।', 'Note deleted.'), 'success');
   };
 

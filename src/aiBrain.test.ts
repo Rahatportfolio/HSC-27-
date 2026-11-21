@@ -35,11 +35,39 @@ describe('answerAiQuestion', () => {
 
   it('details a named chapter', () => {
     const chapter = CHAPTERS.find(item => item.subject === 'physics')!;
-    const answer = answerAiQuestion(`physics ${chapter.number} অধ্যায়`, data);
+    const answer = answerAiQuestion(`physics 1st paper ${chapter.number} অধ্যায়`, data);
     expect(answer.kind).toBe('chapter');
     if (answer.kind !== 'chapter') return;
     expect(answer.chapter.id).toBe(chapter.id);
     expect(answer.text).toContain(chapter.focus);
+  });
+
+  it('does not confuse paper numbers with chapter numbers', () => {
+    const list = answerAiQuestion('physics paper 2 chapters', data);
+    expect(list.kind).toBe('chapters');
+    if (list.kind === 'chapters') expect(list.paper).toBe(2);
+    const detail = answerAiQuestion('physics 2nd paper chapter 2', data);
+    expect(detail.kind).toBe('chapter');
+    if (detail.kind === 'chapter') expect(detail.chapter.id).toBe('physics-2-2');
+    const first = answerAiQuestion('physics paper 2 chapter 1', data);
+    expect(first.kind).toBe('chapter');
+    if (first.kind === 'chapter') expect(first.chapter.id).toBe('physics-2-1');
+  });
+
+  it('asks for a paper instead of guessing an ambiguous chapter number', () => {
+    const answer = answerAiQuestion('পদার্থ অধ্যায় ২', data);
+    expect(answer.kind).toBe('unknown');
+    if (answer.kind === 'unknown') expect(answer.text).toContain('পত্র');
+  });
+
+  it('recognises a named chapter with its subject', () => {
+    const answer = answerAiQuestion('পদার্থের ভেক্টর অধ্যায়ের ফোকাস কী?', data);
+    expect(answer.kind).toBe('chapter');
+    if (answer.kind === 'chapter') expect(answer.chapter.id).toBe('physics-1-2');
+  });
+
+  it('does not guess a named chapter shared by subjects', () => {
+    expect(answerAiQuestion('ভেক্টর অধ্যায়ের ফোকাস কী?', data).kind).toBe('unknown');
   });
 
   it('lists all subjects', () => {

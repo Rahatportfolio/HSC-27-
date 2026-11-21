@@ -29,34 +29,49 @@ function indexedDBAvailable(): boolean {
 async function openDb(): Promise<IDBDatabase | null> {
   if (!indexedDBAvailable()) return null;
   if (!dbPromise) {
-    dbPromise = new Promise<IDBDatabase | null>(resolve => {
-      const request = indexedDB.open(DB_NAME, VERSION);
-      request.onerror = () => resolve(null);
-      request.onblocked = () => resolve(null);
+    let attempt: Promise<IDBDatabase | null>;
+    attempt = new Promise<IDBDatabase | null>(resolve => {
+      let request: IDBOpenDBRequest;
+      try { request = indexedDB.open(DB_NAME, VERSION); }
+      catch { resolve(null); return; }
+      let settled = false;
+      const unavailable = () => { settled = true; resolve(null); };
+      request.onerror = unavailable;
+      request.onblocked = unavailable;
       request.onupgradeneeded = event => {
         const database = (event.target as IDBOpenDBRequest).result;
-        if (!database.objectStoreNames.contains(STORE_NAME)) {
-          database.createObjectStore(STORE_NAME, { keyPath: 'key' });
-        }
+        if (!database.objectStoreNames.contains(STORE_NAME)) database.createObjectStore(STORE_NAME, { keyPath: 'key' });
       };
-      request.onsuccess = () => resolve(request.result);
+      request.onsuccess = () => {
+        const database = request.result;
+        if (settled) { database.close(); return; }
+        database.onversionchange = () => { database.close(); if (dbPromise === attempt) dbPromise = null; };
+        resolve(database);
+      };
     });
+    dbPromise = attempt;
   }
-  return dbPromise;
+  const attempt = dbPromise;
+  const database = await attempt;
+  // A temporary blocked/unavailable DB must not poison every later attempt.
+  if (!database && dbPromise === attempt) dbPromise = null;
+  return database;
 }
 
 async function withStore<T>(mode: IDBTransactionMode, work: (store: IDBObjectStore) => T): Promise<T | null> {
   const database = await openDb();
   if (!database) return null;
   return new Promise<T | null>(resolve => {
-    const transaction = database.transaction(STORE_NAME, mode);
-    const store = transaction.objectStore(STORE_NAME);
     try {
-      const result = work(store);
-      transaction.oncomplete = () => resolve(result as T);
+      const transaction = database.transaction(STORE_NAME, mode);
+      const result = work(transaction.objectStore(STORE_NAME));
+      transaction.oncomplete = () => resolve(result);
       transaction.onerror = () => resolve(null);
       transaction.onabort = () => resolve(null);
     } catch {
+      // A closed or invalid connection should not strand subsequent attempts.
+      database.close();
+      dbPromise = null;
       resolve(null);
     }
   });
@@ -115,15 +130,16 @@ export async function idbSizeBytes(): Promise<number> {
 }
 
 /** Remove expired and temporary entries. */
-export async function clearTempCache(olderThanDays = 7): Promise<number> {
-  const keys = await idbKeys();
+export async function clearTempCache(olderThanDays = 7): Promise<number | null> {
+  const rows = await withStore('readonly', store => ({ request: store.getAll() }));
+  if (!rows) return null;
+  const entries = rows.request.result as Stored[];
   const cutoff = new Date(Date.now() - olderThanDays * 86400000);
   let removed = 0;
-  for (const key of keys) {
-    const row = (await withStore('readonly', store => ({ request: store.get(key) })))?.request.result as Stored | undefined;
-    const expired = row?.expiresAt && new Date(row.expiresAt) < new Date();
+  for (const row of entries) {
+    const expired = row.expiresAt && new Date(row.expiresAt) < new Date();
     const stale = row && row.type === 'temp' && new Date(row.createdAt) < cutoff;
-    if (expired || stale) { await idbDelete(key); removed += 1; }
+    if (expired || stale) { if (!await idbDelete(row.key)) return null; removed += 1; }
   }
   return removed;
 }
@@ -157,12 +173,12 @@ export async function getStorageUsage(): Promise<{
   totalBytes: number;
   estimate: { quota: number; usage: number; usagePercent: number } | null;
 }> {
-  const [indexedDBBytes, estimate] = await Promise.all([idbSizeBytes(), storageEstimate()]);
+  const [database, indexedDBBytes, estimate] = await Promise.all([openDb(), idbSizeBytes(), storageEstimate()]);
   const localStorageBytes = localStorageSizeBytes();
   return {
     localStorageBytes,
     indexedDBBytes,
-    indexedDBAvailable: indexedDBAvailable(),
+    indexedDBAvailable: database !== null,
     totalBytes: localStorageBytes + indexedDBBytes,
     estimate,
   };
