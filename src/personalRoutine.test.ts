@@ -30,18 +30,17 @@ describe('personal S-only routine', () => {
     expect(RECOMMENDED_S_IDS.every(id => CHAPTERS.find(c => c.id === id)?.priority === 'A')).toBe(true);
     expect(newPersonalRoutine().windows).toEqual([]);
   });
-  it('uses the SAME two chapters across two days, halves teaching first and keeps practice/revision for later', () => {
+  it('keeps the same pair, allocating every source in class → notes → practice order', () => {
     const data = dataFor(routine(ids)); const plan = buildStudyPlan(data, data.settings.startDate);
-    for (const day of plan.slice(0, 2)) {
-      expect(new Set(day.tasks.flatMap(task => task.chapterIds))).toEqual(new Set(ids.slice(0, 2)));
-      for (const id of ids.slice(0, 2)) {
-        expect(total(day.tasks.filter(task => task.chapterIds.includes(id) && task.personalWork?.stage === 'class'))).toBe(120);
-        expect(total(day.tasks.filter(task => task.chapterIds.includes(id)))).toBe(day.index === 1 ? 122 : 123);
-      }
+    for (const id of ids) {
+      const tasks = plan.flatMap(day => day.tasks).filter(task => task.chapterIds.includes(id));
+      expect(total(tasks)).toBe(245);
+      expect(total(tasks.filter(task => task.personalWork?.stage === 'class'))).toBe(240);
+      const stages = tasks.map(task => WORK_STAGES.findIndex(stage => stage.id === task.personalWork?.stage));
+      expect(stages).toEqual([...stages].sort((a, b) => a - b));
     }
+    expect(new Set(plan[0].tasks.flatMap(task => task.chapterIds))).toEqual(new Set(ids.slice(0, 2)));
     expect(new Set(plan[2].tasks.flatMap(task => task.chapterIds))).toEqual(new Set(ids.slice(2)));
-    expect(plan[0].tasks.every(task => task.personalWork?.pairDay === 1)).toBe(true);
-    expect(plan[1].tasks.every(task => task.personalWork?.pairDay === 2)).toBe(true);
   });
   it('does not fill unused time with other chapters, B/C, automatic 13 mocks or the whole syllabus', () => {
     const data = dataFor(); const plan = buildStudyPlan(data, data.settings.startDate); const tasks = plan.flatMap(day => day.tasks);

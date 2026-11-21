@@ -169,14 +169,14 @@ describe('routine rework: bounded unpaid-range rolling calendar', () => {
     expect(data.completed).toEqual({ [`smart-part|${encodeURIComponent(old.originalTaskId!)}|0|15`]: at });
     expect(buildStudyPlan(data, today)).toEqual(plan);
   });
-  it('does not pull the remaining half/practice into spare first-day time after first-half checkboxes are ticked', () => {
+  it('retains real first-day completion when all work fits on one day', () => {
     let data = fixture(); data.personalRoutine!.dailyLimitMinutes = 1440; data.personalRoutine!.windows = Array.from({ length: 7 }, (_, weekday) => ({ weekday, startMinute: 360, endMinute: 1380 }));
     const first = buildStudyPlan(data, data.settings.startDate);
     data = setTaskCompletion(data, first[0].tasks.map(task => task.id), true, first);
     const plan = buildStudyPlan(data, data.settings.startDate);
     expect(plan[0].tasks.every(task => isPersonalTaskComplete(task, data.completed))).toBe(true);
-    expect(plan[1].tasks.some(task => !isPersonalTaskComplete(task, data.completed))).toBe(true);
-    expect(learningDashboard(data, plan).overall.completed).toBe(0);
+    expect(plan.flatMap(day => day.tasks).every(task => isPersonalTaskComplete(task, data.completed))).toBe(true);
+    expect(learningDashboard(data, plan).overall.completed).toBe(2);
     assertBoundaries(data, plan);
   });
   it('keeps real completion slots/ranges through carry-forward, repartitioning, availability edits and backup round-trip', () => {

@@ -1,7 +1,8 @@
 import { useMemo, useRef, useState } from 'react';
 import { Check, Plus, Sparkles, X } from 'lucide-react';
 import { usePlanner } from '../context';
-import { applyPersonalRoutine, newPersonalRoutine, RECOMMENDED_S_IDS, DEFAULT_CHAPTER_MINUTES } from '../personalRoutine';
+import { applyPersonalRoutine, newPersonalRoutine, DEFAULT_CHAPTER_MINUTES } from '../personalRoutine';
+import { CHAPTERS } from '../data';
 import { bn, formatDate, formatDurationBn, toMinutes, toTimeInput } from '../planner';
 import { saveData } from '../storage';
 import { isEnglish, t, weekdayName } from '../i18n';
@@ -76,7 +77,7 @@ export default function QuickStart() {
     try {
       const windows = days.flatMap(weekday => selected.map(slot => ({ weekday, startMinute: slot.start, endMinute: slot.end })));
       const routine = {
-        ...newPersonalRoutine(), // scope S, recommended 5★ A shortlist, 50-min sessions, workloads auto-filled later
+        ...newPersonalRoutine('ALL'), // Every chapter uses the same three-session routine.
         windows,
         exclusions: [],
         dailyLimitMinutes: Math.round(hours * 60),
@@ -92,7 +93,7 @@ export default function QuickStart() {
       if (isNativeApp()) { try { await requestNativeNotifications(); } catch { /* the Reminders page can ask again later */ } }
       else if (typeof Notification !== 'undefined' && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch { /* same */ } }
       navigate('today');
-      notify(t('তোমার S রুটিন তৈরি! আজ থেকেই শুরু করো — আর কিছু পূরণ করতে হবে না।', 'Your S routine is ready! Start today — nothing else to fill in.'), 'success');
+      notify(t('সব অধ্যায়ের রুটিন তৈরি! আজ থেকেই শুরু করো — আর কিছু পূরণ করতে হবে না।', 'Your all-chapter routine is ready! Start today — nothing else to fill in.'), 'success');
     } catch (err) {
       setError((err as Error).message);
       notify((err as Error).message, 'error');
@@ -158,7 +159,7 @@ export default function QuickStart() {
       <Sparkles size={20} />{busy ? t('রুটিন বানানো হচ্ছে…', 'Building your routine…') : t('এই সময় দিয়েই রুটিন বানাও — বাকিটা অ্যাপ করবে', 'Build my routine from this — the app does the rest')}
     </button>
     {error && <p className="personal-warning" role="alert">{error}</p>}
-    <p className="quick-start-note"><strong>{t('অ্যাপ যা নিজেই করবে:', 'What the app does by itself:')}</strong> {t('গুরুত্বপূর্ণ A অধ্যায় থেকে ★৫ S তালিকা বেছে অধ্যায় জোড়া বাঁধা, প্রতিটি অধ্যায় ≈২০ ঘণ্টার আনুমানিক কাজ (ক্লাস+পড়া+নোট+অনুশীলন+রিভিশন), একই জোড়া অন্তত দুই দিন রাখা, এবং আজ আর কালকের ক্লাসের নোটিফিকেশন — সব চালু থাকবে।', 'picks the 5★-A S shortlist into chapter pairs, gives each chapter ≈20 hours of estimated work (class + reading + notes + practice + revision), keeps the same pair for at least two days, and turns on today’s and tomorrow’s class notifications — all automatically.')} {formatDurationBn(DEFAULT_CHAPTER_MINUTES)} {t('প্রতি অধ্যায়', 'per chapter')} · {bn(RECOMMENDED_S_IDS.length)} {t('টি অধ্যায়', 'chapters')} · {t('শুরু', 'Starts')} {formatDate(data.settings.startDate, 'long')} · {t('পরে Settings থেকে যেকোনো সময় বদলাতে পারবে।', 'change any of this later in Settings.')}</p>
+    <p className="quick-start-note"><strong>{t('অ্যাপ যা নিজেই করবে:', 'What the app does by itself:')}</strong> {t('সব অধ্যায় রুটিনে থাকবে। প্রতিটিতে তিন সেশন—ক্লাস, নিজের নোট, সলভিং ও অনুশীলন। প্রতি অধ্যায়ে ≈২০ ঘণ্টা অনুমান; সময় ও শেষের তারিখ তোমার ফাঁকা সময়ের ওপর নির্ভর করবে।', 'includes every chapter in three sessions: class, own notes, and solving plus practice. Each chapter has ≈20 estimated hours; actual allocation and finish depend on your availability.')} {formatDurationBn(DEFAULT_CHAPTER_MINUTES)} {t('প্রতি অধ্যায়', 'per chapter')} · {bn(CHAPTERS.length)} {t('টি অধ্যায়', 'chapters')} · {t('শুরু', 'Starts')} {formatDate(data.settings.startDate, 'long')} · {t('পরে Settings থেকে যেকোনো সময় বদলাতে পারবে।', 'change any of this later in Settings.')}</p>
     <div className="quick-start-footer">
       <button type="button" className="text-button" onClick={() => setAdvanced(true)}>{t('সব আমি নিজে সাজিয়ে নিতে চাই →', 'I want to configure everything myself →')}</button>
     </div>

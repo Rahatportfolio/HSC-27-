@@ -22,6 +22,16 @@ export const WORK_STAGES = [
   { id: 'revision', bn: 'অধ্যায়ের রিভিশন', en: 'Chapter revision', media: false },
 ] as const;
 export type WorkStage = typeof WORK_STAGES[number]['id'];
+/** Three student-facing sessions; legacy source records remain separate evidence. */
+export const PERSONAL_SESSIONS: { id: string; bn: string; en: string; stages: WorkStage[] }[] = [
+  { id: 'class', bn: '১. অধ্যায়ের YouTube ক্লাস', en: '1. Chapter YouTube class', stages: ['class'] },
+  { id: 'notes', bn: '২. নিজের নোট তৈরি', en: '2. Make your own notes', stages: ['reading', 'notes'] },
+  { id: 'practice', bn: '৩. CQ/MCQ সলভিং ও নিজে অনুশীলন', en: '3. CQ/MCQ solving and own practice', stages: ['mcqClass', 'mcqPractice', 'cqClass', 'cqPractice', 'revision'] },
+];
+export function personalSessionForStage(stage: WorkStage) {
+  return PERSONAL_SESSIONS.find(session => session.stages.includes(stage))!;
+}
+
 export type DurationSource = 'unknown' | 'student' | 'youtube-player' | 'reference-metadata' | 'planned' | 'default24';
 export interface WorkBudget {
   /** Source video minutes, NOT a fixed session length. Null is genuinely unknown. */
@@ -38,7 +48,7 @@ export type ChapterWorkload = Record<WorkStage, WorkBudget>;
 export interface AvailabilityWindow { weekday: number; startMinute: number; endMinute: number }
 export interface PersonalRoutine {
   version: 1;
-  scope: 'S' | 'A' | 'B' | 'C';
+  scope: 'S' | 'A' | 'B' | 'C' | 'ALL';
   /** A later phase never backdates work into the completed S phase. */
   startsOn?: string;
   chapterIds: string[];
@@ -49,6 +59,8 @@ export interface PersonalRoutine {
   /** Frozen actual historical allocations, not mutable completion evidence. */
   history?: Task[];
   playbackSpeed: 1 | 1.25 | 1.5 | 2;
+  /** Retains old phase-specific speeds when combining saved phases. */
+  chapterSpeeds?: Record<string, 1 | 1.25 | 1.5 | 2>;
   sessionMinutes: number;
   breakMinutes: number;
   workloads: Record<string, ChapterWorkload>;
@@ -139,16 +151,17 @@ export function personalScheduleDateError(settings: Settings, routine?: Pick<Per
   return null;
 }
 export function newPersonalRoutine(scope: PersonalRoutine['scope'] = 'S', excluded: string[] = []): PersonalRoutine {
-  return { version: 1, scope, chapterIds: scope === 'S' ? [...RECOMMENDED_S_IDS] : CHAPTERS.filter(c => c.priority === scope && !excluded.includes(c.id)).map(c => c.id), windows: [], playbackSpeed: 1,
+  return { version: 1, scope, chapterIds: scope === 'S' ? [...RECOMMENDED_S_IDS] : CHAPTERS.filter(c => (scope === 'ALL' || c.priority === scope) && !excluded.includes(c.id)).map(c => c.id), windows: [], playbackSpeed: 1,
     sessionMinutes: 50, breakMinutes: 10, workloads: {}, updatedAt: new Date().toISOString() };
 }
 export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
-  if (!object(raw) || raw.version !== 1 || !['S', 'A', 'B', 'C'].includes(String(raw.scope)) || !Array.isArray(raw.chapterIds) ||
-    !raw.chapterIds.length || raw.chapterIds.length > CHAPTERS.length || !raw.chapterIds.every(id => typeof id === 'string' && Object.hasOwn(chapterById, id) && (raw.scope === 'S' ? isA(id) : chapterById[id].priority === raw.scope)) ||
+  if (!object(raw) || raw.version !== 1 || !['S', 'A', 'B', 'C', 'ALL'].includes(String(raw.scope)) || !Array.isArray(raw.chapterIds) ||
+    !raw.chapterIds.length || raw.chapterIds.length > CHAPTERS.length || (raw.scope === 'ALL' && raw.chapterIds.length !== CHAPTERS.length) || !raw.chapterIds.every(id => typeof id === 'string' && Object.hasOwn(chapterById, id) && (raw.scope === 'ALL' || (raw.scope === 'S' ? isA(id) : chapterById[id].priority === raw.scope))) ||
     new Set(raw.chapterIds).size !== raw.chapterIds.length || !Array.isArray(raw.windows) || !raw.windows.length || raw.windows.length > 56 ||
     ![1, 1.25, 1.5, 2].includes(raw.playbackSpeed as number) || !integer(raw.sessionMinutes, 15, 120) || !integer(raw.breakMinutes, 0, 60) ||
     !object(raw.workloads) || Object.keys(raw.workloads).length > CHAPTERS.length || typeof raw.updatedAt !== 'string' ||
     raw.updatedAt.length > 40 || !Number.isFinite(Date.parse(raw.updatedAt))) return fail();
+  if (raw.chapterSpeeds !== undefined && (!object(raw.chapterSpeeds) || Object.keys(raw.chapterSpeeds).length > CHAPTERS.length || Object.entries(raw.chapterSpeeds).some(([id, speed]) => !Object.hasOwn(chapterById, id) || ![1, 1.25, 1.5, 2].includes(speed as number)))) return fail();
   const windows = raw.windows.map(window => {
     if (!object(window) || !integer(window.weekday, 0, 6) || !integer(window.startMinute, 0, 1439) ||
       !integer(window.endMinute, 1, 1440) || window.endMinute - window.startMinute < 5) return fail();
@@ -201,7 +214,7 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
   const history = raw.history === undefined ? undefined : parsePersonalHistory(raw.history);
   return { version: 1, scope: raw.scope as PersonalRoutine['scope'], chapterIds: [...raw.chapterIds] as string[], windows,
     ...(raw.startsOn ? { startsOn: raw.startsOn as string } : {}), ...(exclusions ? { exclusions } : {}), ...(raw.dailyLimitMinutes !== undefined ? { dailyLimitMinutes: raw.dailyLimitMinutes as number } : {}), ...(history ? { history } : {}), playbackSpeed: raw.playbackSpeed as PersonalRoutine['playbackSpeed'],
-    sessionMinutes: raw.sessionMinutes, breakMinutes: raw.breakMinutes, workloads, updatedAt: raw.updatedAt };
+    sessionMinutes: raw.sessionMinutes, breakMinutes: raw.breakMinutes, workloads, ...(raw.chapterSpeeds ? { chapterSpeeds: { ...raw.chapterSpeeds } as PersonalRoutine['chapterSpeeds'] } : {}), updatedAt: raw.updatedAt };
 }
 export type WorkCalculation = NonNullable<WorkBudget['calculation']>;
 function validWorkCalculation(value: Record<string, unknown>): boolean {
@@ -261,12 +274,13 @@ export const CHAPTER_PROGRESS_STEPS = [
   { id: 'cq', bn: 'CQ অনুশীলন', en: 'CQ practice', stages: ['cqPractice'] },
   { id: 'revision', bn: 'রিভিশন', en: 'Revision', stages: ['revision'] },
 ] as const;
+export const personalChapterSpeed = (routine: PersonalRoutine, id: string) => routine.chapterSpeeds?.[id] ?? routine.playbackSpeed;
 export function personalStageDone(routine: PersonalRoutine, id: string, stage: WorkStage, completed: Record<string, string>): boolean {
   const budget = workloadFor(routine, id)[stage];
   if (budget.minutes === null) return false;
   if (budget.minutes === 0) return ['mcqClass', 'cqClass'].includes(stage); // explicitly omitted optional solving VIDEO, not practice
   const sourceId = personalStageSourceId(routine, id, stage);
-  return !!completed[sourceId] || budget.minutes > 0 && sourceCovered(sourceId, 0, Math.ceil(budget.minutes / (WORK_STAGES.find(item => item.id === stage)!.media ? routine.playbackSpeed : 1)), completed);
+  return !!completed[sourceId] || budget.minutes > 0 && sourceCovered(sourceId, 0, Math.ceil(budget.minutes / (WORK_STAGES.find(item => item.id === stage)!.media ? personalChapterSpeed(routine, id) : 1)), completed);
 }
 export function personalChapterProgress(routine: PersonalRoutine, id: string, completed: Record<string, string>) {
   const steps = CHAPTER_PROGRESS_STEPS.map(step => ({ ...step, done: step.stages.every(stage => personalStageDone(routine, id, stage, completed)) }));
@@ -296,7 +310,7 @@ export function chapterWorkEstimate(routine: PersonalRoutine, id: string) {
   const workload = workloadFor(routine, id);
   const unknown = WORK_STAGES.filter(stage => workload[stage.id].minutes === null).map(stage => stage.id);
   const emptyRequired = WORK_STAGES.filter(stage => !['mcqClass', 'cqClass'].includes(stage.id) && workload[stage.id].minutes === 0).map(stage => stage.id);
-  const minutes = WORK_STAGES.reduce((sum, stage) => sum + Math.ceil((workload[stage.id].minutes || 0) / (stage.media ? routine.playbackSpeed : 1)), 0);
+  const minutes = WORK_STAGES.reduce((sum, stage) => sum + Math.ceil((workload[stage.id].minutes || 0) / (stage.media ? personalChapterSpeed(routine, id) : 1)), 0);
   return { minutes, unknown, emptyRequired, complete: unknown.length === 0 && emptyRequired.length === 0 && minutes > 0 };
 }
 export function weeklyWindows(routine: PersonalRoutine, date: string): AvailabilityWindow[] {
@@ -336,7 +350,7 @@ export function personalStageSourceId(routine: PersonalRoutine, id: string, stag
   // bookkeeping duration. Changing either creates a new identity, so an old tick
   // can never silently certify longer/different work; `durationEvidenceMatches`
   // is what lets a typo-sized correction keep its evidence.
-  return `personal:${id}:${stage}:${fingerprint(JSON.stringify([budget.url || '', budget.minutes, WORK_STAGES.find(item => item.id === stage)!.media ? routine.playbackSpeed : 1, budget.calculation ? [budget.calculation.quantity, budget.calculation.unitMinutes, budget.calculation.difficulty, budget.calculation.reviewedPercent ?? 0] : []]))}`;
+  return `personal:${id}:${stage}:${fingerprint(JSON.stringify([budget.url || '', budget.minutes, WORK_STAGES.find(item => item.id === stage)!.media ? personalChapterSpeed(routine, id) : 1, budget.calculation ? [budget.calculation.quantity, budget.calculation.unitMinutes, budget.calculation.difficulty, budget.calculation.reviewedPercent ?? 0] : []]))}`;
 }
 function requiredStageIds(routine: PersonalRoutine, id: string): WorkStage[] {
   const work = workloadFor(routine, id);
@@ -348,7 +362,7 @@ function sourcesFor(routine: PersonalRoutine, id: string) {
   return WORK_STAGES.flatMap(stage => {
     const budget = workload[stage.id];
     if (!budget.minutes) return [];
-    const minutes = Math.ceil(budget.minutes / (stage.media ? routine.playbackSpeed : 1));
+    const minutes = Math.ceil(budget.minutes / (stage.media ? personalChapterSpeed(routine, id) : 1));
     return [{ stage, budget, minutes, sourceId: personalStageSourceId(routine, id, stage.id) }];
   });
 }
@@ -413,15 +427,12 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
     if (!known.length) continue; // Nothing schedulable yet; the unknown-duration issue names it.
     const chapters = known.map(id => {
       const sources = sourcesFor(routine, id);
-      // First part of teaching/reading/notes first; the rest plus practice/revision
-      // on day two or later. No practice/revision is certified by day one's video.
-      const halves = [0, 1].flatMap(half => sources.flatMap(source => {
-        const middle = ['class', 'reading', 'notes'].includes(source.stage.id) ? Math.ceil(source.minutes / 2) : 0;
-        const from = half === 0 ? 0 : middle, to = half === 0 ? middle : source.minutes;
-        return to > from ? [{ source, from, to }] : [];
-      }));
+      // Keep source identities and their evidence intact, but schedule in the
+      // student's three-session order, never alternating class and notes.
+      const halves = PERSONAL_SESSIONS.flatMap(session => session.stages.flatMap(stage =>
+        sources.filter(source => source.stage.id === stage).map(source => ({ source, from: 0, to: source.minutes }))));
       return { id, sources, requiredSources: requiredSourceIds(routine, id), halves, used: 0, total: chapterWorkEstimate(routine, id).minutes,
-        firstHalf: sources.reduce((sum, source) => sum + (['class', 'reading', 'notes'].includes(source.stage.id) ? Math.ceil(source.minutes / 2) : 0), 0) };
+        firstHalf: chapterWorkEstimate(routine, id).minutes };
     });
     let pairDay = 0;
     while (dayIndex < plan.length && (pairDay < 2 || chapters.some(c => c.used < c.total))) {
@@ -464,7 +475,7 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
           date: day.date, dayIndex: day.index, phase: 'learn', subject: chapterById[chapter.id].subject,
           kind: source.stage.id === 'revision' ? 'revision' : source.stage.media || ['reading', 'notes'].includes(source.stage.id) ? 'learn' : 'practice',
           title: `${chapterById[chapter.id].title} · ${t(source.stage.bn, source.stage.en)}`,
-          detail: `${routine.scope} ${t('ক্যাটাগরি', 'category')} · ${pairDay === 1 ? t('প্রথম অর্ধেকের লক্ষ্য', 'First-half target') : pairDay === 2 ? t('বাকি অর্ধেকের লক্ষ্য', 'Remaining-half target') : t('দুই দিনের বাইরে বাড়তি সময়', 'Additional time beyond two days')} · ${t('জোড়ার পড়ার দিন', 'Pair study day')} ${bn(pairDay)}${range}. ${source.stage.media ? t(`পুরো ক্লাসের উৎস ${formatDurationBn(source.budget.minutes!)}; এই সেশনটি শুধু উপরের অংশ, পুরো ক্লাস নয়।`, `Full source ${formatDurationBn(source.budget.minutes!)}; this session covers only the stated segment, not the whole class.`) : t('নিজে অনুশীলনের পরিকল্পিত সময়; ভিডিওর দৈর্ঘ্য নয়।', 'Planned independent work, not a video duration.')}`,
+          detail: `${routine.scope} ${t('ক্যাটাগরি', 'category')} · ${t('তিন সেশনের ধারাবাহিক কাজ', 'Work in three-session order')} · ${t('জোড়ার পড়ার দিন', 'Pair study day')} ${bn(pairDay)}${range}. ${source.stage.media ? t(`পুরো ক্লাসের উৎস ${formatDurationBn(source.budget.minutes!)}; এই সেশনটি শুধু উপরের অংশ, পুরো ক্লাস নয়।`, `Full source ${formatDurationBn(source.budget.minutes!)}; this session covers only the stated segment, not the whole class.`) : t('নিজে অনুশীলনের পরিকল্পিত সময়; ভিডিওর দৈর্ঘ্য নয়।', 'Planned independent work, not a video duration.')}`,
           chapterIds: [chapter.id], startMinute: cursor, endMinute: cursor + minutes, personalWork });
         cursor += minutes + routine.breakMinutes;
         chapter.used += minutes; quotas[chapterIndex] -= minutes; budget -= minutes;
@@ -570,7 +581,7 @@ function sourceCovered(sourceId: string, from: number, to: number, completed: Re
 }
 export function hasFullPersonalAllocation(data: AppData, plan: Day[], chapterId: string): boolean {
   const routine = personalRoutineForChapter(data, chapterId);
-  return !!routine && chapterWorkEstimate(routine, chapterId).complete && requiredStageIds(routine, chapterId).every(stage => { const budget = workloadFor(routine, chapterId)[stage]; return budget.minutes === 0 ? personalStageDone(routine, chapterId, stage, data.completed) : sourceCovered(personalStageSourceId(routine, chapterId, stage), 0, Math.ceil(budget.minutes! / (WORK_STAGES.find(item => item.id === stage)!.media ? routine.playbackSpeed : 1)), data.completed, plan.flatMap(day => day.tasks)); });
+  return !!routine && chapterWorkEstimate(routine, chapterId).complete && requiredStageIds(routine, chapterId).every(stage => { const budget = workloadFor(routine, chapterId)[stage]; return budget.minutes === 0 ? personalStageDone(routine, chapterId, stage, data.completed) : sourceCovered(personalStageSourceId(routine, chapterId, stage), 0, Math.ceil(budget.minutes! / (WORK_STAGES.find(item => item.id === stage)!.media ? personalChapterSpeed(routine, chapterId) : 1)), data.completed, plan.flatMap(day => day.tasks)); });
 }
 export function personalCompletionEvidence(data: AppData, chapterId: string): string[] {
   if (!data.personalRoutine) return [];
@@ -655,7 +666,7 @@ export function retainPersonalHistory(data: AppData, plan: Day[]): AppData {
 const PHASES = ['S', 'A', 'B', 'C'] as const;
 export function nextPersonalRoutine(data: AppData, asOf: string): PersonalRoutine | undefined {
   const current = data.personalRoutine;
-  if (!current || !isValidDate(asOf) || asOf >= data.settings.examDate || current.chapterIds.some(id => !personalChapterProgress(current, id, data.completed).fullyComplete)) return undefined;
+  if (!current || current.scope === 'ALL' || !isValidDate(asOf) || asOf >= data.settings.examDate || current.chapterIds.some(id => !personalChapterProgress(current, id, data.completed).fullyComplete)) return undefined;
   const excluded = new Set([...(Object.values(data.personalPhases || {}).flatMap(routine => routine.chapterIds)), ...current.chapterIds]);
   for (const scope of PHASES.slice(PHASES.indexOf(current.scope) + 1)) {
     const retained = data.personalPhases?.[scope];
@@ -673,7 +684,7 @@ export function nextPersonalRoutine(data: AppData, asOf: string): PersonalRoutin
 }
 /** Undoing a previously finished prerequisite reopens it instead of prioritising A/B/C. */
 export function resumeUnfinishedPersonalPhase(data: AppData): AppData {
-  if (!data.personalRoutine) return data;
+  if (!data.personalRoutine || data.personalRoutine.scope === 'ALL') return data;
   const earlier = PHASES.slice(0, PHASES.indexOf(data.personalRoutine.scope)).find(scope => {
     const routine = data.personalPhases?.[scope];
     return routine && routine.chapterIds.some(id => !personalChapterProgress(routine, id, data.completed).fullyComplete);
@@ -683,6 +694,31 @@ export function resumeUnfinishedPersonalPhase(data: AppData): AppData {
   const personalRoutine = personalPhases[earlier]!; delete personalPhases[earlier];
   return { ...data, personalRoutine, personalPhases };
 }
+/** Combine old phases without losing source identities, historical allocations or notes. */
+export function allChapterRoutineDraft(data: AppData, plan: Day[]): PersonalRoutine {
+  const active = data.personalRoutine;
+  if (!active) return newPersonalRoutine('ALL');
+  if (active.scope === 'ALL') return structuredClone(active);
+  const phases = [...Object.values(data.personalPhases || {}), active];
+  const workloads = Object.assign({}, ...phases.map(phase => phase.workloads));
+  const chapterSpeeds: NonNullable<PersonalRoutine['chapterSpeeds']> = {};
+  for (const phase of phases) for (const id of phase.chapterIds) {
+    workloads[id] = workloadFor(phase, id);
+    chapterSpeeds[id] = personalChapterSpeed(phase, id);
+  }
+  const history = [...phases.flatMap(phase => phase.history || []), ...personalHistorySnapshot(active, plan, data.completed)];
+  const uniqueHistory = [...new Map(history.map(task => [`${task.date}:${task.id}`, task])).values()];
+  if (uniqueHistory.length > 10000) throw new Error(t('পুরোনো ইতিহাস অনেক বড়; আগে ব্যাকআপ নিয়ে Settings-এ রুটিন রাখো।', 'History is too large to combine safely; keep a backup and review Settings.'));
+  return { ...active, scope: 'ALL', chapterIds: CHAPTERS.map(chapter => chapter.id), workloads, chapterSpeeds, history: uniqueHistory, updatedAt: new Date().toISOString() };
+}
+export function applyAllChapterRoutine(data: AppData, plan: Day[]): AppData {
+  const active = data.personalRoutine;
+  if (!active || active.scope === 'ALL') return data;
+  if (data.lockedDates.some(date => date >= data.settings.startDate && date < data.settings.examDate)) throw new Error(t('সব অধ্যায় যোগ করার আগে লক করা দিন আনলক করো।', 'Unlock plan dates before adding every chapter.'));
+  const personalRoutine = parsePersonalRoutine(allChapterRoutineDraft(data, plan));
+  const personalPhases = { ...data.personalPhases, [active.scope]: structuredClone(active) };
+  return { ...data, personalRoutine, personalPhases, settings: { ...data.settings, calendarRevision: data.settings.calendarRevision + 1 } };
+}
 export function applyPersonalRoutine(data: AppData, raw: unknown, options: { plan?: Day[]; asOf?: string } = {}): AppData {
   let routine = parsePersonalRoutine(raw);
   const dateError = personalScheduleDateError(data.settings, routine); if (dateError) throw new Error(dateError);
@@ -691,18 +727,18 @@ export function applyPersonalRoutine(data: AppData, raw: unknown, options: { pla
   // Reopening S retains later phases. An edit must not give two retained phases
   // ownership of the same chapter: that snapshot would fail backup/reload
   // validation. Reject before changing history, progress or durable storage.
-  const conflict = Object.values(personalPhases || {}).find(phase => phase.scope !== routine.scope && phase.chapterIds.some(id => routine.chapterIds.includes(id)));
+  const conflict = routine.scope === 'ALL' ? undefined : Object.values(personalPhases || {}).find(phase => phase.scope !== routine.scope && phase.chapterIds.some(id => routine.chapterIds.includes(id)));
   if (conflict) throw new Error(t(`নির্বাচিত অধ্যায় সংরক্ষিত ${conflict.scope} ধাপে আছে। দুই ধাপে একই অধ্যায় রাখা যাবে না; আগের নির্বাচন অক্ষত আছে।`, `A selected chapter belongs to retained phase ${conflict.scope}. It cannot belong to both phases; your saved selection is unchanged.`));
-  if (!data.personalRoutine && routine.scope !== 'S') throw new Error(t('আগে S ধাপ শুরু ও সম্পন্ন করো।', 'Start and complete S first.'));
+  if (!data.personalRoutine && routine.scope !== 'S' && routine.scope !== 'ALL') throw new Error(t('আগে S ধাপ শুরু ও সম্পন্ন করো।', 'Start and complete S first.'));
   if (data.personalRoutine) {
     const history = personalHistorySnapshot(data.personalRoutine, options.plan || buildPersonalStudyProjection(data).plan, data.completed);
     if (routine.scope === data.personalRoutine.scope) routine = { ...routine, history };
     else {
       const allowed = nextPersonalRoutine(data, options.asOf || routine.startsOn || data.settings.startDate);
-      if (!allowed || allowed.scope !== routine.scope || routine.chapterIds.some(id => !allowed.chapterIds.includes(id))) throw new Error(t('আগের ধাপের ছয়টি কাজ সম্পন্ন না হলে পরের A/B/C ধাপ চালু হবে না।', 'Complete all six required groups in the current phase before starting the next A/B/C phase.'));
+      if (!allowed || allowed.scope !== routine.scope || routine.chapterIds.some(id => !allowed.chapterIds.includes(id))) throw new Error(t('আগের ধাপের সব কাজ সম্পন্ন না হলে পরের A/B/C ধাপ চালু হবে না।', 'Complete all required work in the current phase before starting the next A/B/C phase.'));
       routine = { ...routine, startsOn: [routine.startsOn || allowed.startsOn!, allowed.startsOn!].sort().at(-1)! };
       personalPhases = { ...personalPhases, [data.personalRoutine.scope]: { ...data.personalRoutine, history } };
-      if (personalPhases[routine.scope]) { personalPhases = { ...personalPhases }; delete personalPhases[routine.scope]; }
+      if (routine.scope !== 'ALL' && personalPhases[routine.scope]) { personalPhases = { ...personalPhases }; delete personalPhases[routine.scope]; }
     }
   }
   return { ...data, personalRoutine: routine, ...(personalPhases ? { personalPhases } : {}), routineSetupRequired: false, settings: { ...data.settings, calendarRevision: data.settings.calendarRevision + 1 } };

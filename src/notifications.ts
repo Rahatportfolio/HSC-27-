@@ -1,4 +1,4 @@
-import { isPersonalTaskComplete } from './personalRoutine';
+import { isPersonalTaskComplete, personalSessionForStage } from './personalRoutine';
 import { chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import {
@@ -81,6 +81,20 @@ function describeDayStudy(day: Day | undefined): string {
   return parts.join(isEnglish() ? ' + ' : ' ও ');
 }
 
+/** A logical personal session gets one reminder per date, not one per internal range.
+ * Custom appointments remain independent. Choose before completion filtering so
+ * ticking the first range does not schedule another reminder for the same session.
+ */
+export function reminderTasksForDay(tasks: Task[]): Task[] {
+  const seen = new Set<string>();
+  return [...tasks].sort((a, b) => a.startMinute - b.startMinute).filter(task => {
+    if (!task.personalWork || !task.chapterIds[0]) return true;
+    const key = `${task.date}:${task.chapterIds[0]}:${personalSessionForStage(task.personalWork.stage).id}`;
+    if (seen.has(key)) return false;
+    seen.add(key); return true;
+  });
+}
+
 /**
  * Computes a complete snapshot of today's study:
  * 1) What to study today (আজ কী পড়া)
@@ -115,21 +129,23 @@ export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: s
   const whatToStudy = describeDayStudy(day);
   const remainingTitles = remainingList.map(tk => tk.title);
 
+  const unitEn = data.personalRoutine ? 'parts' : 'sessions';
+  const unitBn = data.personalRoutine ? 'অংশ' : 'সেশন';
   const totalSummary = isEnglish()
-    ? `${formatDurationBn(totalMinutes)} (${totalTasks} sessions)`
-    : `${formatDurationBn(totalMinutes)} (${bn(totalTasks)}টি সেশন)`;
+    ? `${formatDurationBn(totalMinutes)} (${totalTasks} ${unitEn})`
+    : `${formatDurationBn(totalMinutes)} (${bn(totalTasks)}টি ${unitBn})`;
 
   const completedSummary = isEnglish()
-    ? `${doneTasks}/${totalTasks} sessions (${formatDurationBn(doneMinutes)} · ${percentDone}%)`
-    : `${bn(doneTasks)}/${bn(totalTasks)}টি সেশন (${formatDurationBn(doneMinutes)} · ${bn(percentDone)}%)`;
+    ? `${doneTasks}/${totalTasks} ${unitEn} (${formatDurationBn(doneMinutes)} · ${percentDone}%)`
+    : `${bn(doneTasks)}/${bn(totalTasks)}টি ${unitBn} (${formatDurationBn(doneMinutes)} · ${bn(percentDone)}%)`;
 
   const remainingSummary = totalTasks === 0
     ? (isEnglish() ? 'No scheduled sessions' : 'কোনো নির্ধারিত সেশন নেই')
     : remainingTasks === 0
     ? (isEnglish() ? 'All completed for today!' : 'আজকের সব পড়া সম্পন্ন!')
     : isEnglish()
-      ? `${remainingTasks} sessions left (${formatDurationBn(remainingMinutes)})`
-      : `${bn(remainingTasks)}টি সেশন বাকি (${formatDurationBn(remainingMinutes)})`;
+      ? `${remainingTasks} ${unitEn} left (${formatDurationBn(remainingMinutes)})`
+      : `${bn(remainingTasks)}টি ${unitBn} বাকি (${formatDurationBn(remainingMinutes)})`;
 
   return {
     date,
@@ -166,12 +182,12 @@ export function buildDailyStatusNotification(plan: Day[], data: AppData, date: s
     if (isEnglish()) {
       return {
         title: `🎉 Today 100% Done (${digest.totalSummary})`,
-        body: `Studied: ${digest.whatToStudy}${nextStudy ? `\nNext up: ${nextStudy}` : ''}${digest.pastUnfinishedCount > 0 ? `\nEarlier pending: ${digest.pastUnfinishedCount} sessions (${formatDurationBn(digest.pastUnfinishedMinutes)})` : ''}`,
+        body: `Studied: ${digest.whatToStudy}${nextStudy ? `\nNext up: ${nextStudy}` : ''}${digest.pastUnfinishedCount > 0 ? `\nEarlier pending: ${digest.pastUnfinishedCount} ${data.personalRoutine ? 'parts' : 'sessions'} (${formatDurationBn(digest.pastUnfinishedMinutes)})` : ''}`,
       };
     }
     return {
       title: `🎉 আজকের সব পড়া সম্পন্ন! (${digest.totalSummary})`,
-      body: `আজ পড়া হয়েছে: ${digest.whatToStudy}${nextStudy ? `\nপরের দিনের পড়া: ${nextStudy}` : ''}${digest.pastUnfinishedCount > 0 ? `\nআগের বাকি পড়া: ${bn(digest.pastUnfinishedCount)}টি সেশন (${formatDurationBn(digest.pastUnfinishedMinutes)})` : ''}`,
+      body: `আজ পড়া হয়েছে: ${digest.whatToStudy}${nextStudy ? `\nপরের দিনের পড়া: ${nextStudy}` : ''}${digest.pastUnfinishedCount > 0 ? `\nআগের বাকি পড়া: ${bn(digest.pastUnfinishedCount)}টি ${data.personalRoutine ? 'অংশ' : 'সেশন'} (${formatDurationBn(digest.pastUnfinishedMinutes)})` : ''}`,
     };
   }
 
@@ -191,7 +207,7 @@ export function buildDailyStatusNotification(plan: Day[], data: AppData, date: s
   }
 
   return {
-    title: `📚 আজকের পড়া · কমপ্লিট করতে বাকি ${formatDurationBn(digest.remainingMinutes)} (${bn(digest.remainingTasks)}/${bn(digest.totalTasks)} সেশন)`,
+    title: `📚 আজকের পড়া · কমপ্লিট করতে বাকি ${formatDurationBn(digest.remainingMinutes)} (${bn(digest.remainingTasks)}/${bn(digest.totalTasks)} ${data.personalRoutine ? 'অংশ' : 'সেশন'})`,
     body: `আজ কী পড়া: ${digest.whatToStudy}\nমোট পড়া: ${digest.totalSummary} · সম্পন্ন: ${digest.completedSummary}\nকমপ্লিট করা লাগবে: ${digest.remainingSummary}${nextRemainingText ? ` — ${nextRemainingText}` : ''}${pastLineBn}`,
   };
 }
@@ -216,6 +232,13 @@ export function buildExamRoutineLine(data: AppData, date: string): string | null
 export function buildTaskReminderNotification(plan: Day[], data: AppData, task: Task): NotificationPayload {
   const digest = buildDailyNotificationDigest(plan, data, task.date);
   const taskMin = Math.max(15, task.endMinute - task.startMinute);
+  if (task.personalWork) {
+    const session = personalSessionForStage(task.personalWork.stage);
+    const chapter = chapterById[task.chapterIds[0]]?.title || task.title;
+    return isEnglish()
+      ? { title: `⏰ ${session.en}: ${chapter}`, body: `Starts ${formatTime(task.startMinute)} · This session may continue across multiple slots or days. ${digest.remainingSummary}` }
+      : { title: `⏰ ${session.bn}: ${chapter}`, body: `শুরু ${formatTime(task.startMinute)} · সেশনটি একাধিক সময় বা দিনে চলতে পারে। ${digest.remainingSummary}` };
+  }
   const timeSlot = `${formatTime(task.startMinute)} – ${formatTime(task.endMinute)}`;
 
   if (isEnglish()) {
@@ -241,12 +264,12 @@ export function buildEveningCheckinNotification(plan: Day[], data: AppData, date
   if (digest.remainingTasks === 0 && digest.pastUnfinishedCount > 0) {
     return isEnglish()
       ? {
-          title: `🌙 Today done! ${digest.pastUnfinishedCount} earlier sessions pending`,
-          body: `Today's ${formatDurationBn(digest.totalMinutes)} is 100% complete. If you have time, finish 1 pending session (${formatDurationBn(digest.pastUnfinishedMinutes)} total).`,
+          title: `🌙 Today done! ${digest.pastUnfinishedCount} earlier ${data.personalRoutine ? 'parts' : 'sessions'} pending`,
+          body: `Today's ${formatDurationBn(digest.totalMinutes)} is 100% complete. If you have time, finish 1 pending ${data.personalRoutine ? 'part' : 'session'} (${formatDurationBn(digest.pastUnfinishedMinutes)} total).`,
         }
       : {
           title: `🌙 আজকের পড়া শেষ! আগের ${bn(digest.pastUnfinishedCount)}টি পড়া বাকি`,
-          body: `আজকের ${formatDurationBn(digest.totalMinutes)} সম্পূর্ণ শেষ। হাতে সময় থাকলে আগের বাকি পড়া থেকে ১টি সেশন শেষ করে নাও।`,
+          body: `আজকের ${formatDurationBn(digest.totalMinutes)} সম্পূর্ণ শেষ। হাতে সময় থাকলে আগের বাকি পড়া থেকে ১টি ${data.personalRoutine ? 'অংশ' : 'সেশন'} শেষ করে নাও।`,
         };
   }
 
@@ -277,7 +300,7 @@ export function buildTomorrowPreviewNotification(plan: Day[], data: AppData, dat
   const open = day.tasks.filter(tk => !isPersonalTaskComplete(tk, data.completed));
   const tasks = open.length ? open : day.tasks;
   const totalMinutes = tasks.reduce((sum, tk) => sum + Math.max(0, tk.endMinute - tk.startMinute), 0);
-  const sessions = tasks.length;
+  const sessions = data.personalRoutine ? reminderTasksForDay(tasks).length : tasks.length;
   const firstStart = Math.min(...tasks.map(tk => tk.startMinute));
   const what = describeDayStudy(day);
 

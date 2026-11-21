@@ -440,7 +440,7 @@ export default function StudySystem() {
     }));
   return (
     <div className="view study-workspace">
-      {(data.personalRoutine || data.routineSetupRequired) && <p className="personal-pair-note">{t('এটি আলাদা ঐচ্ছিক মিডিয়া/অনুশীলনের খাতা। এখানে ভিডিও বা দৈনিক লক্ষ্য যোগ করলে S-এর রুটিনে তা নিজে থেকে বসবে না, S অধ্যায়ও সম্পন্ন হবে না। S-এর ক্লাস-সময় ও availability বদলাতে Settings ব্যবহার করো।', 'This is a separate optional media/practice workspace. Adding videos or daily targets here does not silently schedule or complete S chapters. Configure S class durations and availability in Settings.')}</p>}
+      {(data.personalRoutine || data.routineSetupRequired) && <p className="personal-pair-note">{t('এটি আলাদা ঐচ্ছিক মিডিয়া/অনুশীলনের খাতা। এখানে ভিডিও বা দৈনিক লক্ষ্য যোগ করলে ব্যক্তিগত রুটিনে তা নিজে থেকে বসবে না, অধ্যায়ও সম্পন্ন হবে না। ক্লাস-সময় ও availability বদলাতে Settings ব্যবহার করো।', 'This is a separate optional media/practice workspace. Adding videos or daily targets here does not silently schedule or complete chapters. Configure class durations and availability in Settings.')}</p>}
       <PageHeading
         eyebrow="PROSTUTI HSC27"
         title={t("স্মার্ট স্টাডি সিস্টেম", "Smart study system")}

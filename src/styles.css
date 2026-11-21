@@ -5548,3 +5548,11 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .ai-input>div{display:flex;gap:10px}.ai-input input{flex:1;min-width:0}
 .ai-spin{animation:ai-spin 1s linear infinite}@keyframes ai-spin{to{transform:rotate(360deg)}}
 @media(max-width:650px){.brain-meter-row{grid-template-columns:minmax(72px,auto) minmax(0,1fr)}.brain-meter-row>small{grid-column:1 / -1}.brain-preflight-list>li{flex-direction:column;align-items:stretch}.brain-preflight-list .button{width:100%}.ai-input>div{flex-direction:column}.ai-input .button{width:100%}}
+.personal-session-list{display:grid;gap:12px;margin-top:16px}
+.personal-session{padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--surface-soft)}
+.personal-session h3{font-size:15px;margin:0 0 5px}
+.personal-session p{margin:6px 0;font-size:12px}
+.personal-session-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.personal-session details{margin-top:8px}.personal-session summary{cursor:pointer;color:var(--muted);font-size:12px}
+.personal-more>summary{cursor:pointer;font-weight:600;padding:14px}
+.daily-work-top h1{font-size:20px;line-height:1.4}

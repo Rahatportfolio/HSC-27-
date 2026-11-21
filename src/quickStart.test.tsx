@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { STORAGE_KEY, freshData } from './planner';
-import { RECOMMENDED_S_IDS } from './personalRoutine';
+import { CHAPTERS } from './data';
 import { setLanguage } from './i18n';
 
 beforeEach(() => {
@@ -37,7 +37,7 @@ describe('first-run quick start', () => {
     expect(screen.queryByText(/সময় মিলিয়ে নেওয়ার অধ্যায়/)).toBeNull();
   });
 
-  it('one tap builds the S routine, keeps the defaults and turns reminders on', async () => {
+  it('one tap builds the all-chapter routine, keeps the defaults and turns reminders on', async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...freshData(), routineSetupRequired: true }));
     render(<App />);
     const cta = await screen.findByRole('button', { name: /এই সময় দিয়েই রুটিন বানাও/ });
@@ -48,14 +48,14 @@ describe('first-run quick start', () => {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
       expect(saved.routineSetupRequired).toBe(false);
       expect(saved.personalRoutine).toBeTruthy();
-      expect(saved.personalRoutine.scope).toBe('S');
-      expect(saved.personalRoutine.chapterIds).toEqual(RECOMMENDED_S_IDS);
+      expect(saved.personalRoutine.scope).toBe('ALL');
+      expect(saved.personalRoutine.chapterIds).toEqual(CHAPTERS.map(chapter => chapter.id));
       expect(saved.personalRoutine.dailyLimitMinutes).toBe(180);
       expect(saved.personalRoutine.windows.length).toBeGreaterThan(0);
       expect(saved.settings.reminderEnabled).toBe(true);
     });
     // The daily work list is now the first thing on Home.
-    expect(await screen.findByText(/আজ কী পড়বে/)).toBeTruthy();
+    expect(await screen.findByText(/তিন সেশনে অধ্যায় শেষ করো/)).toBeTruthy();
   });
 
   it('still offers the full wizard behind one tap for students who want it', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, freshData } from './planner';
 import { hasStudyData, needsBackup } from './backup';
-import { applyPersonalRoutine, personalStageSourceId, WORK_STAGES, hasFullPersonalAllocation, personalCapacity, retainPersonalHistory, weeklyWindows } from './personalRoutine';
+import { applyPersonalRoutine, personalStageSourceId, WORK_STAGES, hasFullPersonalAllocation, isPersonalTaskComplete, personalCapacity, retainPersonalHistory, weeklyWindows } from './personalRoutine';
 import { buildStudyPlan } from './studyPlan';
 import { setTaskCompletion } from './study';
 import { parseBackup } from './storage';
@@ -31,8 +31,8 @@ describe('full recheck: no unprotected single-feature profiles', () => {
   });
 });
 
-describe('full recheck: current-source first-half boundary', () => {
-  it('does not use completion of replaced sources to squeeze both new halves into one study day', () => {
+describe('full recheck: changed source evidence', () => {
+  it('never applies old completion to a replaced source, even when the new work fits on one day', () => {
     let data = personalDataFixture();
     data.personalRoutine!.windows = data.personalRoutine!.windows.map(window => ({ ...window, startMinute: 360, endMinute: 1380 }));
     data.personalRoutine!.dailyLimitMinutes = 1020;
@@ -50,10 +50,11 @@ describe('full recheck: current-source first-half boundary', () => {
     for (const id of PERSONAL_IDS) {
       const sourceId = personalStageSourceId(data.personalRoutine!, id, 'class');
       const classes = plan.flatMap(day => day.tasks).filter(task => task.originalTaskId === sourceId);
-      const firstDate = classes[0].date;
-      expect(new Set(classes.map(task => task.date)).size).toBeGreaterThanOrEqual(2);
-      expect(Math.max(...classes.filter(task => task.date === firstDate).map(task => task.personalWork!.to))).toBeLessThanOrEqual(180);
-      expect(plan.find(day => day.date === firstDate)!.tasks.filter(task => task.chapterIds[0] === id && task.originalTaskId?.startsWith('personal:')).every(task => ['class', 'reading', 'notes'].includes(task.personalWork!.stage))).toBe(true);
+      expect(classes.length).toBeGreaterThan(0);
+      expect(classes.reduce((sum, task) => sum + task.endMinute - task.startMinute, 0)).toBe(360);
+      expect(classes.every(task => !isPersonalTaskComplete(task, data.completed))).toBe(true);
+      const stages = plan.flatMap(day => day.tasks).filter(task => task.chapterIds[0] === id && task.personalWork && task.personalWork.sourceId === personalStageSourceId(data.personalRoutine!, id, task.personalWork.stage)).map(task => WORK_STAGES.findIndex(stage => stage.id === task.personalWork!.stage));
+      expect(stages).toEqual([...stages].sort((a, b) => a - b));
     }
     expect(data.completed).toEqual(completionHistory);
     expect(JSON.stringify(data)).toBe(before);

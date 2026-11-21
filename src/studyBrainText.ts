@@ -1,11 +1,12 @@
 import { t } from './i18n';
 import type { BrainStatus } from './studyBrain';
 
-export function brainStatusText(status: BrainStatus): { title: string; body: string } {
+export function brainStatusText(status: BrainStatus, allChapters = false): { title: string; body: string } {
+  if (allChapters && status === 'complete') return { title: t('সব অধ্যায়ে সম্পন্ন অগ্রগতি আছে।', 'All chapters have completion records.'), body: t('এটি আয়ত্ত বা পরীক্ষায় নম্বরের নিশ্চয়তা নয়।', 'Completion records do not certify mastery or guarantee exam marks.') };
   const copy: Record<BrainStatus, [string, string, string, string]> = {
     off: ['তোমাকে একটু বুঝে পরের কাজ বলি?', 'A small brain for your study day?', 'সময়, ক্লান্তি আর তোমার ফিডব্যাক থেকে ছোট পরামর্শ—তোমার অনুমতি ছাড়া রুটিন বদলাবে না।', 'Small suggestions from your time, energy and feedback. Your routine stays under your control.'],
-    setup: ['আগে তোমার পড়ার সময় জানা দরকার।', 'First, tell the planner when you can study.', 'আগে availability ও S সেটআপ শেষ করো। ব্রেইন তোমার হয়ে সময় বা ভিডিওর দৈর্ঘ্য বানাবে না।', 'Finish availability and S setup first. The brain will not invent study hours or video lengths.'],
-    legacy: ['পুরোনো রুটিন অক্ষত রেখেছি।', 'Your existing routine is untouched.', 'এই ছোট ব্রেইনের পরের-কাজ পরামর্শ S রুটিনের জন্য। চাইলে Settings-এ প্রিভিউ দেখে নিজে বদলাও; কোনো অটো-মাইগ্রেশন নয়।', 'Next-segment suggestions currently support S routines. Review a migration in Settings only if you want one; nothing converts automatically.'],
+    setup: ['আগে তোমার পড়ার সময় জানা দরকার।', 'First, tell the planner when you can study.', 'আগে availability ও রুটিন সেটআপ শেষ করো। ব্রেইন তোমার হয়ে সময় বা ভিডিওর দৈর্ঘ্য বানাবে না।', 'Finish availability and routine setup first. The brain will not invent study hours or video lengths.'],
+    legacy: ['পুরোনো রুটিন অক্ষত রেখেছি।', 'Your existing routine is untouched.', 'এই ছোট ব্রেইনের পরের-কাজ পরামর্শ ব্যক্তিগত রুটিনের জন্য। চাইলে Settings-এ প্রিভিউ দেখে নিজে বদলাও; কোনো অটো-মাইগ্রেশন নয়।', 'Next-segment suggestions currently support personal routines. Review a migration in Settings only if you want one; nothing converts automatically.'],
     rest: ['আজ বিরতি—নতুন কাজ চাপাচ্ছি না।', 'A break today. No extra work piled on.', 'আজ এইবারের জন্য ০ মিনিট বলেছ। রুটিন ও অসমাপ্ত অংশ রয়ে গেছে; তৈরি হলে চেক-ইন বদলে নিতে পারবে।', 'You offered zero minutes for this check-in. Your routine and unfinished work remain; update the check-in when you are ready.'],
     complete: ['নির্বাচিত S-এ সম্পন্ন অগ্রগতি আছে।', 'Your selected S chapters have completion records.', 'অন্য A/B/C অধ্যায় নিজে থেকে ঢোকানো হয়নি। এটি সব বিষয় আয়ত্ত বা পরীক্ষায় নম্বরের নিশ্চয়তা নয়।', 'Other A/B/C chapters were not added. Completion records do not certify mastery or guarantee exam marks.'],
     duration: ['এই জোড়ার আসল সময় মেলানো বাকি।', 'This pair still needs its real work durations.', 'অজানা ক্লাসকে ৮০ মিনিট ধরিনি, পরের অধ্যায়েও লাফ দিইনি। Settings-এ আলাদা ক্লাস ও নিজের কাজের সময় ঠিক করো।', 'No unknown class became 80 minutes, and no later chapter was substituted. Review separate class and independent-work durations in Settings.'],

@@ -4,6 +4,7 @@ import {
   buildDailyStatusNotification,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
+  reminderTasksForDay,
   buildTomorrowPreviewNotification,
 } from './notifications';
 import type { AppData, Day } from './planner';
@@ -318,7 +319,7 @@ async function performNativeReminderSync(plan: Day[], data: AppData, today: stri
     }
 
     // 2. Per-session reminder with full daily context (today's study, total hours, completed vs remaining)
-    for (const task of day.tasks) {
+    for (const task of data.personalRoutine ? reminderTasksForDay(day.tasks) : day.tasks) {
       if (isPersonalTaskComplete(task, data.completed)) continue;
       const start = taskStart(task);
       const at = instant(start.date, start.minute - data.settings.reminderLead);
