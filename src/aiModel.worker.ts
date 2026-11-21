@@ -16,9 +16,6 @@ function load(request: Request): Promise<Generator> {
       return await pipeline('text-generation', request.model, {
         dtype: request.dtype,
         device: 'wasm',
-        // Limit graph rewrites which can duplicate/prepack weights at startup.
-        // The actual memory and speed trade-off must be checked on WebView.
-        session_options: { graphOptimizationLevel: 'basic' },
         progress_callback: (progress: AiProgress) => worker.postMessage({ id: request.id, kind: 'progress', progress }),
       }) as unknown as Generator;
     })();
@@ -34,7 +31,9 @@ worker.onmessage = event => {
       if (request.kind === 'load') {
         worker.postMessage({ id: request.id, kind: 'result' });
       } else {
-        const output = await model(request.messages ?? [], { max_new_tokens: 256, temperature: 0.7, top_p: 0.9, do_sample: true });
+        // Keep generation bounded on constrained devices; long answers can be
+        // requested in follow-up turns. This does not guarantee sufficient RAM.
+        const output = await model(request.messages ?? [], { max_new_tokens: 96, temperature: 0.7, top_p: 0.9, do_sample: true });
         const messages = output?.[0]?.generated_text ?? [];
         worker.postMessage({ id: request.id, kind: 'result', text: messages[messages.length - 1]?.content?.trim() || '' });
       }
