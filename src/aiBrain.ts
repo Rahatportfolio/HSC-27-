@@ -40,9 +40,26 @@ const normalize = (message: string): string => message
 const detectSubject = (text: string): SubjectId | undefined =>
   SUBJECT_PATTERNS.find(([, pattern]) => pattern.test(text))?.[0];
 
+// Ordinals refer to a paper only when adjacent to "paper"/"পত্র", never
+// when the student asks for a first or second *chapter*.
 const detectPaper = (text: string): 1 | 2 | undefined => {
-  if (/(?:১ম|1ম|1st|first|paper 1|প্রথম|prothom)/u.test(text)) return 1;
-  if (/(?:২য়|2য়|2nd|second|paper 2|দ্বিতীয়|ditiyo)/u.test(text)) return 2;
+  const firstBefore = /(?:\b(?:1(?:st)?|first)|প্রথম|prothom|1ম)\s*(?:paper\b|পত্র)/u;
+  const secondBefore = /(?:\b(?:2(?:nd)?|second)|দ্বিতীয়|ditiyo|2য়)\s*(?:paper\b|পত্র)/u;
+  // Prefer the ordinal immediately before "paper"; the next number can be
+  // the chapter (e.g. "২য় পত্র ১ম অধ্যায়"), not another paper.
+  if (firstBefore.test(text)) return 1;
+  if (secondBefore.test(text)) return 2;
+  if (/(?:paper\b|পত্র)\s*(?:1(?:st)?\b|প্রথম|prothom)/u.test(text)) return 1;
+  if (/(?:paper\b|পত্র)\s*(?:2(?:nd)?\b|দ্বিতীয়|ditiyo)/u.test(text)) return 2;
+  return undefined;
+};
+
+const detectChapterNumber = (text: string): string | undefined => {
+  const numeric = text.match(/(?:chapter\b|অধ্যায়|adhyay)\s*(?:no\.?|number|নং)?\s*(\d+)\b/u)?.[1]
+    ?? text.match(/\b(\d+)\s*(?:তম|নং|ম|য়|st|nd|rd|th)?\s*(?:chapter\b|অধ্যায়|adhyay)/u)?.[1];
+  if (numeric) return numeric;
+  if (/(?:\bfirst\b|প্রথম|prothom)\s*(?:chapter\b|অধ্যায়|adhyay)/u.test(text)) return '1';
+  if (/(?:\bsecond\b|দ্বিতীয়|ditiyo)\s*(?:chapter\b|অধ্যায়|adhyay)/u.test(text)) return '2';
   return undefined;
 };
 
@@ -217,8 +234,7 @@ export function answerAiQuestion(message: string, data: AppData): AiBrainAnswer 
   if (subject) {
     // Only count numbers adjacent to an explicit chapter label; a paper number
     // in "physics paper 2 chapters" is not chapter 2.
-    const chapterNumber = text.match(/(?:chapter\b|অধ্যায়|adhyay)\s*(?:no\.?|number|নং)?\s*(\d+)\b/u)?.[1]
-      ?? text.match(/\b(\d+)\s*(?:তম|নং)?\s*(?:chapter\b|অধ্যায়|adhyay)/u)?.[1];
+    const chapterNumber = detectChapterNumber(text);
     if (chapterNumber) {
       const matches = candidates.filter(chapter => chapter.number === chapterNumber);
       if (matches.length === 1) return chapterAnswer(matches[0]);

@@ -46,3 +46,21 @@ describe('IndexedDB recovery', () => {
     finally { vi.restoreAllMocks(); vi.useRealTimers(); db.close(); }
   });
 });
+
+it('removes all scanner images, including orphaned pages, while preserving other cached data', async () => {
+  vi.stubGlobal('indexedDB', new IDBFactory());
+  const store = await import('./storage-manager');
+  await store.idbSet('scan:orphan', 'image', 'image');
+  await store.idbSet('scan:page', 'image', 'image');
+  await store.idbSet('other', 'keep');
+  expect(await store.clearScanImages()).toBe(true);
+  expect(await store.idbGet('scan:orphan')).toBeUndefined();
+  expect(await store.idbGet('scan:page')).toBeUndefined();
+  expect(await store.idbGet('other')).toBe('keep');
+});
+
+it('reports when scanner image cleanup cannot be performed', async () => {
+  vi.stubGlobal('indexedDB', { open: () => { throw new DOMException('blocked', 'SecurityError'); } });
+  const store = await import('./storage-manager');
+  expect(await store.clearScanImages()).toBe(false);
+});

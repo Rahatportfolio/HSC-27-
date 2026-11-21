@@ -58,6 +58,17 @@ describe('replacing a profile is durable and clears unrelated transient state', 
     const json = screen.getByRole('heading', { name: 'JSON backup' }).parentElement!;
     expect(json.textContent).toContain('Scanned images and offline PDF/video bytes are not included');
   });
+  it('reports a failed JSON backup download without recording a successful backup', async () => {
+    await open();
+    const originalCreate = URL.createObjectURL;
+    URL.createObjectURL = vi.fn(() => { throw new Error('download blocked'); });
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Keep a backup' }));
+      expect(document.querySelector('.toast.error')?.textContent).toContain('Backup could not be downloaded');
+      expect(localStorage.getItem('hsc27-backup-at')).toBeNull();
+      expect(stored().notes).toEqual(original.notes);
+    } finally { URL.createObjectURL = originalCreate; }
+  }, 30000);
   it('does not report JSON restore success, reset clocks or replace data if storage rejects the backup', async () => {
     await open();
     const confirm = await jsonImport();

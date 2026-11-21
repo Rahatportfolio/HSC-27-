@@ -46,3 +46,11 @@ it('reports a database read failure so the app can avoid overwriting its mirror'
   await expect(restoreFromDatabase()).rejects.toThrow('read failed');
   warning.mockRestore();
 });
+
+it('reports a failed database reset rather than treating it as successful', async () => {
+  const { clearDatabase } = await import('./db');
+  mocks.run.mockRejectedValue(new Error('delete failed'));
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  await expect(clearDatabase()).resolves.toBe(false);
+  warning.mockRestore();
+});
