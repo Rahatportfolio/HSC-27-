@@ -31,9 +31,7 @@ worker.onmessage = event => {
       if (request.kind === 'load') {
         worker.postMessage({ id: request.id, kind: 'result' });
       } else {
-        // Keep generation bounded on constrained devices; long answers can be
-        // requested in follow-up turns. This does not guarantee sufficient RAM.
-        const output = await model(request.messages ?? [], { max_new_tokens: 96, temperature: 0.7, top_p: 0.9, do_sample: true });
+        const output = await model(request.messages ?? [], { max_new_tokens: 256, temperature: 0.7, top_p: 0.9, do_sample: true });
         const messages = output?.[0]?.generated_text ?? [];
         worker.postMessage({ id: request.id, kind: 'result', text: messages[messages.length - 1]?.content?.trim() || '' });
       }
