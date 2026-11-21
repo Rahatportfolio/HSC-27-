@@ -85,14 +85,16 @@ async function writeSnapshot(payload: string, updatedAt: string): Promise<boolea
   }
 }
 
-export function clearDatabase(): Promise<void> {
+export function clearDatabase(): Promise<boolean> {
   return queueWrite(clearSnapshot);
 }
-async function clearSnapshot(): Promise<void> {
+async function clearSnapshot(): Promise<boolean> {
   try {
     const db = await getConnection();
     if (db) await db.run('DELETE FROM app_state;');
+    return true; // The web has no SQLite mirror to clear.
   } catch (error) {
     console.warn('Could not clear the SQLite snapshot.', error);
+    return false;
   }
 }

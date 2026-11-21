@@ -144,6 +144,21 @@ export async function clearTempCache(olderThanDays = 7): Promise<number | null> 
   return removed;
 }
 
+/** Remove every scanner page, including orphaned pages, in one transaction. */
+export async function clearScanImages(): Promise<boolean> {
+  const result = await withStore('readwrite', store => {
+    const cursor = store.openCursor();
+    cursor.onsuccess = () => {
+      const row = cursor.result;
+      if (!row) return;
+      if (typeof row.key === 'string' && row.key.startsWith('scan:')) row.delete();
+      row.continue();
+    };
+    return true;
+  });
+  return result === true;
+}
+
 /** Quota estimate for the origin (IndexedDB + CacheStorage + localStorage roughly). */
 export async function storageEstimate(): Promise<{ quota: number; usage: number; usagePercent: number } | null> {
   if (!navigator.storage || !navigator.storage.estimate) return null;

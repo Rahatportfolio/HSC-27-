@@ -166,3 +166,26 @@ describe('checkQuizAnswer', () => {
     expect(result.text).toContain(question.options[question.answer]);
   });
 });
+
+describe('paper and chapter wording', () => {
+  it.each(['physics second chapter', 'পদার্থ দ্বিতীয় অধ্যায়', 'পদার্থ ২য় অধ্যায়'])('does not mistake %s for a paper selection', question => {
+    const answer = answerAiQuestion(question, data);
+    expect(answer.kind).toBe('unknown');
+    if (answer.kind === 'unknown') expect(answer.text).toContain('পত্র');
+  });
+  it.each(['পদার্থ প্রথম পত্র দ্বিতীয় অধ্যায়', 'physics first paper second chapter', 'পদার্থ ১ম পত্র ২য় অধ্যায়'])('resolves %s with both paper and chapter', question => {
+    const answer = answerAiQuestion(question, data);
+    expect(answer.kind).toBe('chapter');
+    if (answer.kind === 'chapter') expect(answer.chapter.id).toBe('physics-1-2');
+  });
+  it('does not use a following chapter ordinal as the paper number', () => {
+    const answer = answerAiQuestion('পদার্থ ২য় পত্র ১ম অধ্যায়', data);
+    expect(answer.kind).toBe('chapter');
+    if (answer.kind === 'chapter') expect(answer.chapter.id).toBe('physics-2-1');
+  });
+  it('recognizes the common paper-number suffix notation', () => {
+    const answer = answerAiQuestion('পদার্থ ২ পত্রের অধ্যায়গুলো', data);
+    expect(answer.kind).toBe('chapters');
+    if (answer.kind === 'chapters') expect(answer.paper).toBe(2);
+  });
+});

@@ -23,28 +23,35 @@ export interface StoredFile {
 
 let dbPromise: Promise<IDBDatabase | null> | null = null;
 
-function openDb(): Promise<IDBDatabase | null> {
-  if (dbPromise) return dbPromise;
-  dbPromise = new Promise((resolve) => {
-    try {
-      if (typeof indexedDB === "undefined") {
-        resolve(null);
-        return;
-      }
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+async function openDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === "undefined") return null;
+  if (!dbPromise) {
+    let attempt: Promise<IDBDatabase | null>;
+    attempt = new Promise((resolve) => {
+      let request: IDBOpenDBRequest;
+      try { request = indexedDB.open(DB_NAME, DB_VERSION); }
+      catch { resolve(null); return; }
+      let settled = false;
+      const unavailable = () => { settled = true; resolve(null); };
       request.onupgradeneeded = () => {
-        const db = request.result;
-        if (!db.objectStoreNames.contains(STORE))
-          db.createObjectStore(STORE, { keyPath: "id" });
+        if (!request.result.objectStoreNames.contains(STORE))
+          request.result.createObjectStore(STORE, { keyPath: "id" });
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => resolve(null);
-      request.onblocked = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-  return dbPromise;
+      request.onerror = unavailable;
+      request.onblocked = unavailable;
+      request.onsuccess = () => {
+        const db = request.result;
+        if (settled) { db.close(); return; }
+        db.onversionchange = () => { db.close(); if (dbPromise === attempt) dbPromise = null; };
+        resolve(db);
+      };
+    });
+    dbPromise = attempt;
+  }
+  const attempt = dbPromise;
+  const db = await attempt;
+  if (!db && dbPromise === attempt) dbPromise = null;
+  return db;
 }
 
 export async function filesAvailable(): Promise<boolean> {
@@ -84,6 +91,8 @@ function tx<T>(
           request.onerror = () => resolve({ ok: false });
           transaction.onabort = () => resolve({ ok: false });
         } catch {
+          db.close();
+          dbPromise = null;
           resolve({ ok: false });
         }
       }),
@@ -316,6 +325,8 @@ export async function clearFiles(): Promise<number> {
   let removed = 0;
   if (hasNativeFiles()) removed = (await NativeFiles.clear()).removed;
   const db = await openDb();
+  if (!db && (typeof indexedDB !== "undefined" || !hasNativeFiles()))
+    throw new Error("Could not open local media storage for cleanup");
   if (db) {
     const ids = await tx<IDBValidKey[]>("readonly", (store) =>
       store.getAllKeys(),

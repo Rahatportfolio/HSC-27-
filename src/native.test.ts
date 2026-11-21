@@ -14,7 +14,7 @@ describe('native-only storage and notifications', () => {
     expect(isNativeApp()).toBe(false);
     expect(await restoreFromDatabase()).toBeNull();
     expect(await persistToDatabase('{}', new Date().toISOString())).toBe(false);
-    await expect(clearDatabase()).resolves.toBeUndefined();
+    await expect(clearDatabase()).resolves.toBe(true);
   });
   it('reports native reminders as unavailable in the web build', async () => {
     const result = await syncNativeReminders([], freshData(), '2026-11-14');
