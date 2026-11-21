@@ -1,0 +1,29 @@
+name: AI model integration
+on:
+  pull_request:
+    paths:
+      - 'src/aiModel.ts'
+      - 'scripts/check-ai-model-browser.mjs'
+      - '.github/workflows/ai-model-integration.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  actual-model:
+    name: Real model download and inference
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Build production app
+        run: npm run build
+      - name: Exercise real model in production Chromium
+        run: |
+          npm run preview > /tmp/ai-vite.log 2>&1 &
+          for i in {1..30}; do curl -fsS http://127.0.0.1:3000/ > /dev/null && break; sleep 1; done
+          node scripts/check-ai-model-browser.mjs

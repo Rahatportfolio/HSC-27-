@@ -1,6 +1,6 @@
 /** Production build regression gate; no raised Vite warning threshold. */
 import assert from 'node:assert/strict';
-import { readFile, stat, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, readdir, stat, writeFile, mkdir } from 'node:fs/promises';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 export const BUILD_LIMITS = Object.freeze({ entry: 500_000, chunk: 500_000, criticalJavaScript: 1_100_000 });
@@ -38,9 +38,19 @@ export async function checkBuild(root = 'dist', output = process.env.BUILD_BUDGE
     assert(shell.has(`./${entry.file}`), `Offline precache is missing: ${entry.file}`);
     for (const file of [...entry.css || [], ...entry.assets || []]) assert(shell.has(`./${file}`), `Offline precache is missing dependency: ${file}`);
   }
+  // Vite workers are not manifest chunks. The optional AI engine is larger
+  // than normal chunks, but must remain bounded and download only on use.
+  const assets = await readdir(join(root, 'assets'));
+  const aiWorker = assets.filter(file => /^aiModel\.worker-.*\.js$/.test(file));
+  const aiWasm = assets.filter(file => /^ort-wasm-simd-threaded\.jsep-.*\.(?:wasm|mjs)$/.test(file));
+  assert(aiWorker.length === 1 && aiWasm.length === 2, 'Missing optional AI runtime assets');
+  const aiWorkerBytes = (await stat(join(root, 'assets', aiWorker[0]))).size;
+  assert(aiWorkerBytes <= 1_000_000, `Optional AI worker exceeds 1 MB: ${aiWorkerBytes}`);
+  for (const file of [...aiWorker, ...aiWasm]) assert(!shell.has(`./assets/${file}`), `Optional AI runtime must not be precached: ${file}`);
   report.allManifestAssetsPrecached = true;
+  report.optionalAiWorkerBytes = aiWorkerBytes;
   if (output) { await mkdir(resolve(output, '..'), { recursive: true }); await writeFile(output, JSON.stringify(report, null, 2) + '\n'); }
-  console.log(`PASS build budget: entry ${report.entryBytes} B; critical JS ${report.criticalJavaScriptBytes} B; ${report.chunks} chunks; all lazy assets precached.`);
+  console.log(`PASS build budget: entry ${report.entryBytes} B; critical JS ${report.criticalJavaScriptBytes} B; ${report.chunks} chunks; manifest assets precached; AI runtime on demand.`);
   return report;
 }
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await checkBuild(process.argv[2] || 'dist');
