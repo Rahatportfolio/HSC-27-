@@ -136,27 +136,28 @@ export interface WeekReport {
 export function weekReport(data: AppData, plan: Day[], today = todayKey(), subjectName: (id: string) => string = id => id): WeekReport {
   const from = addDays(today, -6);
   const inWeek = (date: string) => date >= from && date <= today;
+  const inWeekInstant = (at: string) => Number.isFinite(Date.parse(at)) && inWeek(todayKey(new Date(at)));
   const sessions = data.studySessions.filter(item => inWeek(item.date));
   const minutes = sessions.reduce((sum, item) => sum + item.minutes, 0);
   const perSubject = new Map<string, number>();
   for (const session of sessions) perSubject.set(session.subject, (perSubject.get(session.subject) || 0) + session.minutes);
   const ranked = [...perSubject.entries()].sort((a, b) => b[1] - a[1]);
   const tasksDone = data.personalRoutine ? completedTasksBetween(plan, data, from, today).length
-    : Object.values(data.completed).filter(at => inWeek(at.slice(0, 10))).length;
+    : Object.values(data.completed).filter(at => inWeekInstant(at)).length;
   const attempts = data.attempts.filter(item => inWeek(item.date));
   const correct = attempts.filter(item => item.correct).length;
   const cq = data.cq.filter(item => inWeek(item.date));
   const tests = data.tests.filter(item => inWeek(item.date));
   const chaptersDone = data.personalRoutine ? chaptersCompletedBetween(plan, data, from, today).length
     : new Set(plan.flatMap(day => day.tasks)
-      .filter(task => !!data.completed[task.id] && inWeek(data.completed[task.id].slice(0, 10)))
+      .filter(task => !!data.completed[task.id] && inWeekInstant(data.completed[task.id]))
       .flatMap(task => task.chapterIds)).size;
   const report: WeekReport = {
     from, to: today, days: 7, sessions: sessions.length, minutes,
     tasksDone, chaptersDone,
     mcq: attempts.length, accuracy: attempts.length ? Math.round(correct / attempts.length * 100) : 0,
     cq: cq.length, cqAverage: cq.length ? Math.round(cq.reduce((sum, item) => sum + item.marks / item.total, 0) / cq.length * 100) : 0,
-    revisions: data.revisions.filter(item => !!item.completedAt && inWeek(item.completedAt.slice(0, 10))).length,
+    revisions: data.revisions.filter(item => !!item.completedAt && inWeekInstant(item.completedAt)).length,
     tests: tests.length, testAverage: tests.length ? Math.round(tests.reduce((sum, item) => sum + item.score / item.total, 0) / tests.length * 100) : 0,
     topSubject: ranked[0] ? subjectName(ranked[0][0]) : null,
     weakestSubject: ranked.length ? subjectName(ranked[ranked.length - 1][0]) : null,

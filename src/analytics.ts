@@ -154,7 +154,7 @@ export function weeklyReview(plan: Day[], data: AppData, today: string): WeeklyR
   const weekStart = startOfWeek(today);
   const weekEnd = addDays(weekStart, 6);
   const throughToday = today < weekEnd ? today : weekEnd;
-  const sessions = data.studySessions.filter(session => session.date >= weekStart && session.date <= weekEnd);
+  const sessions = data.studySessions.filter(session => session.date >= weekStart && session.date <= throughToday);
   const completed = completedTasksBetween(plan, data, weekStart, throughToday);
   const planned = plan.flatMap(day => day.tasks).filter(task => task.date >= weekStart && task.date <= weekEnd);
   const chaptersCompleted = chaptersCompletedBetween(plan, data, weekStart, throughToday);
@@ -167,16 +167,16 @@ export function weeklyReview(plan: Day[], data: AppData, today: string): WeeklyR
   });
   return {
     weekStart, weekEnd,
-    minutes: minutesBetween(data.studySessions, weekStart, weekEnd),
+    minutes: minutesBetween(data.studySessions, weekStart, throughToday),
     targetMinutes: data.personalRoutine ? Array.from({ length: elapsedDays }, (_, index) => addDays(weekStart, index))
       .filter(date => date >= data.settings.startDate && date >= (data.personalRoutine!.startsOn || data.settings.startDate) && date < data.settings.examDate)
       .reduce((sum, date) => sum + dailyTargetMinutes(data, date), 0) : data.settings.dailyHours * 60 * elapsedDays,
-    bySubject: subjectMinutes(data.studySessions, weekStart, weekEnd),
+    bySubject: subjectMinutes(data.studySessions, weekStart, throughToday),
     tasksCompleted: completed.length,
     tasksPlanned: planned.length,
     chaptersCompleted,
-    tests: data.tests.filter(test => test.date >= weekStart && test.date <= weekEnd).length,
-    mcq: attemptStats(data.attempts, attempt => attempt.date >= weekStart && attempt.date <= weekEnd),
+    tests: data.tests.filter(test => test.date >= weekStart && test.date <= throughToday).length,
+    mcq: attemptStats(data.attempts, attempt => attempt.date >= weekStart && attempt.date <= throughToday),
     daysStudied: dates.size,
     streak: currentStreak(data, today),
     weakest: weakChapters(plan, data).slice(0, 3),

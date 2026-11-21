@@ -142,7 +142,7 @@ function LegacyTodayView() {
   const activeHours = dailyTargetMinutes(data,selectedDate)/60;
   const measured = minutesOn(data.studySessions, selectedDate);
   const target = activeHours * 60;
-  const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), addDays(startOfWeek(today), 6));
+  const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), today);
   const totalHours = Math.round(data.focus.minutes / 6) / 10;
   const carriedTasks = new Set(pendingCarryovers(data).map(item => item.taskId));
   const pending = pendingCarryovers(data).length + stats.backlog.filter(task => !carriedTasks.has(task.id)).length;

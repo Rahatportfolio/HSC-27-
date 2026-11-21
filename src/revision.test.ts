@@ -95,8 +95,8 @@ describe('1/3/7/14/30-day revision engine', () => {
   it('summarises the last 45 days of recall ratings', () => {
     let data = ensureRevisions(plan, completedChapter());
     const cards = data.revisions.filter(item => item.chapterId === physics.id);
-    data = completeRevisionWithRecall(data, cards[0].id, 'good', '2026-11-15').data;
-    data = completeRevisionWithRecall(data, cards[1].id, 'weak', '2026-11-16').data;
+    data = completeRevisionWithRecall(data, cards[0].id, 'good', '2026-11-15', '2026-11-15T08:00:00Z').data;
+    data = completeRevisionWithRecall(data, cards[1].id, 'weak', '2026-11-16', '2026-11-16T08:00:00Z').data;
     const summary = recallSummary(data.revisions, '2026-11-20');
     expect(summary).toMatchObject({ good: 1, weak: 1, okay: 0, rated: 2 });
     expect(summary.score).toBe(60);
@@ -133,5 +133,36 @@ describe('revision safety and visibility', () => {
     const outcome = completeRevisionWithRecall(data, 'history-0', 'weak', '2026-11-20');
     expect(outcome.limitReached).toBe(true);
     expect(outcome.data.revisions).toHaveLength(2500);
+  });
+});
+
+describe('revision regressions', () => {
+  it('keeps completed chapter milestones distinct from mistake and personal history during compaction', () => {
+    let data = ensureRevisions(plan, completedChapter());
+    const milestone = data.revisions.find(card => card.interval === 1)!;
+    data = completeRevision(data, milestone.id, '2026-11-15T08:00:00Z');
+    data.revisions.push({ ...milestone, id: 'mistake', sourceTaskId: 'auto-mcq:q1', completedAt: '2026-11-16T08:00:00Z' });
+    data.revisions.push({ ...milestone, id: 'personal', sourceTaskId: `personal-chapter:${physics.id}`, completedAt: '2026-11-17T08:00:00Z' });
+    const compacted = compactRevisionHistory(data);
+    expect(compacted.revisions.map(card => card.id)).toEqual(expect.arrayContaining([milestone.id, 'mistake', 'personal']));
+    expect(ensureRevisions(plan, compacted).revisions.filter(card => card.chapterId === physics.id && card.interval === 1 && !card.sourceTaskId)).toHaveLength(1);
+    expect(ensureRevisions(plan, compacted).revisions.find(card => card.id === milestone.id)?.completedAt).toBe('2026-11-15T08:00:00Z');
+  });
+  it('does not rewrite the original completion date when a stale bulk confirmation runs', () => {
+    const data = ensureRevisions(plan, completedChapter());
+    const id = data.revisions[0].id;
+    const completed = completeRevisionWithRecall(data, id, 'good', '2026-11-15', '2026-11-15T08:00:00Z').data;
+    const repeated = completeRevision(completed, id, '2026-11-20T08:00:00Z');
+    expect(repeated.revisions.find(card => card.id === id)).toMatchObject({ completedAt: '2026-11-15T08:00:00Z', recall: 'good' });
+  });
+  it('counts the last 45 Dhaka calendar days and excludes future ratings', () => {
+    const base = ensureRevisions(plan, completedChapter()).revisions[0];
+    const revisions = [
+      { ...base, id: 'old', recall: 'weak' as const, completedAt: '2026-10-05T20:00:00Z' }, // October 6 BD
+      { ...base, id: 'boundary', recall: 'good' as const, completedAt: '2026-10-06T20:00:00Z' }, // October 7 BD
+      { ...base, id: 'today', recall: 'okay' as const, completedAt: '2026-11-19T20:00:00Z' }, // November 20 BD
+      { ...base, id: 'future', recall: 'weak' as const, completedAt: '2026-11-20T20:00:00Z' }, // November 21 BD
+    ];
+    expect(recallSummary(revisions, '2026-11-20')).toEqual({ good: 1, okay: 1, weak: 0, rated: 2, score: 80 });
   });
 });

@@ -100,7 +100,7 @@ export function revisionBuckets(revisions: RevisionItem[], today: string): Revis
 }
 
 export function completeRevision(data: AppData, id: string, at = nowIso()): AppData {
-  return { ...data, revisions: data.revisions.map(item => item.id === id ? { ...item, completedAt: at } : item) };
+  return { ...data, revisions: data.revisions.map(item => item.id === id && !item.completedAt ? { ...item, completedAt: at } : item) };
 }
 
 export const RECALL_LABEL: Record<RecallRating, string> = { weak: 'ভুলে গেছি', okay: 'মোটামুটি', good: 'মনে ছিল' };
@@ -138,21 +138,25 @@ export function completeRevisionWithRecall(data: AppData, id: string, rating: Re
 }
 /** Average recall over the last 45 days, only counting rated cards. */
 export function recallSummary(revisions: RevisionItem[], today: string): { weak: number; okay: number; good: number; rated: number; score: number } {
-  const from = addDays(today, -45);
-  const rated = revisions.filter(item => !!item.recall && !!item.completedAt && item.completedAt.slice(0, 10) >= from);
+  const from = addDays(today, -44); // Today plus the preceding 44 Dhaka calendar days.
+  const rated = revisions.filter(item => {
+    if (!item.recall || !item.completedAt || !Number.isFinite(Date.parse(item.completedAt))) return false;
+    const date = todayKey(new Date(item.completedAt));
+    return date >= from && date <= today;
+  });
   const count = (rating: RecallRating) => rated.filter(item => item.recall === rating).length;
   const score = rated.length ? Math.round((count('good') * 100 + count('okay') * 60 + count('weak') * 20) / rated.length) : 0;
   return { weak: count('weak'), okay: count('okay'), good: count('good'), rated: rated.length, score };
 }
-/** Keep the latest completed card for each chapter/interval so the scheduler
- * does not recreate already-completed milestones after history is compacted. */
+/** Keep the latest completed card per chapter/interval/source. Chapter
+ * milestones, personal milestones and mistake cards are not duplicates. */
 export function compactRevisionHistory(data: AppData): AppData {
   const latest = new Map<string, RevisionItem>();
   for (const item of data.revisions) {
     if (!item.completedAt) continue;
-    const key = `${item.chapterId}:${item.interval}`;
+    const key = JSON.stringify([item.chapterId, item.interval, item.sourceTaskId ?? null]);
     const existing = latest.get(key);
-    if (!existing || (item.completedAt || '') > (existing.completedAt || '')) latest.set(key, item);
+    if (!existing || Date.parse(item.completedAt) > Date.parse(existing.completedAt!)) latest.set(key, item);
   }
   const keep = new Set([...latest.values()].map(item => item.id));
   return { ...data, revisions: data.revisions.filter(item => !item.completedAt || keep.has(item.id)) };

@@ -259,7 +259,17 @@ const WINDOW_DAYS = 14;
 // nightly 9 PM tomorrow-preview on top of briefs, session alerts and check-ins.
 const LIMIT = 96;
 
-export async function syncNativeReminders(plan: Day[], data: AppData, today: string, options: { requestPermission?: boolean } = {}): Promise<NativeSyncResult> {
+// Settings, the reminder screen and the app's background effect can all request
+// a sync. Serialize every caller so an older slow operation cannot schedule
+// obsolete reminders after a newer sync has cancelled them.
+let reminderSyncQueue: Promise<unknown> = Promise.resolve();
+export function syncNativeReminders(plan: Day[], data: AppData, today: string, options: { requestPermission?: boolean } = {}): Promise<NativeSyncResult> {
+  const result = reminderSyncQueue.catch(() => undefined).then(() => performNativeReminderSync(plan, data, today, options));
+  reminderSyncQueue = result.catch(() => undefined);
+  return result;
+}
+
+async function performNativeReminderSync(plan: Day[], data: AppData, today: string, options: { requestPermission?: boolean }): Promise<NativeSyncResult> {
   if (!isNativeApp()) return { scheduled: 0, permission: 'unavailable' };
   const { LocalNotifications } = await import('@capacitor/local-notifications');
 

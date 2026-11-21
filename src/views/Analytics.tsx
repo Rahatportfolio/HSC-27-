@@ -21,7 +21,7 @@ export default function AnalyticsView() {
   const todayGoal = routine ? today >= data.settings.startDate && today >= (routine.startsOn || data.settings.startDate) && today < data.settings.examDate ? dailyTargetMinutes(data, today) : 0 : data.settings.dailyHours * 60;
   const maxMinutes = Math.max(todayGoal, ...series.map(point => point.minutes), 1);
   const totalMinutes = data.focus.minutes;
-  const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), addDays(startOfWeek(today), 6));
+  const weekMinutes = minutesBetween(data.studySessions, startOfWeek(today), today);
   const last30 = addDays(today, -29);
   const bySubject = subjectMinutes(data.studySessions, last30, today);
   const accuracy = subjectAccuracy(data.attempts);
