@@ -16,6 +16,9 @@ function load(request: Request): Promise<Generator> {
       return await pipeline('text-generation', request.model, {
         dtype: request.dtype,
         device: 'wasm',
+        // Limit graph rewrites which can duplicate/prepack weights at startup.
+        // The actual memory and speed trade-off must be checked on WebView.
+        session_options: { graphOptimizationLevel: 'basic' },
         progress_callback: (progress: AiProgress) => worker.postMessage({ id: request.id, kind: 'progress', progress }),
       }) as unknown as Generator;
     })();
