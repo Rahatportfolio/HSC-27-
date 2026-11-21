@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import android.Manifest;
 import android.os.Build;
 import android.os.SystemClock;
+import android.util.Log;
 import android.webkit.WebView;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -86,7 +87,11 @@ public class AiModelIntegrationTest {
       eval(web, "localStorage.setItem('hsc27-prostuti-v1-saved-at'," + JSONObject.quote(stamp) + ");localStorage.setItem('hsc27-prostuti-v1'," + JSONObject.quote(raw) + ");true");
       InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
       waitFor(web, "!!document.querySelector('.personal-home')", 60000);
-      openModel(web); ask(web);
+      Log.i("AiModelProbe", "online model loading");
+      openModel(web);
+      Log.i("AiModelProbe", "online inference");
+      ask(web);
+      Log.i("AiModelProbe", "online inference completed; restarting offline");
       // Disable both network transports on the disposable emulator, then destroy
       // the WebView activity so an in-memory model cannot satisfy the second run.
       InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("svc wifi disable").close();
@@ -95,7 +100,11 @@ public class AiModelIntegrationTest {
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
       web = ref.get();
       waitFor(web, "document.readyState==='complete'", 60000);
-      openModel(web); ask(web);
+      Log.i("AiModelProbe", "offline model loading");
+      openModel(web);
+      Log.i("AiModelProbe", "offline inference");
+      ask(web);
+      Log.i("AiModelProbe", "offline inference completed");
     }
   }
 }

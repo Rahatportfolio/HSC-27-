@@ -22,3 +22,11 @@ The actual-model integration workflows now run when the model worker or dependen
 - **Root cause:** React's passive synchronization captured `dirty = false` before the user's edit and could enqueue an obsolete draft replacement after the edit event.
 - **Fix:** Mark the draft dirty synchronously in a ref before state updates, and check that ref both when the sync effect runs and when its queued draft update is applied. Save, restore and reset still explicitly mark the draft clean. This does not change stored settings or reset user data.
 - **Verification:** The controlled regression passes with the fix and fails without it; normal date-cascade tests exercise confirmation and persistence. The public Pages deployment remains unchanged until the PR is merged and a deployment actually succeeds.
+
+## Additional AI worker lifecycle issue
+
+- **Priority:** P2 — a delayed error from a terminated worker can reject the new worker's in-flight load/chat request.
+- **Location:** `src/aiModel.ts` worker event handlers; `src/aiModel.test.ts`.
+- **Reproduction:** Start loading, unload the worker, start a new load, then deliver a previously queued error from the old worker. The synthetic regression rejected the replacement load on the previous implementation.
+- **Root cause and fix:** The error handler cleared the shared pending-request map even when it belonged to a newer worker. Ignore messages/errors from non-current workers; current-worker failures still reject pending work and permit retry.
+- **Android AI test limitation:** The first 642721b Android AI run ended with the instrumented process dying; its retry passed. Available annotations did not establish the cause. This lifecycle fix is not claimed to explain or fix that crash. The emulator workflow now retains synthetic-test logcat and test results on failure and records model-loading/inference stages for diagnosis if it recurs; no phone user data is collected.

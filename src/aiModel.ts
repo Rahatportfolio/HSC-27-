@@ -68,6 +68,7 @@ function getWorker(): Worker {
   if (!worker) {
     const instance = new Worker(new URL('./aiModel.worker.ts', import.meta.url), { type: 'module' });
     instance.onmessage = (event: MessageEvent<WorkerReply>) => {
+      if (worker !== instance) return;
       const reply = event.data, task = pending.get(reply.id);
       if (!task) return;
       if (reply.kind === 'progress') { if (reply.progress) task.onProgress?.(reply.progress); return; }
@@ -76,8 +77,11 @@ function getWorker(): Worker {
       else task.resolve(reply.text || '');
     };
     instance.onerror = event => {
+      // A terminated worker may have already queued an event. It must not
+      // reject requests that belong to a newer worker.
+      if (worker !== instance) return;
       instance.terminate();
-      if (worker === instance) worker = null;
+      worker = null;
       for (const task of pending.values()) task.reject(new Error('AI worker failed to start: ' + (event.message || 'unknown worker error')));
       pending.clear();
     };
