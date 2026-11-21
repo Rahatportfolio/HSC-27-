@@ -140,3 +140,29 @@ it('does not claim a native file is fully deleted when legacy IndexedDB cleanup 
   expect(await deleteFile('legacy')).toBe(false);
   expect(mock.remove).not.toHaveBeenCalled();
 });
+
+it('retains the legacy file when native deletion fails', async () => {
+  const { IDBFactory } = await import('fake-indexeddb');
+  vi.stubGlobal('indexedDB', new IDBFactory());
+  const { putFile, getFile, deleteFile } = await import('./files');
+  mock.native = false;
+  const blob = new Blob(['%PDF-1.7'], { type: 'application/pdf' });
+  expect(await putFile({ id: 'legacy2', name: 'Notes', blob, size: blob.size, createdAt: '2026-11-20T00:00:00Z' })).toBe(true);
+  mock.native = true;
+  mock.remove.mockRejectedValueOnce(new Error('native store unavailable'));
+  mock.info.mockRejectedValueOnce(new Error('native store unavailable'));
+  expect(await deleteFile('legacy2')).toBe(false);
+  expect((await getFile('legacy2'))?.size).toBe(blob.size);
+});
+
+it('falls back to a legacy file if the native file URL returns an error', async () => {
+  const { IDBFactory } = await import('fake-indexeddb');
+  vi.stubGlobal('indexedDB', new IDBFactory());
+  mock.native = false;
+  const blob = new Blob(['legacy content'], { type: 'application/pdf' });
+  expect(await putFile({ id: 'legacy3', name: 'Notes', blob, size: blob.size, createdAt: '2026-11-20T00:00:00Z' })).toBe(true);
+  mock.native = true;
+  mock.info.mockResolvedValueOnce({ id: 'legacy3', uri: 'file:///missing', size: 14 });
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('not found', { status: 404 })));
+  expect((await getFile('legacy3'))?.size).toBe(blob.size);
+});

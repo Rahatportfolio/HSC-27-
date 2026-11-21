@@ -145,7 +145,7 @@ export async function getFile(id: string): Promise<StoredFile | null> {
     try {
       const f = await NativeFiles.info({ id });
       const response = await fetch(nativeFileUrl(f.uri));
-      if (!response.ok) return null;
+      if (!response.ok) throw new Error("Native file could not be read");
       return {
         ...f,
         blob: new Blob([await response.blob()], {
@@ -163,12 +163,19 @@ export async function getFile(id: string): Promise<StoredFile | null> {
 export async function deleteFile(id: string): Promise<boolean> {
   if (hasNativeFiles())
     try {
-      // Older app versions may have a second copy in IndexedDB. Check that
-      // store first so a temporary failure cannot erase the native copy while
-      // leaving the UI pointing at an inaccessible legacy file.
+      // Preserve whichever copy is still readable if either store fails. Probe
+      // the legacy store before deleting anything; when a legacy copy exists,
+      // delete it last so a native failure cannot destroy the only copy.
       if (typeof indexedDB !== "undefined") {
-        const legacy = await tx<undefined>("readwrite", (store) => store.delete(id));
+        const legacy = await tx<StoredFile | undefined>("readonly", (store) => store.get(id));
         if (!legacy.ok) return false;
+        if (legacy.value) {
+          await NativeFiles.remove({ id });
+          return (await tx<undefined>("readwrite", (store) => store.delete(id))).ok;
+        }
+        // With no legacy copy, ensure that store is writable before removing
+        // the native file, preserving the native bytes on a storage failure.
+        if (!(await tx<undefined>("readwrite", (store) => store.delete(id))).ok) return false;
       }
       await NativeFiles.remove({ id });
       return true;
