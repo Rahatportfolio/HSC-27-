@@ -64,3 +64,34 @@ it('reports when scanner image cleanup cannot be performed', async () => {
   const store = await import('./storage-manager');
   expect(await store.clearScanImages()).toBe(false);
 });
+
+it('marks cache usage unavailable when a read transaction fails after opening IndexedDB', async () => {
+  const factory = new IDBFactory();
+  vi.stubGlobal('indexedDB', factory);
+  vi.stubGlobal('navigator', {});
+  const store = await import('./storage-manager');
+  await store.idbSet('scan:page', 'image', 'image');
+  const request = factory.open('prostuti-hsc27', 1);
+  const db = await new Promise<IDBDatabase>((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+  const proto = Object.getPrototypeOf(db) as IDBDatabase;
+  const original = proto.transaction;
+  vi.spyOn(proto, 'transaction').mockImplementation(function(this: IDBDatabase, ...args: Parameters<IDBDatabase['transaction']>) {
+    if (args[1] === 'readonly') throw new DOMException('blocked', 'SecurityError');
+    return original.apply(this, args);
+  });
+  try {
+    const usage = await store.getStorageUsage();
+    expect(usage.indexedDBAvailable).toBe(false);
+  } finally { vi.restoreAllMocks(); db.close(); }
+});
+
+it('retains measured cache usage when the optional quota estimate rejects', async () => {
+  vi.stubGlobal('indexedDB', new IDBFactory());
+  vi.stubGlobal('navigator', { storage: { estimate: async () => { throw new DOMException('blocked', 'SecurityError'); } } });
+  const store = await import('./storage-manager');
+  await store.idbSet('saved', 'data');
+  const usage = await store.getStorageUsage();
+  expect(usage.indexedDBAvailable).toBe(true);
+  expect(usage.indexedDBBytes).toBeGreaterThan(0);
+  expect(usage.estimate).toBeNull();
+});

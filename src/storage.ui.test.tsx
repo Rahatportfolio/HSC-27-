@@ -39,3 +39,12 @@ describe('storage truthful states', () => {
     expect(screen.queryByText('A safe backup exists.')).toBeNull();
   });
 });
+
+it('does not display a partial total as if it included unavailable IndexedDB data', async () => {
+  vi.spyOn(storage, 'getStorageUsage').mockResolvedValue({ localStorageBytes: 1024, indexedDBBytes: 0, indexedDBAvailable: false, totalBytes: 1024, estimate: null });
+  setup();
+  fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
+  await screen.findByText('IndexedDB unavailable in this browser.');
+  const first = document.querySelector('.stat-row .stat-card .stat-value');
+  expect(first?.textContent).toBe('—');
+});

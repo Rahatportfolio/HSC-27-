@@ -164,14 +164,30 @@ export async function stageMediaRestore(backup: InspectedMediaBackup, onProgress
     };
     if (data.advanced) data.advanced = { ...data.advanced, classes: data.advanced.classes.map(c => ({ ...c, id: mapping.get(c.id) || c.id })) };
     data.pdfs = data.pdfs.map(p => ({ ...p, ...(p.classId ? { classId: mapping.get(p.classId) || p.classId } : {}) }));
-    data.completed = Object.fromEntries(Object.entries(data.completed).map(([id, at]) => {
-      if (!id.startsWith("smart-video|")) return [id, at];
+    // Restored files receive new IDs. Every stored reference to a generated
+    // video task must move with it, otherwise edits, removals and backlog
+    // silently stop applying even though the media and completion survive.
+    const remapTask = (id: string): string => {
       const range = parseTaskRangeId(id);
-      if (!range || range.kind !== 'video') return [id, at];
+      if (!range || range.kind !== 'video') return id;
+      const replacement = mapping.get(range.sourceId);
+      if (!replacement) return id;
       const parts = id.split("|");
-      parts[1] = encodeURIComponent(mapping.get(range.sourceId) || range.sourceId);
-      return [parts.join("|"), at];
-    }));
+      parts[1] = encodeURIComponent(replacement);
+      return parts.join("|");
+    };
+    const remapKeys = <T>(record: Record<string, T>): Record<string, T> =>
+      Object.fromEntries(Object.entries(record).map(([key, value]) => [remapTask(key), value]));
+    data.completed = remapKeys(data.completed);
+    data.taskEdits = remapKeys(data.taskEdits);
+    data.removedTasks = data.removedTasks.map(remapTask);
+    data.dayOverrides = Object.fromEntries(Object.entries(data.dayOverrides).map(([date, override]) => [date, {
+      ...override,
+      ...(override.taskMinutes ? { taskMinutes: remapKeys(override.taskMinutes) } : {}),
+      ...(override.taskStartMinutes ? { taskStartMinutes: remapKeys(override.taskStartMinutes) } : {}),
+    }]));
+    data.carryovers = data.carryovers.map(item => ({ ...item, taskId: remapTask(item.taskId) }));
+    data.revisions = data.revisions.map(item => item.sourceTaskId ? { ...item, sourceTaskId: remapTask(item.sourceTaskId) } : item);
     return { data, rollback };
   } catch (error) {
     await rollback();

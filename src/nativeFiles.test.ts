@@ -132,3 +132,11 @@ describe("Android device storage adapter", () => {
     expect(await storageEstimate()).toEqual({ usage: 20, quota: 500 });
   });
 });
+
+it('does not claim a native file is fully deleted when legacy IndexedDB cleanup fails', async () => {
+  vi.stubGlobal('indexedDB', { open: () => { throw new DOMException('blocked', 'SecurityError'); } });
+  mock.remove.mockResolvedValue(undefined);
+  const { deleteFile } = await import('./files');
+  expect(await deleteFile('legacy')).toBe(false);
+  expect(mock.remove).not.toHaveBeenCalled();
+});
