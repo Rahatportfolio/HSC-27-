@@ -13,3 +13,12 @@ The actual-model integration workflows now run when the model worker or dependen
 - Offline model use still depends on the browser/WebView retaining the downloaded model cache; eviction or storage cleanup can require a fresh download. Bengali answer quality is not certified.
 - The local sandbox has no Android SDK, Java runtime, Chrome or access to the model host. Android APK, emulator, production-browser and real-model online/offline evidence must come from the existing GitHub Actions workflows. Physical devices have not been certified.
 - CI results and final command counts should be read from the PR checks; a pending job is not a pass. The lint rules are intentionally limited and do not imply the absence of other security or quality issues.
+
+## Additional confirmed settings race found during follow-up
+
+- **Priority:** P1 (an unsaved settings edit can disappear, and the same failure blocked the Pages test/deploy).
+- **Location:** `src/views/Settings.tsx`; regression `src/settings.pending-effect.ui.test.tsx`.
+- **Reproduction:** Open Settings and change the routine start before the initial passive settings synchronization has run. The previously scheduled clean-state effect can overwrite the new date and linked boost date. The same assertion failed in the two latest main-branch Pages runs; repeated local runs reproduced it intermittently, and the new controlled regression failed on the pre-fix code.
+- **Root cause:** React's passive synchronization captured `dirty = false` before the user's edit and could enqueue an obsolete draft replacement after the edit event.
+- **Fix:** Mark the draft dirty synchronously in a ref before state updates, and check that ref both when the sync effect runs and when its queued draft update is applied. Save, restore and reset still explicitly mark the draft clean. This does not change stored settings or reset user data.
+- **Verification:** The controlled regression passes with the fix and fails without it; normal date-cascade tests exercise confirmation and persistence. The public Pages deployment remains unchanged until the PR is merged and a deployment actually succeeds.

@@ -28,15 +28,24 @@ export default function SettingsView() {
   const { data, setData, plan, today, notify, confirm, setSelectedDate, setTheme, setFontScale, timer } = usePlanner();
   const [draft, setDraft] = useState<Settings>(data.settings);
   const [dirty, setDirty] = useState(false);
+  // A user can edit before a pending passive sync effect runs. Track that
+  // synchronously, so the old settings cannot overwrite the new draft.
+  const dirtyRef = useRef(false);
+  const markDirty = (value: boolean) => { dirtyRef.current = value; setDirty(value); };
   const [recoveryRaw, setRecoveryRaw] = useState<string | null>(() => { try { return localStorage.getItem(RECOVERY_KEY); } catch { return null; } });
   const fileRef = useRef<HTMLInputElement>(null);
   const startAnchor = useRef(data.settings.startDate);
   const latestData = useRef(data);
   latestData.current = data;
-  useEffect(() => { if (!dirty) { setDraft(data.settings); startAnchor.current = data.settings.startDate; } }, [data.settings, dirty]);
-  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => { setDirty(true); setDraft(current => ({ ...current, [key]: value })); };
+  useEffect(() => {
+    if (!dirty && !dirtyRef.current) {
+      startAnchor.current = data.settings.startDate;
+      setDraft(current => dirtyRef.current ? current : data.settings);
+    }
+  }, [data.settings, dirty]);
+  const update = <K extends keyof Settings>(key: K, value: Settings[K]) => { markDirty(true); setDraft(current => ({ ...current, [key]: value })); };
   const changeStart = (value: string) => {
-    setDirty(true);
+    markDirty(true);
     if (!isValidDate(value)) { setDraft(current => ({ ...current, startDate: value })); return; }
     const previous = startAnchor.current;
     setDraft(current => shiftPlanStart({ ...current, startDate: previous }, value));
@@ -60,7 +69,7 @@ export default function SettingsView() {
     const apply = () => {
       try {
         setData(applyScheduleSettings(latestData.current, settings));
-        setDirty(false);
+        markDirty(false);
         startAnchor.current = settings.startDate;
         if (changed) setSelectedDate(settings.startDate);
         notify(changed ? t('রুটিন ও ব্যক্তিগত সময়সূচি আপডেট হয়েছে। ক্যালেন্ডার আবার ইমপোর্ট করো।', 'Routine and personal schedule updated. Re-import your calendar.') : t('সেটিংস সেভ হয়েছে।', 'Settings saved.'));
@@ -98,7 +107,7 @@ export default function SettingsView() {
         }
         timer.reset();
         try { localStorage.removeItem('hsc27-exam-clock-v1'); } catch { /* storage unavailable */ }
-        setDirty(false); setDraft(parsed.settings); startAnchor.current = parsed.settings.startDate;
+        markDirty(false); setDraft(parsed.settings); startAnchor.current = parsed.settings.startDate;
         setData(parsed); setSelectedDate(parsed.settings.startDate);
         notify(t('ব্যাকআপ ফিরিয়ে আনা হয়েছে।', 'Backup restored.'));
       } });
@@ -120,7 +129,7 @@ export default function SettingsView() {
     downloadCsv([['তারিখ', 'প্রশ্ন ID', 'বিষয়', 'সঠিক?', 'বাছা উত্তর'], ...data.attempts.map(attempt => [attempt.date, attempt.questionId, subjectById[attempt.subject].name, attempt.correct ? 'হ্যাঁ' : 'না', attempt.chosen + 1])], `prostuti-mcq-${todayKey()}.csv`);
     notify(t('MCQ রেকর্ডের CSV ডাউনলোড হয়েছে।', 'MCQ records CSV downloaded.'), 'success');
   };
-  return <div className="view settings-view"><FullBackup onRestored={settings => { setDirty(false); setDraft(settings); startAnchor.current = settings.startDate; }}/>
+  return <div className="view settings-view"><FullBackup onRestored={settings => { markDirty(false); setDraft(settings); startAnchor.current = settings.startDate; }}/>
     <PageHeading eyebrow="MAKE IT YOURS" title="তোমার পড়া, তোমার ছন্দে।" titleEn="Your study, your rhythm." description="শুরুর তারিখ, লক্ষ্য, থিম, রিভিশন আর ডেটা—সব এক জায়গায়। সব পরিবর্তন এই ডিভাইসেই থাকে।" descriptionEn="Start date, targets, theme, revision and data — all local to this device." />
     <PersonalRoutineSettings />
     <form className="card settings-form" onSubmit={save}>
@@ -177,7 +186,7 @@ export default function SettingsView() {
       {recoveryRaw && <div className="notice-box"><ShieldCheck size={18} /><p><strong>{t("আগের সেভ করা তথ্য পড়া যায়নি।", "The saved data could not be read.")}</strong>{t(' সম্ভব হলে কাঁচা তথ্য রিকভারি ফাইল হিসেবে রাখা হয়েছে। নামিয়ে রাখো; পরে চাইলে ইমপোর্ট করে দেখতে পারো।', ' Where possible the raw data was kept as a recovery file. Download and keep it; you can try importing it later.')}</p><button className="button secondary small" onClick={() => { downloadText(recoveryRaw, `prostuti-recovery-${todayKey()}.json`, 'application/json;charset=utf-8'); notify(t('রিকভারি ফাইল ডাউনলোড হয়েছে।', 'Recovery file downloaded.')); }}>{t("রিকভারি ফাইল", "Recovery file")}</button><button className="text-button" onClick={() => { try { localStorage.removeItem(RECOVERY_KEY); } catch { /* ignore */ } setRecoveryRaw(null); }}>{t("সরাও", "Remove")}</button></div>}
       <div className="data-actions"><div><span className="large-icon green"><ArrowDownToLine size={23} /></span><h3>{t("JSON ব্যাকআপ", "JSON backup")}</h3><p>{t('অগ্রগতি, লিখিত নোট, সেশন, MCQ, পরীক্ষা ও সেটিংস। স্ক্যানের ছবি ও offline PDF/ভিডিওর bytes থাকে না; এগুলোর জন্য Full backup বা আলাদা PDF রাখো।', 'Progress, text notes, sessions, MCQ, exams and settings. Scanned images and offline PDF/video bytes are not included; use full backup or separate PDFs.')}</p><p className={`backup-status ${backupAgeDays() === null || backupAgeDays()! >= 7 ? 'stale' : ''}`}>{backupLabel()}</p><div className="data-action-buttons"><button className="button secondary" onClick={backup}><Download size={16} />{t("ব্যাকআপ রাখো", "Keep a backup")}</button><button className="button ghost small" onClick={() => void share()}><Share2 size={15} />{t("শেয়ার / কপি", "Share / copy")}</button></div></div><div><span className="large-icon blue"><ArrowUpFromLine size={23} /></span><h3>{t("ব্যাকআপ ইমপোর্ট", "Import backup")}</h3><p>{t("v1 বা v2 ব্যাকআপ ফিরিয়ে আনো। পুরোনো v1 ফাইলও চলবে।", "Restore a v1 or v2 backup. Old v1 files work too.")}</p><input ref={fileRef} type="file" accept=".json,application/json" hidden aria-label={t("ব্যাকআপ ফাইল", "Backup file")} onChange={e => void importFile(e.target.files?.[0])} /><button className="button secondary" onClick={() => fileRef.current?.click()}><ArrowUpFromLine size={16} />{t("ফাইল নির্বাচন", "Choose file")}</button></div><div><span className="large-icon peach"><FileText size={23} /></span><h3>{t("Markdown পরিকল্পনা", "Markdown plan")}</h3><p>{t("তারিখসহ পুরো রুটিন, অগ্রগতি, নম্বর ও ভুলের খাতা।", "Full routine with dates, progress, marks and the mistake book.")}</p><button className="button secondary" onClick={() => { downloadText(makeMarkdown(plan, data), `HSC-27-plan-${todayKey()}.md`, 'text/markdown;charset=utf-8'); notify(t('Markdown পরিকল্পনা ডাউনলোড হয়েছে।', 'Markdown plan downloaded.')); }}><FileText size={16} />{t(".md ডাউনলোড", "Download .md")}</button></div><div><span className="large-icon lavender"><CalendarDays size={23} /></span><h3>{t("রুটিন ও তারিখ CSV", "Routine & dates CSV")}</h3><p>{t('কাস্টম সাপ্তাহিক ব্লক ও গুরুত্বপূর্ণ তারিখের আলাদা শিট।', 'A separate sheet for custom weekly blocks and important dates.')}</p><div className="data-action-buttons"><button className="button secondary" onClick={exportRoutine}><Download size={16} />{t("রুটিন", "Routine")}</button><button className="button secondary" onClick={exportImportantDates}><Download size={16} />{t("তারিখ", "Date")}</button></div></div></div>
       <div className="csv-row"><div><strong>{t("CSV ডেটা", "CSV data")}</strong><p>{t("স্প্রেডশিটে বিশ্লেষণের জন্য আলাদা ফাইল।", "A separate file for spreadsheet analysis.")}</p></div><button className="button ghost small" onClick={exportSessions}>{t("স্টাডি সেশন", "Study session")}</button><button className="button ghost small" onClick={exportTests}>{t("টেস্ট", "Test")}</button><button className="button ghost small" onClick={exportAttempts}>{t("MCQ উত্তর", "MCQ answers")}</button></div>
-      <div className="reset-row"><div><strong>{t("নতুন করে শুরু করতে চাও?", "Want to start over?")}</strong><p>{t('সব অগ্রগতি, নোট, সেশন, নম্বর ও সেটিংস মুছে যাবে। আগে ব্যাকআপ রাখো।', 'All progress, notes, sessions, marks and settings will be erased. Take a backup first.')}</p></div><button className="button danger-outline" onClick={() => confirm({ title: 'সব তথ্য মুছে নতুন শুরু করবে?', message: 'এই ব্রাউজারের সব অগ্রগতি, দিনের নোট, স্টাডি সেশন, MCQ উত্তর, পরীক্ষার নম্বর, ভুলের খাতা, লাইব্রেরি ও সেটিংস মুছে যাবে। ব্যাকআপ না থাকলে ফিরে পাওয়া যাবে না। ক্যালেন্ডারের ইভেন্ট আলাদাভাবে মুছতে হবে।', label: 'সব মুছে নতুন শুরু', danger: true, action: () => { void (async () => { const fresh = { ...freshData(), routineSetupRequired: true }; if (!saveData(fresh, true)) { notify(t('তথ্য রিসেট করা যায়নি। স্টোরেজের অনুমতি ও খালি জায়গা যাচাই করো।', 'The reset failed. Check storage permission and free space.'), 'error'); return; } timer.reset(); setDirty(false); setDraft(fresh.settings); startAnchor.current = fresh.settings.startDate; setData(fresh); setSelectedDate(fresh.settings.startDate); // A failed cleanup must not skip the other stores or leave the old timer running.
+      <div className="reset-row"><div><strong>{t("নতুন করে শুরু করতে চাও?", "Want to start over?")}</strong><p>{t('সব অগ্রগতি, নোট, সেশন, নম্বর ও সেটিংস মুছে যাবে। আগে ব্যাকআপ রাখো।', 'All progress, notes, sessions, marks and settings will be erased. Take a backup first.')}</p></div><button className="button danger-outline" onClick={() => confirm({ title: 'সব তথ্য মুছে নতুন শুরু করবে?', message: 'এই ব্রাউজারের সব অগ্রগতি, দিনের নোট, স্টাডি সেশন, MCQ উত্তর, পরীক্ষার নম্বর, ভুলের খাতা, লাইব্রেরি ও সেটিংস মুছে যাবে। ব্যাকআপ না থাকলে ফিরে পাওয়া যাবে না। ক্যালেন্ডারের ইভেন্ট আলাদাভাবে মুছতে হবে।', label: 'সব মুছে নতুন শুরু', danger: true, action: () => { void (async () => { const fresh = { ...freshData(), routineSetupRequired: true }; if (!saveData(fresh, true)) { notify(t('তথ্য রিসেট করা যায়নি। স্টোরেজের অনুমতি ও খালি জায়গা যাচাই করো।', 'The reset failed. Check storage permission and free space.'), 'error'); return; } timer.reset(); markDirty(false); setDraft(fresh.settings); startAnchor.current = fresh.settings.startDate; setData(fresh); setSelectedDate(fresh.settings.startDate); // A failed cleanup must not skip the other stores or leave the old timer running.
         void stopStudyTimerService(); void cancelTimerAlarm();
         let mediaCleared = true;
         try { await clearFiles(); } catch { mediaCleared = false; }
