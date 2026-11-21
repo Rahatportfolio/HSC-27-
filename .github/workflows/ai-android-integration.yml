@@ -3,8 +3,14 @@ on:
   pull_request:
     paths:
       - 'src/aiModel.ts'
+      - 'src/aiModel.worker.ts'
+      - 'src/aiProgress.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - 'src/views/StudyBrain.tsx'
+      - 'android/app/src/main/java/com/prostuti/hsc27/MainActivity.java'
       - 'android/app/src/androidTest/java/com/prostuti/hsc27/AiModelIntegrationTest.java'
+      - 'android/app/src/androidTest/java/com/prostuti/hsc27/RendererRecoveryInstrumentedTest.java'
       - '.github/workflows/ai-android-integration.yml'
 permissions:
   contents: read
@@ -43,8 +49,13 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          # A 4 GiB emulator is a better fit for the requested 8 GiB phone than
+          # the default small emulator. It does not certify a physical device
+          # or erase the documented low-memory failures on smaller profiles.
+          emulator-options: -memory 4096 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            echo 'Emulator physical memory:'
+            adb shell cat /proc/meminfo | head -n 5
             adb shell svc power stayon true
             adb shell settings put system screen_off_timeout 2147483647
             adb shell input keyevent KEYCODE_WAKEUP
@@ -52,7 +63,28 @@ jobs:
             adb shell settings put global hide_error_dialogs 1
             adb shell settings put global anr_show_background 0
             adb shell dumpsys window | grep -q "Application Not Responding" && adb shell input keyevent KEYCODE_ENTER || true
-            bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.prostuti.hsc27.AiModelIntegrationTest -Pandroid.testInstrumentationRunnerArguments.aiIntegration=true 2>&1 | tee ../ai-android.log) || status=$?; adb shell dumpsys window | grep -E "mCurrentFocus|mFocusedApp" >> ai-android.log || true; adb logcat -d -t 3000 | grep -Ei "lowmemorykiller|OutOfMemory|chromium.*(crash|kill)|ActivityManager.*(kill|died)|RenderProcessGone|ANR in com.prostuti" | tail -30 >> ai-android.log || true; exit "$status"'
+            bash -o pipefail -c 'status=0; (cd android && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace -Pandroid.testInstrumentationRunnerArguments.class=com.prostuti.hsc27.AiModelIntegrationTest -Pandroid.testInstrumentationRunnerArguments.aiIntegration=true 2>&1 | tee ../ai-android.log) || status=$?; adb shell dumpsys window | grep -E "mCurrentFocus|mFocusedApp" >> ai-android.log || true; adb logcat -d -t 30000 > ai-android-logcat.log || true; grep -Ei "AiModelProbe|lowmemorykiller|OutOfMemory|FATAL EXCEPTION|Fatal signal|chromium.*(crash|kill)|ActivityManager.*(kill|died)|RenderProcessGone|ANR in com.prostuti" ai-android-logcat.log | tail -60 >> ai-android.log || true; exit "$status"'
+      - name: Surface AI probe telemetry
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('ai-android-logcat.log')) {
+              const lines = fs.readFileSync('ai-android-logcat.log', 'utf8').split('\n').filter(line => line.includes('AiModelProbe'));
+              if (lines.length) core.notice(lines.join('\n').slice(-3500), {title: 'AI probe stages and progress-event counts'});
+            }
+      - name: Retain emulator crash diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-android-failure-diagnostics
+          path: |
+            ai-android.log
+            ai-android-logcat.log
+            android/app/build/outputs/androidTest-results/
+          if-no-files-found: warn
+          retention-days: 7
       - name: Surface failure
         if: failure()
         uses: actions/github-script@v7
@@ -61,6 +93,10 @@ jobs:
             const fs = require('fs');
             const file = 'ai-android.log';
             if (fs.existsSync(file)) core.error(fs.readFileSync(file, 'utf8').split('\n').filter(line => /failed|failure|exception|error|timed out|mCurrentFocus|mFocusedApp|lowmemorykiller|OutOfMemory|chromium.*(crash|kill)|ActivityManager.*(kill|died)|RenderProcessGone|ANR in com.prostuti/i.test(line)).join('\n').slice(-3500));
+            if (fs.existsSync('ai-android-logcat.log')) {
+              const stages = fs.readFileSync('ai-android-logcat.log', 'utf8').split('\n').filter(line => line.includes('AiModelProbe'));
+              if (stages.length) core.error('AI probe stages:\n' + stages.join('\n').slice(-3500));
+            }
             const root = 'android/app/build/outputs/androidTest-results';
             function inspect(dir) { if (!fs.existsSync(dir)) return; for (const e of fs.readdirSync(dir,{withFileTypes:true})) { const p=`${dir}/${e.name}`; if(e.isDirectory()) inspect(p); else if(p.endsWith('.xml')) for(const m of fs.readFileSync(p,'utf8').matchAll(/<failure[\s\S]*?<\/failure>/g)) core.error(m[0].slice(0,3500)); } }
             inspect(root);

@@ -1,9 +1,9 @@
 import { pipeline, env } from '@huggingface/transformers';
+import { limitAiProgress } from './aiProgress';
 import wasmUrl from '../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.wasm?url';
 import mjsUrl from '../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.jsep.mjs?url';
 /** Run inference away from the UI thread, especially on Android WebView. */
 interface AiChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
-interface AiProgress { status: string; name?: string; loaded?: number; total?: number; progress?: number }
 interface Generator { (messages: AiChatMessage[], options: Record<string, unknown>): Promise<Array<{ generated_text: AiChatMessage[] }>> }
 interface Request { id: number; kind: 'load' | 'chat'; model: string; dtype: 'q8'; messages?: AiChatMessage[] }
 const worker = globalThis as unknown as { onmessage: ((event: MessageEvent<Request>) => void) | null; postMessage: (message: unknown) => void };
@@ -16,7 +16,7 @@ function load(request: Request): Promise<Generator> {
       return await pipeline('text-generation', request.model, {
         dtype: request.dtype,
         device: 'wasm',
-        progress_callback: (progress: AiProgress) => worker.postMessage({ id: request.id, kind: 'progress', progress }),
+        progress_callback: limitAiProgress(progress => worker.postMessage({ id: request.id, kind: 'progress', progress })),
       }) as unknown as Generator;
     })();
     generator.catch(() => { generator = null; });

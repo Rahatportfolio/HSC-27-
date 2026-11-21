@@ -209,6 +209,76 @@ describe('AI assistant regression checks', () => {
     expect(within(panel()).queryByText('Model reply')).toBeNull();
   });
 
+  it('warns about RAM and releases the optional model when switching back to smart brain', async () => {
+    const unload = vi.spyOn(aiModel, 'unloadAiModel');
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect(within(panel()).getByText(/requires much more RAM than the download size/)).toBeTruthy();
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    expect(within(panel()).getByText(/Model ready/)).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Smart brain' }));
+    expect(unload).toHaveBeenCalledOnce();
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect(within(panel()).queryByText(/Model ready/)).toBeNull();
+    expect(within(panel()).getByRole('button', { name: 'Download AI model' })).toBeTruthy();
+  });
+
+  it('releases the model in the background and reloads only when requested', async () => {
+    const unload = vi.spyOn(aiModel, 'unloadAiModel');
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    fireEvent(document, new Event('visibilitychange'));
+    expect(unload).toHaveBeenCalledOnce();
+    expect(within(panel()).queryByText(/Model ready/)).toBeNull();
+    expect(within(panel()).getByRole('button', { name: 'Download AI model' })).toBeTruthy();
+    expect(within(panel()).getByText(/released to save memory/)).toBeTruthy();
+  });
+
+  it('ignores a late download result after background cancellation', async () => {
+    let finish!: () => void;
+    vi.spyOn(aiModel, 'loadAiModel').mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    vi.spyOn(aiModel, 'unloadAiModel');
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' }));
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    fireEvent(document, new Event('visibilitychange'));
+    await act(async () => finish());
+    expect(within(panel()).queryByText(/Model ready/)).toBeNull();
+    expect(within(panel()).getByRole('button', { name: 'Download AI model' })).toBeTruthy();
+  });
+
+  it('preserves the unfinished prompt if an in-flight model reply is cancelled in the background', async () => {
+    let rejectReply!: (error: Error) => void;
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    vi.spyOn(aiModel, 'chatWithAi').mockImplementation(() => new Promise<string>((_, reject) => { rejectReply = reject; }));
+    vi.spyOn(aiModel, 'unloadAiModel').mockImplementation(() => rejectReply?.(new Error('AI worker stopped')));
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    ask('Explain water');
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+    await act(async () => { fireEvent(document, new Event('visibilitychange')); });
+    expect((within(panel()).getByRole('textbox') as HTMLInputElement).value).toBe('Explain water');
+    expect(within(panel()).queryByText('Explain water')).toBeNull();
+    expect(within(panel()).getByText(/released to save memory/)).toBeTruthy();
+  });
+
+  it('also releases the model on pagehide', async () => {
+    const unload = vi.spyOn(aiModel, 'unloadAiModel');
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    fireEvent(window, new Event('pagehide'));
+    expect(unload).toHaveBeenCalledOnce();
+    expect(within(panel()).queryByText(/Model ready/)).toBeNull();
+  });
+
   it('prevents mode changes while a model download is in progress', async () => {
     let finish!: () => void;
     vi.spyOn(aiModel, 'loadAiModel').mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));

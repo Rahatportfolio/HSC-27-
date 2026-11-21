@@ -5,6 +5,7 @@ import static org.junit.Assert.*;
 import android.Manifest;
 import android.os.Build;
 import android.os.SystemClock;
+import android.util.Log;
 import android.webkit.WebView;
 import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
@@ -48,6 +49,9 @@ public class AiModelIntegrationTest {
     fail("AI probe timed out: " + condition + "; body=" + eval(web, "document.body.innerText.slice(-2500)"));
   }
   private void openModel(WebView web) throws Exception {
+    // Test-only telemetry: count worker progress events without changing their
+    // delivery. The output helps distinguish event floods from memory failures.
+    eval(web, "(()=>{if(window.__aiProbeInstalled)return true;window.__aiProbeInstalled=true;window.__aiProbeProgress=0;const OriginalWorker=window.Worker;window.Worker=function(...args){const w=new OriginalWorker(...args);w.addEventListener('message',e=>{if(e.data?.kind==='progress'&&++window.__aiProbeProgress%100===0)console.info('AiModelProbe progress events '+window.__aiProbeProgress);});return w;};window.Worker.prototype=OriginalWorker.prototype;return true})()");
     eval(web, "location.hash='brain';dispatchEvent(new HashChangeEvent('hashchange'));true");
     // The view can render before native storage hydration completes. Do not
     // click its disabled opt-in control and then mistake the no-op for a model
@@ -62,6 +66,7 @@ public class AiModelIntegrationTest {
     eval(web, "document.querySelector('.ai-download button').click();true");
     waitFor(web, "!!document.querySelector('.ai-ready, .ai-panel .field-error')", 300000);
     assertEquals("Model did not start; body=" + eval(web, "document.querySelector('.ai-panel').innerText"), "true", eval(web, "!!document.querySelector('.ai-ready')"));
+    Log.i("AiModelProbe", "model ready; progress events=" + eval(web, "window.__aiProbeProgress"));
   }
   private void ask(WebView web) throws Exception {
     eval(web, "(()=>{let e=document.querySelector('#ai-input');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(e,'What is water made of?');e.dispatchEvent(new Event('input',{bubbles:true}));return true;})()");
@@ -86,7 +91,11 @@ public class AiModelIntegrationTest {
       eval(web, "localStorage.setItem('hsc27-prostuti-v1-saved-at'," + JSONObject.quote(stamp) + ");localStorage.setItem('hsc27-prostuti-v1'," + JSONObject.quote(raw) + ");true");
       InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
       waitFor(web, "!!document.querySelector('.personal-home')", 60000);
-      openModel(web); ask(web);
+      Log.i("AiModelProbe", "online model loading");
+      openModel(web);
+      Log.i("AiModelProbe", "online inference");
+      ask(web);
+      Log.i("AiModelProbe", "online inference completed; restarting offline");
       // Disable both network transports on the disposable emulator, then destroy
       // the WebView activity so an in-memory model cannot satisfy the second run.
       InstrumentationRegistry.getInstrumentation().getUiAutomation().executeShellCommand("svc wifi disable").close();
@@ -95,7 +104,11 @@ public class AiModelIntegrationTest {
       scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
       web = ref.get();
       waitFor(web, "document.readyState==='complete'", 60000);
-      openModel(web); ask(web);
+      Log.i("AiModelProbe", "offline model loading");
+      openModel(web);
+      Log.i("AiModelProbe", "offline inference");
+      ask(web);
+      Log.i("AiModelProbe", "offline inference completed");
     }
   }
 }

@@ -39,7 +39,8 @@
     "test:lazy-browser": "tsx scripts/check-lazy-routes.ts",
     "test:a11y-reviewer": "tsx scripts/check-a11y-reviewer.ts",
     "test:built-web": "tsx scripts/check-built-web.ts",
-    "test:startup-recovery": "tsx scripts/check-startup-recovery.ts"
+    "test:startup-recovery": "tsx scripts/check-startup-recovery.ts",
+    "lint": "eslint src scripts vite.config.ts vitest.config.ts eslint.config.js --max-warnings=0"
   },
   "dependencies": {
     "@capacitor-community/sqlite": "^8.1.1",
@@ -55,14 +56,17 @@
   },
   "devDependencies": {
     "@capacitor/cli": "^8.6.2",
-    "@huggingface/transformers": "3.8.1",
+    "@huggingface/transformers": "4.3.2",
     "@testing-library/dom": "^10.4.2",
     "@testing-library/react": "^16.3.3",
     "@types/node": "^22.19.0",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
+    "@typescript-eslint/parser": "^8.73.0",
     "@vitejs/plugin-react": "^5.1.1",
     "axe-core": "4.14.1",
+    "eslint": "^10.15.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "fake-indexeddb": "^6.2.8",
     "jsdom": "^31.0.1",
     "playwright-core": "^1.65.1",

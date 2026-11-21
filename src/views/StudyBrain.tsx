@@ -1,5 +1,5 @@
 import { brainChapterGuide, studyBrainPlaybook } from '../studyBrainPlaybook';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { FormEvent } from 'react';
 import { Bot, BrainCircuit, CalendarDays, Check, ChevronRight, Download, Loader2, MessageCircle, Pause, Play, RotateCcw, Send, ShieldCheck, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { PageHeading } from '../components';
@@ -372,22 +372,57 @@ function AiAssistant() {
   const [modelState, setModelState] = useState<ModelState>('idle');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const modelEpoch = useRef(0);
+  const modelActive = useRef(false);
 
-  // The model can use substantial RAM. Release it when this panel unmounts.
-  useEffect(() => () => unloadAiModel(), []);
+  // A backgrounded WebView can otherwise retain a large WASM model while a
+  // replacement activity is already loading another one. Never touch saved data.
+  useEffect(() => {
+    const release = () => {
+      if (!modelActive.current) return;
+      modelActive.current = false;
+      modelEpoch.current++;
+      unloadAiModel();
+      setModelState('idle');
+      setProgress(0);
+      setError(t('মেমোরি বাঁচাতে AI মডেল বন্ধ হয়েছে। ফিরে এসে চাইলে আবার চালু করো।', 'The AI model was released to save memory. Load it again when you return.'));
+    };
+    const onVisibility = () => { if (document.visibilityState === 'hidden') release(); };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', release);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', release);
+      modelEpoch.current++;
+      modelActive.current = false;
+      unloadAiModel();
+    };
+  }, []);
 
   const switchMode = (next: AiMode) => {
+    if (mode === 'model' && next === 'brain') {
+      modelEpoch.current++;
+      modelActive.current = false;
+      unloadAiModel();
+      setModelState('idle');
+      setProgress(0);
+    }
     setMode(next);
     setError('');
     if (next === 'model') { setQuiz(null); setPicked(null); }
   };
 
   const downloadModel = async () => {
+    const epoch = ++modelEpoch.current;
+    modelActive.current = true;
     setModelState('loading'); setError(''); setProgress(0);
     try {
-      await loadAiModel(item => setProgress(Math.round(item.progress ?? 0)));
-      setModelState('ready');
+      await loadAiModel(item => { if (modelEpoch.current === epoch) setProgress(Math.round(item.progress ?? 0)); });
+      if (modelEpoch.current === epoch) setModelState('ready');
     } catch (cause) {
+      if (modelEpoch.current !== epoch) return;
+      modelActive.current = false;
+      unloadAiModel();
       setModelState('error');
       setError(aiErrorMessage(cause));
     }
@@ -428,17 +463,19 @@ function AiAssistant() {
       return;
     }
     const history: AiMessage[] = [...messages, { role: 'user', content: text }];
+    const epoch = modelEpoch.current;
     setMessages(history);
     setBusy(true);
     try {
       // A successful conversation alternates user/assistant and ends in a user
       // turn. Keep an odd number so a truncated context still starts with user.
-      const reply = await chatWithAi(history.slice(-11), item => setProgress(Math.round(item.progress ?? 0)));
+      const reply = await chatWithAi(history.slice(-11), item => { if (modelEpoch.current === epoch) setProgress(Math.round(item.progress ?? 0)); });
+      if (modelEpoch.current !== epoch) throw new Error('AI worker stopped');
       setMessages(current => [...current, { role: 'assistant', content: reply }]);
     } catch (cause) {
       setMessages(current => current.slice(0, -1));
       setInput(text);
-      setError(aiErrorMessage(cause));
+      if (modelEpoch.current === epoch) setError(aiErrorMessage(cause));
     } finally {
       setBusy(false);
     }
@@ -462,6 +499,7 @@ function AiAssistant() {
 
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
       <p>{t(`প্রথমবার প্রায় ${bn(AI_MODEL_SIZE_MB)} MB মডেল এবং চালানোর ফাইল ডাউনলোড হবে (SmolLM2-135M, Q8)। ডিভাইস ও ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The first use downloads an approximately ${AI_MODEL_SIZE_MB} MB model plus runtime files (SmolLM2-135M, Q8). Depending on your device and cache, internet may be needed again.`)}</p>
+      <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। চাইলে স্মার্ট ব্রেইন ব্যবহার করো। স্মার্ট ব্রেইনে ফিরলে বা অ্যাপ আড়ালে গেলে মডেলের মেমোরি ছাড়া হয়; আবার ব্যবহার করতে লোড করতে হবে।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. You can use Smart brain instead. Switching back or backgrounding the app releases the model from memory; using it again requires loading it.')}</p>
       <button type="button" className="button primary" onClick={() => void downloadModel()}><Download size={16} aria-hidden="true" />{t('AI মডেল ডাউনলোড করো', 'Download AI model')}</button>
     </div>}
 

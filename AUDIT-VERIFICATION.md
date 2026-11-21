@@ -68,9 +68,9 @@ No user data, existing features, technology stack, paid service, mandatory backe
 
 - These fixes preserve existing data and do not automatically compact, reset or restore anything. History deleted before this fix cannot be reconstructed by it. Keep a verified backup before any user-initiated cleanup or restore.
 - The architecture continues to use validated local data with an Android SQLite mirror and local media stores. Tests simulate failure and recovery; they do not guarantee hardware or OS behavior on every device or every update path.
-- `npm audit` reports two high-severity development dependency advisories through `@huggingface/transformers` and its nested `sharp`. The suggested fix is a major Transformers upgrade; no untested AI runtime upgrade was made. The production-only dependency audit is reported separately below. This is an unresolved dependency risk, not a verified exploit in the shipped app.
+- At the time of the original audit, `npm audit` reported two high-severity development dependency advisories through `@huggingface/transformers` and its nested `sharp`. The suggested fix is a major Transformers upgrade; no untested AI runtime upgrade was made. The production-only dependency audit is reported separately below. This was a dependency risk, not a verified exploit in the shipped app; see `AUDIT-FOLLOWUP.md` for current status.
 - AI model caching/offline behavior depends on the downloaded model remaining on device. Bengali model quality and physical-device operation are not certified by this audit.
-- The project has no `lint` script or configured linter command; `npm run lint` reports a missing script. Do not interpret that as a passing lint check.
+- At the time of the original audit the project had no configured lint command. See `AUDIT-FOLLOWUP.md` for the later lint baseline and dependency work.
 
 ## Verification
 

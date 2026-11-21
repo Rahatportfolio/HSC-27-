@@ -38,6 +38,51 @@ describe('aiErrorMessage', () => {
 });
 
 describe('AI worker lifecycle', () => {
+  it('does not reject a replacement worker request on a late error from the terminated worker', async () => {
+    class FakeWorker {
+      static instances: FakeWorker[] = [];
+      onmessage: ((event: { data: { id: number; kind: string } }) => void) | null = null;
+      onerror: ((event: { message: string }) => void) | null = null;
+      terminate = vi.fn();
+      postMessage = vi.fn();
+      constructor() { FakeWorker.instances.push(this); }
+    }
+    vi.stubGlobal('Worker', FakeWorker);
+    const first = loadAiModel();
+    const stopped = expect(first).rejects.toThrow('AI worker stopped');
+    const previous = FakeWorker.instances[0];
+    unloadAiModel();
+    await stopped;
+    const replacement = loadAiModel();
+    const result = expect(replacement).resolves.toBeUndefined();
+    previous.onerror?.({ message: 'late error' });
+    const current = FakeWorker.instances[1];
+    current.onmessage?.({ data: { id: current.postMessage.mock.calls[0][0].id, kind: 'result' } });
+    await result;
+    expect(current.terminate).not.toHaveBeenCalled();
+  });
+
+  it('rejects a current worker error and starts a new worker on retry', async () => {
+    class FakeWorker {
+      static instances: FakeWorker[] = [];
+      onmessage: ((event: { data: { id: number; kind: string } }) => void) | null = null;
+      onerror: ((event: { message: string }) => void) | null = null;
+      terminate = vi.fn();
+      postMessage = vi.fn();
+      constructor() { FakeWorker.instances.push(this); }
+    }
+    vi.stubGlobal('Worker', FakeWorker);
+    const first = loadAiModel();
+    const rejected = expect(first).rejects.toThrow('worker failed to start: failed');
+    FakeWorker.instances[0].onerror?.({ message: 'failed' });
+    await rejected;
+    expect(FakeWorker.instances[0].terminate).toHaveBeenCalledOnce();
+    const retry = loadAiModel();
+    const next = FakeWorker.instances[1];
+    next.onmessage?.({ data: { id: next.postMessage.mock.calls[0][0].id, kind: 'result' } });
+    await expect(retry).resolves.toBeUndefined();
+  });
+
   it('releases RAM, rejects pending work, and permits a later retry', async () => {
     class FakeWorker {
       static instances: FakeWorker[] = [];

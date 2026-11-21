@@ -3,6 +3,10 @@ on:
   pull_request:
     paths:
       - 'src/aiModel.ts'
+      - 'src/aiModel.worker.ts'
+      - 'src/aiProgress.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - 'scripts/check-ai-model-browser.mjs'
       - '.github/workflows/ai-model-integration.yml'
   workflow_dispatch:
