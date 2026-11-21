@@ -55,6 +55,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Lint correctness and security baseline
+        run: npm run lint
+
+      - name: Dependency advisory audit
+        run: npm audit --audit-level=high
+
       - name: Typecheck
         run: npm run typecheck
 

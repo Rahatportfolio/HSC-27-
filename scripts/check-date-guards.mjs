@@ -130,6 +130,8 @@ try {
     ...rows.map(row => `| ${row.id} | ${row.killed ? 'killed' : 'SURVIVED / ERROR'} | ${row.failed} |`), '',
     'This is targeted fault injection, not a claim of exhaustive mutation coverage or zero bugs.', '',
   ].join('\n'));
+  // A failed restoration must take precedence over any earlier mutation failure.
+  // eslint-disable-next-line no-unsafe-finally
   if (!unchanged) throw new Error('Source restoration failed. Stop and restore .cache/date-mutations/originals.');
 }
 if (rows.length !== selected.length || rows.some(row => !row.killed)) process.exitCode = 1;

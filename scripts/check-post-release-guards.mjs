@@ -171,6 +171,8 @@ try {
     'Each mutation runs only its intended named test(s). Parse/load errors, missing reports and unrelated failures do not count as kills. The deliberate un-awaited failed export can also produce an unhandled rejection; its changed metadata assertion must still fail. Controls permit no unhandled errors.', '',
     'This is targeted fault injection, not exhaustive mutation coverage or a zero-bug guarantee.', '',
   ].join('\n'));
+  // A failed restoration must take precedence over any earlier mutation failure.
+  // eslint-disable-next-line no-unsafe-finally
   if (!unchanged) throw new Error('Source restoration failed. Stop and inspect the per-invocation originals.');
 }
 if (rows.length !== selected.length || rows.some(row => !row.killed)) process.exitCode = 1;
