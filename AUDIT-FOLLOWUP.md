@@ -56,3 +56,7 @@ The Android real-model integration probe also reports test-only worker progress-
 ### Excessive AI progress messages
 
 The test-only telemetry in successful Android AI run `44930114094` measured **14,716 progress messages** during one online model load and 208 on the cached offline load. Each message crossed from the worker into the WebView and attempted a UI update, even when the displayed percentage did not change. The worker now coalesces per-file and aggregate progress to percentage buckets (or MiB buckets without a known percentage), while passing status events and retaining separate files and new passes. A worker-level regression using 10,001 byte updates emitted 10,003 messages before this fix and 103 after it. This confirms the message-flood fix, not that it caused all earlier timeouts or that it resolves out-of-memory kills; real-model online/offline tests and renderer-loss recovery remain necessary.
+
+### Requested 8 GB phone and CI profile
+
+The user reports an 8 GB RAM phone. The real-model Android workflow now explicitly uses a 4 GiB emulator rather than the prior default small emulator and logs `/proc/meminfo`; it still exercises actual online inference and cold offline activity restart. The API 34/35 renderer-crash recovery tests remain separate. This is not a physical 8 GB phone test, a guarantee that 8 GB will always have enough free RAM, or a claim that prior low-memory failures have been fixed. The earlier low-memory failure and the possibility of interrupted unsaved work remain documented above.

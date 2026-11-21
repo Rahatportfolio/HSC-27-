@@ -49,8 +49,13 @@ jobs:
           target: google_apis
           arch: x86_64
           disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          # A 4 GiB emulator is a better fit for the requested 8 GiB phone than
+          # the default small emulator. It does not certify a physical device
+          # or erase the documented low-memory failures on smaller profiles.
+          emulator-options: -memory 4096 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
+            echo 'Emulator physical memory:'
+            adb shell cat /proc/meminfo | head -n 5
             adb shell svc power stayon true
             adb shell settings put system screen_off_timeout 2147483647
             adb shell input keyevent KEYCODE_WAKEUP
