@@ -7,7 +7,9 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'src/views/StudyBrain.tsx'
+      - 'android/app/src/main/java/com/prostuti/hsc27/MainActivity.java'
       - 'android/app/src/androidTest/java/com/prostuti/hsc27/AiModelIntegrationTest.java'
+      - 'android/app/src/androidTest/java/com/prostuti/hsc27/RendererRecoveryInstrumentedTest.java'
       - '.github/workflows/ai-android-integration.yml'
 permissions:
   contents: read
