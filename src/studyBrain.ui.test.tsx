@@ -11,10 +11,12 @@ import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture
 import { newStudyBrain } from './studyBrain';
 import { chapterById } from './data';
 import { setLanguage } from './i18n';
+import * as aiModel from './aiModel';
+import * as aiBrain from './aiBrain';
 
 const now = new Date('2026-11-20T12:05:00.000Z'), today = '2026-11-20';
 beforeEach(() => { setLanguage('en'); vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(now); });
-afterEach(() => { cleanup(); vi.useRealTimers(); });
+afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
 function enabled() { const data = personalDataFixture(); data.studyBrain = newStudyBrain(); return data; }
 function setup(initial = personalDataFixture(), props: Partial<PlannerContextValue> = {}, teaser = false) {
   let data = initial, request: ConfirmRequest | undefined;
@@ -175,5 +177,65 @@ describe('Study Brain full-strength insights and pre-flight', () => {
     expect(h.data().completed).toBe(initial.completed);
     expect(h.data().personalRoutine).toBe(initial.personalRoutine);
     expect(buildStudyPlan(h.data(), today)).toEqual(buildStudyPlan(initial, today));
+  });
+});
+
+
+describe('AI assistant regression checks', () => {
+  const panel = () => screen.getByRole('region', { name: 'On-device AI assistant' });
+  const ask = (text: string) => {
+    const input = within(panel()).getByRole('textbox');
+    fireEvent.change(input, { target: { value: text } });
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Send' }));
+  };
+
+  it('keeps smart-brain and model histories separate and restores failed prompts', async () => {
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    const chat = vi.spyOn(aiModel, 'chatWithAi').mockRejectedValueOnce(new Error('network down')).mockResolvedValueOnce('Model reply');
+    setup(enabled());
+    ask('My progress?');
+    expect(within(panel()).getByText('My progress?')).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect(within(panel()).queryByText('My progress?')).toBeNull();
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    await act(async () => { ask('What is water?'); });
+    expect((within(panel()).getByRole('textbox') as HTMLInputElement).value).toBe('What is water?');
+    expect(within(panel()).queryByText('What is water?')).toBeNull();
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Send' })); });
+    expect(within(panel()).getByText('Model reply')).toBeTruthy();
+    expect(chat.mock.calls[1][0]).toEqual([{ role: 'user', content: 'What is water?' }]);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Smart brain' }));
+    expect(within(panel()).getByText('My progress?')).toBeTruthy();
+    expect(within(panel()).queryByText('Model reply')).toBeNull();
+  });
+
+  it('prevents mode changes while a model download is in progress', async () => {
+    let finish!: () => void;
+    vi.spyOn(aiModel, 'loadAiModel').mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' }));
+    expect((within(panel()).getByRole('button', { name: 'Smart brain' }) as HTMLButtonElement).disabled).toBe(true);
+    await act(async () => finish());
+    expect((within(panel()).getByRole('button', { name: 'Smart brain' }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it('keeps the selected subject when requesting another quiz', async () => {
+    const load = vi.spyOn(aiBrain, 'loadQuizQuestion');
+    setup(enabled());
+    ask('chemistry quiz');
+    const options = await within(panel()).findByRole('group', { name: 'Quiz options' });
+    fireEvent.click(within(options).getAllByRole('button')[0]);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Give me another quiz' }));
+    await vi.waitFor(() => expect(load).toHaveBeenCalledTimes(2));
+    expect(load.mock.calls.map(call => call[0])).toEqual(['chemistry', 'chemistry']);
+  });
+
+  it('clears old quiz options when a non-quiz question is asked', async () => {
+    setup(enabled());
+    await act(async () => { ask('chemistry quiz'); });
+    expect(await within(panel()).findByRole('group', { name: 'Quiz options' })).toBeTruthy();
+    ask('My progress?');
+    expect(within(panel()).queryByRole('group', { name: 'Quiz options' })).toBeNull();
   });
 });

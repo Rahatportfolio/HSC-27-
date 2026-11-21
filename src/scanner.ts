@@ -186,9 +186,11 @@ export async function loadPagesFromDb(pageKeys: string[]): Promise<string[]> {
   return urls;
 }
 
-/** Delete all page images for a note from IndexedDB. */
-export async function deletePagesFromDb(pageKeys: string[]): Promise<void> {
-  for (const key of pageKeys) await idbDelete(key);
+/** Delete all page images; report failure rather than claiming the bytes were removed. */
+export async function deletePagesFromDb(pageKeys: string[]): Promise<boolean> {
+  let complete = true;
+  for (const key of pageKeys) if (!await idbDelete(key)) complete = false;
+  return complete;
 }
 
 /** Read the scanned-notes metadata array from localStorage. */

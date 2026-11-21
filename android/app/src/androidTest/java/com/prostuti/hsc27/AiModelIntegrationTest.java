@@ -49,8 +49,11 @@ public class AiModelIntegrationTest {
   }
   private void openModel(WebView web) throws Exception {
     eval(web, "location.hash='brain';dispatchEvent(new HashChangeEvent('hashchange'));true");
-    waitFor(web, "!!document.querySelector('.brain-view')", 60000);
-    if ("true".equals(eval(web, "!!document.querySelector('.brain-welcome button.primary')"))) {
+    // The view can render before native storage hydration completes. Do not
+    // click its disabled opt-in control and then mistake the no-op for a model
+    // failure; wait until the panel exists or the button is actually enabled.
+    waitFor(web, "!!document.querySelector('.ai-modes button:nth-child(2)') || !!document.querySelector('.brain-welcome button.primary:not(:disabled)')", 60000);
+    if ("true".equals(eval(web, "!!document.querySelector('.brain-welcome button.primary:not(:disabled)')"))) {
       eval(web, "document.querySelector('.brain-welcome button.primary').click();true");
     }
     waitFor(web, "!!document.querySelector('.ai-modes button:nth-child(2)')", 60000);

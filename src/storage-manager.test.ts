@@ -42,6 +42,6 @@ describe('storage manager', () => {
   });
 
   it('clearTempCache resolves without IndexedDB', async () => {
-    expect(await clearTempCache(7)).toBe(0);
+    expect(await clearTempCache(7)).toBeNull();
   });
 });

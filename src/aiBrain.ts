@@ -83,7 +83,7 @@ function subjectsAnswer(): AiBrainAnswer {
   });
   return {
     kind: 'subjects',
-    text: t(`HSC-এ ${bn(SUBJECTS.length)}টি বিষয় আছে:\n${rows.join('\n')}\nকোনো বিষয়ের অধ্যায় জানতে চাইলে বিষয়ের নাম বলো, যেমন “পদার্থের অধ্যায়গুলো কী?”`, `HSC has ${SUBJECTS.length} subjects:\n${rows.join('\n')}\nName a subject to see its chapters, for example “What are the Physics chapters?”`),
+    text: t(`অ্যাপে ${bn(SUBJECTS.length)}টি বিষয় আছে:\n${rows.join('\n')}\nকোনো বিষয়ের অধ্যায় জানতে চাইলে বিষয়ের নাম বলো, যেমন “পদার্থের অধ্যায়গুলো কী?”`, `The app includes ${SUBJECTS.length} subjects:\n${rows.join('\n')}\nName a subject to see its chapters, for example “What are the Physics chapters?”`),
   };
 }
 
@@ -180,8 +180,8 @@ function motivationAnswer(): AiBrainAnswer {
 }
 
 const HELP_TEXT = (): string => t(
-  'আমি এই প্রশ্নগুলোর উত্তর দিতে পারি:\n· “পদার্থের অধ্যায়গুলো কী?” — বিষয়ের অধ্যায় তালিকা\n· “ভেক্টর অধ্যায়ের ফোকাস কী?” — একটি অধ্যায়ের বিস্তারিত\n· “কুইজ দাও” — MCQ কুইজ\n· “টিপস দাও” — পড়ার টিপস\n· “আমার অগ্রগতি?” — তোমার সেভ করা অগ্রগতি\n· “মোটিভেশন দাও” — উৎসাহ\nখোলামেলা প্রশ্নের জন্য “AI মডেল” মোড ব্যবহার করো (প্রায় ১৪০ MB ডাউনলোড লাগবে)।',
-  'I can answer:\n· “What are the Physics chapters?” — chapter lists by subject\n· “What is the focus of the Vector chapter?” — one chapter in detail\n· “Give me a quiz” — MCQ quiz\n· “Give me tips” — study tips\n· “My progress?” — your saved progress\n· “Motivate me” — encouragement\nFor open-ended questions, use “AI model” mode (approximately 140 MB download).',
+  'আমি এই প্রশ্নগুলোর উত্তর দিতে পারি:\n· “পদার্থের অধ্যায়গুলো কী?” — বিষয়ের অধ্যায় তালিকা\n· “পদার্থের ভেক্টর অধ্যায়ের ফোকাস কী?” — একটি অধ্যায়ের বিস্তারিত\n· “কুইজ দাও” — MCQ কুইজ\n· “টিপস দাও” — পড়ার টিপস\n· “আমার অগ্রগতি?” — তোমার সেভ করা অগ্রগতি\n· “মোটিভেশন দাও” — উৎসাহ\nখোলামেলা প্রশ্নের জন্য “AI মডেল” মোড ব্যবহার করো (প্রায় ১৪০ MB ডাউনলোড লাগবে)।',
+  'I can answer:\n· “What are the Physics chapters?” — chapter lists by subject\n· “What is the focus of the Physics Vector chapter?” — one chapter in detail\n· “Give me a quiz” — MCQ quiz\n· “Give me tips” — study tips\n· “My progress?” — your saved progress\n· “Motivate me” — encouragement\nFor open-ended questions, use “AI model” mode (approximately 140 MB download).',
 );
 
 /** Answer a study question from the app's own data. Pure and testable. */
@@ -206,11 +206,25 @@ export function answerAiQuestion(message: string, data: AppData): AiBrainAnswer 
   if (/(?:বিষয়|bishoy|subjects?|কয়টা বিষয়|koyta bishoy)/u.test(text) && !subject) {
     return subjectsAnswer();
   }
+  // Resolve a chapter name even when the student did not name a subject.
+  // Titles are compared in the same Unicode form as the question, and a
+  // repeated title is never guessed across different papers or subjects.
+  const candidates = CHAPTERS.filter(chapter => (!subject || chapter.subject === subject) && (paper === undefined || chapter.paper === paper));
+  const titleMatches = candidates.filter(chapter => text.includes(normalize(chapter.title)));
+  if (titleMatches.length === 1) return chapterAnswer(titleMatches[0]);
+  if (titleMatches.length > 1) return { kind: 'unknown', text: t('একই নামে একাধিক অধ্যায় আছে। বিষয় ও পত্র বলো।', 'More than one chapter has that name. Specify the subject and paper.') };
+
   if (subject) {
-    // A chapter title or number mentioned with its subject wins over the list.
-    const named = CHAPTERS.find(chapter => chapter.subject === subject
-      && (text.includes(chapter.title) || new RegExp(`\\b${chapter.number}\\b`).test(text)));
-    if (named) return chapterAnswer(named);
+    // Only count numbers adjacent to an explicit chapter label; a paper number
+    // in "physics paper 2 chapters" is not chapter 2.
+    const chapterNumber = text.match(/(?:chapter\b|অধ্যায়|adhyay)\s*(?:no\.?|number|নং)?\s*(\d+)\b/u)?.[1]
+      ?? text.match(/\b(\d+)\s*(?:তম|নং)?\s*(?:chapter\b|অধ্যায়|adhyay)/u)?.[1];
+    if (chapterNumber) {
+      const matches = candidates.filter(chapter => chapter.number === chapterNumber);
+      if (matches.length === 1) return chapterAnswer(matches[0]);
+      if (matches.length > 1) return { kind: 'unknown', text: t('এই নম্বর একাধিক পত্রে আছে। প্রথম না দ্বিতীয় পত্র বলো।', 'This chapter number appears in multiple papers. Specify the paper.') };
+      return { kind: 'unknown', text: t('এই বিষয় ও পত্রে ওই নম্বরের অধ্যায় পাইনি।', 'No chapter with that number was found for this subject and paper.') };
+    }
     if (/(?:অধ্যায়|adhyay|chapters?|list)/u.test(text)) return chaptersAnswer(subject, paper);
   }
   if (/(?:help|সাহায্য|কী পারো|ki paro|what can you do)/u.test(text)) {
