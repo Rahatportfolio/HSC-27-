@@ -4,6 +4,7 @@ on:
     paths:
       - 'src/aiModel.ts'
       - 'src/aiModel.worker.ts'
+      - 'src/aiProgress.ts'
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/check-ai-model-browser.mjs'
