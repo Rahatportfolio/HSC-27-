@@ -466,7 +466,12 @@ public class MobileShellInstrumentedTest {
     // Do not rely solely on the DOM or on WebView's localStorage cache.
     String confirmedNote = "Native confirmed save survives recreation";
     enterField(web, "textarea[aria-label='Day note']", confirmedNote);
-    waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&document.querySelector('.note-card [role=status]')?.textContent==='auto-saved';})()");
+    try {
+      waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&document.querySelector('.note-card [role=status]')?.textContent==='auto-saved';})()");
+    } catch (AssertionError timeout) {
+      JSONObject details = object(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return {status:document.querySelector('.note-card [role=status]')?.textContent||'',value:document.querySelector('.note-card textarea')?.value||'',notes:d.notes,stamp:localStorage.getItem('hsc27-prostuti-v1-saved-at'),alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent)};})()");
+      throw new AssertionError("Confirmed-save timeout: " + details, timeout);
+    }
     File dbFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
     try (SQLiteDatabase db = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
          Cursor cursor = db.rawQuery("SELECT payload FROM app_state WHERE id = 1", null)) {
