@@ -414,10 +414,11 @@ public class MobileShellInstrumentedTest {
     }
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-preview-day')");
-    assertEquals("Capacity must extend the same pair rather than claim a two-day finish", "true", evaluate(web, "document.querySelector('.personal-preview').textContent.includes('SAME pair continues on extra days')"));
+    assertEquals("Extra days should be shown in the preview without an alarming two-day warning", "true", evaluate(web, "document.querySelectorAll('.personal-preview-day').length > 2 && !document.querySelector('.personal-preview').textContent.includes('SAME pair continues on extra days')"));
     screenshot("new-student-preview");
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-home .personal-tasks .task-check')");
+    assertEquals("Extra study days must not trigger the old two-day warning on Home", "true", evaluate(web, "!document.querySelector('main').textContent.includes('does not fit in your first two study days')"));
     JSONObject saved = object(web, "JSON.parse(localStorage.getItem('hsc27-prostuti-v1'))");
     JSONObject routine = saved.getJSONObject("personalRoutine");
     assertFalse("Setup flag was not completed", saved.getBoolean("routineSetupRequired"));

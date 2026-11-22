@@ -25,6 +25,7 @@ export default function PersonalStudyHome() {
   const health = useMemo(() => personalRoutineHealth(data, plan), [data, plan]);
   const plannedChapterIds = routine.chapterIds.filter(id => hasFullPersonalAllocation(data, plan, id));
   const unknownChapters = health.issues.find(issue => issue.code === 'unknown-duration')?.chapterIds || [];
+  const actionableIssues = health.issues.filter(issue => issue.code !== 'two-day-capacity');
   const selected = CHAPTERS.filter(c => routine.chapterIds.includes(c.id));
   const progress = learningProgress(selected, data, plan);
   const sProgress = routine.scope === 'ALL' || routine.scope === 'SELECTED' ? progress : sRoutine ? learningProgress(CHAPTERS.filter(c => sRoutine.chapterIds.includes(c.id)), data, plan) : progress;
@@ -54,10 +55,10 @@ export default function PersonalStudyHome() {
       <button type="button" className="button ghost small" onClick={() => changeDate(today < data.settings.startDate ? data.settings.startDate : today)}>{t('আজ', 'Today')}</button>
       <div className="personal-availability-summary"><strong>{formatDate(selectedDate, 'long')}</strong><span>{windows.length ? windows.map(window => `${formatTime(window.startMinute)}–${formatTime(window.endMinute)}`).join(' · ') : t('এই দিন পড়ার সময় দাওনি', 'No availability on this weekday')}</span><small>{t('দেওয়া সময়ের সীমা', 'Availability cap')}: {formatDurationBn(dailyTargetMinutes(data, selectedDate))} · {t('পড়ার বরাদ্দ', 'Allocated work')}: {formatDurationBn(dayMinutes)} · {t('সম্পন্ন', 'Done')}: {formatDurationBn(doneMinutes)}</small></div>
     </section>
-    {health.issues.length > 0 && <section className="card personal-capacity" aria-label={t('আসল সময় ও রুটিনের ঘাটতি', 'Actual duration and capacity gaps')}>
+    {actionableIssues.length > 0 && <section className="card personal-capacity" aria-label={t('আসল সময় ও রুটিনের ঘাটতি', 'Actual duration and capacity gaps')}>
       <h2><Clock3 size={18} />{t('সময় না মিললে আগে সেটাই জানবে', 'See time gaps before trusting a finish date')}</h2>
-      {health.issues.slice(0, 4).map((issue, index) => <p className="personal-warning" key={index}>{routineIssueText(issue)}</p>)}
-      {health.issues.length > 4 && <details><summary>{t('বাকি সতর্কতা', 'More warnings')} ({bn(health.issues.length - 4)})</summary>{health.issues.slice(4).map((issue, index) => <p key={index}>{routineIssueText(issue)}</p>)}</details>}
+      {actionableIssues.slice(0, 4).map((issue, index) => <p className="personal-warning" key={index}>{routineIssueText(issue)}</p>)}
+      {actionableIssues.length > 4 && <details><summary>{t('বাকি সতর্কতা', 'More warnings')} ({bn(actionableIssues.length - 4)})</summary>{actionableIssues.slice(4).map((issue, index) => <p key={index}>{routineIssueText(issue)}</p>)}</details>}
       <button type="button" className="button primary small" onClick={() => navigate('settings')}>{t('ভিডিওর সময় ও নিজের পড়ার সময় মেলাও', 'Review class durations & availability')}</button>
     </section>}
     <LocalNote />

@@ -8,7 +8,7 @@ import { resolve } from 'node:path';
 import { signingFingerprint } from './verify-release-asset.mjs';
 
 export function validateFreshApk({ badging, manifest, signature, expectedCertificate, zipTest, expectedPackage = 'com.prostuti.hsc27.fresh' }) {
-  assert.ok(['com.prostuti.hsc27.fresh', 'com.prostuti.hsc27.category', 'com.prostuti.hsc27.selected', 'com.prostuti.hsc27.finalapp', 'com.prostuti.hsc27.custom'].includes(expectedPackage), 'Unexpected package target');
+  assert.ok(['com.prostuti.hsc27.fresh', 'com.prostuti.hsc27.category', 'com.prostuti.hsc27.selected', 'com.prostuti.hsc27.finalapp', 'com.prostuti.hsc27.custom', 'com.prostuti.hsc27.calm'].includes(expectedPackage), 'Unexpected package target');
   const packageMatch = badging.match(/^package: name='([^']+)'\s+versionCode='\d+'/m);
   assert.equal(packageMatch?.[1], expectedPackage, 'APK package mismatch');
   const debug = manifest.match(/^.*android:debuggable.*$/mi)?.[0];

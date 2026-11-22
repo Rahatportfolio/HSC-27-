@@ -64,3 +64,10 @@ test('accepts the explicitly separate custom package only when identity matches'
   f.badging = f.badging.replace('.fresh', '.custom');
   assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.custom');
 });
+
+test('requires the separate calm package identity exactly', () => {
+  const f = fixture(); f.expectedPackage = 'com.prostuti.hsc27.calm';
+  assert.throws(() => validateFreshApk(f), /APK package mismatch/);
+  f.badging = f.badging.replace('.fresh', '.calm');
+  assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.calm');
+});

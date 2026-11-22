@@ -121,7 +121,8 @@ async function flow() {
     await accessibility(page, 'actual duration editor');
     await page.screenshot({ path: `${output}/actual-duration-320-en.png`, fullPage: true });
     await page.getByRole('button', { name: 'Next step', exact: true }).click();
-    assert.match(await page.locator('.personal-preview').innerText(), /SAME pair continues on extra days/);
+    assert.ok(await page.locator('.personal-preview-day').count() > 2, 'Long work continues on later days without a two-day warning');
+    assert.doesNotMatch(await page.locator('.personal-preview').innerText(), /SAME pair continues on extra days/);
     await layout(page, 'effective preview'); await accessibility(page, 'effective preview');
     await page.getByRole('button', { name: 'Save selected-chapter routine', exact: true }).click();
     await page.locator('.personal-home').waitFor();
