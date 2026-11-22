@@ -64,4 +64,16 @@ describe('Android durable save status', () => {
     await act(async () => current(true));
     await waitFor(() => expect(screen.getByText('auto-saved')).toBeTruthy());
   });
+  it('does not roll back an edit on a delayed storage event from a retired Android WebView', async () => {
+    render(<App />);
+    const input = await screen.findByRole('textbox', { name: 'Day note' }) as HTMLTextAreaElement;
+    await waitFor(() => expect(screen.getByText('auto-saved')).toBeTruthy());
+    const stale = localStorage.getItem(STORAGE_KEY)!;
+    fireEvent.change(input, { target: { value: 'Current note survives' } });
+    await waitFor(() => expect(screen.getByText('auto-saved')).toBeTruthy());
+    act(() => window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY, newValue: stale, storageArea: localStorage })));
+    expect(input.value).toBe('Current note survives');
+    expect(localStorage.getItem(STORAGE_KEY)).toContain('Current note survives');
+  });
+
 });

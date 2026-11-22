@@ -463,7 +463,24 @@ export default function App() {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [confirmRequest, modal]);
-  useEffect(() => { const onStorage = (e: StorageEvent) => { if (e.key !== STORAGE_KEY || !e.newValue) return; try { setData(parseBackup(e.newValue)); notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info'); } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); } }; window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage); }, [notify]);
+  useEffect(() => {
+    // Activity recreation can briefly leave two Android WebViews on the same
+    // origin. Delayed storage events from the retiring document are not a user
+    // edit in the new Activity and can roll its newer state back. Android has
+    // one app window; its restore protocol, not cross-tab sync, owns recovery.
+    if (isNativeApp()) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY || !e.newValue) return;
+      try {
+        // Events are asynchronous: never replay an obsolete intermediate value.
+        if (localStorage.getItem(STORAGE_KEY) !== e.newValue) return;
+        setData(parseBackup(e.newValue));
+        notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info');
+      } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [notify]);
   const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !isPersonalTaskComplete(plan.flatMap(day => day.tasks).find(task => task.id === id) || { id }, d.completed), plan)), [plan]);
   const logSession = useCallback((session: Parameters<typeof addStudySession>[1]) => setData(d => addStudySession(d, session)), []);
   const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify(t('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'No unfinished session in this period.'), 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch (error) { notify(t('ক্যালেন্ডার ফাইল তৈরি হয়নি: ', 'The calendar file was not created: ') + ((error as Error)?.message || t('অজানা কারণ', 'unknown reason')), 'error'); } }, [plan, data, today, notify]);
