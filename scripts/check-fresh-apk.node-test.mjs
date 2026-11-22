@@ -47,3 +47,13 @@ test('requires the selected package identity exactly', () => {
   f.expectedPackage = 'com.prostuti.hsc27.category';
   assert.throws(() => validateFreshApk(f));
 });
+
+
+test('requires the final package identity exactly', () => {
+  const f = fixture(); f.expectedPackage = 'com.prostuti.hsc27.finalapp';
+  assert.throws(() => validateFreshApk(f));
+  f.badging = f.badging.replace('.fresh', '.finalapp');
+  assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.finalapp');
+  f.expectedPackage = 'com.prostuti.hsc27.selected';
+  assert.throws(() => validateFreshApk(f));
+});
