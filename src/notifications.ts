@@ -1,4 +1,4 @@
-import { isPersonalTaskComplete, personalSessionForStage } from './personalRoutine';
+import { isPersonalTaskComplete, personalSessionForStage, personalCategory, activePersonalCategory } from './personalRoutine';
 import { chapterById, subjectById } from './data';
 import { isEnglish } from './i18n';
 import {
@@ -12,6 +12,14 @@ import {
 } from './planner';
 import type { AppData, Day, Task } from './planner';
 import { nextCadenceSlot } from './cadence';
+
+/** Later-category dates are forecasts, not permission to send advance alarms. */
+export function actionableReminderPlan(plan: Day[], data: AppData): Day[] {
+  const active = activePersonalCategory(data);
+  if (!active) return plan;
+  const order = ['S', 'A', 'B', 'C'];
+  return plan.map(day => ({ ...day, tasks: day.tasks.filter(task => !task.personalWork || order.indexOf(personalCategory(data, task.chapterIds[0])) <= order.indexOf(active)) }));
+}
 
 export interface DailyNotificationDigest {
   date: string;
@@ -102,6 +110,7 @@ export function reminderTasksForDay(tasks: Task[]): Task[] {
  * 3) How much is completed & how much still needs to be completed (কতটুকু কমপ্লিট করা লাগবে)
  */
 export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: string): DailyNotificationDigest {
+  plan = actionableReminderPlan(plan, data);
   const day = plan.find(d => d.date === date);
   const tasks = day?.tasks ?? [];
   const totalTasks = tasks.length;
@@ -174,6 +183,7 @@ export function buildDailyNotificationDigest(plan: Day[], data: AppData, date: s
  * Explicitly includes: আজ কী পড়া + মোট কতটুকু পড়া + কতটুকু সম্পন্ন ও কতটুকু কমপ্লিট করা লাগবে।
  */
 export function buildDailyStatusNotification(plan: Day[], data: AppData, date: string): NotificationPayload {
+  plan = actionableReminderPlan(plan, data);
   const digest = buildDailyNotificationDigest(plan, data, date);
 
   if (digest.totalTasks > 0 && digest.remainingTasks === 0) {
@@ -294,6 +304,7 @@ export function buildEveningCheckinNotification(plan: Day[], data: AppData, date
  * tomorrow has no scheduled work.
  */
 export function buildTomorrowPreviewNotification(plan: Day[], data: AppData, date: string): NotificationPayload | null {
+  plan = actionableReminderPlan(plan, data);
   const tomorrow = addDays(date, 1);
   const day = plan.find(d => d.date === tomorrow);
   if (!day || day.tasks.length === 0) return null;

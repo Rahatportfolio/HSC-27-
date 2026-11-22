@@ -16,10 +16,10 @@ export function makePersonalMarkdown(plan: Day[], data: AppData): string {
   const lines = [
     `# প্রস্তুতি — আমার ${scope} ধাপের রুটিন`, '',
     `**শিক্ষার্থী:** ${cell(data.settings.name || 'আমার প্রস্তুতি')} · **শুরু:** ${data.settings.startDate}`,
-    scope === 'ALL' ? `**লক্ষ্য:** সব ${bn(routine.chapterIds.length)}টি অধ্যায়, প্রতিটিতে তিন সেশন।` : scope === 'S'
+    scope === 'SELECTED' ? `**লক্ষ্য:** শুধু বাছাই করা ${bn(routine.chapterIds.length)}টি অধ্যায়; S → A → B।` : scope === 'ALL' ? `**লক্ষ্য:** সব ${bn(routine.chapterIds.length)}টি অধ্যায়, প্রতিটিতে তিন সেশন।` : scope === 'S'
       ? `**লক্ষ্য:** A থেকে নিজের বেছে নেওয়া ${bn(routine.chapterIds.length)}টি গুরুত্বপূর্ণ S অধ্যায়। বাকি A/B/C লাইব্রেরিতে আছে, এই রুটিনে বাধ্যতামূলক নয়।`
       : `**বর্তমান লক্ষ্য:** ${scope} ধাপের নির্বাচিত ${bn(routine.chapterIds.length)}টি অধ্যায়। S-এর সব প্রয়োজনীয় কাজ শেষ করার পর এই ধাপ বেছে নেওয়া হয়েছে।`,
-    scope === 'ALL' ? `**সব অধ্যায়ের অগ্রগতি:** মোট ${bn(routine.chapterIds.length)} · সম্পন্ন ${bn(routine.chapterIds.filter(id => personalChapterProgress(routine, id, data.completed).fullyComplete).length)}।` : `**S অগ্রগতি:** মোট ${bn(s?.chapterIds.length || 0)} · সম্পন্ন ${bn(sDone)} · বাকি ${bn((s?.chapterIds.length || 0) - sDone)}।`,
+    scope === 'SELECTED' ? `**বাছাই করা অধ্যায়ের অগ্রগতি:** মোট ${bn(routine.chapterIds.length)} · সম্পন্ন ${bn(routine.chapterIds.filter(id => personalChapterProgress(routine, id, data.completed).fullyComplete).length)}।` : scope === 'ALL' ? `**সব অধ্যায়ের অগ্রগতি:** মোট ${bn(routine.chapterIds.length)} · সম্পন্ন ${bn(routine.chapterIds.filter(id => personalChapterProgress(routine, id, data.completed).fullyComplete).length)}।` : `**S অগ্রগতি:** মোট ${bn(s?.chapterIds.length || 0)} · সম্পন্ন ${bn(sDone)} · বাকি ${bn((s?.chapterIds.length || 0) - sDone)}।`,
     ...(scope === 'ALL' ? [] : ['**S একটি ব্যক্তিগত shortlist, সরকারি ক্যাটাগরি বা প্রশ্ন কমন পড়ার নিশ্চয়তা নয়।**']),
     `**ব্যক্তিগত টেস্ট লক্ষ্য:** ${data.settings.testExamDate} · **ব্যক্তিগত HSC প্রস্তুতির লক্ষ্য:** ${data.settings.examDate}। সরকারি/কলেজের পরীক্ষার রুটিন নয়।`,
     `**${scope} ধাপ শুরু:** ${routine.startsOn || data.settings.startDate} · **পূর্ণ কাজের শেষ বরাদ্দ:** ${health.syllabusEnd || 'অজানা/অসম্পূর্ণ বরাদ্দ'} (এটি পড়া শেষ হওয়ার প্রমাণ নয়)।`,

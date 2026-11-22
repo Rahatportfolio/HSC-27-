@@ -5,7 +5,7 @@ import { Suspense, lazy } from 'react';
 // The personal S-syllabus home (and its heavy setup components) loads on demand;
 // Home shell stays instant and inside the entry budget. Offline precache covers it.
 const PersonalStudyHome = lazy(() => import('./PersonalStudyHome'));
-import { PersonalRoutineSettings } from '../components/PersonalRoutineSetup';
+const PersonalRoutineSettings = lazy(() => import('../components/PersonalRoutineSetup').then(module => ({ default: module.PersonalRoutineSettings })));
 import { StudyOverview } from '../components/StudyOverview';
 import { learningDashboard } from '../learning';
 import { weaknessSummary } from '../weakness';
@@ -409,7 +409,7 @@ function LegacyTodayView() {
   const mockPart = mockAvg * 0.3;
   const mcqPart = mcqAcc * 0.2;
   const examReadiness = Math.round(syllabusPart + mockPart + mcqPart);
-  return <div className="view today-view"><DailyWorkCard /><PersonalRoutineSettings /><StudyBrainTeaser /><StudyOverview /><DailyGoals key={today}/>
+  return <div className="view today-view"><DailyWorkCard /><Suspense fallback={null}><PersonalRoutineSettings /></Suspense><StudyBrainTeaser /><StudyOverview /><DailyGoals key={today}/>
     {weakness.total > 0 && <div className="home-weakness-alert" role="status">
       <ShieldAlert size={20} />
       <div>

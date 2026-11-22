@@ -1,6 +1,7 @@
 import { chapterById } from './data';
 import { isPersonalTaskComplete } from './personalRoutine';
 import {
+  actionableReminderPlan,
   buildDailyStatusNotification,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
@@ -272,6 +273,7 @@ export function syncNativeReminders(plan: Day[], data: AppData, today: string, o
 
 async function performNativeReminderSync(plan: Day[], data: AppData, today: string, options: { requestPermission?: boolean }): Promise<NativeSyncResult> {
   if (!isNativeApp()) return { scheduled: 0, permission: 'unavailable' };
+  plan = actionableReminderPlan(plan, data);
   const { LocalNotifications } = await import('@capacitor/local-notifications');
 
   let permission = await LocalNotifications.checkPermissions();

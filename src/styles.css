@@ -5556,3 +5556,10 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .personal-session details{margin-top:8px}.personal-session summary{cursor:pointer;color:var(--muted);font-size:12px}
 .personal-more>summary{cursor:pointer;font-weight:600;padding:14px}
 .daily-work-top h1{font-size:20px;line-height:1.4}
+
+.selected-chapters { margin: 1.25rem 0; }
+.selected-subject { border: 1px solid var(--border, #d6dfd8); border-radius: 12px; padding: .8rem; margin: .65rem 0; }
+.selected-subject summary { cursor: pointer; font-weight: 700; }
+.selected-chapter { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: .5rem; padding: .5rem 0; border-bottom: 1px solid var(--border, #d6dfd8); }
+.selected-chapter label { display: flex; align-items: center; gap: .5rem; }
+.selected-chapter select { min-width: 4rem; }

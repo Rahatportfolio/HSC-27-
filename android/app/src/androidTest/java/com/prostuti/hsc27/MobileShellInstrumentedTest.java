@@ -375,7 +375,15 @@ public class MobileShellInstrumentedTest {
     enterField(web, ".personal-session-options label:first-child input", "60");
     enterField(web, ".personal-session-options label:last-child input", "5");
     tap(web, ".personal-setup-actions button[type='submit']");
-    waitFor(web, "document.querySelector('.personal-setup h2')?.textContent.includes('Three sessions for every chapter')");
+    waitFor(web, "!!document.querySelector('.selected-chapters')");
+    // Fresh setup must not silently choose all chapters. Choose two S chapters
+    // and one B chapter through the visible controls, leaving everything else out.
+    assertEquals("Fresh setup must start with zero selected chapters", "0", evaluate(web, "document.querySelectorAll('.selected-chapter input:checked').length"));
+    tap(web, ".selected-subject:nth-of-type(1) summary");
+    tap(web, ".selected-chapter[data-chapter-id='physics-1-3'] input");
+    tap(web, ".selected-chapter[data-chapter-id='physics-1-1'] input");
+    tap(web, ".selected-subject:nth-of-type(2) summary");
+    tap(web, ".selected-chapter[data-chapter-id='chemistry-1-3'] input");
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-workload-editor')");
     // Step 3 opens on the editable 20-hour estimate and is optional: the plan is
@@ -386,6 +394,8 @@ public class MobileShellInstrumentedTest {
     // prebuilt profile into storage. Long durations must NOT become 80 minutes.
     for (int chapter = 1; chapter <= 2; chapter++) {
       tap(web, ".personal-workload-editor .personal-shortlist-actions button:nth-child(" + chapter + ")");
+      String expectedId = chapter == 1 ? "physics-1-3" : "chemistry-1-3";
+      waitFor(web, "document.querySelector(" + JSONObject.quote("select[aria-label='Chapter to configure']") + ").value===" + JSONObject.quote(expectedId));
       enterField(web, "input[aria-label='Chapter class minutes']", chapter == 1 ? "480" : "420");
       enterField(web, "input[aria-label='Textbook reading minutes']", "30");
       enterField(web, "input[aria-label='Note making minutes']", "20");
@@ -409,19 +419,22 @@ public class MobileShellInstrumentedTest {
       { setTimeZone(java.util.TimeZone.getTimeZone("Asia/Dhaka")); }
     }.format(new java.util.Date());
     assertEquals(expectedStart, saved.getJSONObject("settings").getString("startDate"));
-    assertEquals("ALL", routine.getString("scope"));
-    assertEquals(114, routine.getJSONArray("chapterIds").length());
+    assertEquals("SELECTED", routine.getString("scope"));
+    assertEquals(3, routine.getJSONArray("chapterIds").length());
+    assertEquals("S", routine.getJSONObject("categories").getString("physics-1-3"));
+    assertEquals("S", routine.getJSONObject("categories").getString("chemistry-1-3"));
+    assertEquals("B", routine.getJSONObject("categories").getString("physics-1-1"));
     assertEquals(7, routine.getJSONArray("windows").length());
     assertEquals(240, routine.getInt("dailyLimitMinutes"));
-    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-2").getJSONObject("class").getInt("minutes"));
-    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-2").getJSONObject("class").getInt("minutes"));
+    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-3").getJSONObject("class").getInt("minutes"));
+    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-3").getJSONObject("class").getInt("minutes"));
     waitFor(web, "!document.querySelector('.toast')");
     tap(web, ".personal-more > summary");
     tap(web, ".personal-more > details > summary");
     tap(web, ".personal-tasks .task-check");
     enterField(web, "textarea[aria-label='Day note']", "Native fresh setup note: retain after restart and recovery");
     waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.keys(d.completed).length===1&&Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery');})()");
-    assertEquals("A single segment must not finish a chapter", "0/114", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
+    assertEquals("A single segment must not finish a chapter", "0/3", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
     // Capture the actual edited snapshot atomically. A pending older React effect
     // can briefly write between the readiness probe and this read on a slow device;
     // never compare a stale pre-edit snapshot to the recreated app.
@@ -441,7 +454,7 @@ public class MobileShellInstrumentedTest {
     // No grace loop: the teardown flush must already own this write. A delayed
     // re-read would hide a real loss caused by a late debounce or missing flush.
     assertRetained(web, retained, "Fresh setup lost routine/notes/completion after native recreation");
-    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("allChapters", 114).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
+    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("selectedChapters", routine.getJSONArray("chapterIds").length()).put("scope", routine.getString("scope")).put("dailyNetMinutes", routine.getInt("dailyLimitMinutes")).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
     final WebView recoveryWeb = web;
     InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> recoveryWeb.loadUrl("https://localhost/recovery.html"));

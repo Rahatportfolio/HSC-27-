@@ -2,7 +2,8 @@ import { useMemo, useRef, useState } from 'react';
 import { Check, Plus, Sparkles, X } from 'lucide-react';
 import { usePlanner } from '../context';
 import { applyPersonalRoutine, newPersonalRoutine, DEFAULT_CHAPTER_MINUTES } from '../personalRoutine';
-import { CHAPTERS } from '../data';
+import type { PersonalRoutine } from '../personalRoutine';
+import ChapterSelection from './ChapterSelection';
 import { bn, formatDate, formatDurationBn, toMinutes, toTimeInput } from '../planner';
 import { saveData } from '../storage';
 import { isEnglish, t, weekdayName } from '../i18n';
@@ -49,13 +50,14 @@ export default function QuickStart() {
   const [customEnd, setCustomEnd] = useState('');
   const [hours, setHours] = useState(4);
   const [advanced, setAdvanced] = useState(false);
+  const [chapterDraft, setChapterDraft] = useState<PersonalRoutine>(() => ({ ...newPersonalRoutine('SELECTED'), categories: {} }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const latest = useRef(data); latest.current = data;
   const currentPlan = useRef(plan); currentPlan.current = plan;
 
   const conflict = useMemo(() => slotConflict(selected), [selected]);
-  const canCommit = days.length > 0 && selected.length > 0 && hours >= 1 && hours <= 18 && !conflict && !busy;
+  const canCommit = days.length > 0 && selected.length > 0 && hours >= 1 && hours <= 18 && !conflict && !busy && chapterDraft.chapterIds.length > 0;
 
   const toggleDay = (day: number) => setDays(current => current.includes(day) ? current.filter(value => value !== day) : [...current, day]);
   const toggleSlot = (slot: Slot) => setSelected(current => current.some(item => item.id === slot.id) ? current.filter(item => item.id !== slot.id) : [...current, slot]);
@@ -77,7 +79,7 @@ export default function QuickStart() {
     try {
       const windows = days.flatMap(weekday => selected.map(slot => ({ weekday, startMinute: slot.start, endMinute: slot.end })));
       const routine = {
-        ...newPersonalRoutine('ALL'), // Every chapter uses the same three-session routine.
+        ...chapterDraft,
         windows,
         exclusions: [],
         dailyLimitMinutes: Math.round(hours * 60),
@@ -93,7 +95,7 @@ export default function QuickStart() {
       if (isNativeApp()) { try { await requestNativeNotifications(); } catch { /* the Reminders page can ask again later */ } }
       else if (typeof Notification !== 'undefined' && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch { /* same */ } }
       navigate('today');
-      notify(t('সব অধ্যায়ের রুটিন তৈরি! আজ থেকেই শুরু করো — আর কিছু পূরণ করতে হবে না।', 'Your all-chapter routine is ready! Start today — nothing else to fill in.'), 'success');
+      notify(t('শুধু বাছাই করা অধ্যায়ের রুটিন তৈরি হয়েছে।', 'Your selected-chapter routine is ready.'), 'success');
     } catch (err) {
       setError((err as Error).message);
       notify((err as Error).message, 'error');
@@ -105,14 +107,14 @@ export default function QuickStart() {
   if (advanced) {
     return <div className="quick-start-advanced-wrap">
       <button type="button" className="text-button quick-start-back" onClick={() => setAdvanced(false)}>← {t('সহজ শুরুতে ফিরে যাও', 'Back to quick start')}</button>
-      <PersonalRoutineSetup />
+      <PersonalRoutineSetup initialRoutine={chapterDraft} />
     </div>;
   }
 
   return <section className="card quick-start view" aria-label={t('সহজ শুরু — শুধু সময় দাও', 'Quick start — just tell us when you can study')}>
-    <span className="eyebrow">QUICK START · {t('৩টি প্রশ্ন, ১ মিনিট', '3 QUESTIONS, 1 MINUTE')}</span>
+    <span className="eyebrow">QUICK START · {t('সময় ও অধ্যায় বাছো', 'CHOOSE TIME AND CHAPTERS')}</span>
     <h1 className="quick-start-title">{t('অ্যাপ খুলে পড়া শুরু করো — ফর্ম পূরণ নয়', 'Open the app and just start studying — no form to fill')}</h1>
-    <p className="quick-start-lead">{t('শুধু বলো কোন দিন, কোন সময়ে পড়তে পারবে। কোন অধ্যায়, কত ঘণ্টার ক্লাস, কতটা অনুশীলন, রিমাইন্ডার — সব অ্যাপ নিজেই সাজিয়ে নেবে।', 'Only say which days and times work for you. Which chapters, how long each class, how much practice, reminders — the app arranges everything else by itself.')}</p>
+    <p className="quick-start-lead">{t('কখন পড়বে আর কোন অধ্যায় পড়বে বেছে নাও। শুধু নির্বাচিত অধ্যায় S → A → B ক্রমে সাজানো হবে।', 'Choose your study times and chapters. Only selected chapters are scheduled in S → A → B order.')}</p>
 
     <fieldset className="qs-group">
       <legend><span className="qs-step">১</span>{t('কোন দিনগুলোতে পড়বে?', 'Which days can you study?')}</legend>
@@ -155,11 +157,13 @@ export default function QuickStart() {
       <p className="tiny-muted">{t('বিরতি ও ক্লাস ছাড়া শুধু নেট ঘণ্টার হিসাব। যেকোনো সময় বদলানো যায়।', 'Net hours only, excluding breaks. You can change this any time.')}</p>
     </fieldset>
 
+    <ChapterSelection routine={chapterDraft} onChange={setChapterDraft} />
+    {!chapterDraft.chapterIds.length && <p className="personal-warning">{t('রুটিন বানাতে অন্তত একটি অধ্যায় বেছে নাও।', 'Choose at least one chapter to create the routine.')}</p>}
     <button type="button" className="button primary quick-start-cta" disabled={!canCommit} onClick={() => void commit()}>
       <Sparkles size={20} />{busy ? t('রুটিন বানানো হচ্ছে…', 'Building your routine…') : t('এই সময় দিয়েই রুটিন বানাও — বাকিটা অ্যাপ করবে', 'Build my routine from this — the app does the rest')}
     </button>
     {error && <p className="personal-warning" role="alert">{error}</p>}
-    <p className="quick-start-note"><strong>{t('অ্যাপ যা নিজেই করবে:', 'What the app does by itself:')}</strong> {t('সব অধ্যায় রুটিনে থাকবে। প্রতিটিতে তিন সেশন—ক্লাস, নিজের নোট, সলভিং ও অনুশীলন। প্রতি অধ্যায়ে ≈২০ ঘণ্টা অনুমান; সময় ও শেষের তারিখ তোমার ফাঁকা সময়ের ওপর নির্ভর করবে।', 'includes every chapter in three sessions: class, own notes, and solving plus practice. Each chapter has ≈20 estimated hours; actual allocation and finish depend on your availability.')} {formatDurationBn(DEFAULT_CHAPTER_MINUTES)} {t('প্রতি অধ্যায়', 'per chapter')} · {bn(CHAPTERS.length)} {t('টি অধ্যায়', 'chapters')} · {t('শুরু', 'Starts')} {formatDate(data.settings.startDate, 'long')} · {t('পরে Settings থেকে যেকোনো সময় বদলাতে পারবে।', 'change any of this later in Settings.')}</p>
+    <p className="quick-start-note"><strong>{t('অ্যাপ যা নিজেই করবে:', 'What the app does by itself:')}</strong> {t('শুধু বাছাই করা অধ্যায় থাকবে। প্রতিটিতে তিন সেশন—ক্লাস, নিজের নোট, সলভিং ও অনুশীলন। প্রতি অধ্যায়ে ≈২০ ঘণ্টা অনুমান; সময় ও শেষের তারিখ তোমার ফাঁকা সময়ের ওপর নির্ভর করবে.', 'includes only selected chapters in three sessions: class, own notes, and solving plus practice. Each chapter has ≈20 estimated hours; actual allocation and finish depend on your availability.')} {formatDurationBn(DEFAULT_CHAPTER_MINUTES)} {t('প্রতি অধ্যায়', 'per chapter')} · {bn(chapterDraft.chapterIds.length)} {t('টি অধ্যায়', 'chapters')} · {t('শুরু', 'Starts')} {formatDate(data.settings.startDate, 'long')} · {t('পরে Settings থেকে যেকোনো সময় বদলাতে পারবে।', 'change any of this later in Settings.')}</p>
     <div className="quick-start-footer">
       <button type="button" className="text-button" onClick={() => setAdvanced(true)}>{t('সব আমি নিজে সাজিয়ে নিতে চাই →', 'I want to configure everything myself →')}</button>
     </div>

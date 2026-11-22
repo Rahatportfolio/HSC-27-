@@ -24,8 +24,9 @@ describe('startup compatibility fails safely before opening student data', () =>
     const native = readFileSync('android/app/src/androidTest/java/com/prostuti/hsc27/MobileShellInstrumentedTest.java', 'utf8');
     const firstLaunch = native.slice(native.indexOf('public void a_launch'), native.indexOf('private String syntheticProfile'));
     expect(firstLaunch).toContain('completeFreshSetupAndRecover(scenario, ref.get())');
-    expect(firstLaunch).toContain('Three sessions for every chapter');
-    expect(firstLaunch).toContain('assertEquals(114, routine.getJSONArray("chapterIds").length())');
+    expect(firstLaunch).toContain('Fresh setup must start with zero selected chapters');
+    expect(firstLaunch).toContain('assertEquals(3, routine.getJSONArray("chapterIds").length())');
+    expect(firstLaunch).toContain('assertEquals("SELECTED", routine.getString("scope"))');
     expect(firstLaunch).toContain('personal-workload-editor .personal-shortlist-actions button:nth-child');
     expect(firstLaunch).toContain('new-student-setup-restart');
     expect(firstLaunch).toContain('new-student-independent-recovery');

@@ -15,8 +15,8 @@ import { buildStudyPlan } from '../src/studyPlan';
 import { STORAGE_KEY } from '../src/planner';
 import type { AppData } from '../src/planner';
 import { parseBackup } from '../src/storage';
-import { CHAPTERS, chapterById, subjectById } from '../src/data';
-import { WORK_STAGES, isPersonalTaskComplete, newPersonalRoutine, personalCapacity, personalChapterPairs, personalRoutineHealth, setPersonalStageCompletion, weeklyWindows } from '../src/personalRoutine';
+import { chapterById, subjectById } from '../src/data';
+import { WORK_STAGES, isPersonalTaskComplete, personalCapacity, personalRoutineHealth, setPersonalStageCompletion, weeklyWindows } from '../src/personalRoutine';
 import { PERSONAL_IDS, personalDataFixture } from '../src/test/personalRoutineFixture';
 import { setTaskCompletion } from '../src/study';
 
@@ -88,11 +88,23 @@ async function flow() {
     await page.getByLabel('Maximum continuous session (minutes)', { exact: false }).fill('120');
     await page.getByLabel('Break between sessions (minutes)', { exact: false }).fill('0');
     await page.getByRole('button', { name: 'Next step', exact: true }).click();
-    await page.getByRole('heading', { name: 'Three sessions for every chapter' }).waitFor();
-    await layout(page, 'all chapters'); await accessibility(page, 'all chapters');
+    await page.getByRole('heading', { name: 'Choose chapters', exact: true }).waitFor();
+    assert.equal(await page.locator('.selected-chapter input:checked').count(), 0, 'Nothing is selected by default');
+    await page.getByRole('button', { name: 'Next step', exact: true }).click();
+    assert.match(await page.locator('[role=alert]').innerText(), /Choose at least one chapter/);
+    const firstPair = ['physics-1-3', 'chemistry-1-3'];
+    const selected = [...firstPair, 'physics-1-2', 'physics-1-1'];
+    for (const id of selected) {
+      const row = page.locator(`.selected-chapter[data-chapter-id="${id}"]`);
+      const subject = row.locator('xpath=ancestor::details');
+      if (!await subject.evaluate(element => (element as HTMLDetailsElement).open)) await subject.locator('summary').click();
+      await row.getByRole('checkbox').check();
+    }
+    await page.locator('.selected-chapter[data-chapter-id="physics-1-2"] select').selectOption('A');
+    assert.equal(await page.locator('.selected-chapter input:checked').count(), selected.length);
+    await layout(page, 'selected chapters'); await accessibility(page, 'selected chapters');
     await page.getByRole('button', { name: 'Next step', exact: true }).click();
     const chapter = page.getByLabel('Chapter to configure', { exact: true });
-    const firstPair = personalChapterPairs(newPersonalRoutine('ALL'))[0];
     for (const id of firstPair) {
       await chapter.selectOption(id);
       const lecture = page.locator('.workload-stage').filter({ has: page.getByText('Chapter class', { exact: true }) });
@@ -108,10 +120,11 @@ async function flow() {
     await page.getByRole('button', { name: 'Next step', exact: true }).click();
     assert.match(await page.locator('.personal-preview').innerText(), /SAME pair continues on extra days/);
     await layout(page, 'effective preview'); await accessibility(page, 'effective preview');
-    await page.getByRole('button', { name: 'Save all-chapter routine', exact: true }).click();
+    await page.getByRole('button', { name: 'Save selected-chapter routine', exact: true }).click();
     await page.locator('.personal-home').waitFor();
-    const data = await read(page); assert.equal(data.settings.startDate, '2026-11-20'); assert.equal(data.routineSetupRequired, false); assert.deepEqual(data.personalRoutine!.chapterIds, CHAPTERS.map(chapter => chapter.id));
-    assert.equal(data.personalRoutine!.scope, 'ALL');
+    const data = await read(page); assert.equal(data.settings.startDate, '2026-11-20'); assert.equal(data.routineSetupRequired, false); assert.deepEqual([...data.personalRoutine!.chapterIds].sort(), [...selected].sort());
+    assert.equal(data.personalRoutine!.scope, 'SELECTED');
+    assert.deepEqual(data.personalRoutine!.categories, { 'physics-1-3': 'S', 'chemistry-1-3': 'S', 'physics-1-2': 'A', 'physics-1-1': 'B' });
     for (const id of firstPair) { assert.equal(data.personalRoutine!.workloads[id].class.minutes, 481); assert.equal(data.personalRoutine!.workloads[id].class.source, 'student'); }
     assert.match(await page.locator('.personal-home .backup-nudge').innerText(), /No backup recorded yet/);
     assert.equal(await page.locator('.personal-home .backup-nudge').getByRole('button', { name: 'Save backup', exact: true }).count(), 1);
@@ -126,7 +139,7 @@ async function flow() {
     await page.getByText('Detailed segment schedule', { exact: true }).click();
     await page.locator('.personal-tasks .task-check').first().click();
     await page.waitForFunction(key => Object.keys(JSON.parse(localStorage.getItem(key)!).completed).length > 0, STORAGE_KEY);
-    assert.equal(await page.locator('.personal-goal .card-heading > strong').innerText(), '0/114');
+    assert.equal(await page.locator('.personal-goal .card-heading > strong').innerText(), '0/4');
     await page.getByLabel('Day note', { exact: true }).fill('Keep this dated note after reload');
     await page.reload({ waitUntil: 'networkidle' }); assert.equal(await page.getByLabel('Day note', { exact: true }).inputValue(), 'Keep this dated note after reload');
     await page.locator('.personal-more > summary').click();
@@ -151,11 +164,11 @@ async function flow() {
     const afterGroups = await read(page);
     for (const [id, at] of Object.entries(evidenceBeforeModal)) assert.equal(afterGroups.completed[id], at, 'whole-step confirmation retains original segment stamps');
     await page.keyboard.press('Escape'); await dialog.waitFor({ state: 'hidden' });
-    assert.equal(await page.getByRole('button', { name: /Prepare next phase/ }).count(), 0, 'all-chapter mode has no next phase');
+    assert.equal(await page.getByRole('button', { name: /Prepare next phase/ }).count(), 0, 'selected mode has no separate next phase');
     await context.setOffline(true); await page.reload({ waitUntil: 'networkidle' });
     await page.locator('.personal-home').waitFor(); assert.equal(await page.getByLabel('Day note', { exact: true }).inputValue(), 'Keep this dated note after reload');
     assert.deepEqual((await read(page)).completed, afterGroups.completed);
-    assert.deepEqual(errors, []); results.push({ scenario: '320 first launch → multiple windows/net cap/obligations → all chapters → student durations → bounded overrun → dashboard → segment not chapter → three sessions → offline reload', status: 'passed' });
+    assert.deepEqual(errors, []); results.push({ scenario: '320 first launch → multiple windows/net cap/obligations → explicitly selected S, A and B chapters → student durations → bounded overrun → dashboard → segment not chapter → three sessions → offline reload', status: 'passed' });
   } finally { await context.close(); }
 }
 async function nextPhaseAndUndo() {

@@ -47,7 +47,7 @@ export function forgetStudyBrain(data: AppData): AppData {
   return rest;
 }
 export function brainCurrentPair(data: AppData, plan: Day[]): string[] {
-  return data.personalRoutine ? personalChapterPairs(data.personalRoutine).find(pair => pair.some(id => !isLearningComplete(chapterStage(chapterById[id], data, plan)))) || [] : [];
+  return data.personalRoutine ? personalChapterPairs(data.personalRoutine, data).find(pair => pair.some(id => !isLearningComplete(chapterStage(chapterById[id], data, plan)))) || [] : [];
 }
 /** Uses logged durations only, not assumed video lengths, attendance or intelligence. */
 export function brainStudyPattern(data: AppData, now: Date) {
