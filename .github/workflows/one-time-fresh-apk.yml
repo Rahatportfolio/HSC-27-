@@ -46,10 +46,13 @@ jobs:
       - name: Sign the release and matching instrumentation; discard the key
         run: |
           set -euo pipefail
+          exec > >(tee one-time-build.log) 2>&1
           umask 077
           key_dir=$(mktemp -d)
           trap 'rm -f android/keystore.properties; rm -rf "$key_dir"' EXIT
           export SIGNING_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$SIGNING_PASSWORD"
+          echo 'Generating transient signing key'
           keytool -genkeypair -alias one-time-fresh -keyalg RSA -keysize 3072 -validity 9125 \
             -storetype PKCS12 -keystore "$key_dir/one-time.p12" -storepass:env SIGNING_PASSWORD \
             -keypass:env SIGNING_PASSWORD -dname 'CN=Prostuti Fresh One-time Signing,O=Prostuti,C=BD' -noprompt
@@ -59,16 +62,21 @@ jobs:
           keyAlias=one-time-fresh
           keyPassword=$SIGNING_PASSWORD
           PROPS
+          echo 'Building signed release and instrumentation'
           (cd android && ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PseparateInstall=true --no-daemon --max-workers=2 --stacktrace)
           SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
           AAPT=$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
           SIGNER=$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
+          echo 'Inspecting public signing certificate'
           cert=$(keytool -list -v -keystore "$key_dir/one-time.p12" -storepass:env SIGNING_PASSWORD -alias one-time-fresh | sed -n 's/^[[:space:]]*SHA256: //p' | head -1)
           test -n "$cert"
           cp android/app/build/outputs/apk/release/app-release.apk candidate/prostuti-hsc27-fresh.apk
+          echo 'Inspecting release APK'
           FRESH_ANDROID_CERT_SHA256="$cert" node scripts/check-fresh-apk.mjs candidate/prostuti-hsc27-fresh.apk "$AAPT" "$SIGNER"
+          echo 'Signing instrumentation APK'
           "$SIGNER" sign --ks "$key_dir/one-time.p12" --ks-key-alias one-time-fresh --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD \
             --out candidate/instrumentation.apk android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          echo 'Verifying APK identities and signer equality'
           "$SIGNER" verify --verbose --print-certs candidate/instrumentation.apk > candidate/instrumentation-signature.txt
           "$SIGNER" verify --verbose --print-certs candidate/prostuti-hsc27-fresh.apk > candidate/apk-signature.txt
           APK_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' candidate/apk-signature.txt)
@@ -79,6 +87,13 @@ jobs:
           sha256sum candidate/prostuti-hsc27-fresh.apk > candidate/SHA256SUMS.txt
           # No private key, keystore or password is uploaded. This app cannot
           # be updated in place later, exactly as the user agreed.
+      - name: Surface signing/build failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('one-time-build.log')) core.error(fs.readFileSync('one-time-build.log','utf8').slice(-3500));
       - name: Retain candidate for exact-APK device checks
         uses: actions/upload-artifact@v4
         with:
