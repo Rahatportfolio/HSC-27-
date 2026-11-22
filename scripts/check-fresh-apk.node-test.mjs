@@ -57,3 +57,10 @@ test('requires the final package identity exactly', () => {
   f.expectedPackage = 'com.prostuti.hsc27.selected';
   assert.throws(() => validateFreshApk(f));
 });
+
+test('accepts the explicitly separate custom package only when identity matches', () => {
+  const f = fixture(); f.expectedPackage = 'com.prostuti.hsc27.custom';
+  assert.throws(() => validateFreshApk(f), /APK package mismatch/);
+  f.badging = f.badging.replace('.fresh', '.custom');
+  assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.custom');
+});
