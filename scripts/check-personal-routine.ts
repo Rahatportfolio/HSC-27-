@@ -63,7 +63,7 @@ async function flow() {
     const page = await context.newPage(); const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
     await page.clock.setFixedTime(new Date('2026-11-20T06:00:00Z'));
     await go(page, 'today');
-    assert.equal(await page.locator('main h1').innerText(), 'অ্যাপ খুলে পড়া শুরু করো — ফর্ম পূরণ নয়');
+    assert.equal(await page.locator('main h1').innerText(), 'নিজের মতো পড়ার সময় ঠিক করো');
     await page.getByRole('button', { name: /সব আমি নিজে সাজিয়ে নিতে চাই/ }).click();
     await page.getByRole('heading', { name: 'আগে বলো, কখন পড়তে পারবে?' }).waitFor();
     assert.equal(await page.locator('main h1').innerText(), 'আগে বলো, কখন পড়তে পারবে?');
@@ -79,6 +79,9 @@ async function flow() {
     await page.getByRole('button', { name: 'Add another window', exact: true }).click();
     await page.getByRole('group', { name: 'Study window 2', exact: true }).getByRole('button', { name: 'This time every day', exact: true }).click();
     await page.getByLabel('Window 2 start', { exact: true }).fill('18:00'); await page.getByLabel('Window 2 end', { exact: true }).fill('22:00');
+    await page.getByLabel('Plan start date').fill('2026-11-20');
+    await page.getByLabel('Personal test target').fill('2027-02-01');
+    await page.getByLabel('Personal end target').fill('2027-06-06');
     await page.getByLabel('Daily total study hours (net)', { exact: false }).fill('4');
     await page.getByRole('radio', { name: 'Yes—do not schedule study in these intervals', exact: true }).check();
     await page.getByRole('button', { name: 'This obligation every day', exact: true }).click();

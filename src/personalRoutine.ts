@@ -51,6 +51,8 @@ export interface PersonalRoutine {
   scope: 'S' | 'A' | 'B' | 'C' | 'ALL' | 'SELECTED';
   /** Explicit categories for exactly the selected A/B chapters. */
   categories?: Record<string, 'S' | 'A' | 'B'>;
+  /** New explicit-setup plans never invent missing duration estimates. */
+  manualWorkloads?: boolean;
   /** A later phase never backdates work into the completed S phase. */
   startsOn?: string;
   chapterIds: string[];
@@ -165,6 +167,7 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
     raw.updatedAt.length > 40 || !Number.isFinite(Date.parse(raw.updatedAt))) return fail();
   if (raw.scope === 'SELECTED' && (!object(raw.categories) || Object.keys(raw.categories).length !== raw.chapterIds.length || (raw.chapterIds as string[]).some(id => !Object.hasOwn(raw.categories as object, id) || (chapterById[id].priority === 'A' ? !['S', 'A'].includes(String((raw.categories as Record<string, unknown>)[id])) : (raw.categories as Record<string, unknown>)[id] !== 'B')))) return fail();
   if (raw.categories !== undefined && raw.scope !== 'SELECTED') return fail();
+  if (raw.manualWorkloads !== undefined && typeof raw.manualWorkloads !== 'boolean') return fail();
   if (raw.chapterSpeeds !== undefined && (!object(raw.chapterSpeeds) || Object.keys(raw.chapterSpeeds).length > CHAPTERS.length || Object.entries(raw.chapterSpeeds).some(([id, speed]) => !Object.hasOwn(chapterById, id) || ![1, 1.25, 1.5, 2].includes(speed as number)))) return fail();
   const windows = raw.windows.map(window => {
     if (!object(window) || !integer(window.weekday, 0, 6) || !integer(window.startMinute, 0, 1439) ||
@@ -202,11 +205,12 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
   }
   // A routine must never be saved with an empty plan. Chapters the student never
   // configured receive the editable 20-hour estimate instead of unknown work.
-  for (const id of raw.chapterIds as string[]) if (!workloads[id]) workloads[id] = estimatedChapterWorkload(id);
+  for (const id of raw.chapterIds as string[]) if (!workloads[id]) workloads[id] = raw.manualWorkloads ? defaultChapterWorkload(id) : estimatedChapterWorkload(id);
   // Older profiles were saved with every duration unknown (the plan then rendered
   // blank). Fill only chapters that are still entirely unknown, so a real
   // student/probe/player duration is never overwritten. Settings can edit later.
   for (const [id, work] of Object.entries(workloads)) {
+    if (raw.manualWorkloads) continue;
     if (WORK_STAGES.some(stage => work[stage.id].minutes !== null)) continue;
     const estimate = estimatedChapterWorkload(id);
     const required = WORK_STAGES.filter(stage => !['mcqClass', 'cqClass'].includes(stage.id));
@@ -216,7 +220,7 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
   const exclusions = raw.exclusions === undefined ? undefined : parseAvailabilityList(raw.exclusions);
   if (raw.dailyLimitMinutes !== undefined && !integer(raw.dailyLimitMinutes, 1, 1440)) return fail();
   const history = raw.history === undefined ? undefined : parsePersonalHistory(raw.history);
-  return { version: 1, scope: raw.scope as PersonalRoutine['scope'], chapterIds: [...raw.chapterIds] as string[], windows,
+  return { version: 1, scope: raw.scope as PersonalRoutine['scope'], ...(raw.manualWorkloads !== undefined ? { manualWorkloads: raw.manualWorkloads as boolean } : {}), chapterIds: [...raw.chapterIds] as string[], windows,
     ...(raw.scope === 'SELECTED' ? { categories: { ...raw.categories as Record<string, 'S' | 'A' | 'B'> } } : {}),
     ...(raw.startsOn ? { startsOn: raw.startsOn as string } : {}), ...(exclusions ? { exclusions } : {}), ...(raw.dailyLimitMinutes !== undefined ? { dailyLimitMinutes: raw.dailyLimitMinutes as number } : {}), ...(history ? { history } : {}), playbackSpeed: raw.playbackSpeed as PersonalRoutine['playbackSpeed'],
     sessionMinutes: raw.sessionMinutes, breakMinutes: raw.breakMinutes, workloads, ...(raw.chapterSpeeds ? { chapterSpeeds: { ...raw.chapterSpeeds } as PersonalRoutine['chapterSpeeds'] } : {}), updatedAt: raw.updatedAt };
@@ -308,7 +312,7 @@ export function workloadFor(routine: PersonalRoutine, id: string): ChapterWorklo
   const saved = routine.workloads[id];
   // A chapter whose every duration is still unknown is not "configured": it gets
   // the editable 20-hour default so the plan, progress and picker never render blank.
-  if (!saved || WORK_STAGES.every(stage => !saved[stage.id] || saved[stage.id].minutes === null)) return estimatedChapterWorkload(id);
+  if (!saved || WORK_STAGES.every(stage => !saved[stage.id] || saved[stage.id].minutes === null)) return routine.manualWorkloads ? { ...defaultChapterWorkload(id), ...saved } : estimatedChapterWorkload(id);
   return WORK_STAGES.every(stage => saved[stage.id]) ? saved : { ...defaultChapterWorkload(id), ...saved };
 }
 export function chapterWorkEstimate(routine: PersonalRoutine, id: string) {

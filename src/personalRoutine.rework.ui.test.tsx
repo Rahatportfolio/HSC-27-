@@ -42,6 +42,11 @@ const preview = () => {
   next(); next();
 };
 function windows() {
+  fireEvent.change(screen.getByLabelText('Plan start date'), { target: { value: '2026-11-20' } });
+  fireEvent.change(screen.getByLabelText('Personal test target'), { target: { value: '2027-02-01' } });
+  fireEvent.change(screen.getByLabelText('Personal end target'), { target: { value: '2027-06-06' } });
+  fireEvent.change(screen.getByLabelText(/Maximum continuous session/), { target: { value: '50' } });
+  fireEvent.change(screen.getByLabelText(/Break between sessions/), { target: { value: '10' } });
   fireEvent.click(screen.getByRole('button', { name: 'This time every day' }));
   fireEvent.change(screen.getByLabelText('Window 1 start'), { target: { value: '18:00' } });
   fireEvent.change(screen.getByLabelText('Window 1 end'), { target: { value: '22:00' } });
