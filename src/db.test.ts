@@ -54,3 +54,25 @@ it('reports a failed database reset rather than treating it as successful', asyn
   await expect(clearDatabase()).resolves.toBe(false);
   warning.mockRestore();
 });
+
+it('only confirms a write after the matching row has actually committed', async () => {
+  const { persistToDatabase } = await import('./db');
+  mocks.query.mockResolvedValueOnce({ values: [{ payload: 'newer', updated_at: '2026-11-03T00:00:00.000Z' }] });
+  expect(await persistToDatabase('old', '2026-11-02T00:00:00.000Z')).toBe(false);
+  mocks.query.mockResolvedValueOnce({ values: [{ payload: 'current', updated_at: '2026-11-03T00:00:00.000Z' }] });
+  expect(await persistToDatabase('current', '2026-11-03T00:00:00.000Z')).toBe(true);
+});
+
+it('restores a committed mirror when local payload diverges at the same stamp', async () => {
+  const { SAVED_AT_KEY } = await import('./storage');
+  const { STORAGE_KEY } = await import('./planner');
+  const { restoreFromDatabase } = await import('./db');
+  const stamp = '2026-11-02T00:00:00.000Z';
+  localStorage.setItem(SAVED_AT_KEY, stamp);
+  localStorage.setItem(STORAGE_KEY, 'older local payload');
+  mocks.query.mockResolvedValue({ values: [{ payload: 'committed payload', updated_at: stamp }] });
+  expect(await restoreFromDatabase()).toEqual({ payload: 'committed payload', updatedAt: stamp });
+  expect(localStorage.getItem(STORAGE_KEY)).toBe('older local payload');
+  localStorage.setItem(STORAGE_KEY, 'committed payload');
+  expect(await restoreFromDatabase()).toBeNull();
+});

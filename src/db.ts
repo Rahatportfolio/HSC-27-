@@ -1,4 +1,5 @@
 import { SAVED_AT_KEY } from './storage';
+import { STORAGE_KEY } from './planner';
 import { isNativeApp } from './native';
 
 /**
@@ -52,7 +53,7 @@ export async function restoreFromDatabase(): Promise<{ payload: string; updatedA
     const row = result.values?.[0];
     if (!row || typeof row.payload !== 'string' || typeof row.updated_at !== 'string') return null;
     const localStamp = localStorage.getItem(SAVED_AT_KEY) || '';
-    if (row.updated_at <= localStamp) return null;
+    if (row.updated_at < localStamp || (row.updated_at === localStamp && localStorage.getItem(STORAGE_KEY) === row.payload)) return null;
     // Reading must not mutate storage: callers may have timed out or rejected the snapshot.
     return { payload: row.payload, updatedAt: row.updated_at };
   } catch (error) {
@@ -78,7 +79,11 @@ async function writeSnapshot(payload: string, updatedAt: string): Promise<boolea
     if (!db) return false;
     // INSERT ... SELECT works on older Android SQLite versions too (UPSERT needs SQLite 3.24+).
     await db.run('INSERT OR REPLACE INTO app_state (id, payload, updated_at) SELECT 1, ?, ? WHERE NOT EXISTS (SELECT 1 FROM app_state WHERE id = 1 AND updated_at > ?);', [payload, updatedAt, updatedAt]);
-    return true;
+    // A freshness-guarded INSERT may succeed without writing anything. Never
+    // report durability until the committed row matches this exact snapshot.
+    const result = await db.query('SELECT payload, updated_at FROM app_state WHERE id = 1 LIMIT 1;');
+    const row = result.values?.[0];
+    return row?.payload === payload && row.updated_at === updatedAt;
   } catch (error) {
     console.warn('Could not write the SQLite snapshot.', error);
     return false;
