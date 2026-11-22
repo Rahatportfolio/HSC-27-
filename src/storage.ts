@@ -524,6 +524,46 @@ export function parseBackup(rawText: string): AppData {
   }
   if (result.personalRoutine && result.personalRoutine.scope !== 'S' && result.personalRoutine.scope !== 'ALL' && result.personalRoutine.scope !== 'SELECTED' && !result.personalPhases?.S) throw new Error('A later personal phase must retain its S prerequisite.');
   if (raw.studyBrain !== undefined) result.studyBrain = parseStudyBrain(raw.studyBrain);
+  if (raw.customChapters !== undefined) {
+    result.customChapters = listOf(raw.customChapters, 500, 'নিজের যোগ করা অধ্যায়', item => {
+      if (!object(item) || !nonEmpty(item.id, 180) || !item.id.startsWith('custom-') || !isSubject(item.subject)
+        || (item.paper !== 1 && item.paper !== 2) || !nonEmpty(item.number, 40) || !nonEmpty(item.title, 300)
+        || !['A', 'B', 'C'].includes(String(item.priority)) || !num(item.effort, 1, 10)
+        || !text(item.focus, 1000) || (item.note !== undefined && !text(item.note, 1000))) throw new Error('নিজের যোগ করা অধ্যায়ের তথ্য সঠিক নয়।');
+      return {
+        id: item.id, subject: item.subject as import('./data').SubjectId, paper: item.paper as 1 | 2,
+        number: item.number, title: item.title, priority: item.priority as 'A' | 'B' | 'C',
+        effort: Number(item.effort), focus: item.focus, ...(item.note !== undefined ? { note: item.note } : {}),
+      };
+    });
+    if (new Set(result.customChapters.map(chapter => chapter.id)).size !== result.customChapters.length) throw new Error('নিজের যোগ করা অধ্যায়ে একই ID দুইবার আছে।');
+  }
+  if (raw.chapterOverrides !== undefined) {
+    if (!object(raw.chapterOverrides) || Object.keys(raw.chapterOverrides).length > 1000) throw new Error('অধ্যায়ের পরিবর্তনের তথ্য সঠিক নয়।');
+    const overrides: Record<string, import('./chapterStore').ChapterOverride> = {};
+    for (const [id, override] of Object.entries(raw.chapterOverrides)) {
+      if (!chapterIds.has(id) || !object(override)) throw new Error('অধ্যায়ের পরিবর্তনের তথ্য সঠিক নয়।');
+      const parsed: import('./chapterStore').ChapterOverride = {};
+      if (override.paper !== undefined) {
+        if (override.paper !== 1 && override.paper !== 2) throw new Error('অধ্যায়ের পত্র সঠিক নয়।');
+        parsed.paper = override.paper;
+      }
+      if (override.title !== undefined) {
+        if (!nonEmpty(override.title, 300)) throw new Error('অধ্যায়ের নাম সঠিক নয়।');
+        parsed.title = override.title;
+      }
+      if (override.priority !== undefined) {
+        if (!['A', 'B', 'C'].includes(String(override.priority))) throw new Error('অধ্যায়ের অগ্রাধিকার সঠিক নয়।');
+        parsed.priority = override.priority as 'A' | 'B' | 'C';
+      }
+      if (override.number !== undefined) {
+        if (!nonEmpty(override.number, 40)) throw new Error('অধ্যায়ের নম্বর সঠিক নয়।');
+        parsed.number = override.number;
+      }
+      put(overrides, id, parsed);
+    }
+    result.chapterOverrides = overrides;
+  }
   return resumeUnfinishedPersonalPhase(result);
 }
 

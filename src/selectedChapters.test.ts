@@ -7,6 +7,7 @@ import { buildStudyPlan } from './studyPlan';
 import { parseBackup } from './storage';
 import { actionableReminderPlan } from './notifications';
 import { setTaskCompletion } from './study';
+import { applyChapterAction, mergedChapters } from './chapterStore';
 
 const selected = ['physics-1-3', 'physics-1-2', 'physics-1-1'];
 const categories = { 'physics-1-3': 'S', 'physics-1-2': 'A', 'physics-1-1': 'B' } as const;
@@ -80,4 +81,23 @@ describe('explicitly selected chapters', () => {
     expect(pending.length).toBeGreaterThan(0);
     expect(pending.every(task => task.chapterIds[0] === selected[0])).toBe(true);
   });
+  it('preserves a selected routine and its categories when AI chapter actions are saved and restored', () => {
+    const data = makeData();
+    data.personalRoutine = parsePersonalRoutine({ ...selectedChapterRoutineDraft(data), chapterIds: selected, categories });
+    data.notes[data.settings.startDate] = 'Keep this note';
+    complete(data, selected[0]);
+    const custom = { ...CHAPTERS[0], id: 'custom-physics-example', title: 'My extra chapter' };
+    let updated = applyChapterAction(data, { type: 'add', chapter: custom });
+    updated = applyChapterAction(updated, { type: 'setPriority', chapterId: selected[1], priority: 'C' });
+    const restored = parseBackup(JSON.stringify(updated));
+    expect(mergedChapters(restored).some(chapter => chapter.id === custom.id)).toBe(true);
+    expect(restored.notes).toEqual(data.notes);
+    expect(restored.completed).toEqual(data.completed);
+    expect(restored.personalRoutine!.chapterIds).toEqual(selected);
+    expect(restored.personalRoutine!.categories).toEqual(categories);
+    expect(personalCategory(restored, selected[1])).toBe('A');
+    expect(activePersonalCategory(restored)).toBe('A');
+    expect(buildStudyPlan(restored, data.settings.startDate).flatMap(day => day.tasks).filter(task => task.personalWork).every(task => selected.includes(task.chapterIds[0]))).toBe(true);
+  });
+
 });

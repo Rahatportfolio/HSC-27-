@@ -19,7 +19,7 @@ export const STEPS: { id: ChapterStep; bn: string; en: string }[] = [
   { id: 'boardPractice', bn: 'বোর্ড প্রশ্ন', en: 'Board questions' }, { id: 'revision', bn: 'রিভিশন', en: 'Revision' },
 ];
 export function chapterPriority(chapter: Chapter, data: AppData): Priority {
-  return data.chapterMeta[chapter.id]?.priority || chapter.priority;
+  return data.chapterOverrides?.[chapter.id]?.priority || data.chapterMeta[chapter.id]?.priority || chapter.priority;
 }
 /** Personal routines require every source group. Legacy self-assessments remain historical. */
 export function chapterStage(chapter: Chapter, data: AppData, plan: Day[]): ChapterStage {

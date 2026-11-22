@@ -13,6 +13,8 @@ import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, b
 import { interpretBrainMessage } from '../studyBrainIntents';
 import { answerAiQuestion, checkQuizAnswer, loadQuizQuestion, quizMessage } from '../aiBrain';
 import { aiErrorMessage, chatWithAi, loadAiModel, unloadAiModel, AI_MODEL_SIZE_MB } from '../aiModel';
+import { applyChapterAction, describeChapterAction } from '../chapterStore';
+import type { ChapterAction } from '../chapterStore';
 import type { QuizQuestion } from '../types';
 import type { BrainSuggestion } from '../studyBrain';
 import { brainStatusText } from '../studyBrainText';
@@ -39,7 +41,7 @@ export default function StudyBrainView() {
       description="তোমার সময়, ক্লান্তি, ছোট ফিডব্যাক আর সংরক্ষিত পড়ার রেকর্ড মিলিয়ে পরামর্শ। তোমার হয়ে সিদ্ধান্ত নেওয়া নয়।"
       descriptionEn="Suggestions from your availability, energy, quick feedback and saved study records. You stay in charge."
       action={<span className="brain-local-badge"><ShieldCheck size={16} aria-hidden="true" />{t('ডিভাইসেই · AI', 'ON-DEVICE · AI')}</span>} />
-    <div className="brain-boundary"><BrainCircuit size={21} aria-hidden="true" /><p>{t('স্মার্ট ব্রেইন অল্প কিছু বাংলা, Banglish ও English পড়াশোনার কথা বোঝে। চাইলে ~১৪০ MB AI মডেল ডাউনলোড করে খোলামেলা প্রশ্নও করতে পারো — মডেল ডিভাইসেই চলে, কোনো সার্ভারে তোমার লেখা/তথ্য পাঠায় না, নোট বা স্ক্যান পড়ে না। AI-এর উত্তর ভুল হতে পারে; ভিডিওর দৈর্ঘ্য বা পরীক্ষার নিশ্চয়তা যাচাই করো।', 'The smart brain recognises a small set of Bengali, Banglish and English study requests. Optionally download the ~140 MB AI model for open-ended questions — it runs on this device, sends no text or profile data to a server, and does not read notes or scans. AI answers can be wrong; verify claims about video durations or exam results.')}</p></div>
+    <div className="brain-boundary"><BrainCircuit size={21} aria-hidden="true" /><p>{t('স্মার্ট ব্রেইন অল্প কিছু বাংলা, Banglish ও English পড়াশোনার কথা বোঝে। চাইলে ~১.৬ GB AI মডেল ডাউনলোড করে খোলামেলা প্রশ্নও করতে পারো — মডেল ডিভাইসেই চলে, কোনো সার্ভারে তোমার লেখা/তথ্য পাঠায় না, নোট বা স্ক্যান পড়ে না। AI-এর উত্তর ভুল হতে পারে; ভিডিওর দৈর্ঘ্য বা পরীক্ষার নিশ্চয়তা যাচাই করো।', 'The smart brain recognises a small set of Bengali, Banglish and English study requests. Optionally download the ~1.6 GB AI model for open-ended questions — it runs on this device, sends no text or profile data to a server, and does not read notes or scans. AI answers can be wrong; verify claims about video durations or exam results.')}</p></div>
     {!ready ? <section className="card brain-panel" role="status"><p>{t('আগের ডিভাইসের তথ্য লোড হওয়া পর্যন্ত ব্রেইন বদলানো বন্ধ আছে।', 'Brain changes are paused until saved device data has loaded.')}</p></section> : <>
       {!memory?.enabled ? <section className="card brain-panel brain-welcome">
         <span className="brain-mark" aria-hidden="true"><BrainCircuit size={32} /></span>
@@ -351,13 +353,9 @@ type AiMode = 'brain' | 'model';
 type AiMessage = { role: 'user' | 'assistant'; content: string };
 type ModelState = 'idle' | 'loading' | 'ready' | 'error';
 
-/**
- * AI assistant: the instant built-in smart brain, plus an optional on-device
- * AI model (~140 MB, loaded on demand). Chat text is kept
- * only in this session — never saved, never sent to a server.
- */
+/** Local rule-based assistant and optional on-device model. */
 function AiAssistant() {
-  const { data } = usePlanner();
+  const { data, setData, notify, storageOk, routineSetupReady } = usePlanner();
   const [mode, setMode] = useState<AiMode>('brain');
   const [conversations, setConversations] = useState<Record<AiMode, AiMessage[]>>({ brain: [], model: [] });
   const messages = conversations[mode];
@@ -372,8 +370,12 @@ function AiAssistant() {
   const [modelState, setModelState] = useState<ModelState>('idle');
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
+  const [pendingAction, setPendingAction] = useState<{ action: ChapterAction; text: string } | null>(null);
   const modelEpoch = useRef(0);
   const modelActive = useRef(false);
+
+  // Remove any key saved by the discontinued optional cloud provider.
+  useEffect(() => { try { localStorage.removeItem('hsc27-ai-cloud-config'); } catch { /* storage unavailable */ } }, []);
 
   // A backgrounded WebView can otherwise retain a large WASM model while a
   // replacement activity is already loading another one. Never touch saved data.
@@ -400,7 +402,7 @@ function AiAssistant() {
   }, []);
 
   const switchMode = (next: AiMode) => {
-    if (mode === 'model' && next === 'brain') {
+    if (mode === 'model' && next !== 'model') {
       modelEpoch.current++;
       modelActive.current = false;
       unloadAiModel();
@@ -409,6 +411,7 @@ function AiAssistant() {
     }
     setMode(next);
     setError('');
+    setPendingAction(null);
     if (next === 'model') { setQuiz(null); setPicked(null); }
   };
 
@@ -442,7 +445,7 @@ function AiAssistant() {
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const text = input.trim();
-    if (!text || busy) return;
+    if (!text || busy || pendingAction) return;
     setInput(''); setError('');
     if (mode === 'brain') {
       setMessages(current => [...current, { role: 'user', content: text }]);
@@ -456,10 +459,22 @@ function AiAssistant() {
         } catch {
           setError(t('কুইজ লোড করা যায়নি। সংযোগ পরীক্ষা করে আবার চেষ্টা করো।', 'Could not load the quiz. Check your connection and try again.'));
         } finally { setBusy(false); }
+      } else if (answer.kind === 'action') {
+        setQuiz(null); setPicked(null);
+        setPendingAction({ action: answer.action, text: answer.text });
+        setMessages(current => [...current, { role: 'assistant', content: answer.text }]);
       } else {
         setQuiz(null); setPicked(null);
         setMessages(current => [...current, { role: 'assistant', content: answer.text }]);
       }
+      return;
+    }
+    // Chapter operations remain deterministic and require explicit confirmation;
+    // never treat a language model's prose as proof that a change was made.
+    const localAnswer = answerAiQuestion(text, data);
+    if (localAnswer.kind === 'action') {
+      setMessages(current => [...current, { role: 'user', content: text }, { role: 'assistant', content: localAnswer.text }]);
+      setPendingAction({ action: localAnswer.action, text: localAnswer.text });
       return;
     }
     const history: AiMessage[] = [...messages, { role: 'user', content: text }];
@@ -469,7 +484,13 @@ function AiAssistant() {
     try {
       // A successful conversation alternates user/assistant and ends in a user
       // turn. Keep an odd number so a truncated context still starts with user.
-      const reply = await chatWithAi(history.slice(-11), item => { if (modelEpoch.current === epoch) setProgress(Math.round(item.progress ?? 0)); });
+      const modelHistory = history.reduce<AiMessage[]>((turns, message) => {
+        const last = turns[turns.length - 1];
+        if (last?.role === message.role) turns[turns.length - 1] = { ...last, content: `${last.content}\n${message.content}` };
+        else turns.push(message);
+        return turns;
+      }, []);
+      const reply = await chatWithAi(modelHistory.slice(-11), item => { if (modelEpoch.current === epoch) setProgress(Math.round(item.progress ?? 0)); });
       if (modelEpoch.current !== epoch) throw new Error('AI worker stopped');
       setMessages(current => [...current, { role: 'assistant', content: reply }]);
     } catch (cause) {
@@ -488,17 +509,31 @@ function AiAssistant() {
     setMessages(current => [...current, { role: 'assistant', content: result.text }]);
   };
 
+  const confirmAction = () => {
+    if (!pendingAction || !storageOk || routineSetupReady === false) return;
+    const { action } = pendingAction;
+    setData(current => applyChapterAction(current, action));
+    setPendingAction(null);
+    setMessages(current => [...current, { role: 'assistant', content: t('পরিবর্তন প্রয়োগ করা হয়েছে।', 'Change applied.') }]);
+    notify(t('অধ্যায়ের পরিবর্তন প্রয়োগ করা হয়েছে।', 'Chapter change applied.'));
+  };
+
+  const cancelAction = () => {
+    setPendingAction(null);
+    setMessages(current => [...current, { role: 'assistant', content: t('ঠিক আছে, কিছু বদলাইনি।', 'Okay, nothing changed.') }]);
+  };
+
   const modelReady = modelState === 'ready';
   return <section className="card brain-panel ai-panel" aria-labelledby="ai-title">
-    <h2 id="ai-title"><Bot size={20} aria-hidden="true" />{t('ডিভাইস AI সহকারী', 'On-device AI assistant')}</h2>
-    <p>{t('স্মার্ট ব্রেইন এখনই উত্তর দেয় — অধ্যায়, কুইজ, টিপস, অগ্রগতি। AI মডেল মোডে খোলামেলা প্রশ্ন করতে পারো; মডেল ডিভাইসে চলে, তবে আবার চালু করতে ইন্টারনেট লাগতে পারে। এটি ইংরেজিতে ভালো কাজ করতে পারে; ভুল উত্তর যাচাই করো। চ্যাটের লেখা সেভ হয় না।', 'The smart brain answers instantly — chapters, quizzes, tips, progress. In AI model mode you can ask open-ended questions; the model runs on your device, but restarting it may require internet. It works best in English and can make mistakes. Chat text is never saved.')}</p>
+    <h2 id="ai-title"><Bot size={20} aria-hidden="true" />{t('AI সহকারী', 'AI assistant')}</h2>
+    <p>{t('স্মার্ট ব্রেইন অধ্যায়, কুইজ ও অগ্রগতিতে সাহায্য করে এবং নিশ্চিতি নিয়ে অধ্যায় বদলায়। AI মডেল ফোনেই উত্তর দেয়; chapter command স্মার্ট ব্রেইন বোঝার নিয়মে চলে; প্রথমবার ইন্টারনেট দিয়ে মডেল ডাউনলোড লাগবে। বাংলা ও Banglish-এ ভুল হতে পারে; গুরুত্বপূর্ণ উত্তর যাচাই করো। চ্যাট সেভ হয় না।', 'Smart brain helps with chapters, quizzes and progress, and changes chapters only after confirmation. Chapter commands use the smart brain’s limited rules. The AI model answers on your device; the first download needs internet. It can make mistakes, especially in Bengali or Banglish; verify important answers. Chat is not saved.')}</p>
     <div className="ai-modes" role="group" aria-label={t('AI মোড', 'AI mode')}>
       <button type="button" className={`button secondary ${mode === 'brain' ? 'selected' : ''}`} aria-pressed={mode === 'brain'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('brain')}><BrainCircuit size={16} aria-hidden="true" />{t('স্মার্ট ব্রেইন', 'Smart brain')}</button>
       <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t(`AI মডেল (~${bn(AI_MODEL_SIZE_MB)} MB)`, `AI model (~${AI_MODEL_SIZE_MB} MB)`)}</button>
     </div>
 
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
-      <p>{t(`প্রথমবার প্রায় ${bn(AI_MODEL_SIZE_MB)} MB মডেল এবং চালানোর ফাইল ডাউনলোড হবে (SmolLM2-135M, Q8)। ডিভাইস ও ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The first use downloads an approximately ${AI_MODEL_SIZE_MB} MB model plus runtime files (SmolLM2-135M, Q8). Depending on your device and cache, internet may be needed again.`)}</p>
+      <p>{t(`প্রথমবার প্রায় ${bn(AI_MODEL_SIZE_MB)} MB মডেল এবং চালানোর ফাইল ডাউনলোড হবে (Qwen2.5-1.5B-Instruct, Q8)। ডিভাইস ও ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The first use downloads an approximately ${AI_MODEL_SIZE_MB} MB model plus runtime files (Qwen2.5-1.5B-Instruct, Q8). Depending on your device and cache, internet may be needed again.`)}</p>
       <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। চাইলে স্মার্ট ব্রেইন ব্যবহার করো। স্মার্ট ব্রেইনে ফিরলে বা অ্যাপ আড়ালে গেলে মডেলের মেমোরি ছাড়া হয়; আবার ব্যবহার করতে লোড করতে হবে।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. You can use Smart brain instead. Switching back or backgrounding the app releases the model from memory; using it again requires loading it.')}</p>
       <button type="button" className="button primary" onClick={() => void downloadModel()}><Download size={16} aria-hidden="true" />{t('AI মডেল ডাউনলোড করো', 'Download AI model')}</button>
     </div>}
@@ -522,6 +557,11 @@ function AiAssistant() {
       <button type="button" className="button secondary" disabled={busy} onClick={() => void askQuiz()}><RotateCcw size={16} aria-hidden="true" />{t('আরেকটা কুইজ দাও', 'Give me another quiz')}</button>
     </div>}
 
+    {pendingAction && <div className="ai-download" role="group" aria-label={t('পরিবর্তন নিশ্চিত করো', 'Confirm change')}>
+      <p>{describeChapterAction(pendingAction.action, data)}</p>
+      <button type="button" className="button primary" disabled={!storageOk || routineSetupReady === false} onClick={confirmAction}>{t('হ্যাঁ, করো', 'Yes, do it')}</button>{' '}
+      <button type="button" className="button secondary" onClick={cancelAction}>{t('বাতিল', 'Cancel')}</button>
+    </div>}
     {error && <p className="field-error" role="alert">{error}</p>}
 
     <form className="ai-input" onSubmit={event => void send(event)}>
@@ -529,9 +569,9 @@ function AiAssistant() {
         ? t('জিজ্ঞেস করো — যেমন “পদার্থের অধ্যায়গুলো কী?”, “কুইজ দাও”, “আমার অগ্রগতি?”', 'Ask — for example “What are the Physics chapters?”, “Give me a quiz”, “My progress?”')
         : t('AI-কে জিজ্ঞেস করো (বাংলা / Banglish / English)', 'Ask the AI (Bengali / Banglish / English)')}</label>
       <div>
-        <input id="ai-input" value={input} maxLength={500} autoComplete="off" disabled={busy || (mode === 'model' && !modelReady)} placeholder={t('এখানে লেখো…', 'Type here…')} onChange={event => setInput(event.target.value)} />
-        <button type="submit" className="button primary" disabled={!input.trim() || busy || (mode === 'model' && !modelReady)}>
-          {busy ? <Loader2 size={16} aria-hidden="true" className="ai-spin" /> : <Send size={16} aria-hidden="true" />}
+        <input id="ai-input" value={input} maxLength={500} autoComplete="off" disabled={busy || !!pendingAction || (mode === 'model' && !modelReady)} placeholder={t('এখানে লেখো…', 'Type here…')} onChange={event => setInput(event.target.value)} />
+        <button type="submit" className="button primary" disabled={!input.trim() || busy || !!pendingAction || (mode === 'model' && !modelReady)}>
+          {(busy) ? <Loader2 size={16} aria-hidden="true" className="ai-spin" /> : <Send size={16} aria-hidden="true" />}
           {t('পাঠাও', 'Send')}
         </button>
       </div>

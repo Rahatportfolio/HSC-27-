@@ -3,13 +3,14 @@ import { RECOMMENDED_S_IDS, chapterWorkEstimate, hasFullPersonalAllocation, isPe
 import type { CSSProperties } from 'react';
 import { ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, FileText, LayoutGrid, List, Play, Search, ShieldAlert } from 'lucide-react';
 import { usePlanner } from '../context';
-import { CHAPTERS, PAPER_NAMES, SUBJECTS, syllabusNote, sortChapters, subjectById } from '../data';
+import { PAPER_NAMES, SUBJECTS, syllabusNote, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { bn, chapterFirstDate, chapterStudyTasks, formatDate, formatDurationBn, percent } from '../planner';
 import { chapterMeta } from '../study';
 import { CHAPTER_SCHEDULE, scheduleFor } from '../schedule';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
 import { t } from '../i18n';
+import { mergedChapters, isCustomChapter } from '../chapterStore';
 import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
 import { chapterClassProgress } from '../classes';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, PageHeading, ProgressBar, SubjectIcon } from '../components';
@@ -32,7 +33,10 @@ export default function SyllabusView() {
   const [showFullBlocks, setShowFullBlocks] = useState(true);
   const [openLessons, setOpenLessons] = useState<Record<string, boolean>>({});
 
+  const CHAPTERS = mergedChapters(data);
   const sIds = data.personalRoutine?.scope === 'SELECTED' ? data.personalRoutine.chapterIds.filter(id => data.personalRoutine!.categories?.[id] === 'S') : (data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds || RECOMMENDED_S_IDS;
+  const syllabusPriority = (chapter: (typeof CHAPTERS)[number]) => data.personalRoutine?.scope === 'SELECTED' && data.personalRoutine.categories?.[chapter.id] !== undefined
+    ? data.personalRoutine.categories[chapter.id] : chapterPriority(chapter, data);
   const s = subjectById[subject];
   const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject && (priority !== 'S' || sIds.includes(chapter.id))));
   const done = chapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
@@ -41,7 +45,7 @@ export default function SyllabusView() {
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
 
   const visible = chapters.filter(chapter => (status === 'all' || (status === 'done') === isLearningComplete(chapterStage(chapter, data, plan)))
-    && (priority === 'all' || (priority === 'S' ? sIds.includes(chapter.id) : !sIds.includes(chapter.id) && chapterPriority(chapter, data) === priority))
+    && (priority === 'all' || (priority === 'S' ? sIds.includes(chapter.id) : !sIds.includes(chapter.id) && syllabusPriority(chapter) === priority))
     && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && (!unwatchedOnly || (() => { const progress = chapterClassProgress(data, chapter.id); return progress.total > 0 && progress.watched < progress.total; })())
@@ -148,6 +152,10 @@ export default function SyllabusView() {
               const progress = chapterClassProgress(data, chapter.id);
               const lessonsExpanded = !!openLessons[chapter.id];
 
+              if (isCustomChapter(data, chapter.id)) return <div key={chapter.id} className="chapter-card-item"><div className="chapter-row">
+                <span className="chapter-number">{bn(chapter.number)}</span><span className="chapter-copy"><strong>{chapter.title}</strong><span>{t('নিজের অধ্যায় · AI তালিকায় সংরক্ষিত; রুটিন ও ট্র্যাকিংয়ে এখনো যোগ হয় না।', 'Custom chapter · saved in your AI list; not yet available in routines or tracking.')}</span></span><span className={`priority-badge ${chapter.priority.toLowerCase()}`}>{chapter.priority}</span>
+              </div></div>;
+
               return <div key={chapter.id} className={`chapter-card-item ${isDone ? 'done' : ''} ${isWeak ? 'weak' : ''}`}>
                 <button className={`chapter-row ${isDone ? 'done' : ''} ${isWeak ? 'weak' : ''}`} onClick={() => openChapter(chapter)}>
                   <span className={`chapter-number ${isDone ? 'complete' : ''}`}>{isDone ? <Check size={17} /> : chapter.subject === 'english' || chapter.subject === 'bangla' ? <BookOpen size={15} /> : bn(chapter.number)}</span>
@@ -169,7 +177,7 @@ export default function SyllabusView() {
                     <small>{work ? work.complete ? formatDurationBn(work.minutes) : t('পূর্ণ সময় অজানা', 'Full duration unknown') : `${bn(slot.hours)} ${t('ঘণ্টা', 'hours')}`} · {endDate ? `${data.personalRoutine ? t('শেষ বরাদ্দ', 'last allocation') : t('শেষ','ends')} ${formatDate(endDate)}` : t('সময় বরাদ্দ নেই', 'Not scheduled')}</small>
                     <small className="plan-links">{progress.watched ? `${bn(progress.watched)}/${bn(progress.total)} ${t('ক্লাস দেখা','classes watched')}` : `${bn(progress.total)} ${t('টি সরাসরি ক্লাস','direct classes')}`}</small>
                   </span>}
-                  {sIds.includes(chapter.id) ? <span className="s-category-badge" title={t('A থেকে বাছাই করা ব্যক্তিগত গুরুত্বপূর্ণ তালিকা', 'Personal important shortlist within A')}>S</span> : <span className={`priority-badge ${chapterPriority(chapter, data).toLowerCase()}`}>{chapterPriority(chapter, data)}</span>}
+                  {sIds.includes(chapter.id) ? <span className="s-category-badge" title={t('A থেকে বাছাই করা ব্যক্তিগত গুরুত্বপূর্ণ তালিকা', 'Personal important shortlist within A')}>S</span> : <span className={`priority-badge ${syllabusPriority(chapter).toLowerCase()}`}>{syllabusPriority(chapter)}</span>}
                   <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} ধাপ</small></span>
                   <ChevronRight size={17} />
                 </button>

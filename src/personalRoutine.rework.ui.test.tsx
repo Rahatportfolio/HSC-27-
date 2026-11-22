@@ -19,6 +19,7 @@ import PersonalRoutineSetup from './components/PersonalRoutineSetup';
 import PersonalStudyHome from './views/PersonalStudyHome';
 import PersonalSessionCard from './components/PersonalSessionCard';
 import AnalyticsView from './views/Analytics';
+import SyllabusView from './views/Syllabus';
 import { ChapterModal } from './modals';
 
 beforeEach(() => { localStorage.clear(); setLanguage('en'); window.scrollTo = vi.fn(); });
@@ -271,5 +272,25 @@ describe('upgrade an existing personal routine', () => {
     expect(h.data().personalRoutine!.scope).toBe('S');
     expect(h.data().notes[data.settings.startDate]).toBe('newer');
     expect(h.notify).toHaveBeenCalledWith(expect.stringContaining('Data changed'), 'error');
+  });
+});
+
+
+describe('selected routine and user-managed syllabus integration', () => {
+  it('keeps the selected A category despite a chapter override and shows custom chapters outside the routine', () => {
+    const sId = 'physics-1-3', aId = 'physics-1-2';
+    const data = personalDataFixture([sId, aId]);
+    data.personalRoutine = { ...data.personalRoutine!, scope: 'SELECTED', categories: { [sId]: 'S', [aId]: 'A' } };
+    data.chapterOverrides = { [aId]: { priority: 'C' } };
+    data.customChapters = [{ ...chapterById[aId], id: 'custom-physics-integrated', title: 'Custom chapter in library' }];
+    harness(data, <SyllabusView />);
+    expect(screen.getByText('Custom chapter in library')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'S · important only' }));
+    expect(screen.getByText(chapterById[sId].title)).toBeTruthy();
+    expect(screen.queryByText(chapterById[aId].title)).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'A · Test priority' }));
+    expect(screen.getByText(chapterById[aId].title)).toBeTruthy();
+    expect(screen.queryByText(chapterById[sId].title)).toBeNull();
+    expect(data.personalRoutine.chapterIds).toEqual([sId, aId]);
   });
 });

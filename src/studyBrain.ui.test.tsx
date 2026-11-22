@@ -182,12 +182,36 @@ describe('Study Brain full-strength insights and pre-flight', () => {
 
 
 describe('AI assistant regression checks', () => {
-  const panel = () => screen.getByRole('region', { name: 'On-device AI assistant' });
+  const panel = () => screen.getByRole('region', { name: 'AI assistant' });
   const ask = (text: string) => {
     const input = within(panel()).getByRole('textbox');
     fireEvent.change(input, { target: { value: text } });
     fireEvent.click(within(panel()).getByRole('button', { name: 'Send' }));
   };
+
+  it('requires confirmation before applying a chapter change and allows cancellation', () => {
+    const h = setup(enabled());
+    ask('পদার্থে ‘নতুন অধ্যায়’ নামে অধ্যায় যোগ করো');
+    expect(h.data().customChapters ?? []).toHaveLength(0);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Cancel' }));
+    expect(h.data().customChapters ?? []).toHaveLength(0);
+    ask('পদার্থে ‘নতুন অধ্যায়’ নামে অধ্যায় যোগ করো');
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Yes, do it' }));
+    expect(h.data().customChapters?.[0].title).toBe('নতুন অধ্যায়');
+  });
+
+  it('uses the local action handler in model mode, not model prose', async () => {
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    const chat = vi.spyOn(aiModel, 'chatWithAi');
+    const h = setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    ask('পদার্থে ‘নতুন অধ্যায়’ নামে অধ্যায় যোগ করো');
+    expect(chat).not.toHaveBeenCalled();
+    expect(h.data().customChapters ?? []).toHaveLength(0);
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Yes, do it' }));
+    expect(h.data().customChapters?.[0].title).toBe('নতুন অধ্যায়');
+  });
 
   it('keeps smart-brain and model histories separate and restores failed prompts', async () => {
     vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
