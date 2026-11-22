@@ -1,0 +1,169 @@
+name: Separate Android app
+on:
+  push:
+    branches: ['arena/**']
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'scripts/check-fresh-apk*'
+      - '.github/workflows/fresh-android-apk.yml'
+  pull_request:
+    paths:
+      - 'android/**'
+      - 'src/**'
+      - 'scripts/check-fresh-apk*'
+      - '.github/workflows/fresh-android-apk.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: fresh-android-${{ github.ref }}-${{ github.event_name }}
+  cancel-in-progress: true
+jobs:
+  web-checks:
+    name: Source and release safety checks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run lint && npm run typecheck && npm test && npm run build
+      - run: node --test scripts/*node-test.mjs
+  side-by-side:
+    name: Separate install and data safety (Android ${{ matrix.api }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [34, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci && npm run android:assets && npm run android:sync
+      - name: Build old and separate test packages
+        run: |
+          cd android
+          ./gradlew :app:assembleDebug --no-daemon --max-workers=2
+          cp app/build/outputs/apk/debug/app-debug.apk old-package.apk
+          ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest -PseparateInstall=true --no-daemon --max-workers=2
+          cp app/build/outputs/apk/debug/app-debug.apk separate-package.apk
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          AAPT=$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
+          "$AAPT" dump badging old-package.apk | grep -F "package: name='com.prostuti.hsc27'"
+          "$AAPT" dump badging separate-package.apk | grep -F "package: name='com.prostuti.hsc27.fresh'"
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Install both packages and exercise saved-state recovery
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: |
+            adb shell svc power stayon true
+            adb shell settings put system screen_off_timeout 2147483647
+            adb shell input keyevent KEYCODE_WAKEUP
+            adb shell wm dismiss-keyguard
+            adb shell settings put global hide_error_dialogs 1
+            adb shell settings put global anr_show_background 0
+            adb shell svc wifi disable
+            adb shell svc data disable
+            adb install android/old-package.apk
+            adb install android/separate-package.apk
+            adb shell pm path com.prostuti.hsc27 | grep -q '^package:'
+            adb shell pm path com.prostuti.hsc27.fresh | grep -q '^package:'
+            # Disposable emulator only: prove installing/running the separate
+            # package did not delete or access the original app's private file.
+            adb shell "run-as com.prostuti.hsc27 sh -c 'mkdir -p files; echo original-private-snapshot > files/arena-isolation-check'"
+            adb shell "run-as com.prostuti.hsc27.fresh sh -c 'test ! -e files/arena-isolation-check'"
+            (cd android && ./gradlew :app:connectedDebugAndroidTest -PseparateInstall=true --no-daemon --stacktrace)
+            adb shell pm path com.prostuti.hsc27 | grep -q '^package:'
+            adb shell pm path com.prostuti.hsc27.fresh | grep -q '^package:'
+            adb shell run-as com.prostuti.hsc27 cat files/arena-isolation-check | tr -d '\r' | grep -Fx 'original-private-snapshot'
+            adb shell "run-as com.prostuti.hsc27.fresh sh -c 'test ! -e files/arena-isolation-check'"
+      - name: Preserve device test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: separate-android-results-${{ matrix.api }}
+          path: |
+            android/app/build/reports/androidTests/
+            android/app/build/outputs/androidTest-results/
+          if-no-files-found: ignore
+  signed-release:
+    name: Verified signed separate APK
+    if: github.event_name == 'workflow_dispatch'
+    needs: [web-checks, side-by-side]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      FRESH_KEYSTORE_BASE64: ${{ secrets.FRESH_ANDROID_KEYSTORE_BASE64 }}
+      FRESH_KEYSTORE_PASSWORD: ${{ secrets.FRESH_ANDROID_KEYSTORE_PASSWORD }}
+      FRESH_KEY_ALIAS: ${{ secrets.FRESH_ANDROID_KEY_ALIAS }}
+      FRESH_KEY_PASSWORD: ${{ secrets.FRESH_ANDROID_KEY_PASSWORD }}
+      FRESH_ANDROID_CERT_SHA256: ${{ secrets.FRESH_ANDROID_CERT_SHA256 }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - name: Require persistent separate release signing material
+        run: |
+          for name in FRESH_KEYSTORE_BASE64 FRESH_KEYSTORE_PASSWORD FRESH_KEY_ALIAS FRESH_KEY_PASSWORD FRESH_ANDROID_CERT_SHA256; do
+            if [ -z "${!name}" ]; then echo "::error::Missing required secret $name. No debug fallback is permitted."; exit 1; fi
+          done
+      - run: npm ci && npm run android:assets && npm run android:sync
+      - name: Sign the separate production APK
+        run: |
+          umask 077
+          printf '%s' "$FRESH_KEYSTORE_BASE64" | base64 -d > android/fresh-release.jks
+          cat > android/keystore.properties <<PROPS
+          storeFile=fresh-release.jks
+          storePassword=$FRESH_KEYSTORE_PASSWORD
+          keyAlias=$FRESH_KEY_ALIAS
+          keyPassword=$FRESH_KEY_PASSWORD
+          PROPS
+          cd android
+          ./gradlew :app:assembleRelease -PseparateInstall=true --no-daemon --stacktrace
+      - name: Verify exact APK, identity, signature, certificate and ZIP
+        run: |
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          AAPT=$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
+          SIGNER=$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
+          node scripts/check-fresh-apk.mjs android/app/build/outputs/apk/release/app-release.apk "$AAPT" "$SIGNER"
+          sha256sum android/app/build/outputs/apk/release/app-release.apk > android/app/build/outputs/apk/release/SHA256SUMS.txt
+      - name: Remove private signing material
+        if: always()
+        run: rm -f android/keystore.properties android/fresh-release.jks
+      - uses: actions/upload-artifact@v4
+        with:
+          name: prostuti-fresh-signed-apk
+          path: |
+            android/app/build/outputs/apk/release/app-release.apk
+            android/app/build/outputs/apk/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 30
