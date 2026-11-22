@@ -35,7 +35,7 @@ function availability(start = '18:00', end = '22:00') {
   fireEvent.change(screen.getByLabelText('Window 1 end'), { target: { value: end } });
 }
 const toPreview = () => { next(); next(); next(); };
-const save = () => fireEvent.click(screen.getByRole('button', { name: 'Save this availability & S routine' }));
+const save = () => fireEvent.click(screen.getByRole('button', { name: /Save (this availability & S|all-chapter) routine/ }));
 
 describe('availability-first setup transaction', () => {
   it('asks for availability first, rejects an empty window, then saves a real 20-hour-per-chapter plan without any duration entry', () => {
@@ -52,7 +52,7 @@ describe('availability-first setup transaction', () => {
     // Step 3 is optional: entering no duration must still produce dated work.
     next(); save();
     expect(h.confirm()).toBeUndefined(); expect(h.onDone).toHaveBeenCalledOnce();
-    expect(h.data().routineSetupRequired).toBe(false); expect(h.data().personalRoutine!.scope).toBe('S'); expect(h.data().personalRoutine!.windows).toHaveLength(7);
+    expect(h.data().routineSetupRequired).toBe(false); expect(h.data().personalRoutine!.scope).toBe('ALL'); expect(h.data().personalRoutine!.chapterIds).toHaveLength(114); expect(h.data().personalRoutine!.windows).toHaveLength(7);
     const plan = buildStudyPlan(h.data(), data.settings.startDate);
     expect(plan.flatMap(day => day.tasks).length).toBeGreaterThan(0);
     for (const id of h.data().personalRoutine!.chapterIds) expect(workloadFor(h.data().personalRoutine!, id).class.source).toBe('default24');

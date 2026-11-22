@@ -3,7 +3,7 @@ import { addDays, diffDays, formatDurationBn, formatDate, isValidDate, todayKey 
 import { chapterById } from './data';
 import { t } from './i18n';
 import { parseTaskRangeId } from './taskReferences';
-import { WORK_STAGES, chapterWorkEstimate, isPersonalTaskComplete, personalCapacity, personalChapterPairs, personalFreeWindows, personalStageSourceId, personalUnfinishedRanges, weeklyWindows, workloadFor } from './personalRoutine';
+import { PERSONAL_SESSIONS, WORK_STAGES, chapterWorkEstimate, isPersonalTaskComplete, personalCapacity, personalChapterSpeed, personalChapterPairs, personalFreeWindows, personalStageSourceId, personalUnfinishedRanges, weeklyWindows, workloadFor } from './personalRoutine';
 import type { PersonalWork, WorkStage } from './personalRoutine';
 
 const ordered = (a: Task, b: Task) => a.date.localeCompare(b.date) || a.startMinute - b.startMinute || a.id.localeCompare(b.id);
@@ -113,24 +113,23 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
     if (pair.some(id => !chapterWorkEstimate(routine, id).complete)) break;
     const chapters = pair.map(id => {
       const work = workloadFor(routine, id), estimate = chapterWorkEstimate(routine, id);
-      const pieces = [0, 1].flatMap(half => WORK_STAGES.flatMap(stage => {
+      const pieces = PERSONAL_SESSIONS.flatMap(session => session.stages.flatMap(stageId => {
+        const stage = WORK_STAGES.find(item => item.id === stageId)!;
         const budget = work[stage.id]; if (!budget.minutes) return [];
-        const minutes = Math.ceil(budget.minutes / (stage.media ? routine.playbackSpeed : 1));
-        const middle = primary(stage.id) ? Math.ceil(minutes / 2) : 0;
-        const from = half === 0 ? 0 : middle, to = half === 0 ? middle : minutes; if (to <= from) return [];
+        const minutes = Math.ceil(budget.minutes / (stage.media ? personalChapterSpeed(routine, id) : 1));
+        const from = 0, to = minutes;
         const sourceId = personalStageSourceId(routine, id, stage.id), old = originalFor(sourceId, from);
-        const personalWork: PersonalWork = { stage: stage.id, sourceId, from, to, requiredSources: sourceRequirements(id), chapterMinutes: estimate.minutes, pairDay: half + 1,
+        const personalWork: PersonalWork = { stage: stage.id, sourceId, from, to, requiredSources: sourceRequirements(id), chapterMinutes: estimate.minutes, pairDay: 1,
           rawMinutes: budget.minutes, durationSource: budget.source, ...(budget.url ? { url: budget.url } : {}), ...(stage.media ? { mediaFromSec: from / minutes * budget.minutes * 60, mediaToSec: to / minutes * budget.minutes * 60 } : {}) };
         const task: Task = { id: `smart-part|${encodeURIComponent(sourceId)}|${from}|${to}`, originalTaskId: sourceId, sourceMinutes: minutes,
           date: old?.date || data.settings.startDate, dayIndex: 1, phase: 'learn', subject: chapterById[id].subject,
           kind: stage.id === 'revision' ? 'revision' : stage.media || primary(stage.id) ? 'learn' : 'practice', chapterIds: [id], title: `${chapterById[id].title} · ${t(stage.bn, stage.en)}`,
           detail: old?.detail || t('প্রকৃত উৎসের আলাদা কাজ।', 'Separate work from the actual source.'), startMinute: 0, endMinute: to - from, personalWork };
-        return personalUnfinishedRanges(task, masked).map(range => ({ task, from: range.from, to: range.to, half }));
+        return personalUnfinishedRanges(task, masked).map(range => ({ task, from: range.from, to: range.to }));
       }));
       return { id, pieces };
     });
-    // A completion re-render must not pull tomorrow's second half into spare
-    // room on the first day. Actual earlier work can establish the first day.
+    // Preserve the pair-day label based on actual earlier work.
     const currentSources = new Set(pair.flatMap(id => sourceRequirements(id)));
     const workedDates = [...historical.values(), ...[...allocated.values()].flat()].filter(task => task.personalWork && currentSources.has(task.personalWork.sourceId) && isPersonalTaskComplete(task, data.completed)).map(task => task.date);
     if (!workedDates.length) for (const [id, at] of Object.entries(data.completed)) {
@@ -149,7 +148,7 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
       pairDay = firstWorked && day.date > firstWorked ? Math.max(2, pairDay + 1) : firstWorked && day.date === firstWorked ? 1 : pairDay + 1;
       let windowIndex = 0, cursor = free[0][0], turn = (pairDay - 1) % chapters.length;
       const served = new Set<number>();
-      const eligible = (index: number) => chapters[index].pieces.length && (pairDay > 1 || chapters[index].pieces[0].half === 0);
+      const eligible = (index: number) => chapters[index].pieces.length > 0;
       let guard = 0;
       while (chapters.some((_, index) => eligible(index)) && budget > 0 && windowIndex < free.length && guard++ < 500) {
         while (windowIndex < free.length && cursor >= free[windowIndex][1]) { windowIndex++; if (free[windowIndex]) cursor = Math.max(cursor, free[windowIndex][0]); }

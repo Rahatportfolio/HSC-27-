@@ -14,9 +14,10 @@ import { buildStudyPlan } from './studyPlan';
 import { setTaskCompletion } from './study';
 import { parseBackup } from './storage';
 import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture';
-import { WORK_STAGES, applyPersonalRoutine, nextPersonalRoutine, personalChapterProgress, setPersonalStageCompletion } from './personalRoutine';
+import { WORK_STAGES, applyPersonalRoutine, nextPersonalRoutine, personalChapterProgress, personalStageSourceId, setPersonalStageCompletion } from './personalRoutine';
 import PersonalRoutineSetup from './components/PersonalRoutineSetup';
 import PersonalStudyHome from './views/PersonalStudyHome';
+import PersonalSessionCard from './components/PersonalSessionCard';
 import AnalyticsView from './views/Analytics';
 import { ChapterModal } from './modals';
 
@@ -41,6 +42,61 @@ function windows() {
   fireEvent.change(screen.getByLabelText('Window 1 end'), { target: { value: '22:00' } });
 }
 
+describe('three-session daily workflow', () => {
+  it('groups short allocations by chapter and ticks only the selected date, retaining old evidence on undo', () => {
+    const data = personalDataFixture(); const id = PERSONAL_IDS[0];
+    const plan = buildStudyPlan(data, data.settings.startDate);
+    const parts = plan[0].tasks.filter(task => task.chapterIds.includes(id));
+    const h = harness(data, <PersonalSessionCard />);
+    expect(screen.getAllByRole('heading', { name: '1. Chapter YouTube class' })).toHaveLength(2);
+    const card = screen.getAllByRole('heading', { name: '1. Chapter YouTube class' }).map(el => el.closest('article')!).find(el => el.textContent!.includes(chapterById[id].title))!;
+    expect(within(card).getByRole('link', { name: 'Open YouTube class' })).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Finished this date’s allocation' }));
+    expect(parts.every(task => !!h.data().completed[task.id])).toBe(true);
+    expect(personalChapterProgress(h.data().personalRoutine!, id, h.data().completed).fullyComplete).toBe(false);
+    expect(Object.keys(h.data().completed).every(key => !key.includes(PERSONAL_IDS[1]))).toBe(true);
+    expect(parseBackup(JSON.stringify(h.data())).completed).toEqual(h.data().completed);
+    fireEvent.click(within(card).getByRole('button', { name: /Undo (this date’s work|completed parts on this date)/ }));
+    expect(parts.every(task => !h.data().completed[task.id])).toBe(true);
+  });
+  it('shows retained partial minutes and offers an undo without certifying the whole range', () => {
+    const data = personalDataFixture([PERSONAL_IDS[0]]), id = PERSONAL_IDS[0];
+    const source = personalStageSourceId(data.personalRoutine!, id, 'class');
+    const evidence = `smart-part|${encodeURIComponent(source)}|0|40`;
+    data.completed[evidence] = '2026-11-16T10:00:00.000Z';
+    const h = harness(data, <PersonalSessionCard />);
+    const card = screen.getByRole('heading', { name: '1. Chapter YouTube class' }).closest('article')!;
+    expect(card.textContent).toContain('done 40m');
+    expect(personalChapterProgress(h.data().personalRoutine!, id, h.data().completed).fullyComplete).toBe(false);
+    fireEvent.click(within(card).getByRole('button', { name: 'Undo completed parts on this date' }));
+    expect(h.data().completed[evidence]).toBeUndefined();
+  });
+  it('displays notes without class links and keeps solving links with practice', () => {
+    const data = personalDataFixture([PERSONAL_IDS[0]]);
+    data.personalRoutine!.windows = Array.from({ length: 7 }, (_, weekday) => ({ weekday, startMinute: 480, endMinute: 1320 }));
+    data.personalRoutine!.dailyLimitMinutes = 840;
+    data.personalRoutine!.workloads[PERSONAL_IDS[0]].mcqClass.minutes = 5;
+    data.personalRoutine!.workloads[PERSONAL_IDS[0]].cqClass.minutes = 5;
+    harness(data, <PersonalSessionCard />);
+    const notes = screen.getByRole('heading', { name: '2. Make your own notes' }).closest('article')!;
+    expect(within(notes).queryByRole('link')).toBeNull();
+    const practice = screen.getByRole('heading', { name: '3. CQ/MCQ solving and own practice' }).closest('article')!;
+    expect(within(practice).getByRole('link', { name: 'Open MCQ class' })).toBeTruthy();
+    expect(within(practice).getByRole('link', { name: 'Open CQ class' })).toBeTruthy();
+    expect(within(practice).getByRole('button', { name: 'Find CQ/MCQ classes' })).toBeTruthy();
+  });
+  it('requires an explicit confirmation to certify an entire session and keeps notes pending', () => {
+    const data = personalDataFixture([PERSONAL_IDS[0]]), id = PERSONAL_IDS[0];
+    const h = harness(data, <ChapterModal chapter={chapterById[id]} onClose={vi.fn()} />);
+    const region = screen.getByRole('region', { name: 'Three chapter sessions' });
+    fireEvent.click(within(region).getAllByRole('button', { name: 'Confirm entire session complete' })[0]);
+    expect(Object.keys(h.data().completed)).toHaveLength(0);
+    act(() => h.confirm()!.action());
+    expect(within(region).getByText(/1\/3/)).toBeTruthy();
+    expect(personalChapterProgress(h.data().personalRoutine!, id, h.data().completed).fullyComplete).toBe(false);
+  });
+});
+
 describe('reworked setup UI', () => {
   it('requires explicit daily net hours and an obligation answer, not just a guessed window/default timetable', () => {
     harness({ ...freshData(), routineSetupRequired: true }, <PersonalRoutineSetup />);
@@ -49,7 +105,7 @@ describe('reworked setup UI', () => {
     fireEvent.change(screen.getByLabelText(/Daily total study hours/), { target: { value: '1.5' } }); next();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('First, when can you study?');
     fireEvent.click(screen.getByRole('radio', { name: 'None inside the study windows above' })); next();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('S chapters only');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('All chapters');
   });
   it('saves fixed obligations and daily cap, returns to dashboard and round-trips every minute of the explicit intervals', () => {
     const h = harness({ ...freshData(), routineSetupRequired: true }, <PersonalRoutineSetup />);
@@ -58,7 +114,7 @@ describe('reworked setup UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'This obligation every day' }));
     fireEvent.change(screen.getByLabelText('Obligation 1 start'), { target: { value: '19:00' } });
     fireEvent.change(screen.getByLabelText('Obligation 1 end'), { target: { value: '20:00' } });
-    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save this availability & S routine' }));
+    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save all-chapter routine' }));
     expect(h.navigate).toHaveBeenCalledWith('today');
     expect(h.data().personalRoutine!.dailyLimitMinutes).toBe(90);
     expect(h.data().personalRoutine!.exclusions).toEqual(Array.from({ length: 7 }, (_, weekday) => ({ weekday, startMinute: 1140, endMinute: 1200 })));
@@ -73,7 +129,7 @@ describe('reworked setup UI', () => {
     fireEvent.change(screen.getByLabelText('Plan start date'), { target: { value: '2026-11-21' } });
     expect((screen.getByLabelText('Personal test target') as HTMLInputElement).value).toBe('2027-02-02');
     expect((screen.getByLabelText('Personal end target') as HTMLInputElement).value).toBe('2027-06-07');
-    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save this availability & S routine' }));
+    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save all-chapter routine' }));
     expect(h.data().settings.startDate).toBe('2026-11-21');
   });
   it('explains and excludes retained later-phase chapters from a reopened S editor and its recommended shortlist', () => {
@@ -146,8 +202,9 @@ describe('six-group completion and dashboard UI', () => {
     const h = harness(data, <ChapterModal chapter={chapterById[id]} onClose={vi.fn()} />);
     expect(screen.queryByLabelText('Chapter status')).toBeNull(); expect(screen.queryByRole('button', { name: 'Mark chapter complete' })).toBeNull();
     expect(screen.getByText(/Retained old self-assessment/)).toBeTruthy();
-    const groups = screen.getByRole('region', { name: 'Six required chapter groups' });
-    expect(within(groups).getAllByRole('group')).toHaveLength(6);
+    const groups = screen.getByRole('region', { name: 'Three chapter sessions' });
+    expect(groups.querySelectorAll('fieldset')).toHaveLength(3);
+    for (const summary of within(groups).getAllByText('Individual work and previous progress')) fireEvent.click(summary);
     for (const name of ['Chapter class', 'Textbook reading', 'Note making', 'Own MCQ practice', 'Own CQ practice']) fireEvent.click(within(groups).getByRole('checkbox', { name: new RegExp(`^${name}`) }));
     expect(personalChapterProgress(h.data().personalRoutine!, id, h.data().completed).fullyComplete).toBe(false);
     fireEvent.click(within(groups).getByRole('checkbox', { name: /^Chapter revision/ }));
@@ -183,5 +240,32 @@ describe('six-group completion and dashboard UI', () => {
     expect(h.data().personalRoutine!.scope).toBe('A'); expect(h.data().personalPhases!.S!.chapterIds).toEqual(PERSONAL_IDS);
     expect(h.data().personalRoutine!.startsOn).toBe('2026-11-24'); expect(h.navigate).toHaveBeenCalledWith('today');
     expect(parseBackup(localStorage.getItem(STORAGE_KEY)!)).toEqual(h.data());
+  });
+});
+
+describe('upgrade an existing personal routine', () => {
+  it('asks before adding every chapter and keeps existing notes and evidence', () => {
+    const data = personalDataFixture([PERSONAL_IDS[0]]);
+    data.notes[data.settings.startDate] = 'Keep note';
+    const source = personalStageSourceId(data.personalRoutine!, PERSONAL_IDS[0], 'class');
+    data.completed[source] = '2026-11-20T10:00:00.000Z';
+    const h = harness(data, <PersonalStudyHome />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add all chapters' }));
+    expect(h.data().personalRoutine!.scope).toBe('S');
+    act(() => h.confirm()!.action());
+    expect(h.data().personalRoutine!.scope).toBe('ALL');
+    expect(h.data().personalRoutine!.chapterIds).toHaveLength(114);
+    expect(h.data().notes[data.settings.startDate]).toBe('Keep note');
+    expect(h.data().completed[source]).toBeTruthy();
+    expect(parseBackup(localStorage.getItem(STORAGE_KEY)!)).toEqual(h.data());
+  });
+  it('does not overwrite newer changes while confirmation is open', () => {
+    const data = personalDataFixture(); const h = harness(data, <PersonalStudyHome />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add all chapters' }));
+    act(() => h.setData({ ...data, notes: { ...data.notes, [data.settings.startDate]: 'newer' } }));
+    act(() => h.confirm()!.action());
+    expect(h.data().personalRoutine!.scope).toBe('S');
+    expect(h.data().notes[data.settings.startDate]).toBe('newer');
+    expect(h.notify).toHaveBeenCalledWith(expect.stringContaining('Data changed'), 'error');
   });
 });

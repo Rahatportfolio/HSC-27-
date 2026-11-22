@@ -51,6 +51,19 @@ describe('database restoration while editing', () => {
     await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}').routineSetupRequired).not.toBe(true));
     expect(screen.queryByRole('heading', { name: 'আগে বলো, কখন পড়তে পারবে?' })).toBeNull();
   });
+  it('does not show or edit a potentially stale personal home before the native mirror resolves', async () => {
+    window.location.hash = '#today';
+    const saved = personalDataFixture(); saved.notes[saved.settings.startDate] = 'Newer mirror note';
+    let finish!: (value: { payload: string; updatedAt: string }) => void;
+    mocks.restore.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(personalDataFixture()));
+    render(<App />);
+    expect(screen.getByRole('status').textContent).toContain('Restoring saved device data');
+    expect(document.querySelector('.personal-home')).toBeNull();
+    await act(async () => finish({ payload: JSON.stringify(saved), updatedAt: '2026-11-20T12:00:00Z' }));
+    await waitFor(() => expect(document.querySelector('.personal-home')).not.toBeNull());
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).notes[saved.settings.startDate]).toBe('Newer mirror note'));
+  });
   it('keeps an existing personal view usable but waits before offering an editor during native restoration', async () => {
     const existing = personalDataFixture(); localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
     let finish!: (value: null) => void;

@@ -130,7 +130,9 @@ try {
           ['calendar', '.calendar-day-panel .task-title-button'], ['syllabus', '.chapter-row'], ['exams', '.page-heading .button'],
         ];
         for (const [route, selector] of dialogs) {
-          await go(route); const target = page.locator(selector).first(); await target.click();
+          await go(route);
+          if (profile === 'personal' && selector.endsWith('.task-title-button')) await page.locator('.personal-session details > summary').first().click();
+          const target = page.locator(selector).filter({ visible: true }).first(); await target.click();
           const expansion = selector.endsWith('.task-title-button');
           if (expansion) {
             assert.equal(await target.getAttribute('aria-expanded'), 'true', 'Task details must really expand');
@@ -141,7 +143,8 @@ try {
           else { await page.keyboard.press('Escape'); assert.equal(await page.getByRole('dialog').count(), 0, 'Dialog must close before the next journey'); }
         }
         await go(profile === 'onboarding' ? 'timer' : 'today');
-        await page.locator(profile === 'onboarding' ? '.timer-main-button' : profile === 'personal' ? '.task-preset-timer-btn' : '.preset-launch-btn').first().click();
+        if (profile === 'personal') await page.locator('.personal-session details > summary').first().click();
+        await page.locator(profile === 'onboarding' ? '.timer-main-button' : profile === 'personal' ? '.task-preset-timer-btn' : '.preset-launch-btn').filter({ visible: true }).first().click();
         await page.locator('.live-timer-topbar.running').waitFor();
         for (const width of [320, 360, 390]) {
           await page.setViewportSize({ width, height: 800 }); await assertFits(`running timer ${width}px`);

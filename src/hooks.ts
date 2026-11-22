@@ -6,6 +6,7 @@ import {
   buildExamRoutineLine,
   buildEveningCheckinNotification,
   buildTaskReminderNotification,
+  reminderTasksForDay,
   buildTomorrowPreviewNotification,
 } from './notifications';
 import { t } from './i18n';
@@ -408,7 +409,7 @@ export function useReminders(plan: Day[], data: AppData, enabled: boolean, onOpe
       // 2. Per-session upcoming reminder with session time, today's chapters & remaining work to complete
       let sent: string[] = [];
       try { const v = JSON.parse(localStorage.getItem('hsc27-notified-v1') || '[]'); if (Array.isArray(v)) sent = v.filter(x => typeof x === 'string').slice(-500); } catch { /* empty history */ }
-      const candidates = plan.filter(d => d.date >= addDays(date, -1) && d.date <= date).flatMap(d => d.tasks);
+      const candidates = plan.filter(d => d.date >= addDays(date, -1) && d.date <= date).flatMap(d => data.personalRoutine ? reminderTasksForDay(d.tasks) : d.tasks);
       for (const task of candidates) {
         const startMs = Date.parse(`${task.date}T00:00:00Z`) + task.startMinute * 60000;
         const due = startMs - data.settings.reminderLead * 60000;

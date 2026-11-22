@@ -339,10 +339,7 @@ public class MobileShellInstrumentedTest {
     enterField(web, ".personal-session-options label:first-child input", "60");
     enterField(web, ".personal-session-options label:last-child input", "5");
     tap(web, ".personal-setup-actions button[type='submit']");
-    waitFor(web, "!!document.querySelector('.personal-chapter-choices')");
-    tap(web, ".personal-shortlist-actions .button.ghost");
-    tap(web, ".personal-chapter-choices input[value='physics-1-3']");
-    tap(web, ".personal-chapter-choices input[value='chemistry-1-3']");
+    waitFor(web, "document.querySelector('.personal-setup h2')?.textContent.includes('Three sessions for every chapter')");
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-workload-editor')");
     // Step 3 opens on the editable 20-hour estimate and is optional: the plan is
@@ -376,17 +373,30 @@ public class MobileShellInstrumentedTest {
       { setTimeZone(java.util.TimeZone.getTimeZone("Asia/Dhaka")); }
     }.format(new java.util.Date());
     assertEquals(expectedStart, saved.getJSONObject("settings").getString("startDate"));
-    assertEquals("S", routine.getString("scope"));
-    assertEquals(2, routine.getJSONArray("chapterIds").length());
+    assertEquals("ALL", routine.getString("scope"));
+    assertEquals(114, routine.getJSONArray("chapterIds").length());
     assertEquals(7, routine.getJSONArray("windows").length());
     assertEquals(240, routine.getInt("dailyLimitMinutes"));
-    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-3").getJSONObject("class").getInt("minutes"));
-    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-3").getJSONObject("class").getInt("minutes"));
+    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-2").getJSONObject("class").getInt("minutes"));
+    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-2").getJSONObject("class").getInt("minutes"));
+    waitFor(web, "!document.querySelector('.toast')");
+    tap(web, ".personal-more > summary");
+    tap(web, ".personal-more > details > summary");
     tap(web, ".personal-tasks .task-check");
     enterField(web, "textarea[aria-label='Day note']", "Native fresh setup note: retain after restart and recovery");
     waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.keys(d.completed).length===1&&Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery');})()");
-    assertEquals("A single segment must not finish a chapter", "0/2", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
-    String retained = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
+    assertEquals("A single segment must not finish a chapter", "0/114", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
+    // Capture the actual edited snapshot atomically. A pending older React effect
+    // can briefly write between the readiness probe and this read on a slow device;
+    // never compare a stale pre-edit snapshot to the recreated app.
+    String retained = null;
+    long captureDeadline = SystemClock.elapsedRealtime() + 5000;
+    while (SystemClock.elapsedRealtime() < captureDeadline) {
+      String candidate = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery')&&Object.keys(d.completed).length===1?JSON.stringify([d.personalRoutine,d.notes,d.completed]):'';})()");
+      if (candidate != null && !candidate.equals("\"\"")) { retained = candidate; break; }
+      SystemClock.sleep(50);
+    }
+    assertNotNull("Edited note and completion never reached local storage", retained);
     scenario.recreate();
     AtomicReference<WebView> ref = new AtomicReference<>();
     scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
@@ -395,12 +405,16 @@ public class MobileShellInstrumentedTest {
     // No grace loop: the teardown flush must already own this write. A delayed
     // re-read would hide a real loss caused by a late debounce or missing flush.
     assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
-    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("shortlistChapters", 2).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
+    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("allChapters", 114).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
-    String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
     final WebView recoveryWeb = web;
     InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> recoveryWeb.loadUrl("https://localhost/recovery.html"));
     waitFor(web, "!!document.querySelector('#recovery-profile')");
+    // The old document may finish a save while navigating away. Compare the
+    // exact storage value at the recovery page boundary, and independently
+    // verify it contains the user's edited routine, note, and completion.
+    String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
+    assertEquals("Recovery page lost routine/history before reading", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
     tap(web, "#recovery-profile");
     waitFor(web, "!!document.querySelector('#recovery-json').value");
     assertEquals("Independent native recovery changed raw JSON", raw, evaluate(web, "document.querySelector('#recovery-json').value"));
@@ -423,9 +437,12 @@ public class MobileShellInstrumentedTest {
     // users to finish availability setup. Do not add a production test hook or
     // weaken that rule merely to make this legacy-dashboard regression pass.
     String raw = syntheticProfile(profile);
-    // Replace the durable SQLite mirror together with local storage. Without
-    // this the mount-time restore can re-apply an older real snapshot over the
-    // synthetic profile: a newer mirror stamp wins by design in production.
+    // Leave the old React document before injecting a fixture: its pending
+    // effects must not overwrite the synthetic data during the navigation.
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.loadUrl("https://localhost/recovery.html"));
+    waitFor(web, "!!document.querySelector('#recovery-profile')");
+    // Use a newer local freshness marker so the mount-time restore cannot
+    // replace this synthetic profile with a previous test snapshot.
     // Isolated instrumentation emulator only; no production test hook exists.
     // A fixed literal pattern with zone UTC keeps this independent of host locale.
     long syntheticEpoch = System.currentTimeMillis() + 86_400_000L;
@@ -436,7 +453,7 @@ public class MobileShellInstrumentedTest {
       "localStorage.setItem(stampKey," + JSONObject.quote(iso) + ");" +
       "localStorage.setItem(key," + JSONObject.quote(raw) + ");history.replaceState(null,'','#today');return true;})()"
     );
-    InstrumentationRegistry.getInstrumentation().runOnMainSync(web::reload);
+    InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.loadUrl("https://localhost/#today"));
     waitFor(web, "!!document.querySelector('" + (profile.equals("personal") ? ".personal-home" : ".today-view") + "')");
   }
 
@@ -481,6 +498,10 @@ public class MobileShellInstrumentedTest {
           // otherwise a clock check would silently run against another student's
           // data. This is a real precondition, not an artifact-tolerance retry.
           waitFor(web, "(()=>{const raw=localStorage.getItem('hsc27-prostuti-v1');if(!raw)return false;const actual=JSON.parse(raw),expected=" + syntheticProfile(profile) + ";return JSON.stringify(actual.notes)===JSON.stringify(expected.notes)&&JSON.stringify(actual.completed)===JSON.stringify(expected.completed);})()");
+          if (profile.equals("personal")) {
+            waitFor(web, "!document.querySelector('.toast')");
+            tap(web, ".personal-more > summary");
+          }
           for (int zoom : new int[] {100, 130}) {
             scenario.onActivity(a -> a.getBridge().getWebView().getSettings().setTextZoom(zoom));
             evaluate(web, "document.documentElement.dataset.font='lg';window.scrollTo({top:0,behavior:'instant'});true");

@@ -22,19 +22,23 @@ const minutes = (tasks: ReturnType<typeof buildStudyPlan>[number]['tasks']) => t
 const planFor = (data = personalDataFixture()) => buildStudyPlan(data, data.settings.startDate);
 
 describe('S-only routine final-projection invariants', () => {
-  it('halves teaching/reading/notes first and allocates remaining work plus practice/revision on the second day', () => {
+  it('allocates every source in three-session order without discarding minutes', () => {
     const data = personalDataFixture(); const routine = data.personalRoutine!;
     routine.windows = Array.from({ length: 7 }, (_, weekday) => ({ weekday, startMinute: 480, endMinute: 1320 }));
     routine.dailyLimitMinutes = 840;
     for (const id of PERSONAL_IDS) { routine.workloads[id] = personalWorkload(240, 60, 120); routine.workloads[id].reading.minutes = 20; routine.workloads[id].mcqPractice.minutes = 40; routine.workloads[id].cqPractice.minutes = 60; }
     const plan = planFor(data);
     for (const id of PERSONAL_IDS) for (const stage of WORK_STAGES) {
-      const full = routine.workloads[id][stage.id].minutes!, first = ['class', 'reading', 'notes'].includes(stage.id) ? Math.ceil(full / 2) : 0;
-      expect(minutes(plan[0].tasks.filter(task => task.chapterIds.includes(id) && task.personalWork?.stage === stage.id))).toBe(first);
-      expect(minutes(plan[1].tasks.filter(task => task.chapterIds.includes(id) && task.personalWork?.stage === stage.id))).toBe(full - first);
+      const full = routine.workloads[id][stage.id].minutes!;
+      expect(minutes(plan.slice(0, 2).flatMap(day => day.tasks).filter(task => task.chapterIds.includes(id) && task.personalWork?.stage === stage.id))).toBe(full);
       const ranges = plan.slice(0, 2).flatMap(day => day.tasks).filter(task => task.chapterIds.includes(id) && task.personalWork?.stage === stage.id);
       if (full) { expect(ranges[0].personalWork?.from).toBe(0); expect(ranges.at(-1)?.personalWork?.to).toBe(full); }
       for (let i = 1; i < ranges.length; i++) expect(ranges[i - 1].personalWork?.to).toBe(ranges[i].personalWork?.from);
+    }
+    for (const id of PERSONAL_IDS) {
+      const ordered = plan.flatMap(day => day.tasks).filter(task => task.chapterIds.includes(id)).map(task => task.personalWork!.stage);
+      const stages = WORK_STAGES.map(stage => stage.id);
+      expect(ordered.map(stage => stages.indexOf(stage))).toEqual([...ordered.map(stage => stages.indexOf(stage))].sort((a, b) => a - b));
     }
     expect(plan.slice(2).every(day => day.tasks.length === 0)).toBe(true);
   });
@@ -116,8 +120,8 @@ describe('range evidence, undo, history and downstream integrations', () => {
     const plan = planFor(data); expect(plan[0].tasks.map(task => task.id)).toEqual(oldPlan[0].tasks.map(task => task.id));
     expect(plan[0].tasks.every(task => isPersonalTaskComplete(task, data.completed))).toBe(true);
     expect(isDayComplete(plan[0], data.completed)).toBe(true);
-    expect(buildDailyNotificationDigest(plan, data, plan[0].date).doneMinutes).toBe(244);
-    expect(getStats(plan, data, plan[0].date)).toMatchObject({ done: 6, totalChapters: 2, chapters: 0 });
+    expect(buildDailyNotificationDigest(plan, data, plan[0].date).doneMinutes).toBe(minutes(plan[0].tasks));
+    expect(getStats(plan, data, plan[0].date)).toMatchObject({ done: plan[0].tasks.length, totalChapters: 2, chapters: 0 });
     expect(learningDashboard(data, plan).overall).toMatchObject({ total: 2, completed: 0 });
   });
   it('cannot fall back to legacy all-parts completion when every personal task for a selected S chapter disappears', () => {

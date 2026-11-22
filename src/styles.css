@@ -5279,7 +5279,7 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .duration-probe small{display:block}
 .personal-preview ul{padding-left:22px;line-height:1.9;font-size:14px}
 .personal-preview-day{padding:14px 0;border-bottom:1px solid var(--line)}
-.personal-home>.card{padding:22px;margin-bottom:18px}
+.personal-home>.card,.personal-more>.card{padding:22px;margin-bottom:18px}
 .personal-goal .card-heading>strong{font-size:25px;color:var(--ink);font-family:'DM Sans',sans-serif;white-space:nowrap}
 .personal-goal .s-category-badge{margin-bottom:6px}
 .personal-day-controls{display:grid;grid-template-columns:auto minmax(140px,220px) auto auto;gap:14px;align-items:center;justify-content:start}
@@ -5296,7 +5296,7 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .personal-home .task-topline{flex-wrap:wrap}
 .personal-calendar-goal{padding:22px;margin-bottom:18px}
 @media(max-width:700px){
-  .personal-setup,.personal-home>.card,.personal-settings-summary,.s-shortlist-notice{padding:16px}
+  .personal-setup,.personal-home>.card,.personal-more>.card,.personal-settings-summary,.s-shortlist-notice{padding:16px}
   .personal-steps{grid-template-columns:repeat(2,minmax(0,1fr))}
   .personal-chapter-choices,.personal-pair-grid,.workload-time-row{grid-template-columns:minmax(0,1fr)}
   .personal-setup fieldset{padding:12px}
@@ -5548,3 +5548,11 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .ai-input>div{display:flex;gap:10px}.ai-input input{flex:1;min-width:0}
 .ai-spin{animation:ai-spin 1s linear infinite}@keyframes ai-spin{to{transform:rotate(360deg)}}
 @media(max-width:650px){.brain-meter-row{grid-template-columns:minmax(72px,auto) minmax(0,1fr)}.brain-meter-row>small{grid-column:1 / -1}.brain-preflight-list>li{flex-direction:column;align-items:stretch}.brain-preflight-list .button{width:100%}.ai-input>div{flex-direction:column}.ai-input .button{width:100%}}
+.personal-session-list{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;margin-top:16px}
+.personal-session{min-width:0;padding:15px;border:1px solid var(--line);border-radius:14px;background:var(--surface-soft)}
+.personal-session h3{font-size:15px;margin:0 0 5px}
+.personal-session p{margin:6px 0;font-size:12px}
+.personal-session-actions{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0}
+.personal-session details{margin-top:8px}.personal-session summary{cursor:pointer;color:var(--muted);font-size:12px}
+.personal-more>summary{cursor:pointer;font-weight:600;padding:14px}
+.daily-work-top h1{font-size:20px;line-height:1.4}

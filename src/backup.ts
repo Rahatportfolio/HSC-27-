@@ -167,7 +167,7 @@ export function weekReport(data: AppData, plan: Day[], today = todayKey(), subje
   report.lines = [
     `প্রস্তুতি · সাপ্তাহিক রিপোর্ট (${from} → ${today})`,
     `পড়ার সময়: ${hours} ঘণ্টা · ${sessions.length} সেশন · ${tasksDone} কাজ শেষ`,
-    `${data.personalRoutine ? 'ছয়টি কাজসহ সম্পন্ন অধ্যায়' : 'অধ্যায় এগিয়েছে'}: ${chaptersDone}টি · রিভিশন: ${report.revisions}টি`,
+    `${data.personalRoutine ? 'সব কাজসহ সম্পন্ন অধ্যায়' : 'অধ্যায় এগিয়েছে'}: ${chaptersDone}টি · রিভিশন: ${report.revisions}টি`,
     `MCQ: ${attempts.length}টি · নির্ভুলতা ${report.accuracy}%`,
     cq.length ? `CQ: ${cq.length}টি · গড় ${report.cqAverage}%` : 'CQ: এই সপ্তাহে লেখা হয়নি',
     tests.length ? `টেস্ট: ${tests.length}টি · গড় ${report.testAverage}%` : 'টেস্ট: এই সপ্তাহে হয়নি',
