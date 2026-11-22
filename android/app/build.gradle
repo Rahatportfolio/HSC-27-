@@ -22,9 +22,12 @@ def separateInstall = separateInstallFlag == 'true'
 def categoryInstallFlag = providers.gradleProperty('categoryInstall').orElse('false').get()
 if (!(categoryInstallFlag in ['true', 'false'])) throw new GradleException('categoryInstall must be true or false')
 def categoryInstall = categoryInstallFlag == 'true'
-if (categoryInstall && separateInstall) throw new GradleException('Choose only one separate installation')
-def selectedPackage = categoryInstall ? 'com.prostuti.hsc27.category' : separateInstall ? 'com.prostuti.hsc27.fresh' : 'com.prostuti.hsc27'
-def selectedLabel = categoryInstall ? 'প্রস্তুতি ক্রমানুসারে' : separateInstall ? 'প্রস্তুতি নতুন' : null
+def selectedInstallFlag = providers.gradleProperty('selectedInstall').orElse('false').get()
+if (!(selectedInstallFlag in ['true', 'false'])) throw new GradleException('selectedInstall must be true or false')
+def selectedInstall = selectedInstallFlag == 'true'
+if ([separateInstall, categoryInstall, selectedInstall].count { it } > 1) throw new GradleException('Choose only one separate installation')
+def selectedPackage = selectedInstall ? 'com.prostuti.hsc27.selected' : categoryInstall ? 'com.prostuti.hsc27.category' : separateInstall ? 'com.prostuti.hsc27.fresh' : 'com.prostuti.hsc27'
+def selectedLabel = selectedInstall ? 'প্রস্তুতি বাছাই' : categoryInstall ? 'প্রস্তুতি ক্রমানুসারে' : separateInstall ? 'প্রস্তুতি নতুন' : null
 
 android {
     namespace = "com.prostuti.hsc27"
@@ -63,7 +66,7 @@ android {
             // Play Store uploads prefer an .aab; the APK stays for direct installs.
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
-            } else if (separateInstall || categoryInstall) {
+            } else if (separateInstall || categoryInstall || selectedInstall) {
                 // Never disguise a debug-signed package as the new production app.
                 signingConfig null
             } else {

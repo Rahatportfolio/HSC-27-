@@ -37,3 +37,13 @@ test('requires the separately selected category package exactly', () => {
   f.expectedPackage = 'com.prostuti.hsc27';
   assert.throws(() => validateFreshApk(f));
 });
+
+
+test('requires the selected package identity exactly', () => {
+  const f = fixture(); f.expectedPackage = 'com.prostuti.hsc27.selected';
+  assert.throws(() => validateFreshApk(f));
+  f.badging = f.badging.replace('.fresh', '.selected');
+  assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.selected');
+  f.expectedPackage = 'com.prostuti.hsc27.category';
+  assert.throws(() => validateFreshApk(f));
+});
