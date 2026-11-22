@@ -32,6 +32,7 @@ android {
         versionCode 24
         versionName "2.44.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments = [expectedPackage: separateInstall ? "com.prostuti.hsc27.fresh" : "com.prostuti.hsc27"]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61

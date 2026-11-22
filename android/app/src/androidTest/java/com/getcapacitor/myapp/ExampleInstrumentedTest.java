@@ -21,6 +21,8 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        assertEquals("com.prostuti.hsc27", appContext.getPackageName());
+        String expected = InstrumentationRegistry.getArguments().getString("expectedPackage");
+        assertNotNull("Build must supply the exact expected application ID", expected);
+        assertEquals(expected, appContext.getPackageName());
     }
 }
