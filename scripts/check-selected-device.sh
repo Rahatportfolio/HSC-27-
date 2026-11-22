@@ -22,7 +22,7 @@ adb shell pm path com.prostuti.hsc27.fresh | grep '^package:'
 adb shell pm path com.prostuti.hsc27.selected | grep '^package:'
 adb shell "run-as com.prostuti.hsc27 sh -c 'mkdir -p files; echo original-private-snapshot > files/arena-isolation-check'"
 adb shell "run-as com.prostuti.hsc27.fresh sh -c 'mkdir -p files; echo fresh-private-snapshot > files/arena-isolation-check'"
-adb shell "run-as com.prostuti.hsc27.category sh -c 'mkdir -p files; echo category-private-snapshot > files/arena-isolation-check'
+adb shell "run-as com.prostuti.hsc27.category sh -c 'mkdir -p files; echo category-private-snapshot > files/arena-isolation-check'"
 # -r exposes each test class; -e supplies the exact expected install identity.
 # Instrumentation can run against the non-debuggable APK because the test APK
 # is signed by the same one-time key. Never upload that key.
