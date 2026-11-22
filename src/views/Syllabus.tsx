@@ -178,7 +178,7 @@ export default function SyllabusView() {
                     <small className="plan-links">{progress.watched ? `${bn(progress.watched)}/${bn(progress.total)} ${t('ক্লাস দেখা','classes watched')}` : `${bn(progress.total)} ${t('টি সরাসরি ক্লাস','direct classes')}`}</small>
                   </span>}
                   {sIds.includes(chapter.id) ? <span className="s-category-badge" title={t('A থেকে বাছাই করা ব্যক্তিগত গুরুত্বপূর্ণ তালিকা', 'Personal important shortlist within A')}>S</span> : <span className={`priority-badge ${syllabusPriority(chapter).toLowerCase()}`}>{syllabusPriority(chapter)}</span>}
-                  <span className="chapter-date">{date ? formatDate(date) : 'তারিখ নেই'}<small>{bn(complete)}/{bn(tasks.length)} ধাপ</small></span>
+                  <span className="chapter-date">{date ? formatDate(date) : t('তারিখ নেই', 'No date')}<small>{bn(complete)}/{bn(tasks.length)} {t('ধাপ', 'steps')}</small></span>
                   <ChevronRight size={17} />
                 </button>
 
