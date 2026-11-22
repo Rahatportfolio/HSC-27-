@@ -192,7 +192,8 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
               <select
                 value={task.subject}
                 onChange={e => {
-                  setData(d => editTask(d, task.id, { subject: e.target.value as SubjectId }));
+                  const subject = e.target.value as SubjectId;
+                  setData(d => editTask(d, task.id, { subject }));
                   notify(t('সেশনের বিষয় বদলানো হয়েছে।', 'Session subject updated.'));
                 }}
               >
@@ -258,7 +259,7 @@ export function StudyIllustration() {
 }
 export function LocalNote() {
   const { data, setData, selectedDate, storageOk } = usePlanner();
-  return <section className="card note-card"><div className="card-heading"><h3><NotebookPen size={17} />{t('দিনের ছোট নোট', 'Short day note')}</h3><span className="tiny-muted">{storageOk ? t('অটো সেভ', 'auto-saved') : t('সেভ হয়নি', 'not saved')}</span></div><textarea aria-label={t('দিনের নোট', 'Day note')} placeholder={t('কী শিখলে, কোথায় আটকে গেলে… নিজের জন্য লিখে রাখো।', 'What did you learn? Where did you get stuck? Write it for yourself…')} value={data.notes[selectedDate] || ''} maxLength={10000} onChange={e => setData(d => ({ ...d, notes: { ...d.notes, [selectedDate]: e.target.value } }))} /><span className="note-date">{formatDate(selectedDate, 'long')}</span></section>;
+  return <section className="card note-card"><div className="card-heading"><h3><NotebookPen size={17} />{t('দিনের ছোট নোট', 'Short day note')}</h3><span className="tiny-muted">{storageOk ? t('অটো সেভ', 'auto-saved') : t('সেভ হয়নি', 'not saved')}</span></div><textarea aria-label={t('দিনের নোট', 'Day note')} placeholder={t('কী শিখলে, কোথায় আটকে গেলে… নিজের জন্য লিখে রাখো।', 'What did you learn? Where did you get stuck? Write it for yourself…')} value={data.notes[selectedDate] || ''} maxLength={10000} onChange={e => { const value = e.target.value; setData(d => ({ ...d, notes: { ...d.notes, [selectedDate]: value } })); }} /><span className="note-date">{formatDate(selectedDate, 'long')}</span></section>;
 }
 export function SyllabusNotice() {
   const { data, navigate } = usePlanner();

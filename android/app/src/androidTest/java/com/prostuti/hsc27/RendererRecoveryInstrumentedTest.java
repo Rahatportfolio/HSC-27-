@@ -5,6 +5,9 @@ import static org.junit.Assert.*;
 import android.Manifest;
 import android.os.Build;
 import android.os.SystemClock;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import java.io.File;
 import android.view.View;
 import android.webkit.WebView;
 import android.widget.Button;
@@ -50,6 +53,27 @@ public class RendererRecoveryInstrumentedTest {
     fail("WebView did not become ready: " + expression);
   }
 
+  /** The synthetic injected profile is not a user edit. Before an intentional
+   * renderer kill, prove the native SQLite mirror actually committed it; a DOM
+   * localStorage read alone does not prove its asynchronous disk flush. */
+  private void waitForDurableSyntheticSnapshot() throws Exception {
+    File path = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
+    long end = SystemClock.elapsedRealtime() + 30000;
+    while (SystemClock.elapsedRealtime() < end) {
+      if (path.exists()) {
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(path.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+             Cursor cursor = db.rawQuery("SELECT payload FROM app_state WHERE id = 1", null)) {
+          if (cursor.moveToFirst()) {
+            JSONObject snapshot = new JSONObject(cursor.getString(0));
+            if ("Synthetic native test note — keep through navigation and restart".equals(snapshot.getJSONObject("notes").optString("2026-11-20"))) return;
+          }
+        } catch (Exception ignored) { /* The native plugin may still be opening the DB. */ }
+      }
+      SystemClock.sleep(100);
+    }
+    fail("Synthetic profile never reached the durable SQLite mirror before forced crash");
+  }
+
   @Test public void rendererCrashShowsRecoveryAndRetainsSavedStorage() throws Exception {
     try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
       AtomicReference<MainActivity> first = new AtomicReference<>();
@@ -66,6 +90,7 @@ public class RendererRecoveryInstrumentedTest {
       assertEquals("true", eval(web.get(), "localStorage.setItem('hsc27-prostuti-v1-saved-at','2099-01-01T00:00:00.000Z');localStorage.setItem('hsc27-prostuti-v1'," + JSONObject.quote(profile) + ");localStorage.setItem('renderer-recovery-test','saved synthetic value');true"));
       InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.get().loadUrl("https://localhost/#today"));
       waitFor(web.get(), "!!document.querySelector('.personal-home') && JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).notes['2026-11-20'] === 'Synthetic native test note — keep through navigation and restart'");
+      waitForDurableSyntheticSnapshot();
       scenario.onActivity(a -> a.getBridge().getWebView().loadUrl("chrome://crash"));
 
       long deadline = SystemClock.elapsedRealtime() + 60000;

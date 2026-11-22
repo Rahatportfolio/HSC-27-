@@ -407,10 +407,14 @@ public class MobileShellInstrumentedTest {
     assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
     record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("allChapters", 114).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
-    String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
     final WebView recoveryWeb = web;
     InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> recoveryWeb.loadUrl("https://localhost/recovery.html"));
     waitFor(web, "!!document.querySelector('#recovery-profile')");
+    // The old document may finish a save while navigating away. Compare the
+    // exact storage value at the recovery page boundary, and independently
+    // verify it contains the user's edited routine, note, and completion.
+    String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
+    assertEquals("Recovery page lost routine/history before reading", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
     tap(web, "#recovery-profile");
     waitFor(web, "!!document.querySelector('#recovery-json').value");
     assertEquals("Independent native recovery changed raw JSON", raw, evaluate(web, "document.querySelector('#recovery-json').value"));
@@ -437,9 +441,8 @@ public class MobileShellInstrumentedTest {
     // effects must not overwrite the synthetic data during the navigation.
     InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> web.loadUrl("https://localhost/recovery.html"));
     waitFor(web, "!!document.querySelector('#recovery-profile')");
-    // Replace the durable SQLite mirror together with local storage. Without
-    // this the mount-time restore can re-apply an older real snapshot over the
-    // synthetic profile: a newer mirror stamp wins by design in production.
+    // Use a newer local freshness marker so the mount-time restore cannot
+    // replace this synthetic profile with a previous test snapshot.
     // Isolated instrumentation emulator only; no production test hook exists.
     // A fixed literal pattern with zone UTC keeps this independent of host locale.
     long syntheticEpoch = System.currentTimeMillis() + 86_400_000L;
