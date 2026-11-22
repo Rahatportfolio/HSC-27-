@@ -386,6 +386,8 @@ public class MobileShellInstrumentedTest {
     // prebuilt profile into storage. Long durations must NOT become 80 minutes.
     for (int chapter = 1; chapter <= 2; chapter++) {
       tap(web, ".personal-workload-editor .personal-shortlist-actions button:nth-child(" + chapter + ")");
+      String expectedId = chapter == 1 ? "physics-1-3" : "chemistry-1-3";
+      waitFor(web, "document.querySelector(" + JSONObject.quote("select[aria-label='Chapter to configure']") + ").value===" + JSONObject.quote(expectedId));
       enterField(web, "input[aria-label='Chapter class minutes']", chapter == 1 ? "480" : "420");
       enterField(web, "input[aria-label='Textbook reading minutes']", "30");
       enterField(web, "input[aria-label='Note making minutes']", "20");
@@ -413,8 +415,8 @@ public class MobileShellInstrumentedTest {
     assertEquals(114, routine.getJSONArray("chapterIds").length());
     assertEquals(7, routine.getJSONArray("windows").length());
     assertEquals(240, routine.getInt("dailyLimitMinutes"));
-    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-2").getJSONObject("class").getInt("minutes"));
-    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-2").getJSONObject("class").getInt("minutes"));
+    assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-3").getJSONObject("class").getInt("minutes"));
+    assertEquals(420, routine.getJSONObject("workloads").getJSONObject("chemistry-1-3").getJSONObject("class").getInt("minutes"));
     waitFor(web, "!document.querySelector('.toast')");
     tap(web, ".personal-more > summary");
     tap(web, ".personal-more > details > summary");

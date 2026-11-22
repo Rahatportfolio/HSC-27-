@@ -10,7 +10,7 @@ import { buildStudyPlan } from './studyPlan';
 import { setLanguage } from './i18n';
 import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture';
 import { classDurationReference } from './classDurationReferences';
-import { defaultChapterWorkload, parsePersonalRoutine, personalRoutineHealth, workloadFor } from './personalRoutine';
+import { defaultChapterWorkload, newPersonalRoutine, parsePersonalRoutine, personalRoutineHealth, workloadFor } from './personalRoutine';
 
 beforeEach(() => { localStorage.clear(); setLanguage('en'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -57,6 +57,18 @@ describe('availability-first setup transaction', () => {
     expect(plan.flatMap(day => day.tasks).length).toBeGreaterThan(0);
     for (const id of h.data().personalRoutine!.chapterIds) expect(workloadFor(h.data().personalRoutine!, id).class.source).toBe('default24');
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).personalRoutine.chapterIds).toEqual(h.data().personalRoutine!.chapterIds);
+  });
+  it('shows the actual first pair from the retained S shortlist in an ALL setup', () => {
+    const data = personalDataFixture(['physics-1-2', 'chemistry-1-2']);
+    data.personalPhases = { S: data.personalRoutine! };
+    data.personalRoutine = { ...newPersonalRoutine('ALL'), windows: data.personalRoutine!.windows, dailyLimitMinutes: 240 };
+    setup(data); next(); next();
+    const buttons = screen.getAllByRole('button', { name: /^First pair:/ });
+    expect(buttons).toHaveLength(2);
+    fireEvent.click(buttons[0]);
+    expect((screen.getByLabelText('Chapter to configure') as HTMLSelectElement).value).toBe('physics-1-2');
+    fireEvent.click(buttons[1]);
+    expect((screen.getByLabelText('Chapter to configure') as HTMLSelectElement).value).toBe('chemistry-1-2');
   });
   it('accepts overnight availability on adjacent weekdays without losing a minute or scheduling outside it', () => {
     const h = setup({ ...freshData(), routineSetupRequired: true }); availability('22:00', '02:00'); toPreview(); save();
