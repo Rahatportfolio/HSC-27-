@@ -5,6 +5,8 @@ import static org.junit.Assert.*;
 import android.Manifest;
 import android.app.KeyguardManager;
 import android.graphics.Bitmap;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
@@ -458,6 +460,28 @@ public class MobileShellInstrumentedTest {
     waitFor(web, "!!document.querySelector('.personal-home')");
     assertRetained(web, retained, "Returning from native recovery changed routine/history");
     record("new-student-independent-recovery", new JSONObject().put("exactRawLocalJson", true).put("zeroRecoveryStorageWrites", true).put("returnedToSavedRoutine", true).put("sqliteOrMediaRecoveryCertified", false));
+
+    // In addition to the immediate-recreation check above, prove the app's
+    // actual "auto-saved" indicator is backed by a committed SQLite row.
+    // Do not rely solely on the DOM or on WebView's localStorage cache.
+    String confirmedNote = "Native confirmed save survives recreation";
+    enterField(web, "textarea[aria-label='Day note']", confirmedNote);
+    waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&document.querySelector('.note-card [role=status]')?.textContent==='auto-saved';})()");
+    File dbFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
+    try (SQLiteDatabase db = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+         Cursor cursor = db.rawQuery("SELECT payload FROM app_state WHERE id = 1", null)) {
+      assertTrue("Saved indicator had no SQLite row", cursor.moveToFirst());
+      JSONObject durable = new JSONObject(cursor.getString(0));
+      assertTrue("Saved indicator preceded the durable note", durable.getJSONObject("notes").toString().contains(confirmedNote));
+      assertEquals("Saved indicator lost completion", 1, durable.getJSONObject("completed").length());
+    }
+    scenario.recreate();
+    AtomicReference<WebView> confirmedRef = new AtomicReference<>();
+    scenario.onActivity(a -> confirmedRef.set(a.getBridge().getWebView()));
+    WebView confirmedWeb = confirmedRef.get();
+    waitFor(confirmedWeb, "!!document.querySelector('.personal-home')");
+    assertEquals("SQLite-confirmed note or completion disappeared on recreation", "true", evaluate(confirmedWeb, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&Object.keys(d.completed).length===1;})()"));
+    record("confirmed-device-save-restart", new JSONObject().put("sqliteRowChecked", true).put("noteAndCompletionSurvived", true));
   }
 
   private String syntheticProfile(String profile) throws Exception {
