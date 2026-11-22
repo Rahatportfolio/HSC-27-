@@ -470,6 +470,20 @@ public class MobileShellInstrumentedTest {
       waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&document.querySelector('.note-card [role=status]')?.textContent==='auto-saved';})()");
     } catch (AssertionError timeout) {
       JSONObject details = object(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return {status:document.querySelector('.note-card [role=status]')?.textContent||'',value:document.querySelector('.note-card textarea')?.value||'',notes:d.notes,stamp:localStorage.getItem('hsc27-prostuti-v1-saved-at'),alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent)};})()");
+      File diagFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
+      try (SQLiteDatabase db = SQLiteDatabase.openDatabase(diagFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+           Cursor cursor = db.rawQuery("SELECT payload, updated_at FROM app_state WHERE id = 1", null)) {
+        if (cursor.moveToFirst()) {
+          details.put("databaseStamp", cursor.getString(1));
+          details.put("databaseNotes", new JSONObject(cursor.getString(0)).getJSONObject("notes"));
+        } else details.put("database", "no row");
+      } catch (Exception diagnosticError) { details.put("databaseError", diagnosticError.toString()); }
+      String log = shell("logcat -d -t 3000");
+      StringBuilder warnings = new StringBuilder();
+      for (String line : log.split("\n")) if (line.contains("SQLite snapshot") || line.contains("SQLite mirror") || line.contains("database is slow")) {
+        if (warnings.length() < 2500) warnings.append(line).append("\n");
+      }
+      details.put("sqliteWarnings", warnings.toString());
       throw new AssertionError("Confirmed-save timeout: " + details, timeout);
     }
     File dbFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
