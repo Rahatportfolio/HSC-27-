@@ -371,6 +371,14 @@ public class MobileShellInstrumentedTest {
     enterField(web, "input[aria-label='Window 1 start']", "18:00");
     enterField(web, "input[aria-label='Window 1 end']", "22:00");
     enterField(web, ".personal-availability>.form-label input", "4");
+    java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
+    dateFormat.setTimeZone(java.util.TimeZone.getTimeZone("Asia/Dhaka"));
+    java.util.Calendar dates = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Dhaka"));
+    enterField(web, "input[aria-label='Plan start date']", dateFormat.format(dates.getTime()));
+    dates.add(java.util.Calendar.DAY_OF_YEAR, 180);
+    enterField(web, "input[aria-label='Personal test target']", dateFormat.format(dates.getTime()));
+    dates.add(java.util.Calendar.DAY_OF_YEAR, 180);
+    enterField(web, "input[aria-label='Personal end target']", dateFormat.format(dates.getTime()));
     tap(web, "input[name='fixed-obligations'][value='none']");
     enterField(web, ".personal-session-options label:first-child input", "60");
     enterField(web, ".personal-session-options label:last-child input", "5");
@@ -386,10 +394,9 @@ public class MobileShellInstrumentedTest {
     tap(web, ".selected-chapter[data-chapter-id='chemistry-1-3'] input");
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-workload-editor')");
-    // Step 3 opens on the editable 20-hour estimate and is optional: the plan is
-    // already dated before any minute is typed here.
-    assertEquals("Step 3 must open on the editable 20-hour estimate, not a blank plan", "true",
-        evaluate(web, "(()=>{const t=document.querySelector('.personal-workload-editor').textContent;return t.includes('The schedule already works')&&t.includes('each chapter gets');})()"));
+    // Unknown chapter durations must remain blank until explicitly entered.
+    assertEquals("No chapter duration should be invented", "true",
+        evaluate(web, "document.querySelector(" + JSONObject.quote("input[aria-label='Chapter class minutes']") + ").value===''"));
     // The two first-pair buttons select different chapters without feeding a
     // prebuilt profile into storage. Long durations must NOT become 80 minutes.
     for (int chapter = 1; chapter <= 2; chapter++) {

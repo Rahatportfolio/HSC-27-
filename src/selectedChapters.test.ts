@@ -101,3 +101,18 @@ describe('explicitly selected chapters', () => {
   });
 
 });
+
+describe('manual workload plans', () => {
+  it('round-trips genuinely unknown durations without altering legacy estimates', () => {
+    const data = makeData();
+    const draft = { ...selectedChapterRoutineDraft(data), chapterIds: selected, categories, manualWorkloads: true, workloads: {} };
+    const manual = parsePersonalRoutine(draft);
+    expect(manual.manualWorkloads).toBe(true);
+    expect(WORK_STAGES.every(stage => manual.workloads[selected[0]][stage.id].minutes === null)).toBe(true);
+    const saved = parseBackup(JSON.stringify({ ...data, personalRoutine: manual }));
+    expect(saved.personalRoutine?.workloads[selected[0]].class.minutes).toBeNull();
+    expect(buildStudyPlan(saved, saved.settings.startDate).flatMap(day => day.tasks).filter(task => task.personalWork)).toHaveLength(0);
+    const old = parsePersonalRoutine({ ...draft, manualWorkloads: undefined });
+    expect(old.workloads[selected[0]].class.minutes).toBeGreaterThan(0);
+  });
+});

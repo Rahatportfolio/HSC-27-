@@ -29,6 +29,11 @@ function setup(initial: AppData) {
 }
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
 function availability(start = '18:00', end = '22:00') {
+  fireEvent.change(screen.getByLabelText('Plan start date'), { target: { value: '2026-11-20' } });
+  fireEvent.change(screen.getByLabelText('Personal test target'), { target: { value: '2027-02-01' } });
+  fireEvent.change(screen.getByLabelText('Personal end target'), { target: { value: '2027-06-06' } });
+  fireEvent.change(screen.getByLabelText(/Maximum continuous session/), { target: { value: '50' } });
+  fireEvent.change(screen.getByLabelText(/Break between sessions/), { target: { value: '10' } });
   fireEvent.change(screen.getByLabelText(/Daily total study hours/), { target: { value: '4' } });
   fireEvent.click(screen.getByRole('radio', { name: 'None inside the study windows above' }));
   fireEvent.click(screen.getByRole('button', { name: 'This time every day' }));
@@ -42,24 +47,20 @@ const toPreview = () => { next(); selectFirstIfNeeded(); next(); next(); };
 const save = () => fireEvent.click(screen.getByRole('button', { name: /Save (this availability & S|all-chapter|selected-chapter) routine/ }));
 
 describe('availability-first setup transaction', () => {
-  it('asks for availability first, rejects an empty window, then saves a real 20-hour-per-chapter plan without any duration entry', () => {
+  it('asks for availability first, then preserves unknown chapter durations without inventing work', () => {
     const data = { ...freshData(), routineSetupRequired: true }; const h = setup(data);
     expect(screen.getByRole('heading', { level: 1, name: 'First, when can you study?' })).toBeTruthy();
     expect((screen.getByLabelText('Window 1 start') as HTMLInputElement).value).toBe(''); next();
     expect(screen.getByRole('alert').textContent).toContain('Choose your study days'); expect(h.setData).not.toHaveBeenCalled();
     availability(); next(); selectFirstIfNeeded(); next();
-    // The time step now opens on the editable 20-hour estimate, not on blanks.
-    expect(screen.getByText(/Even if you change nothing, each chapter gets/)).toBeTruthy();
-    // 20 h is stated in the copy (letter/currency spacing is font-dependent,
-    // so assert on the sentence rather than the digits).
-    expect(screen.getByText(/These are estimates, not measured video lengths/)).toBeTruthy();
-    // Step 3 is optional: entering no duration must still produce dated work.
+    expect(screen.getByText(/No durations are assumed/)).toBeTruthy();
+    expect((screen.getByLabelText('Chapter class minutes') as HTMLInputElement).value).toBe('');
     next(); save();
     expect(h.confirm()).toBeUndefined(); expect(h.onDone).toHaveBeenCalledOnce();
     expect(h.data().routineSetupRequired).toBe(false); expect(h.data().personalRoutine!.scope).toBe('SELECTED'); expect(h.data().personalRoutine!.chapterIds).toEqual(['physics-1-3']); expect(h.data().personalRoutine!.windows).toHaveLength(7);
-    const plan = buildStudyPlan(h.data(), data.settings.startDate);
-    expect(plan.flatMap(day => day.tasks).length).toBeGreaterThan(0);
-    for (const id of h.data().personalRoutine!.chapterIds) expect(workloadFor(h.data().personalRoutine!, id).class.source).toBe('default24');
+    const plan = buildStudyPlan(h.data(), h.data().settings.startDate);
+    expect(plan.flatMap(day => day.tasks).filter(task => task.personalWork)).toHaveLength(0);
+    expect(workloadFor(h.data().personalRoutine!, 'physics-1-3').class.minutes).toBeNull();
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).personalRoutine.chapterIds).toEqual(h.data().personalRoutine!.chapterIds);
   });
   it('lets an old ALL plan explicitly switch to only chosen chapters without losing notes', () => {

@@ -1,13 +1,13 @@
 import { useMemo, useRef, useState } from 'react';
-import { Check, Plus, Sparkles, X } from 'lucide-react';
+import { Plus, Sparkles, X } from 'lucide-react';
 import { usePlanner } from '../context';
-import { applyPersonalRoutine, newPersonalRoutine, DEFAULT_CHAPTER_MINUTES } from '../personalRoutine';
+import { applyPersonalRoutine, newPersonalRoutine, personalScheduleDateError } from '../personalRoutine';
 import type { PersonalRoutine } from '../personalRoutine';
 import ChapterSelection from './ChapterSelection';
-import { bn, formatDate, formatDurationBn, toMinutes, toTimeInput } from '../planner';
+import { toMinutes, toTimeInput } from '../planner';
 import { saveData } from '../storage';
-import { isEnglish, t, weekdayName } from '../i18n';
-import { isNativeApp, requestNativeNotifications } from '../native';
+import { t, weekdayName } from '../i18n';
+import { applyScheduleSettings } from '../reschedule';
 import PersonalRoutineSetup from './PersonalRoutineSetup';
 
 interface Slot {
@@ -19,16 +19,6 @@ interface Slot {
   end: number;
 }
 
-const PRESET_SLOTS: Slot[] = [
-  { id: 'dawn', label: 'সকাল ৬:০০–৭:৩০', labelEn: '6:00–7:30 AM', start: 6 * 60, end: 7 * 60 + 30 },
-  { id: 'afternoon', label: 'বিকেল ৪:৩০–৬:০০', labelEn: '4:30–6:00 PM', start: 16 * 60 + 30, end: 18 * 60 },
-  { id: 'evening', label: 'সন্ধ্যা ৭:০০–৮:৩০', labelEn: '7:00–8:30 PM', start: 19 * 60, end: 20 * 60 + 30 },
-  { id: 'night', label: 'রাত ৮:০০–১০:০০', labelEn: '8:00–10:00 PM', start: 20 * 60, end: 22 * 60 },
-  { id: 'late', label: 'রাত ৯:৩০–১১:৩০', labelEn: '9:30–11:30 PM', start: 21 * 60 + 30, end: 23 * 60 + 30 },
-];
-
-/** Every quick-start time template keeps the same shape so presets and custom slots mix freely. */
-const HOUR_CHOICES = [2, 3, 4, 5, 6, 8];
 /** Bangladesh school week: Saturday–Thursday, Friday off. */
 const SCHOOL_WEEK = [6, 0, 1, 2, 3, 4];
 const ALL_DAYS = [6, 0, 1, 2, 3, 4, 5];
@@ -44,23 +34,32 @@ function slotConflict(slots: Slot[]): boolean {
 
 export default function QuickStart() {
   const { data, plan, today, setData, setSelectedDate, navigate, notify } = usePlanner();
-  const [days, setDays] = useState<number[]>(SCHOOL_WEEK);
-  const [selected, setSelected] = useState<Slot[]>([PRESET_SLOTS[3]]); // রাত ৮:০০–১০:০০
+  const [days, setDays] = useState<number[]>([]);
+  const [selected, setSelected] = useState<Slot[]>([]);
   const [customStart, setCustomStart] = useState('');
   const [customEnd, setCustomEnd] = useState('');
-  const [hours, setHours] = useState(4);
+  const [hours, setHours] = useState('');
+  const [session, setSession] = useState('');
+  const [breakLength, setBreakLength] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [testDate, setTestDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [reminders, setReminders] = useState(false);
   const [advanced, setAdvanced] = useState(false);
-  const [chapterDraft, setChapterDraft] = useState<PersonalRoutine>(() => ({ ...newPersonalRoutine('SELECTED'), categories: {} }));
+  const [chapterDraft, setChapterDraft] = useState<PersonalRoutine>(() => ({ ...newPersonalRoutine('SELECTED'), categories: {}, manualWorkloads: true }));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const latest = useRef(data); latest.current = data;
   const currentPlan = useRef(plan); currentPlan.current = plan;
 
   const conflict = useMemo(() => slotConflict(selected), [selected]);
-  const canCommit = days.length > 0 && selected.length > 0 && hours >= 1 && hours <= 18 && !conflict && !busy && chapterDraft.chapterIds.length > 0;
+  const dates = { ...data.settings, startDate, testExamDate: testDate, examDate: endDate };
+  const canCommit = days.length > 0 && selected.length > 0 && hours !== '' && Math.round(Number(hours) * 60) >= 1 && Number(hours) <= 24
+    && session !== '' && Number.isInteger(Number(session)) && Number(session) >= 15 && Number(session) <= 120
+    && breakLength !== '' && Number.isInteger(Number(breakLength)) && Number(breakLength) >= 0 && Number(breakLength) <= 60
+    && !personalScheduleDateError(dates) && !conflict && !busy && chapterDraft.chapterIds.length > 0;
 
   const toggleDay = (day: number) => setDays(current => current.includes(day) ? current.filter(value => value !== day) : [...current, day]);
-  const toggleSlot = (slot: Slot) => setSelected(current => current.some(item => item.id === slot.id) ? current.filter(item => item.id !== slot.id) : [...current, slot]);
   const addCustomSlot = () => {
     if (!customStart || !customEnd) return;
     const start = toMinutes(customStart); const end = toMinutes(customEnd);
@@ -82,18 +81,16 @@ export default function QuickStart() {
         ...chapterDraft,
         windows,
         exclusions: [],
-        dailyLimitMinutes: Math.round(hours * 60),
+        dailyLimitMinutes: Math.round(Number(hours) * 60),
+        sessionMinutes: Number(session), breakMinutes: Number(breakLength),
         updatedAt: new Date().toISOString(),
       };
-      const applied = applyPersonalRoutine(latest.current, routine, { plan: currentPlan.current, asOf: today });
-      // Turn on reminders so today's and tomorrow's classes arrive without any extra setup.
-      const nextData = { ...applied, settings: { ...applied.settings, reminderEnabled: true } };
+      const withDates = applyScheduleSettings(latest.current, { ...latest.current.settings, startDate, testExamDate: testDate, examDate: endDate });
+      const applied = applyPersonalRoutine(withDates, routine, { plan: currentPlan.current, asOf: today });
+      const nextData = { ...applied, settings: { ...applied.settings, reminderEnabled: reminders } };
       if (!saveData(nextData, true)) throw new Error(t('সেভ হয়নি—আগের তথ্য অক্ষত আছে। ফোনের স্টোরেজ যাচাই করো।', 'Not saved—your existing data is unchanged. Check the phone storage.'));
       setData(nextData);
       setSelectedDate(today >= nextData.settings.startDate && today < nextData.settings.examDate ? today : nextData.settings.startDate);
-      // Ask for notification permission at the natural moment on both shells.
-      if (isNativeApp()) { try { await requestNativeNotifications(); } catch { /* the Reminders page can ask again later */ } }
-      else if (typeof Notification !== 'undefined' && Notification.permission === 'default') { try { await Notification.requestPermission(); } catch { /* same */ } }
       navigate('today');
       notify(t('শুধু বাছাই করা অধ্যায়ের রুটিন তৈরি হয়েছে।', 'Your selected-chapter routine is ready.'), 'success');
     } catch (err) {
@@ -113,7 +110,7 @@ export default function QuickStart() {
 
   return <section className="card quick-start view" aria-label={t('সহজ শুরু — শুধু সময় দাও', 'Quick start — just tell us when you can study')}>
     <span className="eyebrow">QUICK START · {t('সময় ও অধ্যায় বাছো', 'CHOOSE TIME AND CHAPTERS')}</span>
-    <h1 className="quick-start-title">{t('অ্যাপ খুলে পড়া শুরু করো — ফর্ম পূরণ নয়', 'Open the app and just start studying — no form to fill')}</h1>
+    <h1 className="quick-start-title">{t('নিজের মতো পড়ার সময় ঠিক করো', 'Set up study time your way')}</h1>
     <p className="quick-start-lead">{t('কখন পড়বে আর কোন অধ্যায় পড়বে বেছে নাও। শুধু নির্বাচিত অধ্যায় S → A → B ক্রমে সাজানো হবে।', 'Choose your study times and chapters. Only selected chapters are scheduled in S → A → B order.')}</p>
 
     <fieldset className="qs-group">
@@ -132,12 +129,6 @@ export default function QuickStart() {
 
     <fieldset className="qs-group">
       <legend><span className="qs-step">২</span>{t('কোন সময়গুলো তোমার?', 'Which time slots are yours?')}</legend>
-      <div className="qs-slots" role="group" aria-label={t('সময়ের প্রিসেট বাছো', 'Pick time presets')}>
-        {PRESET_SLOTS.map(slot => {
-          const active = selected.some(item => item.id === slot.id);
-          return <button key={slot.id} type="button" className={`qs-slot ${active ? 'active' : ''}`} aria-pressed={active} onClick={() => toggleSlot(slot)}>{active && <Check size={13} />}{isEnglish() ? slot.labelEn : slot.label}</button>;
-        })}
-      </div>
       <div className="qs-custom-row">
         <label className="qs-custom-time">{t('শুরুর সময়', 'From')}<input type="time" aria-label={t('নিজের সময়ের শুরুর মুহূর্ত', 'Custom slot start time')} value={customStart} onChange={e => setCustomStart(e.target.value)} /></label>
         <label className="qs-custom-time">{t('শেষের সময়', 'To')}<input type="time" aria-label={t('নিজের সময়ের শেষ মুহূর্ত', 'Custom slot end time')} value={customEnd} onChange={e => setCustomEnd(e.target.value)} /></label>
@@ -151,19 +142,26 @@ export default function QuickStart() {
 
     <fieldset className="qs-group">
       <legend><span className="qs-step">৩</span>{t('দিনে মোট কত ঘণ্টা পড়বে?', 'How many study hours per day, net?')}</legend>
-      <div className="qs-hours" role="group" aria-label={t('দৈনিক ঘণ্টার সংখ্যা বাছো', 'Choose daily hours')}>
-        {HOUR_CHOICES.map(value => <button key={value} type="button" className={`qs-hour ${hours === value ? 'active' : ''}`} aria-pressed={hours === value} onClick={() => setHours(value)}>{bn(value)} {t('ঘণ্টা', 'hrs')}</button>)}
-      </div>
-      <p className="tiny-muted">{t('বিরতি ও ক্লাস ছাড়া শুধু নেট ঘণ্টার হিসাব। যেকোনো সময় বদলানো যায়।', 'Net hours only, excluding breaks. You can change this any time.')}</p>
+      <label className="form-label">{t('তোমার ঘণ্টা', 'Your hours')}<input type="number" min="0.02" max="24" step="any" value={hours} onChange={event => setHours(event.target.value)} /></label>
+      <label className="form-label">{t('একটানা সেশন (মিনিট)', 'Maximum continuous session (minutes)')}<input type="number" min="15" max="120" value={session} onChange={event => setSession(event.target.value)} /></label>
+      <label className="form-label">{t('সেশনের মাঝে বিরতি (মিনিট)', 'Break between sessions (minutes)')}<input type="number" min="0" max="60" value={breakLength} onChange={event => setBreakLength(event.target.value)} /></label>
+      <p className="tiny-muted">{t('নিজে ঠিক করো; বিরতি না চাইলে ০ দাও।', 'Enter your own values; enter 0 if you do not want a break.')}</p>
     </fieldset>
 
+    <fieldset className="qs-group"><legend>{t('নিজের পরিকল্পনার তারিখ', 'Your planning dates')}</legend>
+      <label>{t('পরিকল্পনার শুরুর তারিখ', 'Plan start date')}<input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} /></label>
+      <label>{t('ব্যক্তিগত টেস্ট লক্ষ্য', 'Personal test target')}<input type="date" value={testDate} onChange={event => setTestDate(event.target.value)} /></label>
+      <label>{t('ব্যক্তিগত শেষ লক্ষ্য', 'Personal end target')}<input type="date" value={endDate} onChange={event => setEndDate(event.target.value)} /></label>
+      <p>{t('এগুলো তোমার লক্ষ্য, সরকারি পরীক্ষার তারিখ নয়।', 'These are your goals, not official exam dates.')}</p>
+    </fieldset>
+    <label className="check-line"><input type="checkbox" checked={reminders} onChange={event => setReminders(event.target.checked)} />{t('রিমাইন্ডার চাই (প্রয়োজনে পরে অনুমতি দিতে হবে)', 'Enable reminders (permission may be needed later)')}</label>
     <ChapterSelection routine={chapterDraft} onChange={setChapterDraft} />
     {!chapterDraft.chapterIds.length && <p className="personal-warning">{t('রুটিন বানাতে অন্তত একটি অধ্যায় বেছে নাও।', 'Choose at least one chapter to create the routine.')}</p>}
     <button type="button" className="button primary quick-start-cta" disabled={!canCommit} onClick={() => void commit()}>
-      <Sparkles size={20} />{busy ? t('রুটিন বানানো হচ্ছে…', 'Building your routine…') : t('এই সময় দিয়েই রুটিন বানাও — বাকিটা অ্যাপ করবে', 'Build my routine from this — the app does the rest')}
+      <Sparkles size={20} />{busy ? t('রুটিন বানানো হচ্ছে…', 'Building your routine…') : t('আমার বাছাই সেভ করো', 'Save my choices')}
     </button>
     {error && <p className="personal-warning" role="alert">{error}</p>}
-    <p className="quick-start-note"><strong>{t('অ্যাপ যা নিজেই করবে:', 'What the app does by itself:')}</strong> {t('শুধু বাছাই করা অধ্যায় থাকবে। প্রতিটিতে তিন সেশন—ক্লাস, নিজের নোট, সলভিং ও অনুশীলন। প্রতি অধ্যায়ে ≈২০ ঘণ্টা অনুমান; সময় ও শেষের তারিখ তোমার ফাঁকা সময়ের ওপর নির্ভর করবে.', 'includes only selected chapters in three sessions: class, own notes, and solving plus practice. Each chapter has ≈20 estimated hours; actual allocation and finish depend on your availability.')} {formatDurationBn(DEFAULT_CHAPTER_MINUTES)} {t('প্রতি অধ্যায়', 'per chapter')} · {bn(chapterDraft.chapterIds.length)} {t('টি অধ্যায়', 'chapters')} · {t('শুরু', 'Starts')} {formatDate(data.settings.startDate, 'long')} · {t('পরে Settings থেকে যেকোনো সময় বদলাতে পারবে।', 'change any of this later in Settings.')}</p>
+    <p className="quick-start-note">{t('নিজের সময় ও অধ্যায় সেভ হবে। অধ্যায়ের ক্লাস, নোট ও অনুশীলনের সময় Settings-এ নিজে না দেওয়া পর্যন্ত কাজ বসবে না; কোনো সময় আন্দাজ করা হবে না।', 'Your availability and chapters are saved. No work is scheduled until you enter class, notes and practice durations in Settings; no duration is guessed.')}</p>
     <div className="quick-start-footer">
       <button type="button" className="text-button" onClick={() => setAdvanced(true)}>{t('সব আমি নিজে সাজিয়ে নিতে চাই →', 'I want to configure everything myself →')}</button>
     </div>

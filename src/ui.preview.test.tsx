@@ -29,7 +29,7 @@ describe('the app a first-time visitor sees', () => {
     expect(JSON.parse(saved!).version).toBeGreaterThanOrEqual(1);
     // A new student must be asked for availability, never silently given 8/16h.
     expect(JSON.parse(saved!).routineSetupRequired).toBe(true);
-    expect(screen.getByRole('heading', { name: /অ্যাপ খুলে পড়া শুরু করো/ })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: /নিজের মতো পড়ার সময় ঠিক করো/ })).toBeTruthy();
     expect(document.querySelector('.task-card')).toBeNull();
     const view = document.querySelector('.view') as HTMLElement;
     expect((view.textContent ?? '').length).toBeGreaterThan(500);

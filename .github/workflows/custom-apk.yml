@@ -1,0 +1,192 @@
+name: Custom separate Android APK
+on:
+  push:
+    branches: ['arena/d7287efe-hsc-27']
+permissions:
+  contents: read
+concurrency:
+  group: custom-onetime-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  source:
+    name: Source and safety tests
+    if: contains(github.event.head_commit.message, '[publish-custom-onetime]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci && npm run lint && npm run typecheck && npm test && npm run build
+      - run: node --test scripts/*node-test.mjs
+  candidate:
+    name: Build non-debuggable one-time signed APK
+    if: contains(github.event.head_commit.message, '[publish-custom-onetime]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: npm ci && npm run android:assets && npm run android:sync
+      - name: Build original package for disposable-emulator isolation test
+        run: |
+          (cd android && ./gradlew :app:assembleDebug --no-daemon --max-workers=2)
+          mkdir -p candidate
+          cp android/app/build/outputs/apk/debug/app-debug.apk candidate/original-debug.apk
+          (cd android && ./gradlew :app:assembleDebug -PseparateInstall=true --no-daemon --max-workers=2)
+          cp android/app/build/outputs/apk/debug/app-debug.apk candidate/previous-fresh-debug.apk
+          (cd android && ./gradlew :app:assembleDebug -PcategoryInstall=true --no-daemon --max-workers=2)
+          cp android/app/build/outputs/apk/debug/app-debug.apk candidate/previous-category-debug.apk
+          (cd android && ./gradlew :app:assembleDebug -PselectedInstall=true --no-daemon --max-workers=2)
+          cp android/app/build/outputs/apk/debug/app-debug.apk candidate/previous-selected-debug.apk
+          (cd android && ./gradlew :app:assembleDebug -PfinalInstall=true --no-daemon --max-workers=2)
+          cp android/app/build/outputs/apk/debug/app-debug.apk candidate/previous-final-debug.apk
+      - name: Sign the release and matching instrumentation; discard the key
+        run: |
+          set -euo pipefail
+          exec > >(tee final-build.log) 2>&1
+          umask 077
+          key_dir=$(mktemp -d)
+          trap 'rm -f android/keystore.properties; rm -rf "$key_dir"' EXIT
+          export SIGNING_PASSWORD="$(openssl rand -hex 32)"
+          echo "::add-mask::$SIGNING_PASSWORD"
+          echo 'Generating transient signing key'
+          keytool -genkeypair -alias one-time-fresh -keyalg RSA -keysize 3072 -validity 9125 \
+            -storetype PKCS12 -keystore "$key_dir/one-time.p12" -storepass:env SIGNING_PASSWORD \
+            -keypass:env SIGNING_PASSWORD -dname 'CN=Prostuti Fresh One-time Signing,O=Prostuti,C=BD' -noprompt
+          cat > android/keystore.properties <<PROPS
+          storeFile=$key_dir/one-time.p12
+          storePassword=$SIGNING_PASSWORD
+          keyAlias=one-time-fresh
+          keyPassword=$SIGNING_PASSWORD
+          PROPS
+          echo 'Building signed release and instrumentation'
+          (cd android && ./gradlew :app:assembleRelease :app:assembleDebugAndroidTest -PcustomInstall=true --no-daemon --max-workers=2 --stacktrace)
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          AAPT=$(find "$SDK_ROOT/build-tools" -name aapt -type f | sort -V | tail -1)
+          SIGNER=$(find "$SDK_ROOT/build-tools" -name apksigner -type f | sort -V | tail -1)
+          echo 'Inspecting public signing certificate'
+          cert=$(keytool -list -v -keystore "$key_dir/one-time.p12" -storepass:env SIGNING_PASSWORD -alias one-time-fresh | sed -n 's/^[[:space:]]*SHA256: //p' | head -1)
+          test -n "$cert"
+          cp android/app/build/outputs/apk/release/app-release.apk candidate/prostuti-hsc27-custom.apk
+          echo 'Inspecting release APK'
+          FRESH_ANDROID_CERT_SHA256="$cert" node scripts/check-fresh-apk.mjs candidate/prostuti-hsc27-custom.apk "$AAPT" "$SIGNER" com.prostuti.hsc27.custom
+          echo 'Signing instrumentation APK'
+          "$SIGNER" sign --ks "$key_dir/one-time.p12" --ks-key-alias one-time-fresh --ks-pass env:SIGNING_PASSWORD --key-pass env:SIGNING_PASSWORD \
+            --out candidate/instrumentation.apk android/app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+          echo 'Verifying APK identities and signer equality'
+          "$SIGNER" verify --verbose --print-certs candidate/instrumentation.apk > candidate/instrumentation-signature.txt
+          "$SIGNER" verify --verbose --print-certs candidate/prostuti-hsc27-custom.apk > candidate/apk-signature.txt
+          node --input-type=module -e "import {readFileSync} from 'node:fs'; import {signingFingerprint} from './scripts/verify-release-asset.mjs'; const apk=signingFingerprint(readFileSync('candidate/apk-signature.txt','utf8')); const test=signingFingerprint(readFileSync('candidate/instrumentation-signature.txt','utf8')); if(apk!==test) throw Error('Instrumentation signer differs from release'); console.log('Instrumentation signer matches release:',apk);"
+          "$AAPT" dump badging candidate/original-debug.apk | grep -F "package: name='com.prostuti.hsc27'"
+          "$AAPT" dump badging candidate/previous-fresh-debug.apk | grep -F "package: name='com.prostuti.hsc27.fresh'"
+          "$AAPT" dump badging candidate/previous-category-debug.apk | grep -F "package: name='com.prostuti.hsc27.category'"
+          "$AAPT" dump badging candidate/previous-selected-debug.apk | grep -F "package: name='com.prostuti.hsc27.selected'"
+          "$AAPT" dump badging candidate/previous-final-debug.apk | grep -F "package: name='com.prostuti.hsc27.finalapp'"
+          "$AAPT" dump badging candidate/instrumentation.apk | grep -F "package: name='com.prostuti.hsc27.custom.test'"
+          sha256sum candidate/prostuti-hsc27-custom.apk > candidate/SHA256SUMS.txt
+          # No private key, keystore or password is uploaded. This app cannot
+          # be updated in place later, exactly as the user agreed.
+      - name: Surface signing/build failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('final-build.log')) core.error(fs.readFileSync('final-build.log','utf8').slice(-3500));
+      - name: Retain candidate for exact-APK device checks
+        uses: actions/upload-artifact@v4
+        with:
+          name: signed-custom-candidate
+          path: candidate/
+          if-no-files-found: error
+          retention-days: 7
+  device:
+    name: Exact signed APK alongside all five old apps (Android ${{ matrix.api }})
+    needs: candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        api: [34, 35]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-custom-candidate
+          path: candidate
+      - run: sha256sum -c candidate/SHA256SUMS.txt
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Exercise exact signed APK and five-old-app isolation
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: ${{ matrix.api }}
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          script: |
+            bash -o pipefail -c 'bash scripts/check-custom-device.sh 2>&1 | tee final-device.log'
+      - name: Surface device diagnostics
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            for (const name of ['instrumentation.log','final-device.log']) {
+              if (fs.existsSync(name)) core.error(`${name}:\n${fs.readFileSync(name,'utf8').slice(-3500)}`);
+            }
+      - name: Save test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-device-${{ matrix.api }}
+          path: |
+            final-device.log
+            instrumentation.log
+          if-no-files-found: ignore
+  publish:
+    name: Publish the exact tested APK
+    needs: [source, candidate, device]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-custom-candidate
+          path: candidate
+      - name: Verify artifact and publish without changing Latest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha256sum -c candidate/SHA256SUMS.txt
+          tag="custom-onetime-${GITHUB_RUN_ID}"
+          cat > release-notes.txt <<'NOTES'
+          প্রস্তুতি নিজের মতো — স্বতন্ত্র Android অ্যাপ। নিজে সময় ও মেয়াদ দিলে শুধু নিজের বাছাই করা অধ্যায় S → A → B ক্রমে পরিকল্পনা করা হয়। অধ্যায়ের সময় নিজে সেট করতে হবে। এটি আগের কোনো অ্যাপের জায়গায় ইনস্টল হয় না; প্রতিটি অ্যাপের ডেটা আলাদা। পুরোনো অ্যাপ uninstall বা Clear data করবেন না।
+
+          এই APK একবারের সাইনিং কী দিয়ে তৈরি; কী সংরক্ষণ করা হয়নি। ফলে ভবিষ্যতে এর ওপর সরাসরি আপডেট ইনস্টল করা যাবে না। নিয়মিত যাচাই করা Full backup এবং আলাদা media/PDF সংরক্ষণ করুন।
+
+          The optional Qwen AI model is downloaded separately (about 1.6 GB); real model inference and physical phone compatibility are not certified by this release workflow. The local action assistant recognizes a limited set of routine limits and chapter changes; it cannot execute arbitrary requests. Custom AI-added chapters remain in the library and are not scheduled automatically.
+
+          This is a separately installed, non-debuggable APK with a deliberately discarded one-time signing key. Future in-place updates are impossible. Keep verified backups and the old app. The exact APK was tested on Android 34 and 35 emulators; physical phone compatibility is not certified.
+          NOTES
+          gh release create "$tag" candidate/prostuti-hsc27-custom.apk candidate/SHA256SUMS.txt \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title 'প্রস্তুতি নিজের মতো — একবারের সাইনিং' --notes-file release-notes.txt

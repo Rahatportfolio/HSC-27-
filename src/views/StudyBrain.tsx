@@ -20,6 +20,9 @@ import type { BrainSuggestion } from '../studyBrain';
 import { brainStatusText } from '../studyBrainText';
 import type { BrainCheckInDraft, BrainEnergy, BrainObstacle } from '../studyBrainTypes';
 import { t, weekdayName } from '../i18n';
+import { applyRoutineCommand, describeRoutineCommand, parseRoutineCommand } from '../routineCommands';
+import type { RoutineCommand } from '../routineCommands';
+import { parseBackup, saveData } from '../storage';
 
 const energyLabel = (value: BrainEnergy) => value === 'low' ? t('ক্লান্ত / শক্তি কম', 'Tired / low energy') : value === 'fresh' ? t('বেশ চনমনে', 'Feeling fresh') : t('মোটামুটি', 'Doing okay');
 const obstacleLabel = (value: BrainObstacle) => value === 'understanding' ? t('বুঝতে সমস্যা', 'Understanding') : value === 'remembering' ? t('মনে রাখতে সমস্যা', 'Remembering') : value === 'starting' ? t('শুরু করতে কষ্ট', 'Getting started') : t('নির্দিষ্ট বাধা নেই', 'No particular obstacle');
@@ -355,7 +358,7 @@ type ModelState = 'idle' | 'loading' | 'ready' | 'error';
 
 /** Local rule-based assistant and optional on-device model. */
 function AiAssistant() {
-  const { data, setData, notify, storageOk, routineSetupReady } = usePlanner();
+  const { data, setData, notify, storageOk, routineSetupReady, plan, today } = usePlanner();
   const [mode, setMode] = useState<AiMode>('brain');
   const [conversations, setConversations] = useState<Record<AiMode, AiMessage[]>>({ brain: [], model: [] });
   const messages = conversations[mode];
@@ -371,6 +374,8 @@ function AiAssistant() {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState('');
   const [pendingAction, setPendingAction] = useState<{ action: ChapterAction; text: string } | null>(null);
+  const [pendingRoutine, setPendingRoutine] = useState<{ action: RoutineCommand; snapshot: string } | null>(null);
+  const latestRoutine = useRef({ data, plan, today }); latestRoutine.current = { data, plan, today };
   const modelEpoch = useRef(0);
   const modelActive = useRef(false);
 
@@ -411,7 +416,7 @@ function AiAssistant() {
     }
     setMode(next);
     setError('');
-    setPendingAction(null);
+    setPendingAction(null); setPendingRoutine(null);
     if (next === 'model') { setQuiz(null); setPicked(null); }
   };
 
@@ -445,8 +450,15 @@ function AiAssistant() {
   const send = async (event: FormEvent) => {
     event.preventDefault();
     const text = input.trim();
-    if (!text || busy || pendingAction) return;
+    if (!text || busy || pendingAction || pendingRoutine) return;
     setInput(''); setError('');
+    const routineAction = parseRoutineCommand(text);
+    if (routineAction) {
+      if (!data.personalRoutine) { setError(t('আগে নিজের রুটিন তৈরি করো।', 'Set up your personal routine first.')); return; }
+      setMessages(current => [...current, { role: 'user', content: text }, { role: 'assistant', content: t('আগে প্রস্তাব দেখো, নিশ্চিত করলে তবেই রুটিন বদলাবে।', 'Review the proposal; nothing changes until you confirm.') }]);
+      setPendingRoutine({ action: routineAction, snapshot: JSON.stringify(data) });
+      return;
+    }
     if (mode === 'brain') {
       setMessages(current => [...current, { role: 'user', content: text }]);
       const answer = answerAiQuestion(text, data);
@@ -518,6 +530,20 @@ function AiAssistant() {
     notify(t('অধ্যায়ের পরিবর্তন প্রয়োগ করা হয়েছে।', 'Chapter change applied.'));
   };
 
+  const confirmRoutine = () => {
+    if (!pendingRoutine || !storageOk || routineSetupReady === false) return;
+    try {
+      const current = latestRoutine.current;
+      if (JSON.stringify(current.data) !== pendingRoutine.snapshot) throw new Error(t('তথ্য বদলে গেছে; আবার নির্দেশ দাও।', 'Data changed; please issue the instruction again.'));
+      const next = applyRoutineCommand(current.data, pendingRoutine.action, current.plan, current.today);
+      parseBackup(JSON.stringify(next));
+      if (!saveData(next, true)) throw new Error(t('সেভ হয়নি; আগের তথ্য অক্ষত আছে।', 'Could not save; existing data is unchanged.'));
+      setData(next); setPendingRoutine(null);
+      setMessages(currentMessages => [...currentMessages, { role: 'assistant', content: t('তোমার নিশ্চিত করা পরিবর্তন সেভ হয়েছে।', 'Your confirmed change was saved.') }]);
+      notify(t('রুটিন বদলানো হয়েছে।', 'Routine updated.'));
+    } catch (cause) { setError((cause as Error).message); setPendingRoutine(null); }
+  };
+
   const cancelAction = () => {
     setPendingAction(null);
     setMessages(current => [...current, { role: 'assistant', content: t('ঠিক আছে, কিছু বদলাইনি।', 'Okay, nothing changed.') }]);
@@ -526,7 +552,8 @@ function AiAssistant() {
   const modelReady = modelState === 'ready';
   return <section className="card brain-panel ai-panel" aria-labelledby="ai-title">
     <h2 id="ai-title"><Bot size={20} aria-hidden="true" />{t('AI সহকারী', 'AI assistant')}</h2>
-    <p>{t('স্মার্ট ব্রেইন অধ্যায়, কুইজ ও অগ্রগতিতে সাহায্য করে এবং নিশ্চিতি নিয়ে অধ্যায় বদলায়। AI মডেল ফোনেই উত্তর দেয়; chapter command স্মার্ট ব্রেইন বোঝার নিয়মে চলে; প্রথমবার ইন্টারনেট দিয়ে মডেল ডাউনলোড লাগবে। বাংলা ও Banglish-এ ভুল হতে পারে; গুরুত্বপূর্ণ উত্তর যাচাই করো। চ্যাট সেভ হয় না।', 'Smart brain helps with chapters, quizzes and progress, and changes chapters only after confirmation. Chapter commands use the smart brain’s limited rules. The AI model answers on your device; the first download needs internet. It can make mistakes, especially in Bengali or Banglish; verify important answers. Chat is not saved.')}</p>
+    <p>{t('স্মার্ট ব্রেইন অধ্যায়, কুইজ ও অগ্রগতিতে সাহায্য করে এবং নিশ্চিতি নিয়ে অধ্যায় বা বোঝা সময়ের সীমা বদলায়। AI মডেল ফোনেই উত্তর দেয়; chapter command স্মার্ট ব্রেইন বোঝার নিয়মে চলে; প্রথমবার ইন্টারনেট দিয়ে মডেল ডাউনলোড লাগবে। বাংলা ও Banglish-এ ভুল হতে পারে; গুরুত্বপূর্ণ উত্তর যাচাই করো। চ্যাট সেভ হয় না।', 'Smart brain helps with chapters, quizzes and progress, and changes chapters or supported routine limits only after confirmation. Chapter commands use the smart brain’s limited rules. The AI model answers on your device; the first download needs internet. It can make mistakes, especially in Bengali or Banglish; verify important answers. Chat is not saved.')}</p>
+    <p>{t('উদাহরণ: দৈনিক পড়ার সময় ৩ ঘণ্টা করো; সেশন ৪৫ মিনিট করো; বিরতি ১০ মিনিট করো। অন্য নির্দেশ না বুঝলে Settings-এ নিজে বদলাও।', 'Examples: set daily study time to 3 hours; set session to 45 minutes; set break to 10 minutes. Other requests may need Settings.')}</p>
     <div className="ai-modes" role="group" aria-label={t('AI মোড', 'AI mode')}>
       <button type="button" className={`button secondary ${mode === 'brain' ? 'selected' : ''}`} aria-pressed={mode === 'brain'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('brain')}><BrainCircuit size={16} aria-hidden="true" />{t('স্মার্ট ব্রেইন', 'Smart brain')}</button>
       <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t(`AI মডেল (~${bn(AI_MODEL_SIZE_MB)} MB)`, `AI model (~${AI_MODEL_SIZE_MB} MB)`)}</button>
@@ -557,6 +584,12 @@ function AiAssistant() {
       <button type="button" className="button secondary" disabled={busy} onClick={() => void askQuiz()}><RotateCcw size={16} aria-hidden="true" />{t('আরেকটা কুইজ দাও', 'Give me another quiz')}</button>
     </div>}
 
+    {pendingRoutine && <div className="ai-download" role="group" aria-label={t('রুটিন পরিবর্তন নিশ্চিত করো', 'Confirm routine change')}>
+      <p>{describeRoutineCommand(pendingRoutine.action)}</p>
+      <p>{t('নোট ও সম্পন্ন কাজ মুছবে না; লক করা দিন থাকলে আগে আনলক করতে হবে।', 'Notes and completion evidence remain; locked dates must be unlocked first.')}</p>
+      <button type="button" className="button primary" disabled={!storageOk || routineSetupReady === false} onClick={confirmRoutine}>{t('হ্যাঁ, পরিবর্তন করো', 'Yes, change routine')}</button>{' '}
+      <button type="button" className="button secondary" onClick={() => setPendingRoutine(null)}>{t('বাতিল', 'Cancel')}</button>
+    </div>}
     {pendingAction && <div className="ai-download" role="group" aria-label={t('পরিবর্তন নিশ্চিত করো', 'Confirm change')}>
       <p>{describeChapterAction(pendingAction.action, data)}</p>
       <button type="button" className="button primary" disabled={!storageOk || routineSetupReady === false} onClick={confirmAction}>{t('হ্যাঁ, করো', 'Yes, do it')}</button>{' '}
@@ -569,8 +602,8 @@ function AiAssistant() {
         ? t('জিজ্ঞেস করো — যেমন “পদার্থের অধ্যায়গুলো কী?”, “কুইজ দাও”, “আমার অগ্রগতি?”', 'Ask — for example “What are the Physics chapters?”, “Give me a quiz”, “My progress?”')
         : t('AI-কে জিজ্ঞেস করো (বাংলা / Banglish / English)', 'Ask the AI (Bengali / Banglish / English)')}</label>
       <div>
-        <input id="ai-input" value={input} maxLength={500} autoComplete="off" disabled={busy || !!pendingAction || (mode === 'model' && !modelReady)} placeholder={t('এখানে লেখো…', 'Type here…')} onChange={event => setInput(event.target.value)} />
-        <button type="submit" className="button primary" disabled={!input.trim() || busy || !!pendingAction || (mode === 'model' && !modelReady)}>
+        <input id="ai-input" value={input} maxLength={500} autoComplete="off" disabled={busy || !!pendingAction || !!pendingRoutine || (mode === 'model' && !modelReady)} placeholder={t('এখানে লেখো…', 'Type here…')} onChange={event => setInput(event.target.value)} />
+        <button type="submit" className="button primary" disabled={!input.trim() || busy || !!pendingAction || !!pendingRoutine || (mode === 'model' && !modelReady)}>
           {(busy) ? <Loader2 size={16} aria-hidden="true" className="ai-spin" /> : <Send size={16} aria-hidden="true" />}
           {t('পাঠাও', 'Send')}
         </button>

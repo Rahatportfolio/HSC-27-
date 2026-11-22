@@ -32,8 +32,8 @@ describe('first-run quick start', () => {
   it('shows the 3-question quick start instead of the full 4-step wizard', async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...freshData(), routineSetupRequired: true }));
     render(<App />);
-    expect(await screen.findByText(/অ্যাপ খুলে পড়া শুরু করো/)).toBeTruthy();
-    expect(screen.getByRole('button', { name: /এই সময় দিয়েই রুটিন বানাও/ })).toBeTruthy();
+    expect(await screen.findByText(/নিজের মতো পড়ার সময় ঠিক করো/)).toBeTruthy();
+    expect(screen.getByRole('button', { name: /আমার বাছাই সেভ করো/ })).toBeTruthy();
     // The heavy per-stage duration editor must stay out of the first screen.
     expect(screen.queryByText(/সময় মিলিয়ে নেওয়ার অধ্যায়/)).toBeNull();
   });
@@ -41,13 +41,22 @@ describe('first-run quick start', () => {
   it('requires a selection and saves only selected S and B chapters', async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...freshData(), routineSetupRequired: true }));
     render(<App />);
-    const cta = await screen.findByRole('button', { name: /এই সময় দিয়েই রুটিন বানাও/ });
+    const cta = await screen.findByRole('button', { name: /আমার বাছাই সেভ করো/ });
     expect((cta as HTMLButtonElement).disabled).toBe(true);
     const selectedIds = ['physics-1-3', 'physics-1-1'];
     for (const id of selectedIds) fireEvent.click(screen.getByLabelText(`${chapterById[id].title} · ${personalBookLabel(id)}`));
+    expect((cta as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'প্রতিদিন' }));
+    fireEvent.change(screen.getByLabelText('নিজের সময়ের শুরুর মুহূর্ত'), { target: { value: '18:00' } });
+    fireEvent.change(screen.getByLabelText('নিজের সময়ের শেষ মুহূর্ত'), { target: { value: '21:00' } });
+    fireEvent.click(screen.getByRole('button', { name: /নিজের সময় যোগ করো/ }));
+    fireEvent.change(screen.getByLabelText('তোমার ঘণ্টা'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('একটানা সেশন (মিনিট)'), { target: { value: '45' } });
+    fireEvent.change(screen.getByLabelText('সেশনের মাঝে বিরতি (মিনিট)'), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText('পরিকল্পনার শুরুর তারিখ'), { target: { value: '2026-11-20' } });
+    fireEvent.change(screen.getByLabelText('ব্যক্তিগত টেস্ট লক্ষ্য'), { target: { value: '2027-02-01' } });
+    fireEvent.change(screen.getByLabelText('ব্যক্তিগত শেষ লক্ষ্য'), { target: { value: '2027-06-06' } });
     expect((cta as HTMLButtonElement).disabled).toBe(false);
-    // Pick 3 net hours instead of the default 4.
-    fireEvent.click(screen.getByRole('button', { name: /৩ ঘণ্টা/ }));
     fireEvent.click(cta);
     await waitFor(() => {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
@@ -58,7 +67,9 @@ describe('first-run quick start', () => {
       expect(saved.personalRoutine.categories).toEqual({ 'physics-1-3': 'S', 'physics-1-1': 'B' });
       expect(saved.personalRoutine.dailyLimitMinutes).toBe(180);
       expect(saved.personalRoutine.windows.length).toBeGreaterThan(0);
-      expect(saved.settings.reminderEnabled).toBe(true);
+      expect(saved.settings.reminderEnabled).toBe(false);
+      expect(saved.personalRoutine.manualWorkloads).toBe(true);
+      expect(saved.personalRoutine.workloads['physics-1-3'].class.minutes).toBeNull();
     });
     // The daily work list is now the first thing on Home.
     expect(await screen.findByText(/তিন সেশনে অধ্যায় শেষ করো/)).toBeTruthy();

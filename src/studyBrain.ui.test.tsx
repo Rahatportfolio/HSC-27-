@@ -200,6 +200,30 @@ describe('AI assistant regression checks', () => {
     expect(h.data().customChapters?.[0].title).toBe('নতুন অধ্যায়');
   });
 
+  it('previews a routine change and requires confirmation, preserving existing work', () => {
+    const initial = enabled(); initial.notes[today] = 'Keep note';
+    const h = setup(initial);
+    ask('set daily study time to 3 hours');
+    expect(h.data().personalRoutine!.dailyLimitMinutes).toBe(initial.personalRoutine!.dailyLimitMinutes);
+    expect(within(panel()).getByText('Daily net study limit: 180 minutes')).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Cancel' }));
+    expect(h.data().personalRoutine!.dailyLimitMinutes).toBe(initial.personalRoutine!.dailyLimitMinutes);
+    ask('দৈনিক পড়ার সময় ৩ ঘণ্টা করো');
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Yes, change routine' }));
+    expect(h.data().personalRoutine!.dailyLimitMinutes).toBe(180);
+    expect(h.data().notes[today]).toBe('Keep note');
+    expect(h.data().completed).toEqual(initial.completed);
+  });
+  it('does not overwrite changes made elsewhere while a proposal is awaiting confirmation', () => {
+    const h = setup(enabled());
+    ask('set break to 5 minutes');
+    h.replace({ ...h.data(), notes: { ...h.data().notes, [today]: 'Changed elsewhere' } });
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Yes, change routine' }));
+    expect(h.data().notes[today]).toBe('Changed elsewhere');
+    expect(h.data().personalRoutine!.breakMinutes).not.toBe(5);
+    expect(within(panel()).getByRole('alert').textContent).toContain('Data changed');
+  });
+
   it('uses the local action handler in model mode, not model prose', async () => {
     vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
     const chat = vi.spyOn(aiModel, 'chatWithAi');
