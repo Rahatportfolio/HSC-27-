@@ -3,7 +3,7 @@ import { addDays, diffDays, formatDurationBn, formatDate, isValidDate, todayKey 
 import { chapterById } from './data';
 import { t } from './i18n';
 import { parseTaskRangeId } from './taskReferences';
-import { PERSONAL_SESSIONS, WORK_STAGES, chapterWorkEstimate, isPersonalTaskComplete, personalCapacity, personalChapterSpeed, personalChapterPairs, personalFreeWindows, personalStageSourceId, personalUnfinishedRanges, weeklyWindows, workloadFor } from './personalRoutine';
+import { PERSONAL_SESSIONS, WORK_STAGES, chapterWorkEstimate, isPersonalTaskComplete, personalCapacity, personalChapterSpeed, personalChapterPairs, personalCategory, activePersonalCategory, personalFreeWindows, personalStageSourceId, personalUnfinishedRanges, weeklyWindows, workloadFor } from './personalRoutine';
 import type { PersonalWork, WorkStage } from './personalRoutine';
 
 const ordered = (a: Task, b: Task) => a.date.localeCompare(b.date) || a.startMinute - b.startMinute || a.id.localeCompare(b.id);
@@ -45,7 +45,12 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
     }
     return day.tasks.reduce((sum, task) => sum + task.endMinute - task.startMinute, 0) > personalCapacity(data, day.date);
   });
-  if (!overdue && !invalid && !routine.history?.length) return baseline;
+  // The untouched category-sorted baseline is already safe; avoid a full
+  // rolling reconstruction until evidence or explicit schedule changes exist.
+  const untouchedAll = routine.scope === 'ALL' && !Object.keys(data.completed).some(id => id.startsWith('personal:') || id.startsWith('smart-part|')) &&
+    !data.lockedDates.length && !data.removedTasks.length && !Object.keys(data.taskEdits).length && !Object.keys(data.dayOverrides).length;
+  if (!overdue && !invalid && !routine.history?.length && (routine.scope !== 'ALL' || untouchedAll)) return baseline;
+  const activeCategory = activePersonalCategory(data);
   const earliest = [data.settings.startDate, ...(routine.history || []).map(task => task.date)].sort()[0];
   const plan: Day[] = Array.from({ length: Math.max(0, diffDays(earliest, data.settings.examDate)) }, (_, index) => ({ date: addDays(earliest, index), index: index + 1, phase: 'learn', isCatchup: false, personalRoutine: true, tasks: [] }));
   if (plan[0]) plan[0].reflowFrom = start;
@@ -91,6 +96,8 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
     // the unpaid fragments at their original positions, not the overlapping
     // whole task; otherwise a partial confirmation silently unlocks/moves work.
     if (explicit) for (const range of personalUnfinishedRanges(task, data.completed)) {
+      // A saved pin is retained but cannot bypass an unfinished earlier category.
+      if (activeCategory && ['S', 'A', 'B', 'C'].indexOf(personalCategory(data, task.chapterIds[0])) > ['S', 'A', 'B', 'C'].indexOf(activeCategory)) { omit(fragment(task, range.from, range.to)); continue; }
       const pending = fragment(task, range.from, range.to);
       if (personalSlotFits(data, pending) && !clashes(pending) && occupied(pending.date) + pending.endMinute - pending.startMinute <= personalCapacity(data, pending.date)) {
         reserve(pending); masked[pending.id] = 'reserved-only';
@@ -109,7 +116,10 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
   const sourceRequirements = (id: string) => WORK_STAGES.filter(stage => !['mcqClass', 'cqClass'].includes(stage.id) || workloadFor(routine, id)[stage.id].minutes !== 0).map(stage => personalStageSourceId(routine, id, stage.id));
   let dayCursor = Math.max(0, diffDays(earliest, start));
   const reservedPairEnd = (pair: string[]) => [...allocated.values()].flat().filter(task => task.personalWork && pair.includes(task.chapterIds[0])).map(task => task.date).sort().at(-1);
-  for (const pair of personalChapterPairs(routine)) {
+  for (const pair of personalChapterPairs(routine, data)) {
+    // Later categories are provisional future projections. Today they are not
+    // actionable until every required source in the current category is done.
+    if (activeCategory && ['S', 'A', 'B', 'C'].indexOf(personalCategory(data, pair[0])) > ['S', 'A', 'B', 'C'].indexOf(activeCategory)) dayCursor = Math.max(dayCursor, diffDays(earliest, addDays(start, 1)));
     if (pair.some(id => !chapterWorkEstimate(routine, id).complete)) break;
     const chapters = pair.map(id => {
       const work = workloadFor(routine, id), estimate = chapterWorkEstimate(routine, id);

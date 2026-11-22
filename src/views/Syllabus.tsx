@@ -41,7 +41,7 @@ export default function SyllabusView() {
   const ready = chapters.filter(chapter => { const meta = chapterMeta(data, chapter.id); return meta.cq === 'ready' && meta.mcq === 'ready'; }).length;
 
   const visible = chapters.filter(chapter => (status === 'all' || (status === 'done') === isLearningComplete(chapterStage(chapter, data, plan)))
-    && (priority === 'all' || (priority === 'S' ? sIds.includes(chapter.id) : chapterPriority(chapter, data) === priority))
+    && (priority === 'all' || (priority === 'S' ? sIds.includes(chapter.id) : !sIds.includes(chapter.id) && chapterPriority(chapter, data) === priority))
     && (star === 'all' || CHAPTER_SCHEDULE[chapter.id]?.star === star)
     && (!weakOnly || chapterMeta(data, chapter.id).weak || data.confidence[chapter.id] === 'weak')
     && (!unwatchedOnly || (() => { const progress = chapterClassProgress(data, chapter.id); return progress.total > 0 && progress.watched < progress.total; })())

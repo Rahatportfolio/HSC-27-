@@ -28,3 +28,12 @@ test('supports modern SDK scheme-labelled signer output', () => {
   f.signature = f.signature.replace('Signer #1 certificate SHA-256', 'V2 Signer: certificate SHA-256');
   assert.equal(validateFreshApk(f).certificateSha256, cert);
 });
+
+test('requires the separately selected category package exactly', () => {
+  const f = fixture(); f.expectedPackage = 'com.prostuti.hsc27.category';
+  assert.throws(() => validateFreshApk(f));
+  f.badging = f.badging.replace('.fresh', '.category');
+  assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.category');
+  f.expectedPackage = 'com.prostuti.hsc27';
+  assert.throws(() => validateFreshApk(f));
+});

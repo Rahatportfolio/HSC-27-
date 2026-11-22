@@ -366,8 +366,23 @@ function sourcesFor(routine: PersonalRoutine, id: string) {
     return [{ stage, budget, minutes, sourceId: personalStageSourceId(routine, id, stage.id) }];
   });
 }
-/** Pair by books, preferring different subjects. Keep each pair for TWO study days. */
-export function personalChapterPairs(routine: PersonalRoutine): string[][] {
+/** S is a personal shortlist within A, never an additional copy of a chapter. */
+export function personalCategory(data: AppData, id: string): 'S' | 'A' | 'B' | 'C' {
+  const shortlist = data.personalRoutine?.scope === 'S' ? data.personalRoutine.chapterIds : data.personalPhases?.S?.chapterIds ?? RECOMMENDED_S_IDS;
+  if (shortlist.includes(id)) return 'S';
+  return data.chapterMeta[id]?.priority || chapterById[id].priority;
+}
+export function activePersonalCategory(data: AppData): 'S' | 'A' | 'B' | 'C' | undefined {
+  const routine = data.personalRoutine;
+  return routine?.scope === 'ALL' ? (['S', 'A', 'B', 'C'] as const).find(category => routine.chapterIds.some(id => personalCategory(data, id) === category && !personalChapterProgress(routine, id, data.completed).fullyComplete)) : undefined;
+}
+/** Pair within each category, preferring different subjects. */
+export function personalChapterPairs(routine: PersonalRoutine, data?: AppData): string[][] {
+  if (routine.scope === 'ALL') {
+    const categories = ['S', 'A', 'B', 'C'] as const;
+    const category = (id: string) => data ? personalCategory(data, id) : RECOMMENDED_S_IDS.includes(id) ? 'S' : chapterById[id].priority;
+    return categories.flatMap(group => personalChapterPairs({ ...routine, scope: 'A', chapterIds: routine.chapterIds.filter(id => category(id) === group) }));
+  }
   const books = new Map<string, string[]>();
   for (const id of routine.chapterIds) {
     const c = chapterById[id]; const key = `${c.subject}-${c.paper}`;
@@ -419,10 +434,17 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
   let dayIndex = Math.max(0, diffDays(data.settings.startDate, routine.startsOn && routine.startsOn > data.settings.startDate ? routine.startsOn : data.settings.startDate));
   // A chapter whose durations are still unknown can never be scheduled or given
   // an invented finish date, but it must not blank out the whole plan either:
-  // every chapter that HAS real durations is placed from the first day, even
-  // when it shares a pair with, or follows, an unknown chapter. Unknown
-  // chapters stay visibly pending through the unknown-duration issue.
-  for (const pair of personalChapterPairs(routine)) {
+  // known work in the same category can still be projected. In ALL mode,
+  // a later category must wait for unknown work in the previous category.
+  let previousCategory: string | undefined;
+  let categoryHasUnknown = false;
+  for (const pair of personalChapterPairs(routine, data)) {
+    const category = routine.scope === 'ALL' ? personalCategory(data, pair[0]) : routine.scope;
+    if (category !== previousCategory) {
+      if (categoryHasUnknown) break;
+      previousCategory = category;
+    }
+    if (pair.some(id => !chapterWorkEstimate(routine, id).complete)) categoryHasUnknown = true;
     const known = pair.filter(id => chapterWorkEstimate(routine, id).complete);
     if (!known.length) continue; // Nothing schedulable yet; the unknown-duration issue names it.
     const chapters = known.map(id => {
@@ -518,7 +540,7 @@ export function routineIssueText(issue: RoutineIssue): string {
   if (issue.code === 'deadline') return t(`${names}: লক্ষ্য তারিখ পর্যন্ত আরও ${formatDurationBn(issue.minutes)} কাজ রাখা যায়নি। পরের নির্বাচিত অধ্যায়গুলোও শেষ হয়েছে ধরে নিও না।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit before the target. Later selected chapters are not assumed finished either.`);
   if (issue.code === 'locked-work') return t('লক করা অতীতের দিনের অসমাপ্ত অংশ সরানো হয়নি। আগের জোড়া শেষ করা বা দিন আনলক না করা পর্যন্ত পরের জোড়ায় এগোবে না।', 'Unfinished ranges on locked past dates were not moved. Complete that pair or unlock those dates before progressing to the next pair.');
   if (issue.code === 'required-work') return t('কিছু অধ্যায়ের বাধ্যতামূলক ধাপের সময় ০। ভিডিও, বই পড়া, নোট, MCQ/CQ অনুশীলন ও রিভিশন বাদ দিয়ে সম্পন্ন ধরা যাবে না; প্রতিটির কাজের পরিমাণ/সময় ঠিক করো।', 'Some required stages have a zero budget. Video, reading, notes, MCQ/CQ practice and revision cannot be skipped to certify completion; configure their workload/time.');
-  if (issue.code === 'unscheduled') return t('কিছু কাস্টম কাজ দেওয়া সময়ের বাইরে বা পরস্পরের সঙ্গে মিলে গেছে। সেগুলো তথ্যসহ রাখা আছে, কিন্তু দিনের রুটিনে বসানো হয়নি। ক্যালেন্ডারে সময় ঠিক করো।', 'Some custom appointments are outside availability or clash. They are retained as unallocated items, not scheduled outside your windows. Edit them in the calendar.');
+  if (issue.code === 'unscheduled') return t('কিছু সংরক্ষিত কাজ সময়ের বাইরে, সংঘর্ষে, অথবা আগের ক্যাটাগরি শেষ না হওয়ায় অপেক্ষায় আছে। তথ্য মুছেনি; ক্যালেন্ডারে দেখো।', 'Some saved appointments are outside availability, clash, or are waiting for an earlier category. They are retained; review them in the calendar.');
   if (issue.code === 'no-work') return t(`${names}: সব কাজ ০ দেওয়া আছে। অন্তত একটি কাজের আসল/পরিকল্পিত সময় দাও; শূন্য কাজকে অধ্যায় সম্পন্ন ধরা হয়নি।`, `${names}: every work budget is zero. Configure some actual/planned work; zero work never certifies a chapter.`);
   if (issue.code === 'missing-allocation') return t(`${bn(issue.count || 0)}টি নির্বাচিত অধ্যায়ের পুরো কাজ বর্তমান তালিকায় নেই। সরানো/মুছে দেওয়া অংশ দেখে নাও; আংশিক তারিখকে শেষ তারিখ ধরা হয়নি।`, `${issue.count || 0} selected chapters have work missing from the current schedule. Review removed/moved segments; a partial date is not a finish date.`);
   if (issue.code === 'day-capacity') return t('কিছু দিনের কাস্টম কাজসহ মোট বরাদ্দ তোমার দেওয়া সময়ের সীমা ছাড়িয়েছে। বাড়তি কাজ নিজে মিলিয়ে নাও।', 'On some days, custom work pushes allocation above your availability cap. Review those explicit tasks.');

@@ -19,20 +19,26 @@ def hasReleaseKeystore = keystorePropertiesFile.exists()
 def separateInstallFlag = providers.gradleProperty('separateInstall').orElse('false').get()
 if (!(separateInstallFlag in ['true', 'false'])) throw new GradleException('separateInstall must be true or false')
 def separateInstall = separateInstallFlag == 'true'
+def categoryInstallFlag = providers.gradleProperty('categoryInstall').orElse('false').get()
+if (!(categoryInstallFlag in ['true', 'false'])) throw new GradleException('categoryInstall must be true or false')
+def categoryInstall = categoryInstallFlag == 'true'
+if (categoryInstall && separateInstall) throw new GradleException('Choose only one separate installation')
+def selectedPackage = categoryInstall ? 'com.prostuti.hsc27.category' : separateInstall ? 'com.prostuti.hsc27.fresh' : 'com.prostuti.hsc27'
+def selectedLabel = categoryInstall ? 'প্রস্তুতি ক্রমানুসারে' : separateInstall ? 'প্রস্তুতি নতুন' : null
 
 android {
     namespace = "com.prostuti.hsc27"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId separateInstall ? "com.prostuti.hsc27.fresh" : "com.prostuti.hsc27"
-        manifestPlaceholders = [appLabel: separateInstall ? "প্রস্তুতি নতুন" : "@string/app_name",
-                                activityLabel: separateInstall ? "প্রস্তুতি নতুন" : "@string/title_activity_main"]
+        applicationId selectedPackage
+        manifestPlaceholders = [appLabel: selectedLabel ?: "@string/app_name",
+                                activityLabel: selectedLabel ?: "@string/title_activity_main"]
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 24
         versionName "2.44.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
-        testInstrumentationRunnerArguments = [expectedPackage: separateInstall ? "com.prostuti.hsc27.fresh" : "com.prostuti.hsc27"]
+        testInstrumentationRunnerArguments = [expectedPackage: selectedPackage]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -57,7 +63,7 @@ android {
             // Play Store uploads prefer an .aab; the APK stays for direct installs.
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
-            } else if (separateInstall) {
+            } else if (separateInstall || categoryInstall) {
                 // Never disguise a debug-signed package as the new production app.
                 signingConfig null
             } else {

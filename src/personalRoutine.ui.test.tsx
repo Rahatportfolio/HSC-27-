@@ -76,7 +76,7 @@ describe('availability-first setup transaction', () => {
     data.routineBlocks = [{ id: 'appointment', date, weekday: 5, startMinute: 1080, minutes: 60, subject: 'math', title: 'Keep my custom appointment', createdAt: '2026-11-18T08:00:00Z' }];
     data.dayOverrides[date] = { taskStartMinutes: { [`custom-${date}-appointment`]: 800 } };
     const h = setup(data); const expected = personalRoutineHealth(data, buildStudyPlan(data, date)); expect(expected.issues.some(issue => issue.code === 'unscheduled')).toBe(true);
-    toPreview(); expect(screen.getByText('Some custom appointments are outside availability or clash. They are retained as unallocated items, not scheduled outside your windows. Edit them in the calendar.')).toBeTruthy();
+    toPreview(); expect(screen.getByText('Some saved appointments are outside availability, clash, or are waiting for an earlier category. They are retained; review them in the calendar.')).toBeTruthy();
     save(); expect(h.setData).not.toHaveBeenCalled(); expect(h.confirm()?.message).toContain('history are retained');
     h.replace({ ...data, notes: { ...data.notes, '2026-11-18': 'Updated elsewhere while editing' } });
     act(() => h.confirm()!.action());
