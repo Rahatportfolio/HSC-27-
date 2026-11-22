@@ -374,11 +374,11 @@ public class MobileShellInstrumentedTest {
     java.text.SimpleDateFormat dateFormat = new java.text.SimpleDateFormat("yyyy-MM-dd", java.util.Locale.US);
     dateFormat.setTimeZone(java.util.TimeZone.getTimeZone("Asia/Dhaka"));
     java.util.Calendar dates = java.util.Calendar.getInstance(java.util.TimeZone.getTimeZone("Asia/Dhaka"));
-    enterField(web, "input[aria-label='Plan start date']", dateFormat.format(dates.getTime()));
+    enterField(web, ".personal-setup-dates label:nth-child(1) input", dateFormat.format(dates.getTime()));
     dates.add(java.util.Calendar.DAY_OF_YEAR, 180);
-    enterField(web, "input[aria-label='Personal test target']", dateFormat.format(dates.getTime()));
+    enterField(web, ".personal-setup-dates label:nth-child(2) input", dateFormat.format(dates.getTime()));
     dates.add(java.util.Calendar.DAY_OF_YEAR, 180);
-    enterField(web, "input[aria-label='Personal end target']", dateFormat.format(dates.getTime()));
+    enterField(web, ".personal-setup-dates label:nth-child(3) input", dateFormat.format(dates.getTime()));
     tap(web, "input[name='fixed-obligations'][value='none']");
     enterField(web, ".personal-session-options label:first-child input", "60");
     enterField(web, ".personal-session-options label:last-child input", "5");
