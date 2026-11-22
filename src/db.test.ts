@@ -2,18 +2,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
-  run: vi.fn(), query: vi.fn(), execute: vi.fn(), open: vi.fn(), native: vi.fn(() => true),
+  run: vi.fn(), query: vi.fn(), execute: vi.fn(), open: vi.fn(), isOpen: vi.fn(), create: vi.fn(), native: vi.fn(() => true),
 }));
 vi.mock('./native', () => ({ isNativeApp: mocks.native }));
 vi.mock('@capacitor-community/sqlite', () => ({
   CapacitorSQLite: {},
   SQLiteConnection: class {
     isConnection() { return Promise.resolve({ result: false }); }
-    createConnection() { return Promise.resolve({ open: mocks.open, execute: mocks.execute, query: mocks.query, run: mocks.run }); }
+    createConnection() { return mocks.create(); }
+  },
+  SQLiteDBConnection: class {
+    open = mocks.open; isDBOpen = mocks.isOpen; execute = mocks.execute; query = mocks.query; run = mocks.run;
   },
 }));
 
-beforeEach(() => { vi.resetModules(); localStorage.clear(); vi.clearAllMocks(); mocks.open.mockResolvedValue(undefined); mocks.execute.mockResolvedValue(undefined); mocks.run.mockResolvedValue(undefined); });
+beforeEach(() => { vi.resetModules(); localStorage.clear(); vi.clearAllMocks(); mocks.open.mockResolvedValue(undefined); mocks.execute.mockResolvedValue(undefined); mocks.run.mockResolvedValue(undefined); mocks.isOpen.mockResolvedValue({ result: false }); mocks.create.mockResolvedValue({ open: mocks.open, isDBOpen: mocks.isOpen, execute: mocks.execute, query: mocks.query, run: mocks.run }); });
 
 describe('SQLite snapshot safety', () => {
   it('does not update local metadata merely by reading a newer snapshot', async () => {
@@ -75,4 +78,25 @@ it('restores a committed mirror when local payload diverges at the same stamp', 
   expect(localStorage.getItem(STORAGE_KEY)).toBe('older local payload');
   localStorage.setItem(STORAGE_KEY, 'committed payload');
   expect(await restoreFromDatabase()).toBeNull();
+});
+
+
+it('reattaches an existing native connection after WebView navigation without closing or clearing it', async () => {
+  const { persistToDatabase } = await import('./db');
+  mocks.create.mockRejectedValue(new Error('CreateConnection: Connection hsc27 already exists'));
+  mocks.isOpen.mockResolvedValue({ result: true });
+  mocks.query.mockResolvedValue({ values: [{ payload: 'unchanged', updated_at: '2026-11-02T00:00:00.000Z' }] });
+  expect(await persistToDatabase('unchanged', '2026-11-02T00:00:00.000Z')).toBe(true);
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.execute).toHaveBeenCalledTimes(1);
+  expect(mocks.run.mock.calls.some(call => call[0].startsWith('DELETE'))).toBe(false);
+});
+
+it('does not hide an unrelated database connection error', async () => {
+  const { restoreFromDatabase } = await import('./db');
+  mocks.create.mockRejectedValue(new Error('permission denied'));
+  const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  await expect(restoreFromDatabase()).rejects.toThrow('permission denied');
+  expect(mocks.open).not.toHaveBeenCalled();
+  warning.mockRestore();
 });

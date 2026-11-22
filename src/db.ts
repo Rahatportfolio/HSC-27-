@@ -14,6 +14,7 @@ const TABLE_SQL = 'CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY 
 type Row = Record<string, unknown>;
 type Db = {
   open: () => Promise<void>;
+  isDBOpen: () => Promise<{ result?: boolean }>;
   execute: (statement: string) => Promise<unknown>;
   run: (statement: string, values?: unknown[]) => Promise<unknown>;
   query: (statement: string, values?: unknown[]) => Promise<{ values?: Row[] }>;
@@ -25,14 +26,25 @@ async function getConnection(): Promise<Db | null> {
   if (!isNativeApp()) return null;
   if (!connection) {
     connection = (async () => {
-      const { CapacitorSQLite, SQLiteConnection } = await import('@capacitor-community/sqlite');
+      const { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } = await import('@capacitor-community/sqlite');
       const sqlite = new SQLiteConnection(CapacitorSQLite);
       let db: Db;
       const existing = await sqlite.isConnection(DB_NAME, false);
-      db = (existing.result
-        ? await sqlite.retrieveConnection(DB_NAME, false)
-        : await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false)) as unknown as Db;
-      try { await db.open(); } catch { /* the connection may already be open after a hot reload */ }
+      if (existing.result) {
+        db = await sqlite.retrieveConnection(DB_NAME, false) as unknown as Db;
+      } else {
+        try {
+          db = await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false) as unknown as Db;
+        } catch (error) {
+          // A page navigation resets the JS wrapper's connection map, but the
+          // Android plugin can still hold its live native connection. Reattach
+          // to that exact connection without closing it, clearing the DB, or
+          // disturbing an in-flight write. Do not mask any other failure.
+          if (!String(error).includes(`Connection ${DB_NAME} already exists`)) throw error;
+          db = new SQLiteDBConnection(DB_NAME, false, CapacitorSQLite) as unknown as Db;
+        }
+      }
+      if (!(await db.isDBOpen()).result) await db.open();
       await db.execute(TABLE_SQL);
       return db;
     })().catch(error => {
