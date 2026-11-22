@@ -79,9 +79,7 @@ jobs:
           echo 'Verifying APK identities and signer equality'
           "$SIGNER" verify --verbose --print-certs candidate/instrumentation.apk > candidate/instrumentation-signature.txt
           "$SIGNER" verify --verbose --print-certs candidate/prostuti-hsc27-fresh.apk > candidate/apk-signature.txt
-          APK_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' candidate/apk-signature.txt)
-          TEST_CERT=$(sed -n 's/^Signer #1 certificate SHA-256 digest: //p' candidate/instrumentation-signature.txt)
-          test -n "$APK_CERT" && test "$APK_CERT" = "$TEST_CERT"
+          node --input-type=module -e "import {readFileSync} from 'node:fs'; import {signingFingerprint} from './scripts/verify-release-asset.mjs'; const apk=signingFingerprint(readFileSync('candidate/apk-signature.txt','utf8')); const test=signingFingerprint(readFileSync('candidate/instrumentation-signature.txt','utf8')); if(apk!==test) throw Error('Instrumentation signer differs from release'); console.log('Instrumentation signer matches release:',apk);"
           "$AAPT" dump badging candidate/original-debug.apk | grep -F "package: name='com.prostuti.hsc27'"
           "$AAPT" dump badging candidate/instrumentation.apk | grep -F "package: name='com.prostuti.hsc27.fresh.test'"
           sha256sum candidate/prostuti-hsc27-fresh.apk > candidate/SHA256SUMS.txt

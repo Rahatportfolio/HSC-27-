@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
+import { signingFingerprint } from './verify-release-asset.mjs';
 
 export function validateFreshApk({ badging, manifest, signature, expectedCertificate, zipTest }) {
   assert.match(badging, /package: name='com\.prostuti\.hsc27\.fresh'\s+versionCode='\d+'/);
@@ -13,10 +14,10 @@ export function validateFreshApk({ badging, manifest, signature, expectedCertifi
   assert.match(manifest, /E: application\b/, 'Cannot inspect application manifest');
   assert.match(signature, /Verified using v2 scheme \(APK Signature Scheme v2\): true/);
   assert.match(zipTest, /No errors detected in compressed data/);
-  const signers = [...signature.matchAll(/Signer #(\d+) certificate SHA-256 digest:\s*([0-9a-f:]+)/gi)];
-  assert.equal(signers.length, 1, 'A single inspected signer is required');
-  assert.equal(signers[0][1], '1', 'Unexpected signer number');
-  const actual = signers[0][2].replaceAll(':', '').toLowerCase();
+  // Android SDK versions differ: some print "Signer #1", others print a
+  // V2/V3 signer line for the same signer. Require one signer and one
+  // unambiguous fingerprint rather than assuming one textual format.
+  const actual = signingFingerprint(signature);
   const expected = (expectedCertificate || '').replaceAll(':', '').toLowerCase();
   assert.match(expected, /^[a-f0-9]{64}$/, 'Expected signing certificate SHA-256 must be explicitly configured');
   assert.equal(actual, expected, 'Fresh app signing certificate mismatch');
