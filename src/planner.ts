@@ -188,6 +188,10 @@ export interface AppData {
   removedTasks: string[];
   /** Scanned handwritten notes metadata (page images stored in IndexedDB). */
   scannedNotes: ScannedNoteMeta[];
+  /** Chapters the student added through the AI assistant (built-in list stays untouched). */
+  customChapters?: import('./data').Chapter[];
+  /** Per-built-in-chapter overrides (paper/title/priority/number) set through the AI assistant. */
+  chapterOverrides?: Record<string, import('./chapterStore').ChapterOverride>;
 }
 
 export const freshData = (): AppData => ({
@@ -229,6 +233,8 @@ export const freshData = (): AppData => ({
   taskEdits: {},
   removedTasks: [],
   scannedNotes: [],
+  customChapters: [],
+  chapterOverrides: {},
 });
 
 /** Effective net daily study hours for a date, accounting for next-month boost and per-day custom override. */

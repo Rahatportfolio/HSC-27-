@@ -3,13 +3,14 @@ import { RECOMMENDED_S_IDS, chapterWorkEstimate, hasFullPersonalAllocation, isPe
 import type { CSSProperties } from 'react';
 import { ArrowUpRight, BookOpen, Check, ChevronDown, ChevronRight, FileText, LayoutGrid, List, Play, Search, ShieldAlert } from 'lucide-react';
 import { usePlanner } from '../context';
-import { CHAPTERS, PAPER_NAMES, SUBJECTS, syllabusNote, sortChapters, subjectById } from '../data';
+import { PAPER_NAMES, SUBJECTS, syllabusNote, sortChapters, subjectById } from '../data';
 import type { SubjectId } from '../data';
 import { bn, chapterFirstDate, chapterStudyTasks, formatDate, formatDurationBn, percent } from '../planner';
 import { chapterMeta } from '../study';
 import { CHAPTER_SCHEDULE, scheduleFor } from '../schedule';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
 import { t } from '../i18n';
+import { mergedChapters, isCustomChapter } from '../chapterStore';
 import { chapterPriority, chapterStage, isLearningComplete } from '../learning';
 import { chapterClassProgress } from '../classes';
 import { ClassBlock, ClassLinkRow, EmptyState, LessonList, PageHeading, ProgressBar, SubjectIcon } from '../components';
@@ -32,6 +33,7 @@ export default function SyllabusView() {
   const [showFullBlocks, setShowFullBlocks] = useState(true);
   const [openLessons, setOpenLessons] = useState<Record<string, boolean>>({});
 
+  const CHAPTERS = mergedChapters(data);
   const sIds = (data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds || RECOMMENDED_S_IDS;
   const s = subjectById[subject];
   const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject && (priority !== 'S' || sIds.includes(chapter.id))));
@@ -147,6 +149,10 @@ export default function SyllabusView() {
               const lessons = BANGLA_LESSONS[chapter.id];
               const progress = chapterClassProgress(data, chapter.id);
               const lessonsExpanded = !!openLessons[chapter.id];
+
+              if (isCustomChapter(data, chapter.id)) return <div key={chapter.id} className="chapter-card-item"><div className="chapter-row">
+                <span className="chapter-number">{bn(chapter.number)}</span><span className="chapter-copy"><strong>{chapter.title}</strong><span>{t('নিজের অধ্যায় · AI তালিকায় সংরক্ষিত; রুটিন ও ট্র্যাকিংয়ে এখনো যোগ হয় না।', 'Custom chapter · saved in your AI list; not yet available in routines or tracking.')}</span></span><span className={`priority-badge ${chapter.priority.toLowerCase()}`}>{chapter.priority}</span>
+              </div></div>;
 
               return <div key={chapter.id} className={`chapter-card-item ${isDone ? 'done' : ''} ${isWeak ? 'weak' : ''}`}>
                 <button className={`chapter-row ${isDone ? 'done' : ''} ${isWeak ? 'weak' : ''}`} onClick={() => openChapter(chapter)}>

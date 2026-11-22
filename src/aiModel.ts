@@ -1,20 +1,9 @@
-/**
- * On-device AI model: SmolLM2-135M-Instruct (Q8, about 140 MB).
- *
- * The weights are deliberately NOT bundled. GitHub cannot store a single file
- * larger than 100 MB, and shipping 140 MB inside the site would slow every
- * first visit. Instead the app downloads the model once from Hugging Face
- * through the bundled transformers.js runtime. The browser may cache model
- * files; cache eviction can require downloading the model again.
- *
- * The built-in rule-based brain in aiBrain.ts answers instantly with no
- * download at all; this module is only for open-ended chat.
- */
+/** On-device Qwen2.5 model; weights are downloaded on demand, not bundled. */
 
-export const AI_MODEL_ID = 'HuggingFaceTB/SmolLM2-135M-Instruct';
+export const AI_MODEL_ID = 'onnx-community/Qwen2.5-1.5B-Instruct';
 export const AI_MODEL_DTYPE = 'q8';
 /** Approximate size of the Q8 weights on disk, in megabytes. */
-export const AI_MODEL_SIZE_MB = 140;
+export const AI_MODEL_SIZE_MB = 1600;
 
 export interface AiProgress {
   status: string;
@@ -34,6 +23,7 @@ export const AI_SYSTEM_PROMPT = [
   'Answer in the same language the student writes: Bengali, Banglish (Bengali in Latin letters), or English.',
   'Keep answers short, simple and practical. Explain HSC science concepts step by step (Physics, Chemistry, Biology, Higher Math, Bangla, English, ICT).',
   'Give MCQ and CQ exam tips when asked. Never claim to know the student\'s personal data, marks or routine.',
+  'You cannot change app data. Never claim you added, moved, deleted, renamed, or saved a chapter. For chapter changes, tell the student to use Smart brain with the chapter name and subject.',
   'If you are unsure about something, say so honestly instead of inventing facts.',
 ].join(' ');
 

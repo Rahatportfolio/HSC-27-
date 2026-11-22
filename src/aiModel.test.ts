@@ -7,11 +7,11 @@ import {
 afterEach(() => { unloadAiModel(); vi.unstubAllGlobals(); });
 
 describe('on-device AI model configuration', () => {
-  it('targets the 100–200 MB SmolLM2 instruct model', () => {
-    expect(AI_MODEL_ID).toBe('HuggingFaceTB/SmolLM2-135M-Instruct');
+  it('targets the on-device Qwen instruct model', () => {
+    expect(AI_MODEL_ID).toBe('onnx-community/Qwen2.5-1.5B-Instruct');
     expect(AI_MODEL_DTYPE).toBe('q8');
-    expect(AI_MODEL_SIZE_MB).toBeGreaterThanOrEqual(100);
-    expect(AI_MODEL_SIZE_MB).toBeLessThanOrEqual(200);
+    expect(AI_MODEL_SIZE_MB).toBeGreaterThanOrEqual(1500);
+    expect(AI_MODEL_SIZE_MB).toBeLessThanOrEqual(1800);
   });
 
 

@@ -5,12 +5,14 @@
  * video lengths or exam predictions. For open-ended chat, the downloadable
  * on-device model in aiModel.ts is available separately.
  */
-import { CHAPTERS, SUBJECTS, chapterById, subjectById } from './data';
-import type { Chapter, SubjectId } from './data';
+import { SUBJECTS, chapterById, subjectById } from './data';
+import type { Chapter, Priority, SubjectId } from './data';
 import type { QuizQuestion } from './types';
 import type { AppData } from './planner';
 import { bn } from './planner';
 import { t } from './i18n';
+import { describeChapterAction, isCustomChapter, makeCustomChapterId, mergedChapters, nextChapterNumber } from './chapterStore';
+import type { ChapterAction } from './chapterStore';
 
 export type AiBrainAnswer =
   | { kind: 'chapters'; subject: SubjectId; paper?: 1 | 2; text: string }
@@ -20,6 +22,7 @@ export type AiBrainAnswer =
   | { kind: 'tip'; text: string }
   | { kind: 'progress'; text: string }
   | { kind: 'motivation'; text: string }
+  | { kind: 'action'; action: ChapterAction; text: string }
   | { kind: 'unknown'; text: string };
 
 const SUBJECT_PATTERNS: [SubjectId, RegExp][] = [
@@ -69,9 +72,9 @@ const priorityLabel = (priority: Chapter['priority']): string =>
 const chapterLine = (chapter: Chapter): string =>
   `${bn(chapter.number)}. ${chapter.title} (${priorityLabel(chapter.priority)})`;
 
-function chaptersAnswer(subject: SubjectId, paper?: 1 | 2): AiBrainAnswer {
+function chaptersAnswer(subject: SubjectId, paper: 1 | 2 | undefined, chapters: Chapter[]): AiBrainAnswer {
   const subjectInfo = subjectById[subject];
-  const rows = CHAPTERS.filter(chapter => chapter.subject === subject && (paper === undefined || chapter.paper === paper));
+  const rows = chapters.filter(chapter => chapter.subject === subject && (paper === undefined || chapter.paper === paper));
   if (!rows.length) {
     return { kind: 'chapters', subject, paper, text: t(`${subjectInfo.name}-এর এই পত্রের কোনো অধ্যায় তালিকায় নেই।`, `No chapters are listed for ${subjectInfo.english} in this paper.`) };
   }
@@ -93,9 +96,9 @@ function chapterAnswer(chapter: Chapter): AiBrainAnswer {
   };
 }
 
-function subjectsAnswer(): AiBrainAnswer {
+function subjectsAnswer(chapters: Chapter[]): AiBrainAnswer {
   const rows = SUBJECTS.map(subject => {
-    const count = CHAPTERS.filter(chapter => chapter.subject === subject.id).length;
+    const count = chapters.filter(chapter => chapter.subject === subject.id).length;
     return `${subject.name} (${subject.english}) — ${bn(count)}টি অধ্যায়`;
   });
   return {
@@ -197,14 +200,165 @@ function motivationAnswer(): AiBrainAnswer {
 }
 
 const HELP_TEXT = (): string => t(
-  'আমি এই প্রশ্নগুলোর উত্তর দিতে পারি:\n· “পদার্থের অধ্যায়গুলো কী?” — বিষয়ের অধ্যায় তালিকা\n· “পদার্থের ভেক্টর অধ্যায়ের ফোকাস কী?” — একটি অধ্যায়ের বিস্তারিত\n· “কুইজ দাও” — MCQ কুইজ\n· “টিপস দাও” — পড়ার টিপস\n· “আমার অগ্রগতি?” — তোমার সেভ করা অগ্রগতি\n· “মোটিভেশন দাও” — উৎসাহ\nখোলামেলা প্রশ্নের জন্য “AI মডেল” মোড ব্যবহার করো (প্রায় ১৪০ MB ডাউনলোড লাগবে)।',
-  'I can answer:\n· “What are the Physics chapters?” — chapter lists by subject\n· “What is the focus of the Physics Vector chapter?” — one chapter in detail\n· “Give me a quiz” — MCQ quiz\n· “Give me tips” — study tips\n· “My progress?” — your saved progress\n· “Motivate me” — encouragement\nFor open-ended questions, use “AI model” mode (approximately 140 MB download).',
+  'আমি এই প্রশ্নগুলোর উত্তর দিতে পারি:\n· “পদার্থের অধ্যায়গুলো কী?” — বিষয়ের অধ্যায় তালিকা\n· “পদার্থের ভেক্টর অধ্যায়ের ফোকাস কী?” — একটি অধ্যায়ের বিস্তারিত\n· “কুইজ দাও” — MCQ কুইজ\n· “টিপস দাও” — পড়ার টিপস\n· “আমার অগ্রগতি?” — তোমার সেভ করা অগ্রগতি\n· “মোটিভেশন দাও” — উৎসাহ\nআর অধ্যায় নিজে বদলাতে পারো:\n· “পদার্থে ‘আধুনিক পদার্থবিজ্ঞান’ নামে অধ্যায় যোগ করো” — নতুন অধ্যায়\n· “ভেক্টর অধ্যায় দ্বিতীয় পত্রে রাখো” — পত্র বদল\n· “ভেক্টর অধ্যায়ের নাম ‘ভেক্টর ও ম্যাট্রিক্স’ রাখো” — নাম বদল\n· “ভেক্টর অধ্যায়ের অগ্রাধিকার A করো” — অগ্রাধিকার বদল\nপ্রতিটি পরিবর্তনের আগে তোমার নিশ্চিতি নেবো। খোলামেলা প্রশ্নের জন্য “AI মডেল” মোড ব্যবহার করো।',
+  'I can answer:\n· “What are the Physics chapters?” — chapter lists by subject\n· “What is the focus of the Physics Vector chapter?” — one chapter in detail\n· “Give me a quiz” — MCQ quiz\n· “Give me tips” — study tips\n· “My progress?” — your saved progress\n· “Motivate me” — encouragement\nAnd I can change chapters for you:\n· “Add a chapter named ‘Modern Physics’ to Physics” — new chapter\n· “Move the Vector chapter to the second paper” — change paper\n· “Rename the Vector chapter to ‘Vector and Matrix’” — new title\n· “Make the Vector chapter Priority A” — change priority\nI always ask for your confirmation first. For open-ended questions, use “AI model” mode.',
 );
+
+// ---------- Chapter management actions ----------
+// The brain can also *change* the chapter list: add, move, rename,
+// reprioritise or delete (custom chapters only). Every change is returned as
+// a structured action; the UI asks for confirmation before applying it.
+
+const CHAPTER_WORD = /(?:অধ্যায়|adhyay|chapter)/u;
+const ADD_INTENT = /(?:যোগ\s*(?:করো|কর|দাও)|বাড়াও|বারাও|barau|barao|jog\s*koro|\badd\b)/u;
+const DELETE_INTENT = /(?:মুছে|মুছ|delete|remove|বাদ\s*দাও|বাদ\s*দিও)/u;
+const RENAME_INTENT = /(?:rename|নাম\s*বদল|নাম\s*পরিবর্তন|এর নাম|er naam|naam\s*bodol)/u;
+const MOVE_WORD = /(?:সরাও|সরিয়ে|move|shift|স্থানান্তর)/u;
+const RENAME_PATTERN = /(?:rename|নাম\s*বদলে|নাম\s*বদল|নাম\s*পরিবর্তন)\s+(.+?)\s+(?:to|হিসেবে|নামে)\s+(.+)$/iu;
+const RENAME_PATTERN_2 = /(.+?)\s*(?:এর নাম|er naam|নাম|naam)\s+(.+?)\s*(?:রাখো|rakho|দাও|dao|করো|koro)$/iu;
+
+const moveIntent = (text: string): boolean =>
+  MOVE_WORD.test(text)
+  || (/(?:অন্য|onno)/u.test(text) && /(?:রাখো|rakho)/u.test(text))
+  || (/(?:রাখো|rakho)/u.test(text) && /(?:পত্র|paper)/u.test(text));
+
+/** Last paper mentioned in the text — the target of a move ("1st paper er chapter 2, ditiyo paper e rakho"). */
+function detectTargetPaper(text: string): 1 | 2 | undefined {
+  const pattern = /(?:(?:\b1(?:st)?\b|\bfirst\b|প্রথম|prothom|1ম)\s*(?:paper\b|পত্র))|(?:(?:\b2(?:nd)?\b|\bsecond\b|দ্বিতীয়|ditiyo|2য়)\s*(?:paper\b|পত্র))|(?:(?:paper\b|পত্র)\s*(?:1(?:st)?\b|প্রথম|prothom))|(?:(?:paper\b|পত্র)\s*(?:2(?:nd)?\b|দ্বিতীয়|ditiyo))/gu;
+  let last: 1 | 2 | undefined;
+  for (const match of text.matchAll(pattern)) {
+    last = /^(?:\b1|প্রথম|prothom|1ম|paper\b\s*1|পত্র\s*1)/u.test(match[0]) ? 1 : 2;
+  }
+  return last;
+}
+
+type ChapterLookup =
+  | { status: 'found'; chapter: Chapter }
+  | { status: 'ambiguous'; text: string }
+  | { status: 'missing'; text: string };
+
+/** Find one chapter by title or number. paperHint only breaks ties, never filters. */
+function findChapter(text: string, chapters: Chapter[], subject?: SubjectId, paperHint?: 1 | 2): ChapterLookup {
+  const bySubject = chapters.filter(chapter => !subject || chapter.subject === subject);
+  const titleMatches = bySubject.filter(chapter => text.includes(normalize(chapter.title)));
+  if (titleMatches.length === 1) return { status: 'found', chapter: titleMatches[0] };
+  if (titleMatches.length > 1) {
+    if (paperHint !== undefined) {
+      const inPaper = titleMatches.filter(chapter => chapter.paper === paperHint);
+      if (inPaper.length === 1) return { status: 'found', chapter: inPaper[0] };
+    }
+    return { status: 'ambiguous', text: t('একই নামে একাধিক অধ্যায় আছে। বিষয় ও পত্র বলো।', 'More than one chapter has that name. Specify the subject and paper.') };
+  }
+  const chapterNumber = detectChapterNumber(text);
+  if (chapterNumber) {
+    const matches = bySubject.filter(chapter => chapter.number === chapterNumber);
+    if (matches.length === 1) return { status: 'found', chapter: matches[0] };
+    if (matches.length > 1) {
+      if (paperHint !== undefined) {
+        const inPaper = matches.filter(chapter => chapter.paper === paperHint);
+        if (inPaper.length === 1) return { status: 'found', chapter: inPaper[0] };
+      }
+      return { status: 'ambiguous', text: t('এই নম্বর একাধিক পত্রে আছে। প্রথম না দ্বিতীয় পত্র বলো।', 'This chapter number appears in multiple papers. Specify the paper.') };
+    }
+  }
+  return { status: 'missing', text: t('কোন অধ্যায়ের কথা বলছো তা বুঝতে পারিনি। অধ্যায়ের নাম বা নম্বর বলো।', 'I could not tell which chapter you mean. Give its name or number.') };
+}
+
+const actionAnswer = (action: ChapterAction, data: AppData): AiBrainAnswer => ({
+  kind: 'action',
+  action,
+  text: `${describeChapterAction(action, data)}\n${t('নিশ্চিত করতে নিচের “হ্যাঁ, করো” বোতাম চাপো; বাতিল করতে “বাতিল” চাপো।', 'Tap “Yes, do it” below to confirm; tap “Cancel” to skip.')}`,
+});
+
+/** Title for a new chapter: quoted text, or the text after নামে/named/নাম. */
+function extractNewTitle(message: string): string | undefined {
+  const quoted = message.match(/["“‘]([^"”’]{1,120})["”’]/u)?.[1] ?? message.match(/'([^']{1,120})'/u)?.[1];
+  if (quoted?.trim()) return quoted.trim();
+  const named = message.match(/(?:নামে|named|called)\s+(.+?)(?:\s+(?:যোগ|বাড়াও|barau|barao|add|rakho|রাখো|kor|করো|dao|দাও))?$/iu);
+  if (named?.[1]?.trim()) return named[1].trim();
+  const naam = message.match(/(?:নাম|naam)\s+(.+?)\s*(?:রাখো|rakho|দাও|dao|করো|koro)$/iu);
+  return naam?.[1]?.trim() || undefined;
+}
+
+function addChapterAnswer(message: string, text: string, data: AppData, chapters: Chapter[]): AiBrainAnswer {
+  const subject = detectSubject(text);
+  if (!subject) {
+    return { kind: 'unknown', text: t('কোন বিষয়ে অধ্যায় যোগ করবো? বিষয়ের নাম বলো, যেমন “পদার্থে নতুন অধ্যায় যোগ করো”।', 'Which subject should I add the chapter to? Name the subject, for example “Add a new chapter to Physics”.') };
+  }
+  const title = extractNewTitle(message);
+  if (!title) {
+    return { kind: 'unknown', text: t('নতুন অধ্যায়ের নাম বলো। যেমন: “পদার্থে ‘আধুনিক পদার্থবিজ্ঞান’ নামে অধ্যায় যোগ করো”।', 'Tell me the new chapter’s title. For example: “Add a chapter named ‘Modern Physics’ to Physics”.') };
+  }
+  const paper = detectPaper(text) ?? 1;
+  if (subject === 'ict' && paper === 2) return { kind: 'unknown', text: t('ICT-তে শুধু একটি পত্র আছে।', 'ICT has only one paper.') };
+  if ((data.customChapters?.length ?? 0) >= 500) return { kind: 'unknown', text: t('নিজের অধ্যায়ের সীমা পূর্ণ।', 'Custom chapter limit reached.') };
+  const priority = text.match(/(?:priority|অগ্রাধিকার)\s*([abc])/u)?.[1]?.toUpperCase() as Priority | undefined;
+  const number = nextChapterNumber(chapters, subject, paper);
+  const baseId = makeCustomChapterId(subject, paper, title);
+  const existingIds = new Set(chapters.map(chapter => chapter.id));
+  let id = baseId, suffix = 2;
+  while (existingIds.has(id)) id = `${baseId}-${suffix++}`;
+  const chapter: Chapter = {
+    id, subject, paper, number, title,
+    priority: priority ?? 'B',
+    effort: 2,
+    focus: t('নিজের যোগ করা অধ্যায় — ফোকাস নিজে লিখো।', 'Your own added chapter — write its focus yourself.'),
+  };
+  return actionAnswer({ type: 'add', chapter }, data);
+}
+
+function moveChapterAnswer(text: string, data: AppData, chapters: Chapter[]): AiBrainAnswer {
+  const lookup = findChapter(text, chapters, detectSubject(text), detectPaper(text));
+  if (lookup.status !== 'found') return { kind: 'unknown', text: lookup.text };
+  const chapter = lookup.chapter;
+  const target = detectTargetPaper(text);
+  if (target === undefined) {
+    return { kind: 'unknown', text: t(`“${chapter.title}” কোন পত্রে রাখবো? “প্রথম পত্র” বা “দ্বিতীয় পত্র” বলো।`, `Which paper should I move “${chapter.title}” to? Say “first paper” or “second paper”.`) };
+  }
+  if (chapter.subject === 'ict' && target === 2) return { kind: 'unknown', text: t('ICT-তে শুধু একটি পত্র আছে।', 'ICT has only one paper.') };
+  if (target === chapter.paper) {
+    return { kind: 'unknown', text: t(`“${chapter.title}” ইতিমধ্যে ${bn(target)}ম পত্রে আছে।`, `“${chapter.title}” is already in Paper ${target}.`) };
+  }
+  return actionAnswer({ type: 'move', chapterId: chapter.id, toPaper: target }, data);
+}
+
+function deleteChapterAnswer(text: string, data: AppData, chapters: Chapter[]): AiBrainAnswer {
+  const lookup = findChapter(text, chapters, detectSubject(text), detectPaper(text));
+  if (lookup.status !== 'found') return { kind: 'unknown', text: lookup.text };
+  if (!isCustomChapter(data, lookup.chapter.id)) {
+    return { kind: 'unknown', text: t('বইয়ের মূল অধ্যায় মুছে ফেলা যায় না; তবে অন্য পত্রে সরাতে, নাম বদলাতে বা অগ্রাধিকার বদলাতে পারো।', 'Built-in chapters cannot be deleted; you can move, rename or reprioritise them instead.') };
+  }
+  return actionAnswer({ type: 'delete', chapterId: lookup.chapter.id }, data);
+}
+
+function renameChapterAnswer(message: string, text: string, data: AppData, chapters: Chapter[]): AiBrainAnswer | null {
+  const match = message.match(RENAME_PATTERN) ?? message.match(RENAME_PATTERN_2);
+  if (!match) {
+    if (RENAME_INTENT.test(text)) {
+      return { kind: 'unknown', text: t('নাম বদলাতে বলো এভাবে: “ভেক্টর অধ্যায়ের নাম ‘ভেক্টর ও ম্যাট্রিক্স’ রাখো”।', 'To rename, say it like: “Rename the Vector chapter to ‘Vector and Matrix’”.') };
+    }
+    return null;
+  }
+  const [, chapterRef, rawTitle] = match;
+  const title = rawTitle.replace(/^["“‘']|["”’']$/gu, '').trim();
+  if (!title) return { kind: 'unknown', text: t('নতুন নামটা বলো।', 'Tell me the new title.') };
+  const lookup = findChapter(normalize(chapterRef), chapters, detectSubject(normalize(chapterRef)), detectPaper(normalize(chapterRef)));
+  if (lookup.status !== 'found') return { kind: 'unknown', text: lookup.text };
+  return actionAnswer({ type: 'rename', chapterId: lookup.chapter.id, title }, data);
+}
+
+function priorityChapterAnswer(text: string, data: AppData, chapters: Chapter[]): AiBrainAnswer {
+  const priority = text.match(/(?:priority|অগ্রাধিকার)\s*([abc])/u)?.[1]?.toUpperCase() as Priority;
+  const lookup = findChapter(text, chapters, detectSubject(text), detectPaper(text));
+  if (lookup.status !== 'found') return { kind: 'unknown', text: lookup.text };
+  return actionAnswer({ type: 'setPriority', chapterId: lookup.chapter.id, priority }, data);
+}
 
 /** Answer a study question from the app's own data. Pure and testable. */
 export function answerAiQuestion(message: string, data: AppData): AiBrainAnswer {
   const text = normalize(message);
   if (!text) return { kind: 'unknown', text: HELP_TEXT() };
+  const chapters = mergedChapters(data);
   const subject = detectSubject(text);
   const paper = detectPaper(text);
 
@@ -220,13 +374,23 @@ export function answerAiQuestion(message: string, data: AppData): AiBrainAnswer 
   if (/(?:অগ্রগতি|progress|কেমন চলছে|kemon cholche|আমার রিপোর্ট|my report|how am i doing)/u.test(text)) {
     return progressAnswer(data);
   }
+  // Chapter management commands run before plain listing, so
+  // "physics e chapter barau" is not mistaken for a list request.
+  if (CHAPTER_WORD.test(text)) {
+    const rename = renameChapterAnswer(message, text, data, chapters);
+    if (rename) return rename;
+    if (ADD_INTENT.test(text)) return addChapterAnswer(message, text, data, chapters);
+    if (DELETE_INTENT.test(text)) return deleteChapterAnswer(text, data, chapters);
+    if (/(?:priority|অগ্রাধিকার)\s*[abc]/u.test(text)) return priorityChapterAnswer(text, data, chapters);
+    if (moveIntent(text)) return moveChapterAnswer(text, data, chapters);
+  }
   if (/(?:বিষয়|bishoy|subjects?|কয়টা বিষয়|koyta bishoy)/u.test(text) && !subject) {
-    return subjectsAnswer();
+    return subjectsAnswer(chapters);
   }
   // Resolve a chapter name even when the student did not name a subject.
   // Titles are compared in the same Unicode form as the question, and a
   // repeated title is never guessed across different papers or subjects.
-  const candidates = CHAPTERS.filter(chapter => (!subject || chapter.subject === subject) && (paper === undefined || chapter.paper === paper));
+  const candidates = chapters.filter(chapter => (!subject || chapter.subject === subject) && (paper === undefined || chapter.paper === paper));
   const titleMatches = candidates.filter(chapter => text.includes(normalize(chapter.title)));
   if (titleMatches.length === 1) return chapterAnswer(titleMatches[0]);
   if (titleMatches.length > 1) return { kind: 'unknown', text: t('একই নামে একাধিক অধ্যায় আছে। বিষয় ও পত্র বলো।', 'More than one chapter has that name. Specify the subject and paper.') };
@@ -241,7 +405,7 @@ export function answerAiQuestion(message: string, data: AppData): AiBrainAnswer 
       if (matches.length > 1) return { kind: 'unknown', text: t('এই নম্বর একাধিক পত্রে আছে। প্রথম না দ্বিতীয় পত্র বলো।', 'This chapter number appears in multiple papers. Specify the paper.') };
       return { kind: 'unknown', text: t('এই বিষয় ও পত্রে ওই নম্বরের অধ্যায় পাইনি।', 'No chapter with that number was found for this subject and paper.') };
     }
-    if (/(?:অধ্যায়|adhyay|chapters?|list)/u.test(text)) return chaptersAnswer(subject, paper);
+    if (/(?:অধ্যায়|adhyay|chapters?|list)/u.test(text)) return chaptersAnswer(subject, paper, chapters);
   }
   if (/(?:help|সাহায্য|কী পারো|ki paro|what can you do)/u.test(text)) {
     return { kind: 'unknown', text: HELP_TEXT() };
