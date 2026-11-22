@@ -454,7 +454,7 @@ public class MobileShellInstrumentedTest {
     // No grace loop: the teardown flush must already own this write. A delayed
     // re-read would hide a real loss caused by a late debounce or missing flush.
     assertRetained(web, retained, "Fresh setup lost routine/notes/completion after native recreation");
-    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("allChapters", 114).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
+    record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("selectedChapters", routine.getJSONArray("chapterIds").length()).put("scope", routine.getString("scope")).put("dailyNetMinutes", routine.getInt("dailyLimitMinutes")).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
     final WebView recoveryWeb = web;
     InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> recoveryWeb.loadUrl("https://localhost/recovery.html"));
