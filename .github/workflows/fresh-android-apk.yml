@@ -5,13 +5,13 @@ on:
     paths:
       - 'android/**'
       - 'src/**'
-      - 'scripts/check-fresh-apk*'
+      - 'scripts/check-fresh-*'
       - '.github/workflows/fresh-android-apk.yml'
   pull_request:
     paths:
       - 'android/**'
       - 'src/**'
-      - 'scripts/check-fresh-apk*'
+      - 'scripts/check-fresh-*'
       - '.github/workflows/fresh-android-apk.yml'
   workflow_dispatch:
 permissions:
@@ -78,33 +78,33 @@ jobs:
           disable-animations: true
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
-            adb shell svc power stayon true
-            adb shell settings put system screen_off_timeout 2147483647
-            adb shell input keyevent KEYCODE_WAKEUP
-            adb shell wm dismiss-keyguard
-            adb shell settings put global hide_error_dialogs 1
-            adb shell settings put global anr_show_background 0
-            adb shell svc wifi disable
-            adb shell svc data disable
-            adb install android/old-package.apk
-            adb install android/separate-package.apk
-            adb shell pm path com.prostuti.hsc27 | grep -q '^package:'
-            adb shell pm path com.prostuti.hsc27.fresh | grep -q '^package:'
-            # Disposable emulator only: prove installing/running the separate
-            # package did not delete or access the original app's private file.
-            adb shell "run-as com.prostuti.hsc27 sh -c 'mkdir -p files; echo original-private-snapshot > files/arena-isolation-check'"
-            adb shell "run-as com.prostuti.hsc27.fresh sh -c 'test ! -e files/arena-isolation-check'"
-            (cd android && ./gradlew :app:connectedDebugAndroidTest -PseparateInstall=true --no-daemon --stacktrace)
-            adb shell pm path com.prostuti.hsc27 | grep -q '^package:'
-            adb shell pm path com.prostuti.hsc27.fresh | grep -q '^package:'
-            adb shell run-as com.prostuti.hsc27 cat files/arena-isolation-check | tr -d '\r' | grep -Fx 'original-private-snapshot'
-            adb shell "run-as com.prostuti.hsc27.fresh sh -c 'test ! -e files/arena-isolation-check'"
+            bash -o pipefail -c 'bash scripts/check-fresh-device.sh 2>&1 | tee fresh-device.log'
+      - name: Surface device failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            if (fs.existsSync('fresh-device.log')) core.error(fs.readFileSync('fresh-device.log','utf8').slice(-3500));
+            const root = 'android/app/build/outputs/androidTest-results';
+            function inspect(dir) {
+              if (!fs.existsSync(dir)) return;
+              for (const item of fs.readdirSync(dir,{withFileTypes:true})) {
+                const path = `${dir}/${item.name}`;
+                if (item.isDirectory()) inspect(path);
+                else if (item.name.endsWith('.xml')) {
+                  for (const failure of fs.readFileSync(path,'utf8').matchAll(/<failure[\s\S]*?<\/failure>/g)) core.error(failure[0].slice(0,3500));
+                }
+              }
+            }
+            inspect(root);
       - name: Preserve device test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: separate-android-results-${{ matrix.api }}
           path: |
+            fresh-device.log
             android/app/build/reports/androidTests/
             android/app/build/outputs/androidTest-results/
           if-no-files-found: ignore
