@@ -5,6 +5,8 @@ import static org.junit.Assert.*;
 import android.Manifest;
 import android.app.KeyguardManager;
 import android.graphics.Bitmap;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
 import android.os.Build;
 import android.os.ParcelFileDescriptor;
 import android.os.PowerManager;
@@ -25,6 +27,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONTokener;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
@@ -321,6 +324,39 @@ public class MobileShellInstrumentedTest {
     waitFor(web, "document.querySelector(" + JSONObject.quote(selector) + ").value===" + JSONObject.quote(value));
   }
 
+  // React's validated restore can reorder object keys without changing any
+  // saved content. Compare all values structurally, including every workload,
+  // note and completion, while reporting concise actionable failures.
+  private boolean sameJson(Object left, Object right) throws Exception {
+    if (left instanceof JSONObject && right instanceof JSONObject) {
+      JSONObject a = (JSONObject) left, b = (JSONObject) right;
+      if (a.length() != b.length()) return false;
+      java.util.Iterator<String> keys = a.keys();
+      while (keys.hasNext()) {
+        String key = keys.next();
+        if (!b.has(key) || !sameJson(a.get(key), b.get(key))) return false;
+      }
+      return true;
+    }
+    if (left instanceof JSONArray && right instanceof JSONArray) {
+      JSONArray a = (JSONArray) left, b = (JSONArray) right;
+      if (a.length() != b.length()) return false;
+      for (int i = 0; i < a.length(); i++) if (!sameJson(a.get(i), b.get(i))) return false;
+      return true;
+    }
+    if (left instanceof Number && right instanceof Number) return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue()) == 0;
+    return left.equals(right);
+  }
+
+  private void assertRetained(WebView web, String retained, String message) throws Exception {
+    String actual = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
+    JSONArray expected = new JSONArray((String) new JSONTokener(retained).nextValue());
+    JSONArray observed = new JSONArray((String) new JSONTokener(actual).nextValue());
+    assertTrue(message + ": routine changed", sameJson(expected.getJSONObject(0), observed.getJSONObject(0)));
+    assertTrue(message + ": notes expected=" + expected.getJSONObject(1) + " actual=" + observed.getJSONObject(1), sameJson(expected.getJSONObject(1), observed.getJSONObject(1)));
+    assertTrue(message + ": completion expected=" + expected.getJSONObject(2) + " actual=" + observed.getJSONObject(2), sameJson(expected.getJSONObject(2), observed.getJSONObject(2)));
+  }
+
   private void completeFreshSetupAndRecover(ActivityScenario<MainActivity> scenario, WebView web) throws Exception {
     waitFor(web, "!!document.querySelector('.quick-start')");
     tap(web, ".quick-start-footer .text-button");
@@ -404,7 +440,7 @@ public class MobileShellInstrumentedTest {
     waitFor(web, "!!document.querySelector('.personal-home')");
     // No grace loop: the teardown flush must already own this write. A delayed
     // re-read would hide a real loss caused by a late debounce or missing flush.
-    assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    assertRetained(web, retained, "Fresh setup lost routine/notes/completion after native recreation");
     record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("allChapters", 114).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
     final WebView recoveryWeb = web;
@@ -414,7 +450,7 @@ public class MobileShellInstrumentedTest {
     // exact storage value at the recovery page boundary, and independently
     // verify it contains the user's edited routine, note, and completion.
     String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
-    assertEquals("Recovery page lost routine/history before reading", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    assertRetained(web, retained, "Recovery page lost routine/history before reading");
     tap(web, "#recovery-profile");
     waitFor(web, "!!document.querySelector('#recovery-json').value");
     assertEquals("Independent native recovery changed raw JSON", raw, evaluate(web, "document.querySelector('#recovery-json').value"));
@@ -422,8 +458,49 @@ public class MobileShellInstrumentedTest {
     screenshot("new-student-independent-recovery");
     tap(web, "#recovery-reopen");
     waitFor(web, "!!document.querySelector('.personal-home')");
-    assertEquals("Returning from native recovery changed routine/history", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    assertRetained(web, retained, "Returning from native recovery changed routine/history");
     record("new-student-independent-recovery", new JSONObject().put("exactRawLocalJson", true).put("zeroRecoveryStorageWrites", true).put("returnedToSavedRoutine", true).put("sqliteOrMediaRecoveryCertified", false));
+
+    // In addition to the immediate-recreation check above, prove the app's
+    // actual "auto-saved" indicator is backed by a committed SQLite row.
+    // Do not rely solely on the DOM or on WebView's localStorage cache.
+    String confirmedNote = "Native confirmed save survives recreation";
+    enterField(web, "textarea[aria-label='Day note']", confirmedNote);
+    try {
+      waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&document.querySelector('.note-card [role=status]')?.textContent==='auto-saved';})()");
+    } catch (AssertionError timeout) {
+      JSONObject details = object(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return {status:document.querySelector('.note-card [role=status]')?.textContent||'',value:document.querySelector('.note-card textarea')?.value||'',notes:d.notes,stamp:localStorage.getItem('hsc27-prostuti-v1-saved-at'),alerts:[...document.querySelectorAll('[role=alert]')].map(e=>e.textContent)};})()");
+      File diagFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
+      try (SQLiteDatabase db = SQLiteDatabase.openDatabase(diagFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+           Cursor cursor = db.rawQuery("SELECT payload, updated_at FROM app_state WHERE id = 1", null)) {
+        if (cursor.moveToFirst()) {
+          details.put("databaseStamp", cursor.getString(1));
+          details.put("databaseNotes", new JSONObject(cursor.getString(0)).getJSONObject("notes"));
+        } else details.put("database", "no row");
+      } catch (Exception diagnosticError) { details.put("databaseError", diagnosticError.toString()); }
+      String log = shell("logcat -d -t 3000");
+      StringBuilder warnings = new StringBuilder();
+      for (String line : log.split("\n")) if (line.contains("SQLite snapshot") || line.contains("SQLite mirror") || line.contains("database is slow")) {
+        if (warnings.length() < 2500) warnings.append(line).append("\n");
+      }
+      details.put("sqliteWarnings", warnings.toString());
+      throw new AssertionError("Confirmed-save timeout: " + details, timeout);
+    }
+    File dbFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
+    try (SQLiteDatabase db = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+         Cursor cursor = db.rawQuery("SELECT payload FROM app_state WHERE id = 1", null)) {
+      assertTrue("Saved indicator had no SQLite row", cursor.moveToFirst());
+      JSONObject durable = new JSONObject(cursor.getString(0));
+      assertTrue("Saved indicator preceded the durable note", durable.getJSONObject("notes").toString().contains(confirmedNote));
+      assertEquals("Saved indicator lost completion", 1, durable.getJSONObject("completed").length());
+    }
+    scenario.recreate();
+    AtomicReference<WebView> confirmedRef = new AtomicReference<>();
+    scenario.onActivity(a -> confirmedRef.set(a.getBridge().getWebView()));
+    WebView confirmedWeb = confirmedRef.get();
+    waitFor(confirmedWeb, "!!document.querySelector('.personal-home')");
+    assertEquals("SQLite-confirmed note or completion disappeared on recreation", "true", evaluate(confirmedWeb, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.values(d.notes).includes(" + JSONObject.quote(confirmedNote) + ")&&Object.keys(d.completed).length===1;})()"));
+    record("confirmed-device-save-restart", new JSONObject().put("sqliteRowChecked", true).put("noteAndCompletionSurvived", true));
   }
 
   private String syntheticProfile(String profile) throws Exception {

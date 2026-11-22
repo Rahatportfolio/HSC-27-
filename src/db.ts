@@ -1,4 +1,5 @@
 import { SAVED_AT_KEY } from './storage';
+import { STORAGE_KEY } from './planner';
 import { isNativeApp } from './native';
 
 /**
@@ -13,6 +14,7 @@ const TABLE_SQL = 'CREATE TABLE IF NOT EXISTS app_state (id INTEGER PRIMARY KEY 
 type Row = Record<string, unknown>;
 type Db = {
   open: () => Promise<void>;
+  isDBOpen: () => Promise<{ result?: boolean }>;
   execute: (statement: string) => Promise<unknown>;
   run: (statement: string, values?: unknown[]) => Promise<unknown>;
   query: (statement: string, values?: unknown[]) => Promise<{ values?: Row[] }>;
@@ -24,14 +26,25 @@ async function getConnection(): Promise<Db | null> {
   if (!isNativeApp()) return null;
   if (!connection) {
     connection = (async () => {
-      const { CapacitorSQLite, SQLiteConnection } = await import('@capacitor-community/sqlite');
+      const { CapacitorSQLite, SQLiteConnection, SQLiteDBConnection } = await import('@capacitor-community/sqlite');
       const sqlite = new SQLiteConnection(CapacitorSQLite);
       let db: Db;
       const existing = await sqlite.isConnection(DB_NAME, false);
-      db = (existing.result
-        ? await sqlite.retrieveConnection(DB_NAME, false)
-        : await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false)) as unknown as Db;
-      try { await db.open(); } catch { /* the connection may already be open after a hot reload */ }
+      if (existing.result) {
+        db = await sqlite.retrieveConnection(DB_NAME, false) as unknown as Db;
+      } else {
+        try {
+          db = await sqlite.createConnection(DB_NAME, false, 'no-encryption', 1, false) as unknown as Db;
+        } catch (error) {
+          // A page navigation resets the JS wrapper's connection map, but the
+          // Android plugin can still hold its live native connection. Reattach
+          // to that exact connection without closing it, clearing the DB, or
+          // disturbing an in-flight write. Do not mask any other failure.
+          if (!String(error).includes(`Connection ${DB_NAME} already exists`)) throw error;
+          db = new SQLiteDBConnection(DB_NAME, false, CapacitorSQLite) as unknown as Db;
+        }
+      }
+      if (!(await db.isDBOpen()).result) await db.open();
       await db.execute(TABLE_SQL);
       return db;
     })().catch(error => {
@@ -52,7 +65,7 @@ export async function restoreFromDatabase(): Promise<{ payload: string; updatedA
     const row = result.values?.[0];
     if (!row || typeof row.payload !== 'string' || typeof row.updated_at !== 'string') return null;
     const localStamp = localStorage.getItem(SAVED_AT_KEY) || '';
-    if (row.updated_at <= localStamp) return null;
+    if (row.updated_at < localStamp || (row.updated_at === localStamp && localStorage.getItem(STORAGE_KEY) === row.payload)) return null;
     // Reading must not mutate storage: callers may have timed out or rejected the snapshot.
     return { payload: row.payload, updatedAt: row.updated_at };
   } catch (error) {
@@ -78,7 +91,11 @@ async function writeSnapshot(payload: string, updatedAt: string): Promise<boolea
     if (!db) return false;
     // INSERT ... SELECT works on older Android SQLite versions too (UPSERT needs SQLite 3.24+).
     await db.run('INSERT OR REPLACE INTO app_state (id, payload, updated_at) SELECT 1, ?, ? WHERE NOT EXISTS (SELECT 1 FROM app_state WHERE id = 1 AND updated_at > ?);', [payload, updatedAt, updatedAt]);
-    return true;
+    // A freshness-guarded INSERT may succeed without writing anything. Never
+    // report durability until the committed row matches this exact snapshot.
+    const result = await db.query('SELECT payload, updated_at FROM app_state WHERE id = 1 LIMIT 1;');
+    const row = result.values?.[0];
+    return row?.payload === payload && row.updated_at === updatedAt;
   } catch (error) {
     console.warn('Could not write the SQLite snapshot.', error);
     return false;

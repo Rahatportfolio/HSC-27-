@@ -541,7 +541,7 @@ export function saveData(data: AppData, forceTimestamp = false): boolean {
   try {
     const payload = JSON.stringify(data);
     // Keep the previous timestamp when nothing changed, so a newer on-device SQLite snapshot can win on startup.
-    if (!forceTimestamp && localStorage.getItem(STORAGE_KEY) === payload) return true;
+    if (!forceTimestamp && localStorage.getItem(STORAGE_KEY) === payload && localStorage.getItem(SAVED_AT_KEY)) return true;
     const previousStamp = localStorage.getItem(SAVED_AT_KEY);
     const previous = Date.parse(previousStamp || '');
     // Write the small freshness marker first: if it cannot be stored, never replace

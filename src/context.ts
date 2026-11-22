@@ -25,6 +25,8 @@ export interface PlannerContextValue {
   confirm: (request: ConfirmRequest) => void;
   exportICS: (range: 'day' | 'week' | 'all', date?: string) => void;
   storageOk: boolean;
+  /** On Android, the database confirmation for the current snapshot. */
+  storageStatus?: 'pending' | 'saved' | 'failed';
   timer: ReturnType<typeof useStudyTimer>;
   logSession: (session: NewSession) => void;
   startTimer: (subject: SubjectId, chapterId?: string) => void;

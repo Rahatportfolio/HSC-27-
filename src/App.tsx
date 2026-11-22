@@ -79,6 +79,10 @@ export default function App() {
   currentData.current = data;
   setLanguage(data.settings.language);
   const [storageOk, setStorageOk] = useState(true);
+  const localSaveOk = useRef(true);
+  const mirrorSequence = useRef(0);
+  const [mirrorResult, setMirrorResult] = useState<{ data: AppData; status: 'saved' | 'failed' } | null>(null);
+  const dataPayload = useMemo(() => JSON.stringify(data), [data]);
   const [view, setView] = useState<View>(viewFromHash);
   const now = useNow(); const today = todayKey(now);
   const [selectedDate, setSelectedDateState] = useState(() => today < initial.data.settings.startDate ? initial.data.settings.startDate : today);
@@ -354,7 +358,15 @@ export default function App() {
           preserveSnapshot();
           notify(t('ডাটাবেস লোডের সময় পরিবর্তন হয়েছে; বর্তমান তথ্য রাখা হয়েছে। আগের কপি Settings-এ রিকভারি ফাইলে দেখো।', 'The database changed while loading; your current data was kept. Find the earlier copy in the Settings recovery file.'), 'info');
         } else {
-          try { setData(parseBackup(snapshot.payload)); notify(t('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'Loaded the latest data from this device’s local database.'), 'info'); }
+          try {
+            const restored = parseBackup(snapshot.payload);
+            // Keep a divergent local snapshot as evidence before choosing the
+            // verified newer/equal-stamped database copy. Never delete it.
+            const previous = localStorage.getItem(STORAGE_KEY);
+            if (previous && previous !== snapshot.payload && !localStorage.getItem(RECOVERY_KEY)) {
+              try { localStorage.setItem(RECOVERY_KEY, previous); } catch { /* database copy is retained */ }
+            }
+            setData(restored); notify(t('ডিভাইসের লোকাল ডাটাবেস থেকে সর্বশেষ তথ্য লোড হয়েছে।', 'Loaded the latest data from this device’s local database.'), 'info'); }
           catch { preserveSnapshot(); notify(t('ডাটাবেসের তথ্য পড়া যায়নি; Settings থেকে রিকভারি ফাইল রাখো।', 'The database could not be read; save a recovery file from Settings.'), 'error'); }
         }
       }
@@ -362,33 +374,35 @@ export default function App() {
     }).catch(() => { if (active) { setDbMirrorSafe(false); setDbReady(true); notify(t('ডাটাবেস পড়া যায়নি; বর্তমান তথ্য রাখা হয়েছে।', 'The database could not be read; your current data was kept.'), 'error'); } });
     return () => { active = false; window.clearTimeout(timer); };
   }, [notify, initial.data]);
-  useEffect(() => { if (dbReady) setStorageOk(saveData(data)); }, [data, dbReady]);
-  // The last mirror write must not be lost when the WebView is torn down by an
-  // Activity recreation or the app leaves the foreground inside the debounce.
-  const pendingMirror = useRef<{ payload: string; updatedAt: string } | null>(null);
-  const flushMirror = useCallback(() => {
-    const pending = pendingMirror.current;
-    if (!pending) return;
-    pendingMirror.current = null;
-    void persistToDatabase(pending.payload, pending.updatedAt);
-  }, []);
   useEffect(() => {
-    if (!isNativeApp() || !dbReady || !dbMirrorSafe) return;
-    const payload = JSON.stringify(data);
-    let updatedAt = new Date().toISOString();
-    try { updatedAt = localStorage.getItem(SAVED_AT_KEY) || updatedAt; } catch { /* storage may be unavailable */ }
-    pendingMirror.current = { payload, updatedAt };
-    const handle = window.setTimeout(flushMirror, 900);
-    return () => window.clearTimeout(handle);
-  }, [data, dbReady, dbMirrorSafe, flushMirror]);
+    if (!dbReady) return;
+    localSaveOk.current = saveData(data);
+    setStorageOk(localSaveOk.current);
+  }, [data, dbReady]);
+  // localStorage writes are not a durable Android disk acknowledgement. Start
+  // the SQLite commit immediately, and only call this exact snapshot saved
+  // after SQLite confirms the payload. A killed renderer may lose an edit
+  // while the UI still says saving; no asynchronous bridge can promise more.
   useEffect(() => {
-    if (!isNativeApp()) return;
-    const onHidden = () => { if (document.visibilityState === 'hidden') flushMirror(); };
-    const onPageHide = () => flushMirror();
-    window.addEventListener('pagehide', onPageHide);
-    document.addEventListener('visibilitychange', onHidden);
-    return () => { window.removeEventListener('pagehide', onPageHide); document.removeEventListener('visibilitychange', onHidden); flushMirror(); };
-  }, [flushMirror]);
+    if (!isNativeApp() || !dbReady) return;
+    const sequence = ++mirrorSequence.current;
+    if (!dbMirrorSafe || !localSaveOk.current) {
+      setMirrorResult({ data, status: 'failed' });
+      return;
+    }
+    let updatedAt: string;
+    try { updatedAt = localStorage.getItem(SAVED_AT_KEY) || ''; } catch { updatedAt = ''; }
+    if (!updatedAt) {
+      setMirrorResult({ data, status: 'failed' });
+      return;
+    }
+    void persistToDatabase(dataPayload, updatedAt).then(ok => {
+      if (mirrorSequence.current === sequence) setMirrorResult({ data, status: ok ? 'saved' : 'failed' });
+    }, () => {
+      if (mirrorSequence.current === sequence) setMirrorResult({ data, status: 'failed' });
+    });
+    return () => { if (mirrorSequence.current === sequence) mirrorSequence.current++; };
+  }, [data, dataPayload, dbReady, dbMirrorSafe]);
   useEffect(() => { if (dbReady) setData(current => ensureRevisions(plan, current)); }, [dbReady, plan, data.completed, data.advanced, data.settings.revisionEnabled]);
   useEffect(() => { if (dbReady) setData(current => autoCarryover(plan, current, today)); }, [dbReady, plan, data.settings.carryoverMode, today]);
   // Android drops a notification whose channel does not exist, so the channels are
@@ -449,7 +463,24 @@ export default function App() {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [confirmRequest, modal]);
-  useEffect(() => { const onStorage = (e: StorageEvent) => { if (e.key !== STORAGE_KEY || !e.newValue) return; try { setData(parseBackup(e.newValue)); notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info'); } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); } }; window.addEventListener('storage', onStorage); return () => window.removeEventListener('storage', onStorage); }, [notify]);
+  useEffect(() => {
+    // Activity recreation can briefly leave two Android WebViews on the same
+    // origin. Delayed storage events from the retiring document are not a user
+    // edit in the new Activity and can roll its newer state back. Android has
+    // one app window; its restore protocol, not cross-tab sync, owns recovery.
+    if (isNativeApp()) return;
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== STORAGE_KEY || !e.newValue) return;
+      try {
+        // Events are asynchronous: never replay an obsolete intermediate value.
+        if (localStorage.getItem(STORAGE_KEY) !== e.newValue) return;
+        setData(parseBackup(e.newValue));
+        notify(t('অন্য ট্যাবের পরিবর্তন এই ট্যাবেও এসেছে।', 'Changes from the other tab are now here too.'), 'info');
+      } catch { notify(t('অন্য ট্যাবের তথ্য পড়া যায়নি।', 'Data from the other tab could not be read.'), 'error'); }
+    };
+    window.addEventListener('storage', onStorage);
+    return () => window.removeEventListener('storage', onStorage);
+  }, [notify]);
   const toggleTask = useCallback((id: string) => setData(d => setTaskCompletion(d, [id], !isPersonalTaskComplete(plan.flatMap(day => day.tasks).find(task => task.id === id) || { id }, d.completed), plan)), [plan]);
   const logSession = useCallback((session: Parameters<typeof addStudySession>[1]) => setData(d => addStudySession(d, session)), []);
   const exportICS = useCallback((range: 'day' | 'week' | 'all', date?: string) => { try { const count = exportCalendar(plan, data, range, date || today); if (!count) { notify(t('এই সময়ে কোনো অসমাপ্ত সেশন নেই।', 'No unfinished session in this period.'), 'info'); return; } notify(`${bn(count)}টি সেশনের .ics ফাইল ডাউনলোড হয়েছে। এবার ক্যালেন্ডারে ইমপোর্ট করো।`); } catch (error) { notify(t('ক্যালেন্ডার ফাইল তৈরি হয়নি: ', 'The calendar file was not created: ') + ((error as Error)?.message || t('অজানা কারণ', 'unknown reason')), 'error'); } }, [plan, data, today, notify]);
@@ -576,10 +607,11 @@ export default function App() {
   }, []);
   const todayDigest = useMemo(() => buildDailyNotificationDigest(plan, data, today), [plan, data, today]);
   const currentNav = NAV.find(n => n.id === view);
+  const storageStatus = !isNativeApp() ? undefined : !dbReady || mirrorResult?.data !== data ? 'pending' as const : mirrorResult.status;
   const context = {
     data, setData, plan, adaptive, routineSetupReady: dbReady, today, now, view, navigate, selectedDate, setSelectedDate, notify, toggleTask,
     openChapter: (chapter: Chapter) => setModal({ type: 'chapter', chapter }), openExam: (paperId: string) => setModal({ type: 'exam', paperId }), openMistake,
-    confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
+    confirm: (request: ConfirmRequest) => setConfirmRequest(request), exportICS, storageOk, storageStatus, timer, logSession, startTimer, startPresetTimer, sendStudyStatusNotification, setTheme, setFontScale, screenAwake, serviceRunning,
   };
   const ViewComponent = routeViews[invalidSchedule ? 'settings' : view];
   const testExamDays = diffDays(today, data.settings.testExamDate);
@@ -728,7 +760,7 @@ export default function App() {
             <strong className="exam-pill-days">{countdownText(examDays)}</strong>
           </button>
         </div>
-        <main id="main-content" className="main-content" tabIndex={-1}>{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}{health.warnings.length > 0 && !(data.personalRoutine && ['settings'].includes(view)) && !data.routineSetupRequired && <section className="schedule-warning" role="alert" aria-label={t('রুটিনের সময়সীমার সতর্কতা', 'Schedule capacity warning')}><strong>{health.missingDurations ? t('কিছু অধ্যায়ের সময় এখনো দেওয়া হয়নি', 'Some chapters still need real durations') : t('সময়সীমা মিলিয়ে নাও', 'Check your schedule capacity')}</strong><ul>{health.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul><button type="button" className="text-button" onClick={() => navigate('settings')}>{health.missingDurations ? t('সময় ও রুটিন খুলো', 'Open availability & routine') : t('তারিখ ও সময় ঠিক করো', 'Review dates and times')}</button></section>}{!dbReady && view === 'today' ? <section className="card personal-setup" role="status"><p>{t('ডিভাইসের সংরক্ষিত তথ্য মিলিয়ে নিচ্ছি…', 'Restoring saved device data…')}</p></section> : data.routineSetupRequired && !invalidSchedule && ['today', 'calendar', 'testprep', 'backlog'].includes(view) ? dbReady ? <Suspense fallback={<RouteLoading title={t('রুটিন তৈরি', 'Routine setup')} />}><QuickStart /></Suspense> : <section className="card personal-setup" role="status"><p>{t('ডিভাইসের আগের তথ্য লোড করছি… তার আগে নতুন রুটিন তৈরি হবে না।', 'Loading your saved device data… no new routine is created before restoration.')}</p></section> : <RouteBoundary key={invalidSchedule ? 'settings' : view} onHome={() => navigate('today')} onSettings={() => navigate('settings')} onBackup={() => { try { downloadBackup(data); notify(t('JSON ব্যাকআপ ডাউনলোড শুরু হয়েছে। এতে আসল স্ক্যান/ভিডিও bytes নেই; মূল অ্যাপ বা ডেটা মুছো না।', 'JSON backup download started. It omits original scan/video bytes; do not uninstall or clear data.')); } catch { notify(t('ব্যাকআপ ডাউনলোড করা যায়নি। অ্যাপের ডেটা মুছো না; আবার চেষ্টা করো।', 'Backup could not download. Do not clear app data; try again.'), 'error'); } }}><Suspense fallback={<RouteLoading title={invalidSchedule || view === 'settings' ? t('সেটিংস ও ব্যাকআপ', 'Settings & backup') : t(currentNav?.label || 'প্রস্তুতি', currentNav?.labelEn || 'Preparation')} />}><ViewComponent /></Suspense></RouteBoundary>}</main>
+        <main id="main-content" className="main-content" tabIndex={-1}>{storageOk && storageStatus === 'failed' && <div className="storage-warning" role="alert"><ShieldCheck size={18} /><p>{t('ডিভাইসে সেভ নিশ্চিত হয়নি। অ্যাপ বন্ধ বা আনইনস্টল কোরো না; সেটিংস থেকে ব্যাকআপ রাখো।', 'Device save was not confirmed. Do not close or uninstall the app; keep a backup from Settings.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t('ব্যাকআপ', 'Backup')}</button></div>}{!storageOk && <div className="storage-warning"><ShieldCheck size={18} /><p>{t('ব্রাউজারে তথ্য সেভ করা যাচ্ছে না। স্টোরেজ খালি করো এবং যাওয়ার আগে JSON ব্যাকআপ রাখো।', 'The browser cannot save data. Free some storage and keep a JSON backup before leaving.')}</p><button className="text-button" onClick={() => navigate('settings')}>{t("ব্যাকআপ", "Backup")}</button></div>}{health.warnings.length > 0 && !(data.personalRoutine && ['settings'].includes(view)) && !data.routineSetupRequired && <section className="schedule-warning" role="alert" aria-label={t('রুটিনের সময়সীমার সতর্কতা', 'Schedule capacity warning')}><strong>{health.missingDurations ? t('কিছু অধ্যায়ের সময় এখনো দেওয়া হয়নি', 'Some chapters still need real durations') : t('সময়সীমা মিলিয়ে নাও', 'Check your schedule capacity')}</strong><ul>{health.warnings.map(warning => <li key={warning}>{warning}</li>)}</ul><button type="button" className="text-button" onClick={() => navigate('settings')}>{health.missingDurations ? t('সময় ও রুটিন খুলো', 'Open availability & routine') : t('তারিখ ও সময় ঠিক করো', 'Review dates and times')}</button></section>}{!dbReady && view === 'today' ? <section className="card personal-setup" role="status"><p>{t('ডিভাইসের সংরক্ষিত তথ্য মিলিয়ে নিচ্ছি…', 'Restoring saved device data…')}</p></section> : data.routineSetupRequired && !invalidSchedule && ['today', 'calendar', 'testprep', 'backlog'].includes(view) ? dbReady ? <Suspense fallback={<RouteLoading title={t('রুটিন তৈরি', 'Routine setup')} />}><QuickStart /></Suspense> : <section className="card personal-setup" role="status"><p>{t('ডিভাইসের আগের তথ্য লোড করছি… তার আগে নতুন রুটিন তৈরি হবে না।', 'Loading your saved device data… no new routine is created before restoration.')}</p></section> : <RouteBoundary key={invalidSchedule ? 'settings' : view} onHome={() => navigate('today')} onSettings={() => navigate('settings')} onBackup={() => { try { downloadBackup(data); notify(t('JSON ব্যাকআপ ডাউনলোড শুরু হয়েছে। এতে আসল স্ক্যান/ভিডিও bytes নেই; মূল অ্যাপ বা ডেটা মুছো না।', 'JSON backup download started. It omits original scan/video bytes; do not uninstall or clear data.')); } catch { notify(t('ব্যাকআপ ডাউনলোড করা যায়নি। অ্যাপের ডেটা মুছো না; আবার চেষ্টা করো।', 'Backup could not download. Do not clear app data; try again.'), 'error'); } }}><Suspense fallback={<RouteLoading title={invalidSchedule || view === 'settings' ? t('সেটিংস ও ব্যাকআপ', 'Settings & backup') : t(currentNav?.label || 'প্রস্তুতি', currentNav?.labelEn || 'Preparation')} />}><ViewComponent /></Suspense></RouteBoundary>}</main>
       </div>
       <nav ref={bottomNavRef} className="mobile-bottom-nav" aria-label={t('মোবাইল নেভিগেশন', 'Mobile navigation')}>
         {(['today', 'calendar', 'syllabus', 'videos'] as const).map(id => NAV.find(n => n.id === id)!).map(n => (
