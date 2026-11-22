@@ -25,6 +25,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.json.JSONObject;
+import org.json.JSONArray;
 import org.json.JSONTokener;
 import org.junit.BeforeClass;
 import org.junit.FixMethodOrder;
@@ -321,6 +322,18 @@ public class MobileShellInstrumentedTest {
     waitFor(web, "document.querySelector(" + JSONObject.quote(selector) + ").value===" + JSONObject.quote(value));
   }
 
+  // React's validated restore can reorder object keys without changing any
+  // saved content. Compare all values structurally, including every workload,
+  // note and completion, while reporting concise actionable failures.
+  private void assertRetained(WebView web, String retained, String message) throws Exception {
+    String actual = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
+    JSONArray expected = new JSONArray((String) new JSONTokener(retained).nextValue());
+    JSONArray observed = new JSONArray((String) new JSONTokener(actual).nextValue());
+    assertTrue(message + ": routine changed", expected.getJSONObject(0).similar(observed.getJSONObject(0)));
+    assertTrue(message + ": notes expected=" + expected.getJSONObject(1) + " actual=" + observed.getJSONObject(1), expected.getJSONObject(1).similar(observed.getJSONObject(1)));
+    assertTrue(message + ": completion expected=" + expected.getJSONObject(2) + " actual=" + observed.getJSONObject(2), expected.getJSONObject(2).similar(observed.getJSONObject(2)));
+  }
+
   private void completeFreshSetupAndRecover(ActivityScenario<MainActivity> scenario, WebView web) throws Exception {
     waitFor(web, "!!document.querySelector('.quick-start')");
     tap(web, ".quick-start-footer .text-button");
@@ -404,7 +417,7 @@ public class MobileShellInstrumentedTest {
     waitFor(web, "!!document.querySelector('.personal-home')");
     // No grace loop: the teardown flush must already own this write. A delayed
     // re-read would hide a real loss caused by a late debounce or missing flush.
-    assertEquals("Fresh setup lost routine/notes/completion after native recreation", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    assertRetained(web, retained, "Fresh setup lost routine/notes/completion after native recreation");
     record("new-student-setup-restart", new JSONObject().put("noProfileInjection", true).put("nativeChoiceAndSubmitTaps", true).put("fieldEntry", "DOM input events, not soft-keyboard certification").put("allChapters", 114).put("dailyNetMinutes", 240).put("retainedRoutineNotesCompletion", true));
     screenshot("new-student-after-restart");
     final WebView recoveryWeb = web;
@@ -414,7 +427,7 @@ public class MobileShellInstrumentedTest {
     // exact storage value at the recovery page boundary, and independently
     // verify it contains the user's edited routine, note, and completion.
     String raw = evaluate(web, "localStorage.getItem('hsc27-prostuti-v1')");
-    assertEquals("Recovery page lost routine/history before reading", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    assertRetained(web, retained, "Recovery page lost routine/history before reading");
     tap(web, "#recovery-profile");
     waitFor(web, "!!document.querySelector('#recovery-json').value");
     assertEquals("Independent native recovery changed raw JSON", raw, evaluate(web, "document.querySelector('#recovery-json').value"));
@@ -422,7 +435,7 @@ public class MobileShellInstrumentedTest {
     screenshot("new-student-independent-recovery");
     tap(web, "#recovery-reopen");
     waitFor(web, "!!document.querySelector('.personal-home')");
-    assertEquals("Returning from native recovery changed routine/history", retained, evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()"));
+    assertRetained(web, retained, "Returning from native recovery changed routine/history");
     record("new-student-independent-recovery", new JSONObject().put("exactRawLocalJson", true).put("zeroRecoveryStorageWrites", true).put("returnedToSavedRoutine", true).put("sqliteOrMediaRecoveryCertified", false));
   }
 
