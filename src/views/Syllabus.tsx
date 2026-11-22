@@ -24,7 +24,7 @@ export default function SyllabusView() {
   const { plan, data, openChapter } = usePlanner();
   const [subject, setSubject] = useState<SubjectId>('physics');
   const [status, setStatus] = useState<'all' | 'pending' | 'done'>('all');
-  const [priority, setPriority] = useState<'all' | 'S' | 'A' | 'B' | 'C'>(data.personalRoutine?.scope === 'ALL' ? 'all' : data.personalRoutine || data.routineSetupRequired ? 'S' : 'all');
+  const [priority, setPriority] = useState<'all' | 'S' | 'A' | 'B' | 'C'>(data.personalRoutine?.scope === 'ALL' || data.personalRoutine?.scope === 'SELECTED' ? 'all' : data.personalRoutine || data.routineSetupRequired ? 'S' : 'all');
   const [query, setQuery] = useState('');
   const [weakOnly, setWeakOnly] = useState(false);
   const [star, setStar] = useState<'all' | 5 | 3 | 1>('all');
@@ -32,7 +32,7 @@ export default function SyllabusView() {
   const [showFullBlocks, setShowFullBlocks] = useState(true);
   const [openLessons, setOpenLessons] = useState<Record<string, boolean>>({});
 
-  const sIds = (data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds || RECOMMENDED_S_IDS;
+  const sIds = data.personalRoutine?.scope === 'SELECTED' ? data.personalRoutine.chapterIds.filter(id => data.personalRoutine!.categories?.[id] === 'S') : (data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds || RECOMMENDED_S_IDS;
   const s = subjectById[subject];
   const chapters = sortChapters(CHAPTERS.filter(chapter => chapter.subject === subject && (priority !== 'S' || sIds.includes(chapter.id))));
   const done = chapters.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
@@ -57,12 +57,12 @@ export default function SyllabusView() {
       action={<div className="syllabus-total"><strong>{bn(priority === 'S' ? sIds.length : CHAPTERS.length)}</strong><span>{priority === 'S' && 'S · '}{t('অধ্যায় ও ইউনিট', 'Chapters & units')}<br />{t('৭ বিষয় · ১৩ পত্র', '7 subjects · 13 papers')}</span></div>}
     />
 
-    {data.personalRoutine?.scope !== 'ALL' && <section className="card s-shortlist-notice"><span className="s-category-badge">S</span><div><strong>{t('A থেকে বাছাই করা গুরুত্বপূর্ণ অধ্যায়', 'Important chapters selected from A')} · {bn(sIds.length)}</strong><p>{data.personalRoutine && data.personalRoutine.scope !== 'S' ? t(`S সংরক্ষিত আছে; S-এর সব কাজ শেষ করে এখন ${data.personalRoutine.scope} ধাপ চলছে। বাকি A/B/C লাইব্রেরিতে থাকবে।`, `S is retained. After completing its required work you are now in phase ${data.personalRoutine.scope}. Other A/B/C chapters remain in the library.`) : data.personalRoutine ? t('এখন শুধু এই S তালিকাই রুটিনের লক্ষ্য। বাকি A/B/C দেখা যাবে, কিন্তু শেষ করতে বাধ্য করা হবে না।', 'Only your S shortlist is this routine’s goal. Other A/B/C chapters remain available, not compulsory.') : t('প্রস্তাবিত shortlist = A-এর ৫★ অধ্যায়। সব অধ্যায়ের রুটিন চালু করতে হোম/Settings-এ নিজের সময় দাও; পুরোনো রুটিন নিজে থেকে বদলায়নি।', 'Suggested shortlist = five-star A chapters. Set your availability in Home/Settings to plan all chapters; the legacy routine has not silently changed.')}</p></div><button type="button" className="button primary small" onClick={() => setPriority('S')}>{t('S ক্যাটাগরি দেখো', 'Show S category')}</button></section>}
+    {data.personalRoutine?.scope !== 'ALL' && data.personalRoutine?.scope !== 'SELECTED' && <section className="card s-shortlist-notice"><span className="s-category-badge">S</span><div><strong>{t('A থেকে বাছাই করা গুরুত্বপূর্ণ অধ্যায়', 'Important chapters selected from A')} · {bn(sIds.length)}</strong><p>{data.personalRoutine && data.personalRoutine.scope !== 'S' ? t(`S সংরক্ষিত আছে; S-এর সব কাজ শেষ করে এখন ${data.personalRoutine.scope} ধাপ চলছে। বাকি A/B/C লাইব্রেরিতে থাকবে।`, `S is retained. After completing its required work you are now in phase ${data.personalRoutine.scope}. Other A/B/C chapters remain in the library.`) : data.personalRoutine ? t('এখন শুধু এই S তালিকাই রুটিনের লক্ষ্য। বাকি A/B/C দেখা যাবে, কিন্তু শেষ করতে বাধ্য করা হবে না।', 'Only your S shortlist is this routine’s goal. Other A/B/C chapters remain available, not compulsory.') : t('প্রস্তাবিত shortlist = A-এর ৫★ অধ্যায়। সব অধ্যায়ের রুটিন চালু করতে হোম/Settings-এ নিজের সময় দাও; পুরোনো রুটিন নিজে থেকে বদলায়নি।', 'Suggested shortlist = five-star A chapters. Set your availability in Home/Settings to plan all chapters; the legacy routine has not silently changed.')}</p></div><button type="button" className="button primary small" onClick={() => setPriority('S')}>{t('S ক্যাটাগরি দেখো', 'Show S category')}</button></section>}
     <div className="subject-tabs">
       {SUBJECTS.map(sub => {
         const total = CHAPTERS.filter(chapter => chapter.subject === sub.id && (priority !== 'S' || sIds.includes(chapter.id)));
         const complete = total.filter(chapter => isLearningComplete(chapterStage(chapter, data, plan))).length;
-        return <button key={sub.id} className={`subject-tab ${subject === sub.id ? 'active' : ''}`} onClick={() => { setSubject(sub.id); setQuery(''); setWeakOnly(false); setUnwatchedOnly(false); setPriority(data.personalRoutine?.scope === 'ALL' ? 'all' : data.personalRoutine || data.routineSetupRequired ? 'S' : 'all'); setStar('all'); setStatus('all'); }} style={{ '--subject': sub.color, '--subject-tint': sub.tint } as CSSProperties}>
+        return <button key={sub.id} className={`subject-tab ${subject === sub.id ? 'active' : ''}`} onClick={() => { setSubject(sub.id); setQuery(''); setWeakOnly(false); setUnwatchedOnly(false); setPriority(data.personalRoutine?.scope === 'ALL' || data.personalRoutine?.scope === 'SELECTED' ? 'all' : data.personalRoutine || data.routineSetupRequired ? 'S' : 'all'); setStar('all'); setStatus('all'); }} style={{ '--subject': sub.color, '--subject-tint': sub.tint } as CSSProperties}>
           <span className="subject-tab-icon"><SubjectIcon subject={sub.id} /></span>
           <strong>{sub.name}</strong>
           <span>{bn(complete)}/{bn(total.length)}{sub.optional ? ` · ${t('৪র্থ বিষয়','4th subject')}` : ''}</span>

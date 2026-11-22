@@ -14,7 +14,7 @@ import { buildStudyPlan } from './studyPlan';
 import { setTaskCompletion } from './study';
 import { parseBackup } from './storage';
 import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture';
-import { WORK_STAGES, applyPersonalRoutine, nextPersonalRoutine, personalChapterProgress, personalStageSourceId, setPersonalStageCompletion } from './personalRoutine';
+import { WORK_STAGES, applyPersonalRoutine, nextPersonalRoutine, personalChapterProgress, personalStageSourceId, setPersonalStageCompletion, personalBookLabel } from './personalRoutine';
 import PersonalRoutineSetup from './components/PersonalRoutineSetup';
 import PersonalStudyHome from './views/PersonalStudyHome';
 import PersonalSessionCard from './components/PersonalSessionCard';
@@ -35,7 +35,11 @@ function harness(initial: AppData, children: ReactNode, today = initial.settings
   return { data: () => data, navigate, notify, confirm: () => pending, setData };
 }
 const next = () => fireEvent.click(screen.getByRole('button', { name: 'Next step' }));
-const preview = () => { next(); next(); next(); };
+const preview = () => {
+  next();
+  if (screen.queryByLabelText('Choose chapters')) fireEvent.click(screen.getByLabelText(`${chapterById['physics-1-3'].title} · ${personalBookLabel('physics-1-3')}`));
+  next(); next();
+};
 function windows() {
   fireEvent.click(screen.getByRole('button', { name: 'This time every day' }));
   fireEvent.change(screen.getByLabelText('Window 1 start'), { target: { value: '18:00' } });
@@ -105,7 +109,7 @@ describe('reworked setup UI', () => {
     fireEvent.change(screen.getByLabelText(/Daily total study hours/), { target: { value: '1.5' } }); next();
     expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('First, when can you study?');
     fireEvent.click(screen.getByRole('radio', { name: 'None inside the study windows above' })); next();
-    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('All chapters');
+    expect(screen.getByRole('heading', { level: 1 }).textContent).toBe('Choose chapters');
   });
   it('saves fixed obligations and daily cap, returns to dashboard and round-trips every minute of the explicit intervals', () => {
     const h = harness({ ...freshData(), routineSetupRequired: true }, <PersonalRoutineSetup />);
@@ -114,7 +118,7 @@ describe('reworked setup UI', () => {
     fireEvent.click(screen.getByRole('button', { name: 'This obligation every day' }));
     fireEvent.change(screen.getByLabelText('Obligation 1 start'), { target: { value: '19:00' } });
     fireEvent.change(screen.getByLabelText('Obligation 1 end'), { target: { value: '20:00' } });
-    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save all-chapter routine' }));
+    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save selected-chapter routine' }));
     expect(h.navigate).toHaveBeenCalledWith('today');
     expect(h.data().personalRoutine!.dailyLimitMinutes).toBe(90);
     expect(h.data().personalRoutine!.exclusions).toEqual(Array.from({ length: 7 }, (_, weekday) => ({ weekday, startMinute: 1140, endMinute: 1200 })));
@@ -129,7 +133,7 @@ describe('reworked setup UI', () => {
     fireEvent.change(screen.getByLabelText('Plan start date'), { target: { value: '2026-11-21' } });
     expect((screen.getByLabelText('Personal test target') as HTMLInputElement).value).toBe('2027-02-02');
     expect((screen.getByLabelText('Personal end target') as HTMLInputElement).value).toBe('2027-06-07');
-    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save all-chapter routine' }));
+    preview(); fireEvent.click(screen.getByRole('button', { name: 'Save selected-chapter routine' }));
     expect(h.data().settings.startDate).toBe('2026-11-21');
   });
   it('explains and excludes retained later-phase chapters from a reopened S editor and its recommended shortlist', () => {

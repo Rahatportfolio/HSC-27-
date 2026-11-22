@@ -519,10 +519,10 @@ export function parseBackup(rawText: string): AppData {
       if (routine.scope !== scope || result.personalRoutine?.scope === scope) throw new Error('Personal phase scope invalid');
       result.personalPhases[scope] = routine;
     }
-    const selected = [result.personalRoutine?.scope === 'ALL' ? undefined : result.personalRoutine, ...Object.values(result.personalPhases)].flatMap(routine => routine?.chapterIds || []);
+    const selected = [result.personalRoutine?.scope === 'ALL' || result.personalRoutine?.scope === 'SELECTED' ? undefined : result.personalRoutine, ...Object.values(result.personalPhases)].flatMap(routine => routine?.chapterIds || []);
     if (new Set(selected).size !== selected.length) throw new Error('Personal phase chapters overlap');
   }
-  if (result.personalRoutine && result.personalRoutine.scope !== 'S' && result.personalRoutine.scope !== 'ALL' && !result.personalPhases?.S) throw new Error('A later personal phase must retain its S prerequisite.');
+  if (result.personalRoutine && result.personalRoutine.scope !== 'S' && result.personalRoutine.scope !== 'ALL' && result.personalRoutine.scope !== 'SELECTED' && !result.personalPhases?.S) throw new Error('A later personal phase must retain its S prerequisite.');
   if (raw.studyBrain !== undefined) result.studyBrain = parseStudyBrain(raw.studyBrain);
   return resumeUnfinishedPersonalPhase(result);
 }

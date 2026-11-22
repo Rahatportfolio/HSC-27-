@@ -5,12 +5,13 @@ import PersonalRoutineSetup, { PersonalRoutineSettings } from './components/Pers
 import { PlannerContext } from './context';
 import type { ConfirmRequest, PlannerContextValue } from './context';
 import { freshData, STORAGE_KEY } from './planner';
+import { chapterById } from './data';
 import type { AppData } from './planner';
 import { buildStudyPlan } from './studyPlan';
 import { setLanguage } from './i18n';
 import { personalDataFixture, PERSONAL_IDS } from './test/personalRoutineFixture';
 import { classDurationReference } from './classDurationReferences';
-import { defaultChapterWorkload, newPersonalRoutine, parsePersonalRoutine, personalRoutineHealth, workloadFor } from './personalRoutine';
+import { defaultChapterWorkload, newPersonalRoutine, parsePersonalRoutine, personalRoutineHealth, workloadFor, personalBookLabel } from './personalRoutine';
 
 beforeEach(() => { localStorage.clear(); setLanguage('en'); });
 afterEach(() => { cleanup(); vi.restoreAllMocks(); });
@@ -34,8 +35,11 @@ function availability(start = '18:00', end = '22:00') {
   fireEvent.change(screen.getByLabelText('Window 1 start'), { target: { value: start } });
   fireEvent.change(screen.getByLabelText('Window 1 end'), { target: { value: end } });
 }
-const toPreview = () => { next(); next(); next(); };
-const save = () => fireEvent.click(screen.getByRole('button', { name: /Save (this availability & S|all-chapter) routine/ }));
+const selectFirstIfNeeded = () => {
+  if (screen.queryByLabelText('Choose chapters')) fireEvent.click(screen.getByLabelText(`${chapterById['physics-1-3'].title} · ${personalBookLabel('physics-1-3')}`));
+};
+const toPreview = () => { next(); selectFirstIfNeeded(); next(); next(); };
+const save = () => fireEvent.click(screen.getByRole('button', { name: /Save (this availability & S|all-chapter|selected-chapter) routine/ }));
 
 describe('availability-first setup transaction', () => {
   it('asks for availability first, rejects an empty window, then saves a real 20-hour-per-chapter plan without any duration entry', () => {
@@ -43,7 +47,7 @@ describe('availability-first setup transaction', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'First, when can you study?' })).toBeTruthy();
     expect((screen.getByLabelText('Window 1 start') as HTMLInputElement).value).toBe(''); next();
     expect(screen.getByRole('alert').textContent).toContain('Choose your study days'); expect(h.setData).not.toHaveBeenCalled();
-    availability(); next(); next();
+    availability(); next(); selectFirstIfNeeded(); next();
     // The time step now opens on the editable 20-hour estimate, not on blanks.
     expect(screen.getByText(/Even if you change nothing, each chapter gets/)).toBeTruthy();
     // 20 h is stated in the copy (letter/currency spacing is font-dependent,
@@ -52,11 +56,30 @@ describe('availability-first setup transaction', () => {
     // Step 3 is optional: entering no duration must still produce dated work.
     next(); save();
     expect(h.confirm()).toBeUndefined(); expect(h.onDone).toHaveBeenCalledOnce();
-    expect(h.data().routineSetupRequired).toBe(false); expect(h.data().personalRoutine!.scope).toBe('ALL'); expect(h.data().personalRoutine!.chapterIds).toHaveLength(114); expect(h.data().personalRoutine!.windows).toHaveLength(7);
+    expect(h.data().routineSetupRequired).toBe(false); expect(h.data().personalRoutine!.scope).toBe('SELECTED'); expect(h.data().personalRoutine!.chapterIds).toEqual(['physics-1-3']); expect(h.data().personalRoutine!.windows).toHaveLength(7);
     const plan = buildStudyPlan(h.data(), data.settings.startDate);
     expect(plan.flatMap(day => day.tasks).length).toBeGreaterThan(0);
     for (const id of h.data().personalRoutine!.chapterIds) expect(workloadFor(h.data().personalRoutine!, id).class.source).toBe('default24');
     expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).personalRoutine.chapterIds).toEqual(h.data().personalRoutine!.chapterIds);
+  });
+  it('lets an old ALL plan explicitly switch to only chosen chapters without losing notes', () => {
+    const data = personalDataFixture();
+    data.notes['2026-11-18'] = 'Keep my notes';
+    data.personalRoutine = { ...newPersonalRoutine('ALL'), windows: data.personalRoutine!.windows, dailyLimitMinutes: 240 };
+    const h = setup(data); next();
+    fireEvent.click(screen.getByRole('button', { name: 'Not all — choose my chapters' }));
+    expect(h.data().personalRoutine?.scope).toBe('ALL');
+    const sId = 'physics-1-3', aId = 'physics-1-2', bId = 'physics-1-1';
+    for (const id of [sId, aId, bId]) fireEvent.click(screen.getByLabelText(`${chapterById[id].title} · ${personalBookLabel(id)}`));
+    fireEvent.change(screen.getByLabelText(`${chapterById[sId].title} · ${personalBookLabel(sId)} category`), { target: { value: 'A' } });
+    fireEvent.change(screen.getByLabelText(`${chapterById[aId].title} · ${personalBookLabel(aId)} category`), { target: { value: 'S' } });
+    next(); next(); save();
+    expect(h.data().personalRoutine?.scope).toBe('ALL');
+    act(() => h.confirm()!.action());
+    expect(h.data().personalRoutine?.scope).toBe('SELECTED');
+    expect(h.data().personalRoutine?.categories).toEqual({ [sId]: 'A', [aId]: 'S', [bId]: 'B' });
+    expect(h.data().personalRoutine?.chapterIds).toHaveLength(3);
+    expect(h.data().notes['2026-11-18']).toBe('Keep my notes');
   });
   it('shows the actual first pair from the retained S shortlist in an ALL setup', () => {
     const data = personalDataFixture(['physics-1-2', 'chemistry-1-2']);

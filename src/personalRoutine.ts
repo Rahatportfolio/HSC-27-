@@ -48,7 +48,9 @@ export type ChapterWorkload = Record<WorkStage, WorkBudget>;
 export interface AvailabilityWindow { weekday: number; startMinute: number; endMinute: number }
 export interface PersonalRoutine {
   version: 1;
-  scope: 'S' | 'A' | 'B' | 'C' | 'ALL';
+  scope: 'S' | 'A' | 'B' | 'C' | 'ALL' | 'SELECTED';
+  /** Explicit categories for exactly the selected A/B chapters. */
+  categories?: Record<string, 'S' | 'A' | 'B'>;
   /** A later phase never backdates work into the completed S phase. */
   startsOn?: string;
   chapterIds: string[];
@@ -94,7 +96,7 @@ const object = (v: unknown): v is Record<string, unknown> => !!v && typeof v ===
 const integer = (v: unknown, min: number, max: number): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= min && v <= max;
 const isA = (id: unknown): id is string => typeof id === 'string' && Object.hasOwn(chapterById, id) && chapterById[id].priority === 'A';
 const fail = (): never => { throw new Error(t('নিজের পড়ার সময়, S তালিকা ও ক্লাসের সময় সঠিকভাবে দাও।', 'Check your availability, S shortlist and class durations.')); };
-export const isSChapter = (data: AppData, id: string): boolean => !!(data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds.includes(id);
+export const isSChapter = (data: AppData, id: string): boolean => data.personalRoutine?.scope === 'SELECTED' ? data.personalRoutine.categories?.[id] === 'S' : !!(data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds.includes(id);
 export const personalRoutineForChapter = (data: AppData, id: string): PersonalRoutine | undefined => data.personalRoutine?.chapterIds.includes(id) ? data.personalRoutine : Object.values(data.personalPhases || {}).find(routine => routine.chapterIds.includes(id));
 
 /** 20 hours (1,200 minutes) of study per chapter, used when the student has not
@@ -151,16 +153,18 @@ export function personalScheduleDateError(settings: Settings, routine?: Pick<Per
   return null;
 }
 export function newPersonalRoutine(scope: PersonalRoutine['scope'] = 'S', excluded: string[] = []): PersonalRoutine {
-  return { version: 1, scope, chapterIds: scope === 'S' ? [...RECOMMENDED_S_IDS] : CHAPTERS.filter(c => (scope === 'ALL' || c.priority === scope) && !excluded.includes(c.id)).map(c => c.id), windows: [], playbackSpeed: 1,
+  return { version: 1, scope, chapterIds: scope === 'SELECTED' ? [] : scope === 'S' ? [...RECOMMENDED_S_IDS] : CHAPTERS.filter(c => (scope === 'ALL' || c.priority === scope) && !excluded.includes(c.id)).map(c => c.id), windows: [], playbackSpeed: 1,
     sessionMinutes: 50, breakMinutes: 10, workloads: {}, updatedAt: new Date().toISOString() };
 }
 export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
-  if (!object(raw) || raw.version !== 1 || !['S', 'A', 'B', 'C', 'ALL'].includes(String(raw.scope)) || !Array.isArray(raw.chapterIds) ||
-    !raw.chapterIds.length || raw.chapterIds.length > CHAPTERS.length || (raw.scope === 'ALL' && raw.chapterIds.length !== CHAPTERS.length) || !raw.chapterIds.every(id => typeof id === 'string' && Object.hasOwn(chapterById, id) && (raw.scope === 'ALL' || (raw.scope === 'S' ? isA(id) : chapterById[id].priority === raw.scope))) ||
+  if (!object(raw) || raw.version !== 1 || !['S', 'A', 'B', 'C', 'ALL', 'SELECTED'].includes(String(raw.scope)) || !Array.isArray(raw.chapterIds) ||
+    !raw.chapterIds.length || raw.chapterIds.length > CHAPTERS.length || (raw.scope === 'ALL' && raw.chapterIds.length !== CHAPTERS.length) || !raw.chapterIds.every(id => typeof id === 'string' && Object.hasOwn(chapterById, id) && (raw.scope === 'ALL' || raw.scope === 'SELECTED' && ['A', 'B'].includes(chapterById[id].priority) || (raw.scope === 'S' ? isA(id) : chapterById[id].priority === raw.scope))) ||
     new Set(raw.chapterIds).size !== raw.chapterIds.length || !Array.isArray(raw.windows) || !raw.windows.length || raw.windows.length > 56 ||
     ![1, 1.25, 1.5, 2].includes(raw.playbackSpeed as number) || !integer(raw.sessionMinutes, 15, 120) || !integer(raw.breakMinutes, 0, 60) ||
     !object(raw.workloads) || Object.keys(raw.workloads).length > CHAPTERS.length || typeof raw.updatedAt !== 'string' ||
     raw.updatedAt.length > 40 || !Number.isFinite(Date.parse(raw.updatedAt))) return fail();
+  if (raw.scope === 'SELECTED' && (!object(raw.categories) || Object.keys(raw.categories).length !== raw.chapterIds.length || (raw.chapterIds as string[]).some(id => !Object.hasOwn(raw.categories as object, id) || (chapterById[id].priority === 'A' ? !['S', 'A'].includes(String((raw.categories as Record<string, unknown>)[id])) : (raw.categories as Record<string, unknown>)[id] !== 'B')))) return fail();
+  if (raw.categories !== undefined && raw.scope !== 'SELECTED') return fail();
   if (raw.chapterSpeeds !== undefined && (!object(raw.chapterSpeeds) || Object.keys(raw.chapterSpeeds).length > CHAPTERS.length || Object.entries(raw.chapterSpeeds).some(([id, speed]) => !Object.hasOwn(chapterById, id) || ![1, 1.25, 1.5, 2].includes(speed as number)))) return fail();
   const windows = raw.windows.map(window => {
     if (!object(window) || !integer(window.weekday, 0, 6) || !integer(window.startMinute, 0, 1439) ||
@@ -213,6 +217,7 @@ export function parsePersonalRoutine(raw: unknown): PersonalRoutine {
   if (raw.dailyLimitMinutes !== undefined && !integer(raw.dailyLimitMinutes, 1, 1440)) return fail();
   const history = raw.history === undefined ? undefined : parsePersonalHistory(raw.history);
   return { version: 1, scope: raw.scope as PersonalRoutine['scope'], chapterIds: [...raw.chapterIds] as string[], windows,
+    ...(raw.scope === 'SELECTED' ? { categories: { ...raw.categories as Record<string, 'S' | 'A' | 'B'> } } : {}),
     ...(raw.startsOn ? { startsOn: raw.startsOn as string } : {}), ...(exclusions ? { exclusions } : {}), ...(raw.dailyLimitMinutes !== undefined ? { dailyLimitMinutes: raw.dailyLimitMinutes as number } : {}), ...(history ? { history } : {}), playbackSpeed: raw.playbackSpeed as PersonalRoutine['playbackSpeed'],
     sessionMinutes: raw.sessionMinutes, breakMinutes: raw.breakMinutes, workloads, ...(raw.chapterSpeeds ? { chapterSpeeds: { ...raw.chapterSpeeds } as PersonalRoutine['chapterSpeeds'] } : {}), updatedAt: raw.updatedAt };
 }
@@ -368,19 +373,20 @@ function sourcesFor(routine: PersonalRoutine, id: string) {
 }
 /** S is a personal shortlist within A, never an additional copy of a chapter. */
 export function personalCategory(data: AppData, id: string): 'S' | 'A' | 'B' | 'C' {
+  if (data.personalRoutine?.scope === 'SELECTED' && data.personalRoutine.categories?.[id]) return data.personalRoutine.categories[id];
   const shortlist = data.personalRoutine?.scope === 'S' ? data.personalRoutine.chapterIds : data.personalPhases?.S?.chapterIds ?? RECOMMENDED_S_IDS;
   if (shortlist.includes(id)) return 'S';
   return data.chapterMeta[id]?.priority || chapterById[id].priority;
 }
 export function activePersonalCategory(data: AppData): 'S' | 'A' | 'B' | 'C' | undefined {
   const routine = data.personalRoutine;
-  return routine?.scope === 'ALL' ? (['S', 'A', 'B', 'C'] as const).find(category => routine.chapterIds.some(id => personalCategory(data, id) === category && !personalChapterProgress(routine, id, data.completed).fullyComplete)) : undefined;
+  return (routine?.scope === 'ALL' || routine?.scope === 'SELECTED') ? (['S', 'A', 'B', 'C'] as const).find(category => routine.chapterIds.some(id => personalCategory(data, id) === category && !personalChapterProgress(routine, id, data.completed).fullyComplete)) : undefined;
 }
 /** Pair within each category, preferring different subjects. */
 export function personalChapterPairs(routine: PersonalRoutine, data?: AppData): string[][] {
-  if (routine.scope === 'ALL') {
+  if (routine.scope === 'ALL' || routine.scope === 'SELECTED') {
     const categories = ['S', 'A', 'B', 'C'] as const;
-    const category = (id: string) => data ? personalCategory(data, id) : RECOMMENDED_S_IDS.includes(id) ? 'S' : chapterById[id].priority;
+    const category = (id: string) => routine.scope === 'SELECTED' ? routine.categories?.[id] : data ? personalCategory(data, id) : RECOMMENDED_S_IDS.includes(id) ? 'S' : chapterById[id].priority;
     return categories.flatMap(group => personalChapterPairs({ ...routine, scope: 'A', chapterIds: routine.chapterIds.filter(id => category(id) === group) }));
   }
   const books = new Map<string, string[]>();
@@ -439,7 +445,7 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
   let previousCategory: string | undefined;
   let categoryHasUnknown = false;
   for (const pair of personalChapterPairs(routine, data)) {
-    const category = routine.scope === 'ALL' ? personalCategory(data, pair[0]) : routine.scope;
+    const category = routine.scope === 'ALL' || routine.scope === 'SELECTED' ? personalCategory(data, pair[0]) : routine.scope;
     if (category !== previousCategory) {
       if (categoryHasUnknown) break;
       previousCategory = category;
@@ -662,9 +668,10 @@ export function undoPersonalRange(completed: Record<string, string>, task: Task)
  */
 export function personalHistorySnapshot(routine: PersonalRoutine, plan: Day[], completed: Record<string, string>): Task[] {
   const seen: Record<string, string> = {}, history: Task[] = [];
+  const retainedHistory = new Set((routine.history || []).map(task => `${task.date}:${task.id}`));
   for (const task of [...(routine.history || []), ...plan.flatMap(day => [...day.tasks, ...(day.historyTasks || [])])]) {
     const work = task.personalWork;
-    if (!work || !routine.chapterIds.includes(task.chapterIds[0])) continue;
+    if (!work || (!routine.chapterIds.includes(task.chapterIds[0]) && !(routine.scope === 'SELECTED' && retainedHistory.has(`${task.date}:${task.id}`)))) continue;
     let from = work.from;
     const missing = personalUnfinishedRanges(task, completed);
     const covered: { from: number; to: number }[] = [];
@@ -688,7 +695,7 @@ export function retainPersonalHistory(data: AppData, plan: Day[]): AppData {
 const PHASES = ['S', 'A', 'B', 'C'] as const;
 export function nextPersonalRoutine(data: AppData, asOf: string): PersonalRoutine | undefined {
   const current = data.personalRoutine;
-  if (!current || current.scope === 'ALL' || !isValidDate(asOf) || asOf >= data.settings.examDate || current.chapterIds.some(id => !personalChapterProgress(current, id, data.completed).fullyComplete)) return undefined;
+  if (!current || (current.scope === 'ALL' || current.scope === 'SELECTED') || !isValidDate(asOf) || asOf >= data.settings.examDate || current.chapterIds.some(id => !personalChapterProgress(current, id, data.completed).fullyComplete)) return undefined;
   const excluded = new Set([...(Object.values(data.personalPhases || {}).flatMap(routine => routine.chapterIds)), ...current.chapterIds]);
   for (const scope of PHASES.slice(PHASES.indexOf(current.scope) + 1)) {
     const retained = data.personalPhases?.[scope];
@@ -706,7 +713,7 @@ export function nextPersonalRoutine(data: AppData, asOf: string): PersonalRoutin
 }
 /** Undoing a previously finished prerequisite reopens it instead of prioritising A/B/C. */
 export function resumeUnfinishedPersonalPhase(data: AppData): AppData {
-  if (!data.personalRoutine || data.personalRoutine.scope === 'ALL') return data;
+  if (!data.personalRoutine || (data.personalRoutine.scope === 'ALL' || data.personalRoutine.scope === 'SELECTED')) return data;
   const earlier = PHASES.slice(0, PHASES.indexOf(data.personalRoutine.scope)).find(scope => {
     const routine = data.personalPhases?.[scope];
     return routine && routine.chapterIds.some(id => !personalChapterProgress(routine, id, data.completed).fullyComplete);
@@ -715,6 +722,20 @@ export function resumeUnfinishedPersonalPhase(data: AppData): AppData {
   const personalPhases = { ...data.personalPhases, [data.personalRoutine.scope]: data.personalRoutine };
   const personalRoutine = personalPhases[earlier]!; delete personalPhases[earlier];
   return { ...data, personalRoutine, personalPhases };
+}
+/** An explicit new selection starts empty; source settings remain available if reselected. */
+export function selectedChapterRoutineDraft(data: AppData): PersonalRoutine {
+  const active = data.personalRoutine;
+  if (!active) return { ...newPersonalRoutine('SELECTED'), categories: {} };
+  if (active.scope === 'SELECTED') return structuredClone(active);
+  const phases = [...Object.values(data.personalPhases || {}), active];
+  const workloads = Object.assign({}, ...phases.map(phase => phase.workloads));
+  const chapterSpeeds: NonNullable<PersonalRoutine['chapterSpeeds']> = { ...active.chapterSpeeds };
+  for (const phase of phases) for (const id of phase.chapterIds) {
+    workloads[id] = workloadFor(phase, id);
+    chapterSpeeds[id] = personalChapterSpeed(phase, id);
+  }
+  return { ...structuredClone(active), scope: 'SELECTED', chapterIds: [], categories: {}, workloads, chapterSpeeds };
 }
 /** Combine old phases without losing source identities, historical allocations or notes. */
 export function allChapterRoutineDraft(data: AppData, plan: Day[]): PersonalRoutine {
@@ -731,14 +752,15 @@ export function allChapterRoutineDraft(data: AppData, plan: Day[]): PersonalRout
   const history = [...phases.flatMap(phase => phase.history || []), ...personalHistorySnapshot(active, plan, data.completed)];
   const uniqueHistory = [...new Map(history.map(task => [`${task.date}:${task.id}`, task])).values()];
   if (uniqueHistory.length > 10000) throw new Error(t('পুরোনো ইতিহাস অনেক বড়; আগে ব্যাকআপ নিয়ে Settings-এ রুটিন রাখো।', 'History is too large to combine safely; keep a backup and review Settings.'));
-  return { ...active, scope: 'ALL', chapterIds: CHAPTERS.map(chapter => chapter.id), workloads, chapterSpeeds, history: uniqueHistory, updatedAt: new Date().toISOString() };
+  const combined = { ...active }; delete combined.categories;
+  return { ...combined, scope: 'ALL', chapterIds: CHAPTERS.map(chapter => chapter.id), workloads, chapterSpeeds, history: uniqueHistory, updatedAt: new Date().toISOString() };
 }
 export function applyAllChapterRoutine(data: AppData, plan: Day[]): AppData {
   const active = data.personalRoutine;
   if (!active || active.scope === 'ALL') return data;
   if (data.lockedDates.some(date => date >= data.settings.startDate && date < data.settings.examDate)) throw new Error(t('সব অধ্যায় যোগ করার আগে লক করা দিন আনলক করো।', 'Unlock plan dates before adding every chapter.'));
   const personalRoutine = parsePersonalRoutine(allChapterRoutineDraft(data, plan));
-  const personalPhases = { ...data.personalPhases, [active.scope]: structuredClone(active) };
+  const personalPhases = active.scope === 'SELECTED' ? { ...data.personalPhases } : { ...data.personalPhases, [active.scope]: structuredClone(active) };
   return { ...data, personalRoutine, personalPhases, settings: { ...data.settings, calendarRevision: data.settings.calendarRevision + 1 } };
 }
 export function applyPersonalRoutine(data: AppData, raw: unknown, options: { plan?: Day[]; asOf?: string } = {}): AppData {
@@ -749,18 +771,21 @@ export function applyPersonalRoutine(data: AppData, raw: unknown, options: { pla
   // Reopening S retains later phases. An edit must not give two retained phases
   // ownership of the same chapter: that snapshot would fail backup/reload
   // validation. Reject before changing history, progress or durable storage.
-  const conflict = routine.scope === 'ALL' ? undefined : Object.values(personalPhases || {}).find(phase => phase.scope !== routine.scope && phase.chapterIds.some(id => routine.chapterIds.includes(id)));
+  const conflict = routine.scope === 'ALL' || routine.scope === 'SELECTED' ? undefined : Object.values(personalPhases || {}).find(phase => phase.scope !== routine.scope && phase.chapterIds.some(id => routine.chapterIds.includes(id)));
   if (conflict) throw new Error(t(`নির্বাচিত অধ্যায় সংরক্ষিত ${conflict.scope} ধাপে আছে। দুই ধাপে একই অধ্যায় রাখা যাবে না; আগের নির্বাচন অক্ষত আছে।`, `A selected chapter belongs to retained phase ${conflict.scope}. It cannot belong to both phases; your saved selection is unchanged.`));
-  if (!data.personalRoutine && routine.scope !== 'S' && routine.scope !== 'ALL') throw new Error(t('আগে S ধাপ শুরু ও সম্পন্ন করো।', 'Start and complete S first.'));
+  if (!data.personalRoutine && routine.scope !== 'S' && routine.scope !== 'ALL' && routine.scope !== 'SELECTED') throw new Error(t('আগে S ধাপ শুরু ও সম্পন্ন করো।', 'Start and complete S first.'));
   if (data.personalRoutine) {
     const history = personalHistorySnapshot(data.personalRoutine, options.plan || buildPersonalStudyProjection(data).plan, data.completed);
     if (routine.scope === data.personalRoutine.scope) routine = { ...routine, history };
-    else {
+    else if (routine.scope === 'SELECTED') {
+      routine = { ...routine, history };
+      if (['S', 'A', 'B', 'C'].includes(data.personalRoutine.scope)) personalPhases = { ...personalPhases, [data.personalRoutine.scope]: { ...data.personalRoutine, history } };
+    } else {
       const allowed = nextPersonalRoutine(data, options.asOf || routine.startsOn || data.settings.startDate);
       if (!allowed || allowed.scope !== routine.scope || routine.chapterIds.some(id => !allowed.chapterIds.includes(id))) throw new Error(t('আগের ধাপের সব কাজ সম্পন্ন না হলে পরের A/B/C ধাপ চালু হবে না।', 'Complete all required work in the current phase before starting the next A/B/C phase.'));
       routine = { ...routine, startsOn: [routine.startsOn || allowed.startsOn!, allowed.startsOn!].sort().at(-1)! };
       personalPhases = { ...personalPhases, [data.personalRoutine.scope]: { ...data.personalRoutine, history } };
-      if (routine.scope !== 'ALL' && personalPhases[routine.scope]) { personalPhases = { ...personalPhases }; delete personalPhases[routine.scope]; }
+      if (routine.scope !== 'ALL' && routine.scope !== 'SELECTED' && personalPhases[routine.scope]) { personalPhases = { ...personalPhases }; delete personalPhases[routine.scope]; }
     }
   }
   return { ...data, personalRoutine: routine, ...(personalPhases ? { personalPhases } : {}), routineSetupRequired: false, settings: { ...data.settings, calendarRevision: data.settings.calendarRevision + 1 } };

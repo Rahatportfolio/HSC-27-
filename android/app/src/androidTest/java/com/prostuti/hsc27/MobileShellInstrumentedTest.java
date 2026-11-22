@@ -375,7 +375,15 @@ public class MobileShellInstrumentedTest {
     enterField(web, ".personal-session-options label:first-child input", "60");
     enterField(web, ".personal-session-options label:last-child input", "5");
     tap(web, ".personal-setup-actions button[type='submit']");
-    waitFor(web, "document.querySelector('.personal-setup h2')?.textContent.includes('Three sessions for every chapter')");
+    waitFor(web, "!!document.querySelector('.selected-chapters')");
+    // Fresh setup must not silently choose all chapters. Choose two S chapters
+    // and one B chapter through the visible controls, leaving everything else out.
+    assertEquals("Fresh setup must start with zero selected chapters", "0", evaluate(web, "document.querySelectorAll('.selected-chapter input:checked').length"));
+    tap(web, ".selected-subject:nth-of-type(1) summary");
+    tap(web, ".selected-chapter[data-chapter-id='physics-1-3'] input");
+    tap(web, ".selected-chapter[data-chapter-id='physics-1-1'] input");
+    tap(web, ".selected-subject:nth-of-type(2) summary");
+    tap(web, ".selected-chapter[data-chapter-id='chemistry-1-3'] input");
     tap(web, ".personal-setup-actions button[type='submit']");
     waitFor(web, "!!document.querySelector('.personal-workload-editor')");
     // Step 3 opens on the editable 20-hour estimate and is optional: the plan is
@@ -411,8 +419,11 @@ public class MobileShellInstrumentedTest {
       { setTimeZone(java.util.TimeZone.getTimeZone("Asia/Dhaka")); }
     }.format(new java.util.Date());
     assertEquals(expectedStart, saved.getJSONObject("settings").getString("startDate"));
-    assertEquals("ALL", routine.getString("scope"));
-    assertEquals(114, routine.getJSONArray("chapterIds").length());
+    assertEquals("SELECTED", routine.getString("scope"));
+    assertEquals(3, routine.getJSONArray("chapterIds").length());
+    assertEquals("S", routine.getJSONObject("categories").getString("physics-1-3"));
+    assertEquals("S", routine.getJSONObject("categories").getString("chemistry-1-3"));
+    assertEquals("B", routine.getJSONObject("categories").getString("physics-1-1"));
     assertEquals(7, routine.getJSONArray("windows").length());
     assertEquals(240, routine.getInt("dailyLimitMinutes"));
     assertEquals(480, routine.getJSONObject("workloads").getJSONObject("physics-1-3").getJSONObject("class").getInt("minutes"));
@@ -423,7 +434,7 @@ public class MobileShellInstrumentedTest {
     tap(web, ".personal-tasks .task-check");
     enterField(web, "textarea[aria-label='Day note']", "Native fresh setup note: retain after restart and recovery");
     waitFor(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return Object.keys(d.completed).length===1&&Object.values(d.notes).includes('Native fresh setup note: retain after restart and recovery');})()");
-    assertEquals("A single segment must not finish a chapter", "0/114", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
+    assertEquals("A single segment must not finish a chapter", "0/3", new JSONTokener(evaluate(web, "document.querySelector('.personal-goal .card-heading>strong').textContent")).nextValue());
     // Capture the actual edited snapshot atomically. A pending older React effect
     // can briefly write between the readiness probe and this read on a slow device;
     // never compare a stale pre-edit snapshot to the recreated app.

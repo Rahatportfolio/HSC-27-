@@ -3,7 +3,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { STORAGE_KEY, freshData } from './planner';
-import { CHAPTERS } from './data';
+import { chapterById } from './data';
+import { personalBookLabel } from './personalRoutine';
 import { setLanguage } from './i18n';
 
 beforeEach(() => {
@@ -37,10 +38,14 @@ describe('first-run quick start', () => {
     expect(screen.queryByText(/সময় মিলিয়ে নেওয়ার অধ্যায়/)).toBeNull();
   });
 
-  it('one tap builds the all-chapter routine, keeps the defaults and turns reminders on', async () => {
+  it('requires a selection and saves only selected S and B chapters', async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...freshData(), routineSetupRequired: true }));
     render(<App />);
     const cta = await screen.findByRole('button', { name: /এই সময় দিয়েই রুটিন বানাও/ });
+    expect((cta as HTMLButtonElement).disabled).toBe(true);
+    const selectedIds = ['physics-1-3', 'physics-1-1'];
+    for (const id of selectedIds) fireEvent.click(screen.getByLabelText(`${chapterById[id].title} · ${personalBookLabel(id)}`));
+    expect((cta as HTMLButtonElement).disabled).toBe(false);
     // Pick 3 net hours instead of the default 4.
     fireEvent.click(screen.getByRole('button', { name: /৩ ঘণ্টা/ }));
     fireEvent.click(cta);
@@ -48,8 +53,9 @@ describe('first-run quick start', () => {
       const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
       expect(saved.routineSetupRequired).toBe(false);
       expect(saved.personalRoutine).toBeTruthy();
-      expect(saved.personalRoutine.scope).toBe('ALL');
-      expect(saved.personalRoutine.chapterIds).toEqual(CHAPTERS.map(chapter => chapter.id));
+      expect(saved.personalRoutine.scope).toBe('SELECTED');
+      expect(new Set(saved.personalRoutine.chapterIds)).toEqual(new Set(selectedIds));
+      expect(saved.personalRoutine.categories).toEqual({ 'physics-1-3': 'S', 'physics-1-1': 'B' });
       expect(saved.personalRoutine.dailyLimitMinutes).toBe(180);
       expect(saved.personalRoutine.windows.length).toBeGreaterThan(0);
       expect(saved.settings.reminderEnabled).toBe(true);

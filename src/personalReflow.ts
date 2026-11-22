@@ -47,9 +47,9 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
   });
   // The untouched category-sorted baseline is already safe; avoid a full
   // rolling reconstruction until evidence or explicit schedule changes exist.
-  const untouchedAll = routine.scope === 'ALL' && !Object.keys(data.completed).some(id => id.startsWith('personal:') || id.startsWith('smart-part|')) &&
+  const untouchedAll = (routine.scope === 'ALL' || routine.scope === 'SELECTED') && !Object.keys(data.completed).some(id => id.startsWith('personal:') || id.startsWith('smart-part|')) &&
     !data.lockedDates.length && !data.removedTasks.length && !Object.keys(data.taskEdits).length && !Object.keys(data.dayOverrides).length;
-  if (!overdue && !invalid && !routine.history?.length && (routine.scope !== 'ALL' || untouchedAll)) return baseline;
+  if (!overdue && !invalid && !routine.history?.length && (routine.scope !== 'ALL' && routine.scope !== 'SELECTED' || untouchedAll)) return baseline;
   const activeCategory = activePersonalCategory(data);
   const earliest = [data.settings.startDate, ...(routine.history || []).map(task => task.date)].sort()[0];
   const plan: Day[] = Array.from({ length: Math.max(0, diffDays(earliest, data.settings.examDate)) }, (_, index) => ({ date: addDays(earliest, index), index: index + 1, phase: 'learn', isCatchup: false, personalRoutine: true, tasks: [] }));
@@ -77,6 +77,10 @@ export function reflowPersonalPlan(data: AppData, baseline: Day[], asOf: string)
     }
   }
   for (const task of historical.values()) {
+    if (routine.scope === 'SELECTED' && !routine.chapterIds.includes(task.chapterIds[0])) {
+      const day = days.get(task.date); if (day) day.historyTasks = [...(day.historyTasks || []), task];
+      continue;
+    }
     if (personalSlotFits(data, task) && !clashes(task) && (task.date < start || occupied(task.date) + task.endMinute - task.startMinute <= personalCapacity(data, task.date))) {
       if (task.date >= start) reserve(task); else append(task);
     } else {
