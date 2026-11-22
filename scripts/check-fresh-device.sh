@@ -17,6 +17,9 @@ adb shell pm path com.prostuti.hsc27.fresh | grep -q '^package:'
 adb shell "run-as com.prostuti.hsc27 sh -c 'mkdir -p files; echo original-private-snapshot > files/arena-isolation-check'"
 adb shell "run-as com.prostuti.hsc27.fresh sh -c 'test ! -e files/arena-isolation-check'"
 (cd android && ./gradlew :app:connectedDebugAndroidTest -PseparateInstall=true --no-daemon --stacktrace)
+# Gradle uninstalls the *test target* after instrumentation. Reinstall only
+# the fresh disposable-emulator package; never uninstall or modify the old one.
+adb install android/separate-package.apk
 adb shell pm path com.prostuti.hsc27 | grep -q '^package:'
 adb shell pm path com.prostuti.hsc27.fresh | grep -q '^package:'
 adb shell run-as com.prostuti.hsc27 cat files/arena-isolation-check | tr -d '\r' | grep -Fx 'original-private-snapshot'
