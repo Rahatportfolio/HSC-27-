@@ -325,13 +325,34 @@ public class MobileShellInstrumentedTest {
   // React's validated restore can reorder object keys without changing any
   // saved content. Compare all values structurally, including every workload,
   // note and completion, while reporting concise actionable failures.
+  private boolean sameJson(Object left, Object right) throws Exception {
+    if (left instanceof JSONObject && right instanceof JSONObject) {
+      JSONObject a = (JSONObject) left, b = (JSONObject) right;
+      if (a.length() != b.length()) return false;
+      java.util.Iterator<String> keys = a.keys();
+      while (keys.hasNext()) {
+        String key = keys.next();
+        if (!b.has(key) || !sameJson(a.get(key), b.get(key))) return false;
+      }
+      return true;
+    }
+    if (left instanceof JSONArray && right instanceof JSONArray) {
+      JSONArray a = (JSONArray) left, b = (JSONArray) right;
+      if (a.length() != b.length()) return false;
+      for (int i = 0; i < a.length(); i++) if (!sameJson(a.get(i), b.get(i))) return false;
+      return true;
+    }
+    if (left instanceof Number && right instanceof Number) return Double.compare(((Number) left).doubleValue(), ((Number) right).doubleValue()) == 0;
+    return left.equals(right);
+  }
+
   private void assertRetained(WebView web, String retained, String message) throws Exception {
     String actual = evaluate(web, "(()=>{const d=JSON.parse(localStorage.getItem('hsc27-prostuti-v1'));return JSON.stringify([d.personalRoutine,d.notes,d.completed]);})()");
     JSONArray expected = new JSONArray((String) new JSONTokener(retained).nextValue());
     JSONArray observed = new JSONArray((String) new JSONTokener(actual).nextValue());
-    assertTrue(message + ": routine changed", expected.getJSONObject(0).similar(observed.getJSONObject(0)));
-    assertTrue(message + ": notes expected=" + expected.getJSONObject(1) + " actual=" + observed.getJSONObject(1), expected.getJSONObject(1).similar(observed.getJSONObject(1)));
-    assertTrue(message + ": completion expected=" + expected.getJSONObject(2) + " actual=" + observed.getJSONObject(2), expected.getJSONObject(2).similar(observed.getJSONObject(2)));
+    assertTrue(message + ": routine changed", sameJson(expected.getJSONObject(0), observed.getJSONObject(0)));
+    assertTrue(message + ": notes expected=" + expected.getJSONObject(1) + " actual=" + observed.getJSONObject(1), sameJson(expected.getJSONObject(1), observed.getJSONObject(1)));
+    assertTrue(message + ": completion expected=" + expected.getJSONObject(2) + " actual=" + observed.getJSONObject(2), sameJson(expected.getJSONObject(2), observed.getJSONObject(2)));
   }
 
   private void completeFreshSetupAndRecover(ActivityScenario<MainActivity> scenario, WebView web) throws Exception {
