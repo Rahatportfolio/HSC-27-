@@ -3,8 +3,8 @@ apply plugin: 'com.android.application'
 /**
  * A real release build needs a keystore. The file is never committed: CI writes
  * `android/keystore.properties` + the .jks from repository secrets, and a local
- * build can drop the same pair in place. Without them the release build falls back
- * to the debug key, so `assembleRelease` never breaks for a contributor.
+ * build can drop the same pair in place. The legacy package keeps its contributor
+ * debug fallback; the separate package is never debug-signed as a release.
  */
 def keystorePropertiesFile = rootProject.file('keystore.properties')
 def keystoreProperties = new Properties()
@@ -15,16 +15,24 @@ def hasReleaseKeystore = keystorePropertiesFile.exists()
         && keystoreProperties.containsKey('storeFile')
         && rootProject.file(keystoreProperties['storeFile']).exists()
 
+// A deliberately separate install. The default package and its data remain untouched.
+def separateInstallFlag = providers.gradleProperty('separateInstall').orElse('false').get()
+if (!(separateInstallFlag in ['true', 'false'])) throw new GradleException('separateInstall must be true or false')
+def separateInstall = separateInstallFlag == 'true'
+
 android {
     namespace = "com.prostuti.hsc27"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.prostuti.hsc27"
+        applicationId separateInstall ? "com.prostuti.hsc27.fresh" : "com.prostuti.hsc27"
+        manifestPlaceholders = [appLabel: separateInstall ? "প্রস্তুতি নতুন" : "@string/app_name",
+                                activityLabel: separateInstall ? "প্রস্তুতি নতুন" : "@string/title_activity_main"]
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 24
         versionName "2.44.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunnerArguments = [expectedPackage: separateInstall ? "com.prostuti.hsc27.fresh" : "com.prostuti.hsc27"]
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
@@ -49,6 +57,9 @@ android {
             // Play Store uploads prefer an .aab; the APK stays for direct installs.
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
+            } else if (separateInstall) {
+                // Never disguise a debug-signed package as the new production app.
+                signingConfig null
             } else {
                 signingConfig signingConfigs.debug
             }
