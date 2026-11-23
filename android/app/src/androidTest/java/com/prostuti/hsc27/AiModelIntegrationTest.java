@@ -63,7 +63,7 @@ public class AiModelIntegrationTest {
     waitFor(web, "!!document.querySelector('.ai-modes button:nth-child(2)')", 60000);
     eval(web, "document.querySelector('.ai-modes button:nth-child(2)').click();true");
     String choice = InstrumentationRegistry.getArguments().getString("aiModelChoice", "standard");
-    assertTrue("Unsupported model choice", choice.equals("standard") || choice.equals("light"));
+    assertTrue("Unsupported model choice", choice.equals("standard") || choice.equals("light") || choice.equals("optimized"));
     eval(web, "document.querySelector('input[name=ai-model-choice][value=" + choice + "]').click();true");
     waitFor(web, "!!document.querySelector('.ai-download button')", 30000);
     eval(web, "document.querySelector('.ai-download button').click();true");

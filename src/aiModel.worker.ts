@@ -5,15 +5,15 @@ import mjsUrl from '../node_modules/onnxruntime-web/dist/ort-wasm-simd-threaded.
 /** Run inference away from the UI thread, especially on Android WebView. */
 interface AiChatMessage { role: 'system' | 'user' | 'assistant'; content: string }
 interface Generator { (messages: AiChatMessage[], options: Record<string, unknown>): Promise<Array<{ generated_text: AiChatMessage[] }>> }
-interface Request { id: number; kind: 'load' | 'chat'; model: string; dtype: 'q8'; messages?: AiChatMessage[] }
+interface Request { id: number; kind: 'load' | 'chat'; model: string; dtype: 'q8' | 'q4f16'; messages?: AiChatMessage[] }
 const worker = globalThis as unknown as { onmessage: ((event: MessageEvent<Request>) => void) | null; postMessage: (message: unknown) => void };
 let generator: Promise<Generator> | null = null;
 let activeModel: string | null = null;
 
 function load(request: Request): Promise<Generator> {
-  if (generator && activeModel !== request.model) return Promise.reject(new Error('Unload the current model before switching models.'));
+  if (generator && activeModel !== `${request.model}:${request.dtype}`) return Promise.reject(new Error('Unload the current model before switching models.'));
   if (!generator) {
-    activeModel = request.model;
+    activeModel = `${request.model}:${request.dtype}`;
     generator = (async () => {
       env.backends.onnx.wasm!.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
       // Browser worker threads and graph rewriting can increase peak memory on phones.

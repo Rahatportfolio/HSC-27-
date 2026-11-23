@@ -5,7 +5,7 @@ on:
       model:
         description: Model to test
         type: choice
-        options: [standard, light]
+        options: [standard, light, optimized]
         default: standard
   pull_request:
     paths:

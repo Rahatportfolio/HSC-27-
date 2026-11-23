@@ -5,8 +5,9 @@ export const AI_MODEL_DTYPE = 'q8';
 /** Approximate size of the Q8 weights on disk, in megabytes. */
 export const AI_MODEL_SIZE_MB = 1600;
 /** Explicit choice: smaller files are easier to download but the model is less capable. */
-export type AiModelChoice = 'light' | 'standard';
-export const AI_MODELS: Record<AiModelChoice, { id: string; dtype: 'q8'; sizeMB: number }> = {
+export type AiModelChoice = 'light' | 'standard' | 'optimized';
+export const AI_MODELS: Record<AiModelChoice, { id: string; dtype: 'q8' | 'q4f16'; sizeMB: number }> = {
+  optimized: { id: AI_MODEL_ID, dtype: 'q4f16', sizeMB: 1250 },
   light: { id: 'onnx-community/Qwen2.5-0.5B-Instruct', dtype: 'q8', sizeMB: 550 },
   standard: { id: AI_MODEL_ID, dtype: AI_MODEL_DTYPE, sizeMB: AI_MODEL_SIZE_MB },
 };

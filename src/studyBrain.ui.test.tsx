@@ -16,7 +16,7 @@ import * as aiBrain from './aiBrain';
 
 const now = new Date('2026-11-20T12:05:00.000Z'), today = '2026-11-20';
 beforeEach(() => { setLanguage('en'); vi.useFakeTimers({ toFake: ['Date'] }); vi.setSystemTime(now); });
-afterEach(() => { cleanup(); vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { cleanup(); sessionStorage.clear(); vi.useRealTimers(); vi.restoreAllMocks(); });
 function enabled() { const data = personalDataFixture(); data.studyBrain = newStudyBrain(); return data; }
 function setup(initial = personalDataFixture(), props: Partial<PlannerContextValue> = {}, teaser = false) {
   let data = initial, request: ConfirmRequest | undefined;
@@ -302,6 +302,16 @@ describe('AI assistant regression checks', () => {
     expect(within(panel()).getByRole('button', { name: 'Download AI model' })).toBeTruthy();
   });
 
+  it('shows an unfinished-attempt notice without saving prompts or altering study data', () => {
+    sessionStorage.setItem('prostuti-ai-attempt-v1', 'loading');
+    const h = setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect(within(panel()).getByText(/previous model download or startup did not finish/)).toBeTruthy();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Dismiss' }));
+    expect(sessionStorage.getItem('prostuti-ai-attempt-v1')).toBeNull();
+    expect(h.setData).not.toHaveBeenCalled();
+  });
+
   it('allows choosing a model and cancelling a download without accepting late results', async () => {
     let finish!: () => void;
     let emit!: (item: aiModel.AiProgress) => void;
@@ -309,8 +319,8 @@ describe('AI assistant regression checks', () => {
     const unload = vi.spyOn(aiModel, 'unloadAiModel');
     const h = setup(enabled());
     fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
-    expect((within(panel()).getByRole('radio', { name: /Small/ }) as HTMLInputElement).checked).toBe(true);
-    fireEvent.click(within(panel()).getByRole('radio', { name: /Previous larger/ }));
+    expect((within(panel()).getByRole('radio', { name: /Stronger/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(panel()).getByRole('radio', { name: /Stronger/ }));
     fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' }));
     expect(load.mock.calls[0][1]).toBe('standard');
     act(() => emit({ status: 'progress', file: 'weights.onnx', progress: 67 }));

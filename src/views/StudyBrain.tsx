@@ -14,6 +14,7 @@ import { interpretBrainMessage } from '../studyBrainIntents';
 import { answerAiQuestion, checkQuizAnswer, loadQuizQuestion, quizMessage } from '../aiBrain';
 import { aiErrorMessage, chatWithAi, loadAiModel, unloadAiModel, AI_MODELS } from '../aiModel';
 import type { AiModelChoice, AiProgress } from '../aiModel';
+import { recordAiAttempt, clearAiAttempt, previousAiAttempt } from '../aiRecovery';
 import { applyChapterAction, describeChapterAction } from '../chapterStore';
 import type { ChapterAction } from '../chapterStore';
 import type { QuizQuestion } from '../types';
@@ -372,7 +373,8 @@ function AiAssistant() {
   const [picked, setPicked] = useState<number | null>(null);
   const [quizSubject, setQuizSubject] = useState<SubjectId | undefined>();
   const [modelState, setModelState] = useState<ModelState>('idle');
-  const [choice, setChoice] = useState<AiModelChoice>('light');
+  const [choice, setChoice] = useState<AiModelChoice>('standard');
+  const [previousAttempt, setPreviousAttempt] = useState(previousAiAttempt);
   const [progress, setProgress] = useState<AiProgress | null>(null);
   const [error, setError] = useState('');
   const [pendingAction, setPendingAction] = useState<{ action: ChapterAction; text: string } | null>(null);
@@ -392,6 +394,7 @@ function AiAssistant() {
       if (!modelActive.current) return;
       modelActive.current = false;
       modelLoading.current = false;
+      clearAiAttempt();
       modelEpoch.current++;
       unloadAiModel();
       setModelState('idle');
@@ -408,6 +411,7 @@ function AiAssistant() {
       modelEpoch.current++;
       modelActive.current = false;
       modelLoading.current = false;
+      clearAiAttempt();
       unloadAiModel();
     };
   }, []);
@@ -417,6 +421,7 @@ function AiAssistant() {
       modelEpoch.current++;
       modelActive.current = false;
       modelLoading.current = false;
+      clearAiAttempt();
       unloadAiModel();
       setModelState('idle');
       setProgress(null);
@@ -431,10 +436,13 @@ function AiAssistant() {
     const epoch = ++modelEpoch.current;
     modelActive.current = true;
     modelLoading.current = true;
+    setPreviousAttempt(null);
+    recordAiAttempt('loading');
     setModelState('loading'); setError(''); setProgress(null);
     try {
       await loadAiModel(item => { if (modelEpoch.current === epoch) setProgress(item); }, choice);
       if (modelEpoch.current === epoch) {
+        clearAiAttempt();
         modelLoading.current = false;
         if (document.visibilityState === 'hidden') {
           modelActive.current = false;
@@ -447,6 +455,7 @@ function AiAssistant() {
       if (modelEpoch.current !== epoch) return;
       modelActive.current = false;
       modelLoading.current = false;
+      clearAiAttempt();
       unloadAiModel();
       setModelState('error');
       setError(aiErrorMessage(cause));
@@ -457,6 +466,7 @@ function AiAssistant() {
     modelEpoch.current++;
     modelActive.current = false;
     modelLoading.current = false;
+    clearAiAttempt();
     unloadAiModel();
     setModelState('idle');
     setProgress(null);
@@ -520,6 +530,7 @@ function AiAssistant() {
     const epoch = modelEpoch.current;
     setMessages(history);
     setBusy(true);
+    recordAiAttempt('answering');
     try {
       // A successful conversation alternates user/assistant and ends in a user
       // turn. Keep an odd number so a truncated context still starts with user.
@@ -537,6 +548,7 @@ function AiAssistant() {
       setInput(text);
       if (modelEpoch.current === epoch) setError(aiErrorMessage(cause));
     } finally {
+      if (modelEpoch.current === epoch) clearAiAttempt();
       setBusy(false);
     }
   };
@@ -586,11 +598,18 @@ function AiAssistant() {
       <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t('AI মডেল', 'AI model')}</button>
     </div>
 
+    {mode === 'model' && previousAttempt && <div className="ai-download" role="status">
+      <p>{previousAttempt === 'loading' ? t('আগেরবার মডেল ডাউনলোড বা চালু হওয়ার প্রক্রিয়া শেষ হয়নি। ব্রাউজার বন্ধ বা রিলোড হয়ে থাকতে পারে; কারণ নিশ্চিত নয়।', 'The previous model download or startup did not finish. The browser may have closed or reloaded; the cause is unknown.') : t('আগেরবার উত্তর তৈরি শেষ হয়নি। ব্রাউজার বন্ধ বা রিলোড হয়ে থাকতে পারে; কারণ নিশ্চিত নয়।', 'The previous answer did not finish. The browser may have closed or reloaded; the cause is unknown.')}</p>
+      <p>{t('ফোনে অন্য ট্যাব বন্ধ করে আবার চেষ্টা করো। সমস্যা হলে এই বার্তার স্ক্রিনশট পাঠাও; পড়ার তথ্য মুছো না।', 'Close other tabs and retry. If it happens again, share a screenshot of this message; do not clear study data.')}</p>
+      <button type="button" className="button secondary" onClick={() => { clearAiAttempt(); setPreviousAttempt(null); }}>{t('বুঝেছি', 'Dismiss')}</button>
+    </div>}
+
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
       <fieldset className="ai-model-choice">
         <legend>{t('মডেল বেছে নাও', 'Choose a model')}</legend>
         <label><input type="radio" name="ai-model-choice" value="light" checked={choice === 'light'} onChange={() => setChoice('light')} /> {t('ছোট — প্রায় ৫৫০ MB (Qwen 0.5B); কম ডেটা, তবে উত্তর দুর্বল হতে পারে', 'Small — about 550 MB (Qwen 0.5B); less data, but answers may be weaker')}</label>
-        <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('আগের বড় মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Previous larger model — about 1.6 GB (Qwen 1.5B)')}</label>
+        <label><input type="radio" name="ai-model-choice" value="optimized" checked={choice === 'optimized'} onChange={() => setChoice('optimized')} /> {t('পরীক্ষামূলক কম্প্যাক্ট ১.৫B — প্রায় ১.২৫ GB; কম্প্রেশনের কারণে উত্তর ভিন্ন হতে পারে', 'Experimental compact 1.5B — about 1.25 GB; compression can affect answers')}</label>
+        <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('শক্তিশালী মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Stronger model — about 1.6 GB (Qwen 1.5B)')}</label>
       </fieldset>
       <p>{t(`প্রায় ${bn(AI_MODELS[choice].sizeMB)} MB মডেলের পাশাপাশি চালানোর ফাইলও লাগবে। ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The approximately ${AI_MODELS[choice].sizeMB} MB model also needs runtime files. Depending on your browser cache, internet may be needed again.`)}</p>
       <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। স্থিতিশীল Wi-Fi ব্যবহার করো। ডাউনলোড চলার সময় পেজ বন্ধ বা রিলোড কোরো না; আড়ালে গেলে ব্রাউজার থামাতে পারে। মডেল চালু হলে আড়ালে গেলে মেমোরি ছাড়া হয়। পড়ার তথ্য মুছো না।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. Use a stable connection and keep the page open; your browser may suspend background downloads. Once loaded, backgrounding releases the model from memory. Do not clear your study data.')}</p>
