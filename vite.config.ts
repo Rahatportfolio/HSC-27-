@@ -20,7 +20,7 @@ function offlineShell(): Plugin {
       // fetch handler instead of downloading it for every new visitor.
       const shell = [...new Set(['./', './index.html', ...files
         .map(file => './' + relative(file)).sort()
-        .filter(file => file !== './sw.js' && !/\/(?:aiModel\.worker-|ort-wasm-simd-threaded\.jsep-)/.test(file))])];
+        .filter(file => file !== './sw.js' && !/\/(?:ai(?:Model|Gpu)\.worker-|ort-wasm-simd-threaded\.jsep-)/.test(file))])];
       const workerPath = join(dist, 'sw.js');
       const worker = await readFile(workerPath, 'utf8');
       const buildId = offlineShellBuildId(await Promise.all(files.map(async file => ({ path: relative(file), bytes: await readFile(file) }))));

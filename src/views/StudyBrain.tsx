@@ -607,6 +607,7 @@ function AiAssistant() {
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
       <fieldset className="ai-model-choice">
         <legend>{t('মডেল বেছে নাও', 'Choose a model')}</legend>
+        <label><input type="radio" name="ai-model-choice" value="gpu" checked={choice === 'gpu'} onChange={() => setChoice('gpu')} /> {t('পরীক্ষামূলক GPU ১.৫B — প্রায় ১ GB; WebGPU সমর্থন ও যথেষ্ট ফ্রি মেমোরি দরকার', 'Experimental GPU 1.5B — about 1 GB; requires WebGPU and sufficient free memory')}</label>
         <label><input type="radio" name="ai-model-choice" value="light" checked={choice === 'light'} onChange={() => setChoice('light')} /> {t('ছোট — প্রায় ৫৫০ MB (Qwen 0.5B); কম ডেটা, তবে উত্তর দুর্বল হতে পারে', 'Small — about 550 MB (Qwen 0.5B); less data, but answers may be weaker')}</label>
         <label><input type="radio" name="ai-model-choice" value="optimized" checked={choice === 'optimized'} onChange={() => setChoice('optimized')} /> {t('পরীক্ষামূলক কম্প্যাক্ট ১.৫B — প্রায় ১.২৫ GB; উত্তর ছোট বা ভিন্ন হতে পারে', 'Experimental compact 1.5B — about 1.25 GB; replies may be shorter or different')}</label>
         <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('শক্তিশালী মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Stronger model — about 1.6 GB (Qwen 1.5B)')}</label>
@@ -619,7 +620,11 @@ function AiAssistant() {
     {mode === 'model' && modelState === 'loading' && <div className="ai-download" role="status" aria-live="polite">
       <p>{t('AI মডেলের ফাইল ডাউনলোড ও চালু হচ্ছে। পেজ খোলা রাখো; বিভিন্ন ফাইলের অগ্রগতি আলাদা। ১০০% এর পরেও মডেল চালু হতে সময় লাগতে পারে।', 'Downloading files and starting the AI model. Keep this page open; progress is per file. Starting the model may take time after a file reaches 100%.')}</p>
       {progress?.file && <small>{t('ফাইল:', 'File:')} {progress.file}</small>}
-      {progress?.status === 'progress' && typeof progress.progress === 'number' && Number.isFinite(progress.progress) && <>
+      {progress?.status === 'progress_total' && typeof progress.progress === 'number' && Number.isFinite(progress.progress) && <>
+        <div className="ai-progress" aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, progress.progress))}%` }} /></div>
+        <small>{t('মডেল লোড:', 'Model loading:')} {bn(Math.round(Math.max(0, Math.min(100, progress.progress))))}%</small>
+      </>}
+      {progress?.status === 'progress' && typeof progress.progress === 'number'  && Number.isFinite(progress.progress) && <>
         <div className="ai-progress" aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, progress.progress))}%` }} /></div>
         <small>{t('এই ফাইল:', 'This file:')} {bn(Math.round(Math.max(0, Math.min(100, progress.progress))))}%</small>
       </>}

@@ -42,11 +42,13 @@ export async function checkBuild(root = 'dist', output = process.env.BUILD_BUDGE
   // than normal chunks, but must remain bounded and download only on use.
   const assets = await readdir(join(root, 'assets'));
   const aiWorker = assets.filter(file => /^aiModel\.worker-.*\.js$/.test(file));
+  const gpuWorker = assets.filter(file => /^aiGpu\.worker-.*\.js$/.test(file));
   const aiWasm = assets.filter(file => /^ort-wasm-simd-threaded\.jsep-.*\.(?:wasm|mjs)$/.test(file));
-  assert(aiWorker.length === 1 && aiWasm.length === 2, 'Missing optional AI runtime assets');
+  assert(aiWorker.length === 1 && gpuWorker.length === 1 && aiWasm.length === 2, 'Missing optional AI runtime assets');
   const aiWorkerBytes = (await stat(join(root, 'assets', aiWorker[0]))).size;
   assert(aiWorkerBytes <= 1_000_000, `Optional AI worker exceeds 1 MB: ${aiWorkerBytes}`);
-  for (const file of [...aiWorker, ...aiWasm]) assert(!shell.has(`./assets/${file}`), `Optional AI runtime must not be precached: ${file}`);
+  assert((await stat(join(root, 'assets', gpuWorker[0]))).size <= 6_500_000, 'Optional GPU worker exceeds 6.5 MB');
+  for (const file of [...aiWorker, ...gpuWorker, ...aiWasm]) assert(!shell.has(`./assets/${file}`), `Optional AI runtime must not be precached: ${file}`);
   report.allManifestAssetsPrecached = true;
   report.optionalAiWorkerBytes = aiWorkerBytes;
   if (output) { await mkdir(resolve(output, '..'), { recursive: true }); await writeFile(output, JSON.stringify(report, null, 2) + '\n'); }

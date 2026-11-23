@@ -5,8 +5,9 @@ export const AI_MODEL_DTYPE = 'q8';
 /** Approximate size of the Q8 weights on disk, in megabytes. */
 export const AI_MODEL_SIZE_MB = 1600;
 /** Explicit choice: smaller files are easier to download but the model is less capable. */
-export type AiModelChoice = 'light' | 'standard' | 'optimized';
-export const AI_MODELS: Record<AiModelChoice, { id: string; dtype: 'q8' | 'q4f16'; sizeMB: number }> = {
+export type AiModelChoice = 'light' | 'standard' | 'optimized' | 'gpu';
+export const AI_MODELS: Record<AiModelChoice, { id: string; dtype: 'q8' | 'q4f16' | 'webgpu'; sizeMB: number }> = {
+  gpu: { id: 'Qwen2.5-1.5B-Instruct-q4f32_1-MLC', dtype: 'webgpu', sizeMB: 1000 },
   optimized: { id: AI_MODEL_ID, dtype: 'q4f16', sizeMB: 1250 },
   light: { id: 'onnx-community/Qwen2.5-0.5B-Instruct', dtype: 'q8', sizeMB: 550 },
   standard: { id: AI_MODEL_ID, dtype: AI_MODEL_DTYPE, sizeMB: AI_MODEL_SIZE_MB },
@@ -65,12 +66,17 @@ interface WorkerReply {
 }
 type Pending = { resolve: (text: string) => void; reject: (error: Error) => void; onProgress?: (progress: AiProgress) => void };
 let worker: Worker | null = null;
+let workerChoice: AiModelChoice | null = null;
 let nextId = 0;
 const pending = new Map<number, Pending>();
 
-function getWorker(): Worker {
+function getWorker(choice: AiModelChoice): Worker {
+  if (worker && workerChoice !== choice) throw new Error('Unload the current model before switching models');
   if (!worker) {
-    const instance = new Worker(new URL('./aiModel.worker.ts', import.meta.url), { type: 'module' });
+    const instance = choice === 'gpu'
+      ? new Worker(new URL('./aiGpu.worker.ts', import.meta.url), { type: 'module' })
+      : new Worker(new URL('./aiModel.worker.ts', import.meta.url), { type: 'module' });
+    workerChoice = choice;
     instance.onmessage = (event: MessageEvent<WorkerReply>) => {
       if (worker !== instance) return;
       const reply = event.data, task = pending.get(reply.id);
@@ -86,6 +92,7 @@ function getWorker(): Worker {
       if (worker !== instance) return;
       instance.terminate();
       worker = null;
+      workerChoice = null;
       for (const task of pending.values()) task.reject(new Error('AI worker failed to start: ' + (event.message || 'unknown worker error')));
       pending.clear();
     };
@@ -97,7 +104,7 @@ function getWorker(): Worker {
 function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard'): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
-      const instance = getWorker(), id = ++nextId;
+      const instance = getWorker(choice), id = ++nextId;
       pending.set(id, { resolve, reject, onProgress });
       try { instance.postMessage({ id, kind, messages, model: AI_MODELS[choice].id, dtype: AI_MODELS[choice].dtype }); }
       catch (error) { pending.delete(id); throw error; }
@@ -109,6 +116,7 @@ function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?:
 export function unloadAiModel(): void {
   worker?.terminate();
   worker = null;
+  workerChoice = null;
   for (const task of pending.values()) task.reject(new Error('AI worker stopped'));
   pending.clear();
 }

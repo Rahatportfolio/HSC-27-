@@ -6,7 +6,8 @@ import { join } from 'node:path';
 
 const profile = await mkdtemp(join(tmpdir(), 'ai-model-test-'));
 const fixture = await readFile('android/app/src/androidTest/assets/native-personal-profile.json', 'utf8');
-const options = { executablePath: process.env.CHROMIUM_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage'] };
+const choice = process.env.AI_MODEL_CHOICE || 'standard';
+const options = { executablePath: process.env.CHROMIUM_PATH || '/usr/bin/google-chrome', args: ['--no-sandbox', '--disable-dev-shm-usage', ...(choice === 'gpu' ? ['--enable-unsafe-webgpu', '--use-angle=swiftshader', '--enable-features=Vulkan'] : [])] };
 let context;
 let stage = 'online';
 async function openAndAsk(page) {
@@ -15,14 +16,13 @@ async function openAndAsk(page) {
   const enable = page.locator('.brain-welcome button.primary');
   if (await enable.isVisible()) await enable.click();
   await page.locator('.ai-modes button:nth-child(2)').click();
-  const choice = process.env.AI_MODEL_CHOICE || 'standard';
   await page.locator(`input[name=ai-model-choice][value=${choice}]`).check();
   await page.locator('.ai-download button.primary').click();
-  await page.locator('.ai-ready, .ai-panel .field-error').first().waitFor({ timeout: 300000 });
+  await page.locator('.ai-ready, .ai-panel .field-error').first().waitFor({ timeout: choice === 'gpu' ? 600000 : 300000 });
   if (!await page.locator('.ai-ready').isVisible()) throw new Error('Model load failed: ' + await page.locator('.ai-panel').innerText());
   await page.locator('#ai-input').fill('What is water made of? Answer briefly.');
   await page.locator('.ai-input button[type=submit]').click();
-  await page.locator('.ai-message.assistant, .ai-panel .field-error').first().waitFor({ timeout: 300000 });
+  await page.locator('.ai-message.assistant, .ai-panel .field-error').first().waitFor({ timeout: choice === 'gpu' ? 600000 : 300000 });
   const answer = await page.locator('.ai-message.assistant').first().textContent().catch(() => '');
   if (!answer || answer.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('No model response: ' + await page.locator('.ai-panel').innerText());
   console.log(stage + ' model response:', answer.slice(0, 300));
@@ -41,6 +41,11 @@ try {
   await page.goto('http://127.0.0.1:3000/', { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => navigator.serviceWorker.ready);
   await page.waitForFunction(() => !!navigator.serviceWorker.controller, { timeout: 60000 });
+  if (choice === 'gpu') {
+    const gpu = await page.evaluate(async () => !!navigator.gpu && !!await navigator.gpu.requestAdapter());
+    console.log('Real WebGPU adapter available:', gpu);
+    if (!gpu) throw new Error('No WebGPU adapter available in this browser');
+  }
   await openAndAsk(page);
   await context.close();
   stage = 'offline after browser restart';
