@@ -16,9 +16,12 @@ function load(request: Request): Promise<Generator> {
     activeModel = request.model;
     generator = (async () => {
       env.backends.onnx.wasm!.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
+      // Browser worker threads and graph rewriting can increase peak memory on phones.
+      env.backends.onnx.wasm!.numThreads = 1;
       return await pipeline('text-generation', request.model, {
         dtype: request.dtype,
         device: 'wasm',
+        session_options: { graphOptimizationLevel: 'disabled' },
         progress_callback: limitAiProgress(progress => worker.postMessage({ id: request.id, kind: 'progress', progress })),
       }) as unknown as Generator;
     })();
@@ -34,7 +37,7 @@ worker.onmessage = event => {
       if (request.kind === 'load') {
         worker.postMessage({ id: request.id, kind: 'result' });
       } else {
-        const output = await model(request.messages ?? [], { max_new_tokens: 256, temperature: 0.7, top_p: 0.9, do_sample: true });
+        const output = await model(request.messages ?? [], { max_new_tokens: 80, temperature: 0.7, top_p: 0.9, do_sample: true });
         const messages = output?.[0]?.generated_text ?? [];
         worker.postMessage({ id: request.id, kind: 'result', text: messages[messages.length - 1]?.content?.trim() || '' });
       }
