@@ -5,7 +5,7 @@ import { buildStudyPlan } from './studyPlan';
 import {
   DEFAULT_CHAPTER_MINUTES, RECOMMENDED_S_IDS, WORK_STAGES,
   chapterWorkEstimate, defaultChapterStudyPlan, estimatedChapterWorkload, newPersonalRoutine,
-  parsePersonalRoutine, personalRoutineHealth, workloadFor,
+  parsePersonalRoutine, personalRoutineHealth, workloadFor, routineIssueText,
 } from './personalRoutine';
 import type { ChapterWorkload } from './personalRoutine';
 
@@ -124,8 +124,14 @@ describe('default 20-hour chapter budget', () => {
       workloads: Object.fromEntries(newPersonalRoutine().chapterIds.map(id => [id, estimatedChapterWorkload(id)])) };
     const plan = buildStudyPlan(data, data.settings.startDate);
     const spill = plan.flatMap(day => day.tasks).length ? personalRoutineHealth(data, plan) : null;
-    expect(spill!.issues.filter(issue => issue.code === 'two-day-capacity')).toHaveLength(1);
-    expect(spill!.warnings).toHaveLength(1);
+    const combined = spill!.issues.filter(issue => issue.code === 'two-day-capacity');
+    expect(combined).toHaveLength(1);
+    expect(combined[0].count).toBeGreaterThan(1);
+    const text = routineIssueText(combined[0]);
+    // The combined total must not be falsely attributed to the first pair.
+    expect(text).toMatch(/জোড়া|chapter pairs/);
+    expect(text).not.toContain('গতিবিদ্যা');
+    expect(spill!.warnings).toHaveLength(0);
     // Everything is still scheduled and finishable — nothing was dropped.
     expect(plan.flatMap(day => day.tasks).length).toBeGreaterThan(0);
     expect(spill!.missingDurations).toBe(false);

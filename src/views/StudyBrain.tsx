@@ -12,7 +12,8 @@ import { personalBookLabel, weeklyWindows, WORK_STAGES } from '../personalRoutin
 import { BRAIN_LIMITS, brainCurrentPair, brainFocusMethod, brainRevisionQueue, brainReportDirection, brainWeeklyReview, forgetStudyBrain, newStudyBrain, parseStudyBrain, saveBrainCheckIn, saveBrainFeedback, studyBrainSuggestion } from '../studyBrain';
 import { interpretBrainMessage } from '../studyBrainIntents';
 import { answerAiQuestion, checkQuizAnswer, loadQuizQuestion, quizMessage } from '../aiBrain';
-import { aiErrorMessage, chatWithAi, loadAiModel, unloadAiModel, AI_MODEL_SIZE_MB } from '../aiModel';
+import { aiErrorMessage, chatWithAi, loadAiModel, unloadAiModel, AI_MODELS } from '../aiModel';
+import type { AiModelChoice, AiProgress } from '../aiModel';
 import { applyChapterAction, describeChapterAction } from '../chapterStore';
 import type { ChapterAction } from '../chapterStore';
 import type { QuizQuestion } from '../types';
@@ -44,7 +45,7 @@ export default function StudyBrainView() {
       description="তোমার সময়, ক্লান্তি, ছোট ফিডব্যাক আর সংরক্ষিত পড়ার রেকর্ড মিলিয়ে পরামর্শ। তোমার হয়ে সিদ্ধান্ত নেওয়া নয়।"
       descriptionEn="Suggestions from your availability, energy, quick feedback and saved study records. You stay in charge."
       action={<span className="brain-local-badge"><ShieldCheck size={16} aria-hidden="true" />{t('ডিভাইসেই · AI', 'ON-DEVICE · AI')}</span>} />
-    <div className="brain-boundary"><BrainCircuit size={21} aria-hidden="true" /><p>{t('স্মার্ট ব্রেইন অল্প কিছু বাংলা, Banglish ও English পড়াশোনার কথা বোঝে। চাইলে ~১.৬ GB AI মডেল ডাউনলোড করে খোলামেলা প্রশ্নও করতে পারো — মডেল ডিভাইসেই চলে, কোনো সার্ভারে তোমার লেখা/তথ্য পাঠায় না, নোট বা স্ক্যান পড়ে না। AI-এর উত্তর ভুল হতে পারে; ভিডিওর দৈর্ঘ্য বা পরীক্ষার নিশ্চয়তা যাচাই করো।', 'The smart brain recognises a small set of Bengali, Banglish and English study requests. Optionally download the ~1.6 GB AI model for open-ended questions — it runs on this device, sends no text or profile data to a server, and does not read notes or scans. AI answers can be wrong; verify claims about video durations or exam results.')}</p></div>
+    <div className="brain-boundary"><BrainCircuit size={21} aria-hidden="true" /><p>{t('স্মার্ট ব্রেইন অল্প কিছু বাংলা, Banglish ও English পড়াশোনার কথা বোঝে। চাইলে AI মডেল ডাউনলোড করে খোলামেলা প্রশ্নও করতে পারো — মডেল ডিভাইসেই চলে, কোনো সার্ভারে তোমার লেখা/তথ্য পাঠায় না, নোট বা স্ক্যান পড়ে না। AI-এর উত্তর ভুল হতে পারে; ভিডিওর দৈর্ঘ্য বা পরীক্ষার নিশ্চয়তা যাচাই করো।', 'The smart brain recognises a small set of Bengali, Banglish and English study requests. Optionally download an AI model for open-ended questions — it runs on this device, sends no text or profile data to a server, and does not read notes or scans. AI answers can be wrong; verify claims about video durations or exam results.')}</p></div>
     {!ready ? <section className="card brain-panel" role="status"><p>{t('আগের ডিভাইসের তথ্য লোড হওয়া পর্যন্ত ব্রেইন বদলানো বন্ধ আছে।', 'Brain changes are paused until saved device data has loaded.')}</p></section> : <>
       {!memory?.enabled ? <section className="card brain-panel brain-welcome">
         <span className="brain-mark" aria-hidden="true"><BrainCircuit size={32} /></span>
@@ -371,13 +372,15 @@ function AiAssistant() {
   const [picked, setPicked] = useState<number | null>(null);
   const [quizSubject, setQuizSubject] = useState<SubjectId | undefined>();
   const [modelState, setModelState] = useState<ModelState>('idle');
-  const [progress, setProgress] = useState(0);
+  const [choice, setChoice] = useState<AiModelChoice>('light');
+  const [progress, setProgress] = useState<AiProgress | null>(null);
   const [error, setError] = useState('');
   const [pendingAction, setPendingAction] = useState<{ action: ChapterAction; text: string } | null>(null);
   const [pendingRoutine, setPendingRoutine] = useState<{ action: RoutineCommand; snapshot: string } | null>(null);
   const latestRoutine = useRef({ data, plan, today }); latestRoutine.current = { data, plan, today };
   const modelEpoch = useRef(0);
   const modelActive = useRef(false);
+  const modelLoading = useRef(false);
 
   // Remove any key saved by the discontinued optional cloud provider.
   useEffect(() => { try { localStorage.removeItem('hsc27-ai-cloud-config'); } catch { /* storage unavailable */ } }, []);
@@ -388,13 +391,15 @@ function AiAssistant() {
     const release = () => {
       if (!modelActive.current) return;
       modelActive.current = false;
+      modelLoading.current = false;
       modelEpoch.current++;
       unloadAiModel();
       setModelState('idle');
-      setProgress(0);
+      setProgress(null);
       setError(t('মেমোরি বাঁচাতে AI মডেল বন্ধ হয়েছে। ফিরে এসে চাইলে আবার চালু করো।', 'The AI model was released to save memory. Load it again when you return.'));
     };
-    const onVisibility = () => { if (document.visibilityState === 'hidden') release(); };
+    // Let downloads continue when briefly backgrounded; browsers may still suspend them.
+    const onVisibility = () => { if (document.visibilityState === 'hidden' && !modelLoading.current) release(); };
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pagehide', release);
     return () => {
@@ -402,6 +407,7 @@ function AiAssistant() {
       window.removeEventListener('pagehide', release);
       modelEpoch.current++;
       modelActive.current = false;
+      modelLoading.current = false;
       unloadAiModel();
     };
   }, []);
@@ -410,9 +416,10 @@ function AiAssistant() {
     if (mode === 'model' && next !== 'model') {
       modelEpoch.current++;
       modelActive.current = false;
+      modelLoading.current = false;
       unloadAiModel();
       setModelState('idle');
-      setProgress(0);
+      setProgress(null);
     }
     setMode(next);
     setError('');
@@ -423,17 +430,37 @@ function AiAssistant() {
   const downloadModel = async () => {
     const epoch = ++modelEpoch.current;
     modelActive.current = true;
-    setModelState('loading'); setError(''); setProgress(0);
+    modelLoading.current = true;
+    setModelState('loading'); setError(''); setProgress(null);
     try {
-      await loadAiModel(item => { if (modelEpoch.current === epoch) setProgress(Math.round(item.progress ?? 0)); });
-      if (modelEpoch.current === epoch) setModelState('ready');
+      await loadAiModel(item => { if (modelEpoch.current === epoch) setProgress(item); }, choice);
+      if (modelEpoch.current === epoch) {
+        modelLoading.current = false;
+        if (document.visibilityState === 'hidden') {
+          modelActive.current = false;
+          unloadAiModel();
+          setModelState('idle');
+          setError(t('ডাউনলোড শেষ হলেও মেমোরি বাঁচাতে মডেল বন্ধ হয়েছে। ফিরে এসে আবার চালু করো; ক্যাশ থাকলে আবার ডাউনলোড নাও লাগতে পারে।', 'Loading finished in the background; the model was released to save memory. Load again; cached files may be reused.'));
+        } else setModelState('ready');
+      }
     } catch (cause) {
       if (modelEpoch.current !== epoch) return;
       modelActive.current = false;
+      modelLoading.current = false;
       unloadAiModel();
       setModelState('error');
       setError(aiErrorMessage(cause));
     }
+  };
+
+  const cancelDownload = () => {
+    modelEpoch.current++;
+    modelActive.current = false;
+    modelLoading.current = false;
+    unloadAiModel();
+    setModelState('idle');
+    setProgress(null);
+    setError(t('ডাউনলোড বন্ধ করা হয়েছে। পরে আবার চেষ্টা করতে পারো; অসম্পূর্ণ ফাইল আবার ডাউনলোড লাগতে পারে।', 'Download stopped. You can retry later; incomplete files may need downloading again.'));
   };
 
   const askQuiz = async () => {
@@ -502,7 +529,7 @@ function AiAssistant() {
         else turns.push(message);
         return turns;
       }, []);
-      const reply = await chatWithAi(modelHistory.slice(-11), item => { if (modelEpoch.current === epoch) setProgress(Math.round(item.progress ?? 0)); });
+      const reply = await chatWithAi(modelHistory.slice(-11), undefined, choice);
       if (modelEpoch.current !== epoch) throw new Error('AI worker stopped');
       setMessages(current => [...current, { role: 'assistant', content: reply }]);
     } catch (cause) {
@@ -556,19 +583,28 @@ function AiAssistant() {
     <p>{t('উদাহরণ: দৈনিক পড়ার সময় ৩ ঘণ্টা করো; সেশন ৪৫ মিনিট করো; বিরতি ১০ মিনিট করো। অন্য নির্দেশ না বুঝলে Settings-এ নিজে বদলাও।', 'Examples: set daily study time to 3 hours; set session to 45 minutes; set break to 10 minutes. Other requests may need Settings.')}</p>
     <div className="ai-modes" role="group" aria-label={t('AI মোড', 'AI mode')}>
       <button type="button" className={`button secondary ${mode === 'brain' ? 'selected' : ''}`} aria-pressed={mode === 'brain'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('brain')}><BrainCircuit size={16} aria-hidden="true" />{t('স্মার্ট ব্রেইন', 'Smart brain')}</button>
-      <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t(`AI মডেল (~${bn(AI_MODEL_SIZE_MB)} MB)`, `AI model (~${AI_MODEL_SIZE_MB} MB)`)}</button>
+      <button type="button" className={`button secondary ${mode === 'model' ? 'selected' : ''}`} aria-pressed={mode === 'model'} disabled={busy || modelState === 'loading'} onClick={() => switchMode('model')}><Bot size={16} aria-hidden="true" />{t('AI মডেল', 'AI model')}</button>
     </div>
 
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
-      <p>{t(`প্রথমবার প্রায় ${bn(AI_MODEL_SIZE_MB)} MB মডেল এবং চালানোর ফাইল ডাউনলোড হবে (Qwen2.5-1.5B-Instruct, Q8)। ডিভাইস ও ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The first use downloads an approximately ${AI_MODEL_SIZE_MB} MB model plus runtime files (Qwen2.5-1.5B-Instruct, Q8). Depending on your device and cache, internet may be needed again.`)}</p>
-      <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। চাইলে স্মার্ট ব্রেইন ব্যবহার করো। স্মার্ট ব্রেইনে ফিরলে বা অ্যাপ আড়ালে গেলে মডেলের মেমোরি ছাড়া হয়; আবার ব্যবহার করতে লোড করতে হবে।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. You can use Smart brain instead. Switching back or backgrounding the app releases the model from memory; using it again requires loading it.')}</p>
+      <fieldset className="ai-model-choice">
+        <legend>{t('মডেল বেছে নাও', 'Choose a model')}</legend>
+        <label><input type="radio" name="ai-model-choice" value="light" checked={choice === 'light'} onChange={() => setChoice('light')} /> {t('ছোট — প্রায় ৫৫০ MB (Qwen 0.5B); কম ডেটা, তবে উত্তর দুর্বল হতে পারে', 'Small — about 550 MB (Qwen 0.5B); less data, but answers may be weaker')}</label>
+        <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('আগের বড় মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Previous larger model — about 1.6 GB (Qwen 1.5B)')}</label>
+      </fieldset>
+      <p>{t(`প্রায় ${bn(AI_MODELS[choice].sizeMB)} MB মডেলের পাশাপাশি চালানোর ফাইলও লাগবে। ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The approximately ${AI_MODELS[choice].sizeMB} MB model also needs runtime files. Depending on your browser cache, internet may be needed again.`)}</p>
+      <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। স্থিতিশীল Wi-Fi ব্যবহার করো। ডাউনলোড চলার সময় পেজ বন্ধ বা রিলোড কোরো না; আড়ালে গেলে ব্রাউজার থামাতে পারে। মডেল চালু হলে আড়ালে গেলে মেমোরি ছাড়া হয়। পড়ার তথ্য মুছো না।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. Use a stable connection and keep the page open; your browser may suspend background downloads. Once loaded, backgrounding releases the model from memory. Do not clear your study data.')}</p>
       <button type="button" className="button primary" onClick={() => void downloadModel()}><Download size={16} aria-hidden="true" />{t('AI মডেল ডাউনলোড করো', 'Download AI model')}</button>
     </div>}
 
     {mode === 'model' && modelState === 'loading' && <div className="ai-download" role="status" aria-live="polite">
-      <p>{t('AI মডেল ডাউনলোড ও চালু হচ্ছে… ইন্টারনেট বন্ধ কোরো না।', 'Downloading and starting the AI model… keep the internet on.')}</p>
-      <div className="ai-progress" aria-hidden="true"><span style={{ width: `${progress}%` }} /></div>
-      <small>{bn(progress)}%</small>
+      <p>{t('AI মডেলের ফাইল ডাউনলোড ও চালু হচ্ছে। পেজ খোলা রাখো; বিভিন্ন ফাইলের অগ্রগতি আলাদা। ১০০% এর পরেও মডেল চালু হতে সময় লাগতে পারে।', 'Downloading files and starting the AI model. Keep this page open; progress is per file. Starting the model may take time after a file reaches 100%.')}</p>
+      {progress?.file && <small>{t('ফাইল:', 'File:')} {progress.file}</small>}
+      {progress?.status === 'progress' && typeof progress.progress === 'number' && Number.isFinite(progress.progress) && <>
+        <div className="ai-progress" aria-hidden="true"><span style={{ width: `${Math.max(0, Math.min(100, progress.progress))}%` }} /></div>
+        <small>{t('এই ফাইল:', 'This file:')} {bn(Math.round(Math.max(0, Math.min(100, progress.progress))))}%</small>
+      </>}
+      <button type="button" className="button secondary" onClick={cancelDownload}>{t('ডাউনলোড বন্ধ করো', 'Cancel download')}</button>
     </div>}
 
     {mode === 'model' && modelReady && <p className="ai-ready" role="status">{t('মডেল প্রস্তুত — প্রশ্ন পাঠালেই ডিভাইসেই উত্তর আসবে।', 'Model ready — send a question and the answer comes from this device.')}</p>}

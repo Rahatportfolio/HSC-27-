@@ -274,7 +274,7 @@ describe('missing durations never blank out the whole plan', () => {
     const data = unknownData();
     const health = personalRoutineHealth(data, planFor(data));
     expect(health.issues.filter(issue => issue.code === 'two-day-capacity')).toHaveLength(1);
-    expect(health.warnings.join(' ')).toContain('বাড়তি দিনে চলবে');
+    expect(health.warnings.join(' ')).not.toContain('বাড়তি দিনে চলবে');
   });
 });
 

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
-  AI_MODEL_DTYPE, AI_MODEL_ID, AI_MODEL_SIZE_MB,
+  AI_MODEL_DTYPE, AI_MODEL_ID, AI_MODEL_SIZE_MB, AI_MODELS,
   aiErrorMessage, loadAiModel, chatWithAi, unloadAiModel,
 } from './aiModel';
 
@@ -12,6 +12,8 @@ describe('on-device AI model configuration', () => {
     expect(AI_MODEL_DTYPE).toBe('q8');
     expect(AI_MODEL_SIZE_MB).toBeGreaterThanOrEqual(1500);
     expect(AI_MODEL_SIZE_MB).toBeLessThanOrEqual(1800);
+    expect(AI_MODELS.light.id).toContain('0.5B');
+    expect(AI_MODELS.light.sizeMB).toBeLessThan(AI_MODEL_SIZE_MB);
   });
 
 
@@ -20,6 +22,11 @@ describe('on-device AI model configuration', () => {
 describe('aiErrorMessage', () => {
   it('explains network failures in Bengali', () => {
     expect(aiErrorMessage(new Error('Failed to fetch'))).toContain('ইন্টারনেট');
+  });
+
+  it('explains storage and memory errors without suggesting data deletion', () => {
+    expect(aiErrorMessage(new Error('QuotaExceededError'))).toContain('জায়গা');
+    expect(aiErrorMessage(new Error('out of memory'))).toContain('মেমোরি');
   });
 
   it('explains missing WebGPU/WASM support', () => {
@@ -38,6 +45,27 @@ describe('aiErrorMessage', () => {
 });
 
 describe('AI worker lifecycle', () => {
+  it('uses the chosen model for loading and the subsequent chat', async () => {
+    class FakeWorker {
+      static instance: FakeWorker;
+      onmessage: ((event: { data: { id: number; kind: string; text?: string } }) => void) | null = null;
+      onerror = null;
+      terminate = vi.fn();
+      postMessage = vi.fn();
+      constructor() { FakeWorker.instance = this; }
+    }
+    vi.stubGlobal('Worker', FakeWorker);
+    const loading = loadAiModel(undefined, 'light');
+    const w = FakeWorker.instance;
+    expect(w.postMessage.mock.calls[0][0].model).toBe(AI_MODELS.light.id);
+    w.onmessage?.({ data: { id: w.postMessage.mock.calls[0][0].id, kind: 'result' } });
+    await loading;
+    const chat = chatWithAi([{ role: 'user', content: 'Hello' }], undefined, 'light');
+    expect(w.postMessage.mock.calls[1][0].model).toBe(AI_MODELS.light.id);
+    w.onmessage?.({ data: { id: w.postMessage.mock.calls[1][0].id, kind: 'result', text: 'Hello' } });
+    await expect(chat).resolves.toBe('Hello');
+  });
+
   it('does not reject a replacement worker request on a late error from the terminated worker', async () => {
     class FakeWorker {
       static instances: FakeWorker[] = [];

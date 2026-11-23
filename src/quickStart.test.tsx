@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
 import { STORAGE_KEY, freshData } from './planner';
 import { chapterById } from './data';
 import { personalBookLabel } from './personalRoutine';
 import { setLanguage } from './i18n';
+import { personalDataFixture } from './test/personalRoutineFixture';
 
 beforeEach(() => {
   localStorage.clear();
@@ -37,6 +38,28 @@ describe('first-run quick start', () => {
     // The heavy per-stage duration editor must stay out of the first screen.
     expect(screen.queryByText(/সময় মিলিয়ে নেওয়ার অধ্যায়/)).toBeNull();
   });
+
+  it('offers a safe website backup import before entering a new routine', async () => {
+    const current = { ...freshData(), routineSetupRequired: true };
+    current.notes['2026-11-20'] = 'Existing app note';
+    const website = personalDataFixture(); website.notes['2026-11-20'] = 'From the website';
+    website.routineSetupRequired = false;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(current));
+    render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'ওয়েবসাইটের ব্যাকআপ ইমপোর্ট করো' }));
+    expect(await screen.findByRole('button', { name: 'Full backup import' })).toBeTruthy();
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).notes['2026-11-20']).toBe('Existing app note');
+    const file = new File(['backup'], 'website.json', { type: 'application/json' });
+    Object.defineProperty(file, 'text', { value: async () => JSON.stringify(website) });
+    fireEvent.change(screen.getByLabelText('ব্যাকআপ ফাইল'), { target: { files: [file] } });
+    const dialog = await screen.findByRole('dialog', { name: 'ব্যাকআপ ফিরিয়ে আনবে?' });
+    expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).notes['2026-11-20']).toBe('Existing app note');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'ব্যাকআপ ইমপোর্ট করো' }));
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(STORAGE_KEY)!).notes['2026-11-20']).toBe('From the website'));
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(saved.personalRoutine.chapterIds).toEqual(website.personalRoutine!.chapterIds);
+    expect(saved.routineSetupRequired).toBe(false);
+  }, 30000);
 
   it('requires a selection and saves only selected S and B chapters', async () => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify({ ...freshData(), routineSetupRequired: true }));

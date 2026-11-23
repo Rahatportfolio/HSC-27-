@@ -4,10 +4,17 @@ export const AI_MODEL_ID = 'onnx-community/Qwen2.5-1.5B-Instruct';
 export const AI_MODEL_DTYPE = 'q8';
 /** Approximate size of the Q8 weights on disk, in megabytes. */
 export const AI_MODEL_SIZE_MB = 1600;
+/** Explicit choice: smaller files are easier to download but the model is less capable. */
+export type AiModelChoice = 'light' | 'standard';
+export const AI_MODELS: Record<AiModelChoice, { id: string; dtype: 'q8'; sizeMB: number }> = {
+  light: { id: 'onnx-community/Qwen2.5-0.5B-Instruct', dtype: 'q8', sizeMB: 550 },
+  standard: { id: AI_MODEL_ID, dtype: AI_MODEL_DTYPE, sizeMB: AI_MODEL_SIZE_MB },
+};
 
 export interface AiProgress {
   status: string;
   name?: string;
+  file?: string;
   loaded?: number;
   total?: number;
   progress?: number;
@@ -30,6 +37,12 @@ export const AI_SYSTEM_PROMPT = [
 /** Map any engine/network failure to a clear Bengali message. Never leaks internals. */
 export function aiErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/quota|insufficient storage|not enough (?:disk|storage)|disk full/i.test(message)) {
+    return 'ব্রাউজারে AI মডেলের জন্য জায়গা পর্যাপ্ত নয়। ডিভাইসে জায়গা খালি করে আবার চেষ্টা করো; পড়ার তথ্য মুছো না।';
+  }
+  if (/out of memory|memory access|allocation failed|cannot allocate/i.test(message)) {
+    return 'মডেল চালাতে পর্যাপ্ত মেমোরি পাওয়া যায়নি। ছোট মডেল চেষ্টা করো বা অন্য ট্যাব বন্ধ করে আবার চেষ্টা করো।';
+  }
   if (/failed to fetch|network|offline|load failed|net::/i.test(message)) {
     return 'ইন্টারনেট সংযোগ নেই বা ডাউনলোড ব্যর্থ হয়েছে। সংযোগ ঠিক করে আবার চেষ্টা করো।';
   }
@@ -80,12 +93,12 @@ function getWorker(): Worker {
   return worker;
 }
 
-function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?: (progress: AiProgress) => void): Promise<string> {
+function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard'): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
       const instance = getWorker(), id = ++nextId;
       pending.set(id, { resolve, reject, onProgress });
-      try { instance.postMessage({ id, kind, messages, model: AI_MODEL_ID, dtype: AI_MODEL_DTYPE }); }
+      try { instance.postMessage({ id, kind, messages, model: AI_MODELS[choice].id, dtype: AI_MODELS[choice].dtype }); }
       catch (error) { pending.delete(id); throw error; }
     } catch (error) { reject(error instanceof Error ? error : new Error(String(error))); }
   });
@@ -100,12 +113,12 @@ export function unloadAiModel(): void {
 }
 
 /** Download/load the model in a worker. A failed request can be retried. */
-export async function loadAiModel(onProgress?: (progress: AiProgress) => void): Promise<void> {
-  await request('load', undefined, onProgress);
+export async function loadAiModel(onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard'): Promise<void> {
+  await request('load', undefined, onProgress, choice);
 }
 
 /** One chat turn against the on-device model; inference never blocks the UI thread. */
-export async function chatWithAi(history: AiChatMessage[], onProgress?: (progress: AiProgress) => void): Promise<string> {
-  const reply = await request('chat', [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history], onProgress);
+export async function chatWithAi(history: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard'): Promise<string> {
+  const reply = await request('chat', [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history], onProgress, choice);
   return reply || 'মডেল কোনো উত্তর দিতে পারেনি। আবার চেষ্টা করো, অথবা স্মার্ট ব্রেইন মোড ব্যবহার করো।';
 }

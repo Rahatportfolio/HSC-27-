@@ -534,7 +534,7 @@ export function buildPersonalStudyProjection(data: AppData): PersonalProjection 
   const spill = issues.filter(issue => issue.code === 'two-day-capacity');
   if (spill.length > 1) {
     // Keep every other issue in its original order; drop only the duplicates.
-    const merged: RoutineIssue = { code: 'two-day-capacity', chapterIds: [...new Set(spill.flatMap(issue => issue.chapterIds))], minutes: spill.reduce((sum, issue) => sum + issue.minutes, 0) };
+    const merged: RoutineIssue = { code: 'two-day-capacity', chapterIds: [...new Set(spill.flatMap(issue => issue.chapterIds))], minutes: spill.reduce((sum, issue) => sum + issue.minutes, 0), count: spill.length };
     const kept = issues.filter(issue => issue.code !== 'two-day-capacity');
     const at = issues.findIndex(issue => issue.code === 'two-day-capacity');
     kept.splice(kept.filter(issue => issues.indexOf(issue) < at).length, 0, merged);
@@ -546,7 +546,9 @@ export function routineIssueText(issue: RoutineIssue): string {
   const names = issue.chapterIds.slice(0, 2).map(id => chapterById[id]?.title || id).join(' + ');
   if (issue.code === 'unknown-duration') return t(`${names}${issue.chapterIds.length > 2 ? ` +${bn(issue.chapterIds.length - 2)}` : ''} — এই নির্বাচিত অধ্যায়ের ক্লাস/কাজের সময় অজানা। প্রকৃত সময় না মেলা পর্যন্ত এদের শেষ তারিখ বানানো হবে না; বাকি অধ্যায়ের কাজ চলবে।`, `${names}${issue.chapterIds.length > 2 ? ` +${issue.chapterIds.length - 2}` : ''} — selected chapters with unknown class/work durations. No finish date is invented for them until the real minutes are entered; the other chapters keep their sessions.`);
   if (issue.code === 'stale-evidence') return t(`${names}: ভিডিও/গণনার উৎস বদলেছ, তাই আগের টিকগুলো নতুন উৎসের প্রমাণ হিসেবে গোনা হচ্ছে না (মুছে যায়নি)। নতুন উৎসটি দেখে/করে আবার টিক দাও।`, `${names}: the video/calculation source changed, so the earlier ticks no longer count as evidence for the new source (nothing was deleted). Study/practise the new source and tick it again.`);
-  if (issue.code === 'two-day-capacity') return t(`${names}: তোমার প্রথম দুই পড়ার দিনে আরও ${formatDurationBn(issue.minutes)} কাজ বাকি থাকে। একই জোড়া বাড়তি দিনে চলবে—ক্লাস ছোট করা হয়নি।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit in your first two study days. The SAME pair continues on extra days; no class was shortened.`);
+  if (issue.code === 'two-day-capacity') return (issue.count || 0) > 1
+    ? t(`${bn(issue.count!)}টি অধ্যায়-জোড়ার প্রতিটির প্রথম দুই পড়ার দিনের পর মোট ${formatDurationBn(issue.minutes)} কাজ বাকি থাকে। কাজ পরের দিনগুলোতে চলবে।`, `Across ${issue.count} chapter pairs, ${formatDurationBn(issue.minutes)} in total remains after each pair's first two study days. Work continues on later days.`)
+    : t(`${names}: এই জোড়ার প্রথম দুই পড়ার দিনের পর ${formatDurationBn(issue.minutes)} কাজ বাকি থাকে। কাজ পরের দিনগুলোতে চলবে।`, `${names}: ${formatDurationBn(issue.minutes)} remains after this pair's first two study days. Work continues on later days.`);
   if (issue.code === 'deadline') return t(`${names}: লক্ষ্য তারিখ পর্যন্ত আরও ${formatDurationBn(issue.minutes)} কাজ রাখা যায়নি। পরের নির্বাচিত অধ্যায়গুলোও শেষ হয়েছে ধরে নিও না।`, `${names}: ${formatDurationBn(issue.minutes)} does not fit before the target. Later selected chapters are not assumed finished either.`);
   if (issue.code === 'locked-work') return t('লক করা অতীতের দিনের অসমাপ্ত অংশ সরানো হয়নি। আগের জোড়া শেষ করা বা দিন আনলক না করা পর্যন্ত পরের জোড়ায় এগোবে না।', 'Unfinished ranges on locked past dates were not moved. Complete that pair or unlock those dates before progressing to the next pair.');
   if (issue.code === 'required-work') return t('কিছু অধ্যায়ের বাধ্যতামূলক ধাপের সময় ০। ভিডিও, বই পড়া, নোট, MCQ/CQ অনুশীলন ও রিভিশন বাদ দিয়ে সম্পন্ন ধরা যাবে না; প্রতিটির কাজের পরিমাণ/সময় ঠিক করো।', 'Some required stages have a zero budget. Video, reading, notes, MCQ/CQ practice and revision cannot be skipped to certify completion; configure their workload/time.');
@@ -578,7 +580,9 @@ export function personalRoutineHealth(data: AppData, plan: Day[]) {
   if (deferredMinutes && newlyMissing.length) issues.push({ code: 'deadline', chapterIds: newlyMissing.slice(0, 2), minutes: deferredMinutes });
   if (tasks.some(task => task.personalWork && (data.taskEdits[task.id]?.chapterIds?.some(id => !task.chapterIds.includes(id)) ||
       (data.dayOverrides[task.date]?.taskMinutes?.[task.id] !== undefined && data.dayOverrides[task.date].taskMinutes![task.id] !== task.endMinute - task.startMinute)))) issues.push({ code: 'source-edit', chapterIds: [], minutes: 0 });
-  return { issues, warnings: issues.map(routineIssueText), missingDurations: issues.some(issue => issue.code === 'unknown-duration'),
+  // Taking more than two days is normal and is not an error. Keep this fact in
+  // structured diagnostics, but reserve the global banner for actionable issues.
+  return { issues, warnings: issues.filter(issue => issue.code !== 'two-day-capacity').map(routineIssueText), missingDurations: issues.some(issue => issue.code === 'unknown-duration'),
     syllabusEnd: !missing.length ? tasks.filter(task => task.personalWork).map(task => task.date).sort().at(-1) : undefined, clashingSessions: overlaps };
 }
 /** Timestamps for this chapter+stage that belong to a source no longer selected.

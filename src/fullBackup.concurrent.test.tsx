@@ -94,3 +94,16 @@ it('does not erase staged images after a durable restore commit even if updating
   expect(rollback).not.toHaveBeenCalled();
   expect(state.notify).toHaveBeenCalledWith('UI unavailable after commit', 'error');
 });
+
+it('does not start a restore if study data changes before confirmation', async () => {
+  const original = freshData(); const setData = vi.fn();
+  state.ctx = { data: original, setData, confirm: state.confirm, notify: state.notify, timer: { reset: vi.fn() } } as unknown as PlannerContextValue;
+  const view = render(<FullBackup />);
+  fireEvent.change(view.container.querySelector('input[type=file]')!, { target: { files: [new File(['archive'], 'backup.prostuti')] } });
+  await waitFor(() => expect(state.confirm).toHaveBeenCalled());
+  state.ctx = { ...state.ctx, data: { ...original, notes: { recent: 'New note' } } };
+  view.rerender(<FullBackup />);
+  await act(async () => { state.confirm.mock.calls[0][0].action(); });
+  expect(state.stage).not.toHaveBeenCalled(); expect(state.save).not.toHaveBeenCalled(); expect(setData).not.toHaveBeenCalled();
+  expect(state.notify).toHaveBeenCalledWith(expect.stringMatching(/নিশ্চিত করার আগে|before confirmation/), 'error');
+});

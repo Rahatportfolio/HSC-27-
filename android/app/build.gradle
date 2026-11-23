@@ -31,9 +31,15 @@ def finalInstall = finalInstallFlag == 'true'
 def customInstallFlag = providers.gradleProperty('customInstall').orElse('false').get()
 if (!(customInstallFlag in ['true', 'false'])) throw new GradleException('customInstall must be true or false')
 def customInstall = customInstallFlag == 'true'
-if ([separateInstall, categoryInstall, selectedInstall, finalInstall, customInstall].count { it } > 1) throw new GradleException('Choose only one separate installation')
-def selectedPackage = customInstall ? 'com.prostuti.hsc27.custom' : finalInstall ? 'com.prostuti.hsc27.finalapp' : selectedInstall ? 'com.prostuti.hsc27.selected' : categoryInstall ? 'com.prostuti.hsc27.category' : separateInstall ? 'com.prostuti.hsc27.fresh' : 'com.prostuti.hsc27'
-def selectedLabel = customInstall ? 'প্রস্তুতি নিজের মতো' : finalInstall ? 'প্রস্তুতি ফাইনাল' : selectedInstall ? 'প্রস্তুতি বাছাই' : categoryInstall ? 'প্রস্তুতি ক্রমানুসারে' : separateInstall ? 'প্রস্তুতি নতুন' : null
+def calmInstallFlag = providers.gradleProperty('calmInstall').orElse('false').get()
+if (!(calmInstallFlag in ['true', 'false'])) throw new GradleException('calmInstall must be true or false')
+def calmInstall = calmInstallFlag == 'true'
+def bridgeInstallFlag = providers.gradleProperty('bridgeInstall').orElse('false').get()
+if (!(bridgeInstallFlag in ['true', 'false'])) throw new GradleException('bridgeInstall must be true or false')
+def bridgeInstall = bridgeInstallFlag == 'true'
+if ([separateInstall, categoryInstall, selectedInstall, finalInstall, customInstall, calmInstall, bridgeInstall].count { it } > 1) throw new GradleException('Choose only one separate installation')
+def selectedPackage = bridgeInstall ? 'com.prostuti.hsc27.bridge' : calmInstall ? 'com.prostuti.hsc27.calm' : customInstall ? 'com.prostuti.hsc27.custom' : finalInstall ? 'com.prostuti.hsc27.finalapp' : selectedInstall ? 'com.prostuti.hsc27.selected' : categoryInstall ? 'com.prostuti.hsc27.category' : separateInstall ? 'com.prostuti.hsc27.fresh' : 'com.prostuti.hsc27'
+def selectedLabel = bridgeInstall ? 'প্রস্তুতি সাথে' : calmInstall ? 'প্রস্তুতি স্বস্তি' : customInstall ? 'প্রস্তুতি নিজের মতো' : finalInstall ? 'প্রস্তুতি ফাইনাল' : selectedInstall ? 'প্রস্তুতি বাছাই' : categoryInstall ? 'প্রস্তুতি ক্রমানুসারে' : separateInstall ? 'প্রস্তুতি নতুন' : null
 
 android {
     namespace = "com.prostuti.hsc27"
@@ -72,7 +78,7 @@ android {
             // Play Store uploads prefer an .aab; the APK stays for direct installs.
             if (hasReleaseKeystore) {
                 signingConfig signingConfigs.release
-            } else if (separateInstall || categoryInstall || selectedInstall || finalInstall || customInstall) {
+            } else if (separateInstall || categoryInstall || selectedInstall || finalInstall || customInstall || calmInstall || bridgeInstall) {
                 // Never disguise a debug-signed package as the new production app.
                 signingConfig null
             } else {

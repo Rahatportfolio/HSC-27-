@@ -40,10 +40,12 @@ export default function FullBackup({ onRestored }: { onRestored?: (settings: Set
     }
   };
   const restore = async (file: File) => {
+    const expected = latestData.current;
     setBusy(true);
     setStatus(t("ব্যাকআপ যাচাই হচ্ছে…", "Validating backup…"));
     try {
       const backup = await inspectMediaBackup(file);
+      if (latestData.current !== expected) throw new Error(t("ব্যাকআপ যাচাইয়ের সময় তথ্য বদলেছে। আগের তথ্য রেখে আবার চেষ্টা করো।", "Data changed during backup validation. Your progress is unchanged; please try again."));
       confirm({
         title: t("Media-সহ backup ফিরিয়ে আনবে?", "Restore full backup?"),
         message: t(
@@ -55,9 +57,9 @@ export default function FullBackup({ onRestored }: { onRestored?: (settings: Set
             setBusy(true);
             let staged:
               Awaited<ReturnType<typeof stageMediaRestore>> | undefined;
-            const expected = latestData.current;
             let committed = false;
             try {
+              if (latestData.current !== expected) throw new Error(t("নিশ্চিত করার আগে তথ্য বদলেছে। নতুন তথ্য রেখে আবার চেষ্টা করো।", "Data changed before confirmation. Your progress is unchanged; please try again."));
               staged = await stageMediaRestore(backup, progress);
               if (latestData.current !== expected)
                 throw new Error(

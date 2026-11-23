@@ -8,9 +8,12 @@ interface Generator { (messages: AiChatMessage[], options: Record<string, unknow
 interface Request { id: number; kind: 'load' | 'chat'; model: string; dtype: 'q8'; messages?: AiChatMessage[] }
 const worker = globalThis as unknown as { onmessage: ((event: MessageEvent<Request>) => void) | null; postMessage: (message: unknown) => void };
 let generator: Promise<Generator> | null = null;
+let activeModel: string | null = null;
 
 function load(request: Request): Promise<Generator> {
+  if (generator && activeModel !== request.model) return Promise.reject(new Error('Unload the current model before switching models.'));
   if (!generator) {
+    activeModel = request.model;
     generator = (async () => {
       env.backends.onnx.wasm!.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
       return await pipeline('text-generation', request.model, {
@@ -19,7 +22,7 @@ function load(request: Request): Promise<Generator> {
         progress_callback: limitAiProgress(progress => worker.postMessage({ id: request.id, kind: 'progress', progress })),
       }) as unknown as Generator;
     })();
-    generator.catch(() => { generator = null; });
+    generator.catch(() => { generator = null; activeModel = null; });
   }
   return generator;
 }

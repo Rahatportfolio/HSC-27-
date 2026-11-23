@@ -286,18 +286,42 @@ describe('AI assistant regression checks', () => {
     expect(within(panel()).getByText(/released to save memory/)).toBeTruthy();
   });
 
-  it('ignores a late download result after background cancellation', async () => {
+  it('continues loading when backgrounded but releases the completed model if still hidden', async () => {
     let finish!: () => void;
     vi.spyOn(aiModel, 'loadAiModel').mockImplementation(() => new Promise<void>(resolve => { finish = resolve; }));
-    vi.spyOn(aiModel, 'unloadAiModel');
+    const unload = vi.spyOn(aiModel, 'unloadAiModel');
     setup(enabled());
     fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
     fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' }));
     vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
     fireEvent(document, new Event('visibilitychange'));
+    expect(unload).not.toHaveBeenCalled();
     await act(async () => finish());
+    expect(unload).toHaveBeenCalledOnce();
     expect(within(panel()).queryByText(/Model ready/)).toBeNull();
     expect(within(panel()).getByRole('button', { name: 'Download AI model' })).toBeTruthy();
+  });
+
+  it('allows choosing a model and cancelling a download without accepting late results', async () => {
+    let finish!: () => void;
+    let emit!: (item: aiModel.AiProgress) => void;
+    const load = vi.spyOn(aiModel, 'loadAiModel').mockImplementation((progress) => new Promise<void>(resolve => { finish = resolve; emit = progress!; }));
+    const unload = vi.spyOn(aiModel, 'unloadAiModel');
+    const h = setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    expect((within(panel()).getByRole('radio', { name: /Small/ }) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(within(panel()).getByRole('radio', { name: /Previous larger/ }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' }));
+    expect(load.mock.calls[0][1]).toBe('standard');
+    act(() => emit({ status: 'progress', file: 'weights.onnx', progress: 67 }));
+    expect(within(panel()).getByText('This file: 67%')).toBeTruthy();
+    act(() => emit({ status: 'done', file: 'weights.onnx' }));
+    expect(within(panel()).queryByText('This file: 0%')).toBeNull();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Cancel download' }));
+    expect(unload).toHaveBeenCalledOnce();
+    await act(async () => finish());
+    expect(within(panel()).queryByText(/Model ready/)).toBeNull();
+    expect(h.setData).not.toHaveBeenCalled();
   });
 
   it('preserves the unfinished prompt if an in-flight model reply is cancelled in the background', async () => {
