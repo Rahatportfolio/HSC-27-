@@ -16,12 +16,11 @@ function load(request: Request): Promise<Generator> {
     activeModel = `${request.model}:${request.dtype}`;
     generator = (async () => {
       env.backends.onnx.wasm!.wasmPaths = { wasm: wasmUrl, mjs: mjsUrl };
-      // Browser worker threads and graph rewriting can increase peak memory on phones.
-      env.backends.onnx.wasm!.numThreads = 1;
       return await pipeline('text-generation', request.model, {
         dtype: request.dtype,
         device: 'wasm',
-        session_options: { graphOptimizationLevel: 'disabled' },
+        // The compact float16 graph can exceed the WASM heap during optimisation.
+        ...(request.dtype === 'q4f16' ? { session_options: { graphOptimizationLevel: 'disabled' as const } } : {}),
         progress_callback: limitAiProgress(progress => worker.postMessage({ id: request.id, kind: 'progress', progress })),
       }) as unknown as Generator;
     })();
@@ -37,7 +36,7 @@ worker.onmessage = event => {
       if (request.kind === 'load') {
         worker.postMessage({ id: request.id, kind: 'result' });
       } else {
-        const output = await model(request.messages ?? [], { max_new_tokens: 80, temperature: 0.7, top_p: 0.9, do_sample: true });
+        const output = await model(request.messages ?? [], { max_new_tokens: request.dtype === 'q4f16' ? 80 : 256, temperature: 0.7, top_p: 0.9, do_sample: true });
         const messages = output?.[0]?.generated_text ?? [];
         worker.postMessage({ id: request.id, kind: 'result', text: messages[messages.length - 1]?.content?.trim() || '' });
       }

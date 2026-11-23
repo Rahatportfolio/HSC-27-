@@ -608,7 +608,7 @@ function AiAssistant() {
       <fieldset className="ai-model-choice">
         <legend>{t('মডেল বেছে নাও', 'Choose a model')}</legend>
         <label><input type="radio" name="ai-model-choice" value="light" checked={choice === 'light'} onChange={() => setChoice('light')} /> {t('ছোট — প্রায় ৫৫০ MB (Qwen 0.5B); কম ডেটা, তবে উত্তর দুর্বল হতে পারে', 'Small — about 550 MB (Qwen 0.5B); less data, but answers may be weaker')}</label>
-        <label><input type="radio" name="ai-model-choice" value="optimized" checked={choice === 'optimized'} onChange={() => setChoice('optimized')} /> {t('পরীক্ষামূলক কম্প্যাক্ট ১.৫B — প্রায় ১.২৫ GB; কম্প্রেশনের কারণে উত্তর ভিন্ন হতে পারে', 'Experimental compact 1.5B — about 1.25 GB; compression can affect answers')}</label>
+        <label><input type="radio" name="ai-model-choice" value="optimized" checked={choice === 'optimized'} onChange={() => setChoice('optimized')} /> {t('পরীক্ষামূলক কম্প্যাক্ট ১.৫B — প্রায় ১.২৫ GB; উত্তর ছোট বা ভিন্ন হতে পারে', 'Experimental compact 1.5B — about 1.25 GB; replies may be shorter or different')}</label>
         <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('শক্তিশালী মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Stronger model — about 1.6 GB (Qwen 1.5B)')}</label>
       </fieldset>
       <p>{t(`প্রায় ${bn(AI_MODELS[choice].sizeMB)} MB মডেলের পাশাপাশি চালানোর ফাইলও লাগবে। ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The approximately ${AI_MODELS[choice].sizeMB} MB model also needs runtime files. Depending on your browser cache, internet may be needed again.`)}</p>

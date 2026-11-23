@@ -24,8 +24,8 @@ describe('AI model worker progress', () => {
     worker.onmessage({ data: { id: 1, kind: 'load', model: 'model', dtype: 'q8' } });
     await vi.waitFor(() => expect(sent).toHaveBeenCalledWith({ id: 1, kind: 'result' }));
     expect(sent.mock.calls.filter(([message]) => message.kind === 'progress')).toHaveLength(103);
-    expect(fake.pipeline.mock.calls[0][2]).toMatchObject({ device: 'wasm', session_options: { graphOptimizationLevel: 'disabled' } });
-    expect(fake.env.backends.onnx.wasm).toMatchObject({ numThreads: 1 });
+    expect(fake.pipeline.mock.calls[0][2]).toMatchObject({ device: 'wasm' });
+    expect(fake.pipeline.mock.calls[0][2].session_options).toBeUndefined();
     expect(sent.mock.calls.at(-1)![0]).toEqual({ id: 1, kind: 'result' });
   });
   it('limits generated answer length to reduce memory growth', async () => {
@@ -35,9 +35,10 @@ describe('AI model worker progress', () => {
     fake.pipeline.mockResolvedValue(model);
     await import('./aiModel.worker');
     const worker = globalThis as unknown as { onmessage: (event: { data: unknown }) => void };
-    worker.onmessage({ data: { id: 2, kind: 'chat', model: 'model', dtype: 'q8', messages: [{ role: 'user', content: 'Question' }] } });
+    worker.onmessage({ data: { id: 2, kind: 'chat', model: 'model', dtype: 'q4f16', messages: [{ role: 'user', content: 'Question' }] } });
     await vi.waitFor(() => expect(sent).toHaveBeenCalledWith({ id: 2, kind: 'result', text: 'Water' }));
     expect(model.mock.calls[0][1]).toMatchObject({ max_new_tokens: 80 });
+    expect(fake.pipeline.mock.calls[0][2]).toMatchObject({ session_options: { graphOptimizationLevel: 'disabled' } });
   });
 
 });
