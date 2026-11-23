@@ -7,6 +7,11 @@ on:
         type: choice
         options: [standard, light, optimized]
         default: standard
+      memory:
+        description: Emulator RAM in MiB (not a physical phone)
+        type: choice
+        options: ['4096', '8192']
+        default: '4096'
   pull_request:
     paths:
       - 'src/aiModel.ts'
@@ -61,7 +66,7 @@ jobs:
           # A 4 GiB emulator is a better fit for the requested 8 GiB phone than
           # the default small emulator. It does not certify a physical device
           # or erase the documented low-memory failures on smaller profiles.
-          emulator-options: -memory 4096 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
+          emulator-options: -memory ${{ inputs.memory || '4096' }} -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none -no-snapshot
           script: |
             echo 'Emulator physical memory:'
             adb shell cat /proc/meminfo | head -n 5
