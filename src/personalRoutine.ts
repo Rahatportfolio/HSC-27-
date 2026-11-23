@@ -101,6 +101,21 @@ const fail = (): never => { throw new Error(t('নিজের পড়ার স�
 export const isSChapter = (data: AppData, id: string): boolean => data.personalRoutine?.scope === 'SELECTED' ? data.personalRoutine.categories?.[id] === 'S' : !!(data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds.includes(id);
 export const personalRoutineForChapter = (data: AppData, id: string): PersonalRoutine | undefined => data.personalRoutine?.chapterIds.includes(id) ? data.personalRoutine : Object.values(data.personalPhases || {}).find(routine => routine.chapterIds.includes(id));
 
+/** Preset-timer length for a task: the FULL source/work length plus one break,
+ * not just this session's segment — e.g. an 8h class gets an ~8h timer, not
+ * 20m. personalWork uses its full rawMinutes; video segments use the tracked
+ * class duration (stored in seconds). Tasks without a larger source keep their
+ * scheduled segment length. */
+export function timerMinutesForTask(task: Task, data: AppData): number {
+  const segment = Math.max(1, task.endMinute - task.startMinute);
+  const videoClass = task.video ? data.advanced?.classes.find(c => c.id === task.video!.classId) : undefined;
+  const full = task.personalWork?.rawMinutes ?? (videoClass ? Math.ceil(videoClass.duration / 60) : undefined);
+  if (!full || full <= segment) return segment;
+  const chapterId = task.chapterIds[0];
+  const breakMin = chapterId ? (personalRoutineForChapter(data, chapterId)?.breakMinutes ?? 0) : 0;
+  return full + breakMin;
+}
+
 /** 20 hours (1,200 minutes) of study per chapter, used when the student has not
  * measured anything yet. It is an editable ESTIMATE, never a claim about a real
  * video length: the class share is what is left after the independent work below.

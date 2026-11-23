@@ -24,7 +24,8 @@ import { newId } from "../storage";
 import { Modal, PageHeading } from "../components";
 import { formatBytes } from "../pdfCatalog";
 import { t } from "../i18n";
-import { todayKey } from "../planner";
+import { formatDurationBn, todayKey } from "../planner";
+import { personalRoutineForChapter } from "../personalRoutine";
 
 const labels: Record<PreparationStep, string> = {
   lecture: "Lecture completed",
@@ -38,7 +39,12 @@ const labels: Record<PreparationStep, string> = {
   examReady: "Exam-ready",
 };
 function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
-  const { setData, notify, startPresetTimer } = usePlanner();
+  const { data, setData, notify, startPresetTimer } = usePlanner();
+  // Timer covers the FULL class length plus one break, not a fixed 30m —
+  // e.g. an 8h class gets an ~8h timer. Falls back to 30m when the class
+  // length is unknown.
+  const classBreakMin = personalRoutineForChapter(data, item.chapterId)?.breakMinutes ?? 0;
+  const classTimerMin = Math.max(30, Math.ceil(item.duration / 60) + classBreakMin);
   const [src, setSrc] = useState(item.local ? "" : item.url);
   const video = useRef<HTMLVideoElement>(null);
   const anchor = useRef<number | null>(null);
@@ -192,11 +198,11 @@ function ClassPlayer({ item, close }: { item: StudyClass; close: () => void }) {
               subject: chapterById[item.chapterId].subject,
               chapterId: item.chapterId,
               label: item.title,
-              durationMin: 30,
+              durationMin: classTimerMin,
             })
           }
         >
-          {t("৩০ মিনিট Focus timer", "30-minute focus timer")}
+          {`${t("টাইমার", "Timer")} · ${formatDurationBn(classTimerMin)}`}
         </button>
       )}
       <label>

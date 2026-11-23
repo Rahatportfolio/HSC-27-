@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { openDialogScope } from './dialog';
-import { isPersonalTaskComplete, personalMediaUrl } from './personalRoutine';
+import { isPersonalTaskComplete, personalMediaUrl, timerMinutesForTask } from './personalRoutine';
 import type { CSSProperties, ReactNode } from 'react';
 import { ArrowUpRight, BookOpen, Check, CheckCheck, ChevronDown, ChevronRight, Clock3, FlaskConical, Leaf, Minus, NotebookPen, Pause, Play, Plus, Search, ShieldCheck, Sparkles, Trash2, X } from 'lucide-react';
 import { CHAPTERS, chapterById, subjectById } from './data';
@@ -60,6 +60,10 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
   const generated = !!task.video || task.id.startsWith('smart-part|');
   const durationMin = Math.max(1, task.endMinute - task.startMinute);
   const primaryChapterId = task.chapterIds[0];
+  // Timer covers the FULL source/work length plus one break, not just this
+  // session's segment — e.g. an 8h class gets an ~8h timer, not 20m.
+  const timerDurationMin = timerMinutesForTask(task, data);
+  const isSegmentTask = timerDurationMin > durationMin;
   const primaryChapter = primaryChapterId ? chapterById[primaryChapterId] : undefined;
   const primaryClasses = primaryChapterId ? CHAPTER_CLASSES[primaryChapterId] : undefined;
   const isThisTimerActive = timer.taskId === task.id && (timer.running || timer.elapsedSec > 0);
@@ -75,7 +79,7 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
       startPresetTimer({
         subject: task.subject,
         chapterId: primaryChapter?.id,
-        durationMin,
+        durationMin: timerDurationMin,
         label: task.title,
         taskId: task.id,
       });
@@ -141,13 +145,13 @@ export function TaskCard({ task, compact = false }: { task: Task; compact?: bool
             type="button"
             className={`task-preset-timer-btn ${isThisTimerActive && timer.running ? 'live' : ''}`}
             onClick={launchPreset}
-            title={t('এই সেশনের নির্ধারিত সময়ের প্রিসেট টাইমার চালু করো', 'Start preset timer for this session')}
+            title={isSegmentTask ? t('পুরো কাজের দৈর্ঘ্য + বিরতিসহ প্রিসেট টাইমার চালু করো', 'Start preset timer for the full work length plus break') : t('এই সেশনের নির্ধারিত সময়ের প্রিসেট টাইমার চালু করো', 'Start preset timer for this session')}
           >
             {isThisTimerActive && timer.running ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
             <span>
               {isThisTimerActive
                 ? `${timer.running ? t('চলছে', 'Running') : t('বিরতি', 'Paused')} · ${bn(String(Math.floor(timer.remainingSec / 60)).padStart(2, '0'))}:${bn(String(timer.remainingSec % 60).padStart(2, '0'))}`
-                : `${t('টাইমার', 'Timer')} · ${formatDurationBn(durationMin)}`}
+                : `${t('টাইমার', 'Timer')} · ${formatDurationBn(timerDurationMin)}`}
             </span>
           </button>
         )}
