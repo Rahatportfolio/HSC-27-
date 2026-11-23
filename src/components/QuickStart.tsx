@@ -113,6 +113,13 @@ export default function QuickStart() {
     <h1 className="quick-start-title">{t('নিজের মতো পড়ার সময় ঠিক করো', 'Set up study time your way')}</h1>
     <p className="quick-start-lead">{t('কখন পড়বে আর কোন অধ্যায় পড়বে বেছে নাও। শুধু নির্বাচিত অধ্যায় S → A → B ক্রমে সাজানো হবে।', 'Choose your study times and chapters. Only selected chapters are scheduled in S → A → B order.')}</p>
 
+    <section className="qs-import" aria-label={t('ওয়েবসাইটের ব্যাকআপ আনো', 'Bring your website backup')}>
+      <h2>{t('ওয়েবসাইটে আগের তথ্য আছে?', 'Already have data on the website?')}</h2>
+      <p>{t('ওয়েবসাইট ও অ্যাপ আলাদা। ওয়েবসাইটের Settings থেকে Full backup export করে ফোনে রাখো, তারপর এখানে ইমপোর্ট করো। তথ্য নিজে থেকে সিঙ্ক হয় না।', 'The website and app store data separately. Export a full backup from website Settings to your phone, then import it here. They do not sync automatically.')}</p>
+      <p>{t('ইমপোর্টের আগে ব্যাকআপ যাচাই ও তোমার নিশ্চিতি লাগবে। অ্যাপে নতুন তথ্য থাকলে তারও ব্যাকআপ রাখো।', 'The backup is checked and requires your confirmation. Back up any existing app data first.')}</p>
+      <button type="button" className="button secondary" onClick={() => navigate('settings')}>{t('ওয়েবসাইটের ব্যাকআপ ইমপোর্ট করো', 'Import website backup')}</button>
+    </section>
+
     <fieldset className="qs-group">
       <legend><span className="qs-step">১</span>{t('কোন দিনগুলোতে পড়বে?', 'Which days can you study?')}</legend>
       <div className="qs-days" role="group" aria-label={t('পড়ার দিন বাছো', 'Choose study days')}>

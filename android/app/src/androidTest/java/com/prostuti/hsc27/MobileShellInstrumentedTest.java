@@ -291,6 +291,11 @@ public class MobileShellInstrumentedTest {
       assertEquals("Fresh Android users must give availability before receiving a routine", "true", evaluate(ref.get(), "!document.querySelector('.today-view')&&!document.querySelector('.personal-home')&&!document.querySelector('.personal-setup')&&!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
       record("availability-first", new JSONObject().put("freshSetupVisible", true).put("automaticRoutineCreated", false));
       screenshot("startup");
+      tap(ref.get(), ".qs-import button");
+      waitFor(ref.get(), "!!document.querySelector('.settings-view .study-panel input[type=file]')");
+      assertEquals("Opening backup controls must not create a routine", "true", evaluate(ref.get(), "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine"));
+      evaluate(ref.get(), "location.hash='#today';window.dispatchEvent(new HashChangeEvent('hashchange'));true");
+      waitFor(ref.get(), "!!document.querySelector('.quick-start')");
       AtomicReference<String> chrome = new AtomicReference<>();
       scenario.onActivity(a -> chrome.set(
         "supportActionBar=" + (a.getSupportActionBar() != null && a.getSupportActionBar().isShowing()) +
@@ -652,6 +657,45 @@ public class MobileShellInstrumentedTest {
       assertEquals("Brain must not enable itself during native navigation/restart", "true", evaluate(web, "!JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).studyBrain"));
       assertSyntheticProfile(web, "personal");
       screenshot("personal-offline-brain-after-restart");
+    }
+  }
+
+  @Test
+  public void c_websiteFullBackupRestoresAfterConsentAndSurvivesRestart() throws Exception {
+    // Isolated emulator only: synthetic browser-format .prostuti without media.
+    // File selection is simulated; the on-screen confirmation receives a real tap.
+    try (ActivityScenario<MainActivity> scenario = ActivityScenario.launch(MainActivity.class)) {
+      AtomicReference<WebView> ref = new AtomicReference<>();
+      scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
+      InstrumentationRegistry.getInstrumentation().runOnMainSync(() -> ref.get().loadUrl("https://localhost/#settings"));
+      waitFor(ref.get(), "!!document.querySelector('.settings-view .study-panel input[type=file]')");
+      String previous = evaluate(ref.get(), "localStorage.getItem('hsc27-prostuti-v1')");
+      String fixture = syntheticProfile("personal");
+      String code = "(()=>{const data=JSON.parse(" + JSONObject.quote(fixture) + ");" +
+        "data.notes['2026-11-20']='Website backup imported by Android test';" +
+        "const json=new TextEncoder().encode(JSON.stringify({version:1,data,files:[]}));" +
+        "const len=new Uint8Array(4);new DataView(len.buffer).setUint32(0,json.length);" +
+        "const f=new File(['PROSTUTI-MEDIA-1\\n',len,json],'website.prostuti',{type:'application/vnd.prostuti.backup'});" +
+        "const dt=new DataTransfer();dt.items.add(f);const input=document.querySelector('.settings-view .study-panel input[type=file]');" +
+        "input.files=dt.files;input.dispatchEvent(new Event('change',{bubbles:true}));return true;})()";
+      assertEquals("true", evaluate(ref.get(), code));
+      waitFor(ref.get(), "!!document.querySelector('.modal-actions .button.primary')");
+      assertEquals("Nothing should change before explicit confirmation", previous, evaluate(ref.get(), "localStorage.getItem('hsc27-prostuti-v1')"));
+      tap(ref.get(), ".modal-actions .button.primary");
+      waitFor(ref.get(), "JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).notes['2026-11-20']==='Website backup imported by Android test'");
+      File dbFile = InstrumentationRegistry.getInstrumentation().getTargetContext().getDatabasePath("hsc27SQLite.db");
+      long until = SystemClock.elapsedRealtime() + 30000; boolean durable = false;
+      while (SystemClock.elapsedRealtime() < until && !durable) {
+        try (SQLiteDatabase db = SQLiteDatabase.openDatabase(dbFile.getAbsolutePath(), null, SQLiteDatabase.OPEN_READONLY);
+             Cursor cursor = db.rawQuery("SELECT payload FROM app_state WHERE id = 1", null)) {
+          if (cursor.moveToFirst()) durable = new JSONObject(cursor.getString(0)).getJSONObject("notes").optString("2026-11-20").equals("Website backup imported by Android test");
+        } catch (Exception ignored) { }
+        if (!durable) SystemClock.sleep(100);
+      }
+      assertTrue("Restored backup did not reach the native database", durable);
+      scenario.recreate(); scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
+      waitFor(ref.get(), "!!document.querySelector('.settings-view') && JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).notes['2026-11-20']==='Website backup imported by Android test'");
+      assertEquals("Selected chapters must survive restore", "true", evaluate(ref.get(), "JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine.chapterIds.includes('physics-1-3')"));
     }
   }
 

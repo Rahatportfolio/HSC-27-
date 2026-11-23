@@ -96,11 +96,14 @@ export default function SettingsView() {
   const share = async () => { try { const outcome = await shareBackup(data); if (outcome === 'cancelled') return; notify(outcome === 'shared' ? 'ব্যাকআপ শেয়ার শিটে পাঠানো হয়েছে।' : outcome === 'copied' ? 'ব্যাকআপ JSON ক্লিপবোর্ডে কপি হয়েছে।' : 'ব্যাকআপ ফাইল ডাউনলোড হয়েছে।'); } catch { notify(t('শেয়ার করা যায়নি। ব্যাকআপ রাখো বোতাম ব্যবহার করো।', 'Sharing failed. Use the “Keep backup” button.'), 'error'); } };
   const importFile = async (file: File | undefined) => {
     if (!file) return;
+    const expected = latestData.current;
     try {
       if (file.size > 8_000_000) throw new Error('ব্যাকআপটি ৮ MB-এর কম হতে হবে।');
       const parsed = parseBackup(await file.text());
+      if (latestData.current !== expected) throw new Error(t("ব্যাকআপ যাচাইয়ের সময় তথ্য বদলেছে। আগের তথ্য রেখে আবার চেষ্টা করো।", "Data changed during backup validation. Your progress is unchanged; please try again."));
       delete parsed.activeExam; // Restoring replaces history, never resumes a different live exam.
       confirm({ title: 'ব্যাকআপ ফিরিয়ে আনবে?', message: 'বর্তমান অগ্রগতি, নোট, সেশন, MCQ, পরীক্ষা ও সেটিংস এই ব্যাকআপের তথ্য দিয়ে বদলে যাবে। চালু স্টাডি ও পরীক্ষার ঘড়ি রিসেট হবে। প্রয়োজন হলে আগে বর্তমান তথ্যের ব্যাকআপ রাখো।', label: 'ব্যাকআপ ইমপোর্ট করো', action: () => {
+        if (latestData.current !== expected) { notify(t('নিশ্চিত করার আগে তথ্য বদলেছে। নতুন তথ্য রেখে আবার চেষ্টা করো।', 'Data changed before confirmation. Your progress is unchanged; please try again.'), 'error'); return; }
         if (!saveData(parsed, true)) {
           notify(t('ব্যাকআপ সেভ করা যায়নি। আগের তথ্য ও ঘড়ি অপরিবর্তিত আছে। স্টোরেজের অনুমতি ও খালি জায়গা যাচাই করো।', 'Backup could not be saved. Your existing data and clocks are unchanged. Check storage permission and free space.'), 'error');
           return;

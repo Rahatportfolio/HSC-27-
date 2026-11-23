@@ -71,3 +71,10 @@ test('requires the separate calm package identity exactly', () => {
   f.badging = f.badging.replace('.fresh', '.calm');
   assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.calm');
 });
+
+test('requires the separate bridge package identity exactly', () => {
+  const f = fixture(); f.expectedPackage = 'com.prostuti.hsc27.bridge';
+  assert.throws(() => validateFreshApk(f), /APK package mismatch/);
+  f.badging = f.badging.replace('.fresh', '.bridge');
+  assert.equal(validateFreshApk(f).packageName, 'com.prostuti.hsc27.bridge');
+});
