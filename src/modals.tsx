@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { chapterWorkEstimate, hasFullPersonalAllocation, isPersonalTaskComplete, isSChapter, personalRoutineForChapter } from './personalRoutine';
+import { chapterWorkEstimate, hasFullPersonalAllocation, isPersonalTaskComplete, isSChapter, personalRoutineForChapter, timerMinutesForChapter } from './personalRoutine';
 import PersonalAllocationHistory from './components/PersonalAllocationHistory';
 import PersonalChapterProgress from './components/PersonalChapterProgress';
 import type { CSSProperties, FormEvent } from 'react';
@@ -25,7 +25,7 @@ const PRIORITY_LABEL: Record<string, string> = { A: 'আগে পড়ো', B:
 const PREP_LABEL = { none: 'শুরু হয়নি', practicing: 'অনুশীলনে', ready: 'প্রস্তুত' } as const;
 
 export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClose: () => void }) {
-  const { plan, data, setData, navigate, toggleTask, startTimer } = usePlanner();
+  const { plan, data, setData, navigate, toggleTask, startTimer, startPresetTimer } = usePlanner();
   const tasks = chapterStudyTasks(plan, c.id), done = tasks.filter(task => isPersonalTaskComplete(task, data.completed)).length;
   const sChapter = isSChapter(data, c.id);
   const personal = personalRoutineForChapter(data, c.id);
@@ -58,7 +58,7 @@ export function ChapterModal({ chapter: c, onClose }: { chapter: Chapter; onClos
     {personal && !fullAllocation && <p className="personal-warning">{t('অধ্যায়ের সব কাজ বরাদ্দ হয়নি। দৃশ্যমান অংশ টিক দিয়ে পুরো অধ্যায় শেষ দেখানো বন্ধ আছে।', 'Not all chapter work is allocated. Completing visible fragments cannot certify the whole chapter.')}</p>}
     <div className="chapter-tool-row">
       {!personal && tasks.length > 0 && <button className="button secondary" disabled={!fullAllocation && !isLearningComplete(stage)} onClick={() => setData(d => { const finish = !isLearningComplete(chapterStage(c, d, plan)); return updateChapterMeta(setTaskCompletion(d, tasks.map(task => task.id), finish, plan), c.id, { stage: finish ? 'completed' : 'inProgress' }); })}><Check size={16} />{isLearningComplete(stage) ? t('অধ্যায় অসম্পূর্ণ করো', 'Mark chapter incomplete') : t('পুরো অধ্যায় সম্পন্ন করো', 'Mark chapter complete')}</button>}
-      <button className="button secondary" onClick={() => { startTimer(c.subject, c.id); onClose(); }}><Timer size={16} />{t("এই অধ্যায়ে টাইমার", "Timer for this chapter")}</button>
+      <button className="button secondary" onClick={() => { const mins = timerMinutesForChapter(c.id, data, plan); if (startPresetTimer) startPresetTimer({ subject: c.subject, chapterId: c.id, durationMin: mins, label: c.title }); else startTimer(c.subject, c.id); onClose(); }}><Timer size={16} />{t("এই অধ্যায়ে টাইমার", "Timer for this chapter")} · {formatDurationBn(timerMinutesForChapter(c.id, data, plan))}</button>
       <button className={`button secondary ${meta.weak ? 'selected' : ''}`} aria-pressed={meta.weak} onClick={() => setData(d => updateChapterMeta(d, c.id, { weak: !meta.weak }))}><NotebookPen size={16} />{meta.weak ? 'দুর্বল তালিকা থেকে সরাও' : 'দুর্বল হিসেবে রাখো'}</button>
       {tasks[0] && <button className="button secondary" onClick={() => { navigate('today', tasks[0].date); onClose(); }}>{t("রুটিনে দেখো", "See it in the routine")}<ArrowRight size={16} /></button>}
     </div>
@@ -150,7 +150,7 @@ export function SearchModal({ onClose, onChapter }: { onClose: () => void; onCha
 
   const launchChapterQuickTimer = (c: Chapter) => {
     if (startPresetTimer) {
-      startPresetTimer({ subject: c.subject, chapterId: c.id, durationMin: 45, label: c.title });
+      startPresetTimer({ subject: c.subject, chapterId: c.id, durationMin: timerMinutesForChapter(c.id, data, plan), label: c.title });
     } else {
       startTimer(c.subject, c.id);
     }
@@ -198,8 +198,8 @@ export function SearchModal({ onClose, onChapter }: { onClose: () => void; onCha
         return <div className="search-chapter-entry" key={c.id}>
           <div className="search-chapter-head">
             <button className="search-result" onClick={() => onChapter(c)}><span className="search-result-icon" style={{ color: subjectById[c.subject].color, background: subjectById[c.subject].tint } as CSSProperties}><BookOpen size={18} /></span><span><strong>{c.title}</strong><small>{subjectById[c.subject].name} · {t('পত্র', 'Paper')} {bn(c.paper)} · {t('অগ্রাধিকার', 'Priority')} {c.priority}</small></span><ChevronRight size={17} /></button>
-            <button type="button" className="search-chapter-timer-btn" onClick={() => launchChapterQuickTimer(c)} title={t('এই অধ্যায়ের ৪৫ মিনিট টাইমার চালু করো', 'Start 45m timer for this chapter')}>
-              <Play size={11} fill="currentColor" />{t('টাইমার', 'Timer')}
+            <button type="button" className="search-chapter-timer-btn" onClick={() => launchChapterQuickTimer(c)} title={t(`এই অধ্যায়ের পুরো কাজের ${formatDurationBn(timerMinutesForChapter(c.id, data, plan))} টাইমার চালু করো`, `Start ${formatDurationBn(timerMinutesForChapter(c.id, data, plan))} timer for this chapter's full work`)}>
+              <Play size={11} fill="currentColor" />{t('টাইমার', 'Timer')} · {formatDurationBn(timerMinutesForChapter(c.id, data, plan))}
             </button>
           </div>
           {links && <div className="search-chapter-classes"><ClassLinkRow classes={links} /></div>}
