@@ -17,6 +17,10 @@ jobs:
     name: Real model download and inference
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [light, standard]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -27,6 +31,8 @@ jobs:
       - name: Build production app
         run: npm run build
       - name: Exercise real model in production Chromium
+        env:
+          AI_MODEL_CHOICE: ${{ matrix.model }}
         run: |
           npm run preview > /tmp/ai-vite.log 2>&1 &
           for i in {1..30}; do curl -fsS http://127.0.0.1:3000/ > /dev/null && break; sleep 1; done

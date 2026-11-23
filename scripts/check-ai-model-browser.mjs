@@ -15,7 +15,9 @@ async function openAndAsk(page) {
   const enable = page.locator('.brain-welcome button.primary');
   if (await enable.isVisible()) await enable.click();
   await page.locator('.ai-modes button:nth-child(2)').click();
-  await page.locator('.ai-download button').click();
+  const choice = process.env.AI_MODEL_CHOICE || 'standard';
+  await page.locator(`input[name=ai-model-choice][value=${choice}]`).check();
+  await page.locator('.ai-download button.primary').click();
   await page.locator('.ai-ready, .ai-panel .field-error').first().waitFor({ timeout: 300000 });
   if (!await page.locator('.ai-ready').isVisible()) throw new Error('Model load failed: ' + await page.locator('.ai-panel').innerText());
   await page.locator('#ai-input').fill('What is water made of? Answer briefly.');
