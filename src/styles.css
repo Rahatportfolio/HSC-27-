@@ -5568,3 +5568,8 @@ input::placeholder,textarea::placeholder{color:#6f7a63}
 .selected-chapter select { min-width: 4rem; }
 .ai-model-choice{display:grid;gap:10px;border:1px solid var(--line-strong);border-radius:10px;margin:0 0 12px;padding:12px}
 .ai-model-choice legend{font-weight:700;padding:0 4px}.ai-model-choice label{display:flex;align-items:flex-start;gap:8px;font-size:13px}.ai-model-choice input{flex:none;margin-top:3px}.ai-download small{display:block;overflow-wrap:anywhere;margin:6px 0}
+.update-banner{display:flex;align-items:center;gap:10px;background:#eef6e6;border-bottom:1px solid #d5e5c3;padding:9px 16px;color:#5c7b49}
+.update-banner p{flex:1;font-size:12px;line-height:1.6}
+.update-banner .button{flex-shrink:0}
+[data-theme="dark"] .update-banner{background:#26331f;border-color:#3c4c30;color:#cfe3bd}
+@media(max-width:650px){.update-banner{padding:8px 12px}.update-banner p{font-size:11px}}

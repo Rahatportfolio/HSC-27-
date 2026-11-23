@@ -101,6 +101,9 @@ const fail = (): never => { throw new Error(t('নিজের পড়ার স�
 export const isSChapter = (data: AppData, id: string): boolean => data.personalRoutine?.scope === 'SELECTED' ? data.personalRoutine.categories?.[id] === 'S' : !!(data.personalRoutine?.scope === 'S' ? data.personalRoutine : data.personalPhases?.S)?.chapterIds.includes(id);
 export const personalRoutineForChapter = (data: AppData, id: string): PersonalRoutine | undefined => data.personalRoutine?.chapterIds.includes(id) ? data.personalRoutine : Object.values(data.personalPhases || {}).find(routine => routine.chapterIds.includes(id));
 
+/** Hard ceiling shared by every preset-timer label: the study timer clamps to
+ * 12h, so a label must never promise more than the timer will actually run. */
+const PRESET_TIMER_MAX = 720;
 /** Preset-timer length for a task: the FULL source/work length plus one break,
  * not just this session's segment — e.g. an 8h class gets an ~8h timer, not
  * 20m. personalWork uses its full rawMinutes; video segments use the tracked
@@ -110,10 +113,28 @@ export function timerMinutesForTask(task: Task, data: AppData): number {
   const segment = Math.max(1, task.endMinute - task.startMinute);
   const videoClass = task.video ? data.advanced?.classes.find(c => c.id === task.video!.classId) : undefined;
   const full = task.personalWork?.rawMinutes ?? (videoClass ? Math.ceil(videoClass.duration / 60) : undefined);
-  if (!full || full <= segment) return segment;
+  if (!full || full <= segment) return Math.min(PRESET_TIMER_MAX, segment);
   const chapterId = task.chapterIds[0];
   const breakMin = chapterId ? (personalRoutineForChapter(data, chapterId)?.breakMinutes ?? 0) : 0;
-  return full + breakMin;
+  return Math.min(PRESET_TIMER_MAX, full + breakMin);
+}
+
+/** Preset-timer length for a whole chapter: the chapter's FULL work total plus
+ * one break (e.g. a 20h chapter gets the 12h maximum, not 45m). Legacy
+ * chapters without a routine use their scheduled task minutes; chapters with
+ * nothing scheduled keep the old 45m quick timer. */
+export function timerMinutesForChapter(chapterId: string, data: AppData, plan: Day[]): number {
+  const routine = personalRoutineForChapter(data, chapterId);
+  const breakMin = routine?.breakMinutes ?? 0;
+  if (routine) {
+    const total = chapterWorkEstimate(routine, chapterId).minutes;
+    if (total > 0) return Math.min(PRESET_TIMER_MAX, total + breakMin);
+  }
+  const scheduled = plan.flatMap(day => day.tasks)
+    .filter(task => task.chapterIds.includes(chapterId))
+    .reduce((sum, task) => sum + Math.max(0, task.endMinute - task.startMinute), 0);
+  if (scheduled > 0) return Math.min(PRESET_TIMER_MAX, scheduled + breakMin);
+  return 45;
 }
 
 /** 20 hours (1,200 minutes) of study per chapter, used when the student has not

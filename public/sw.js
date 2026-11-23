@@ -5,6 +5,11 @@ self.addEventListener('install', event => {
   // Do not skipWaiting: an open tab keeps its old precache until it is safe to activate.
   event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(SHELL)));
 });
+self.addEventListener('message', event => {
+  // User-initiated only, from the update banner's Reload button. Install still
+  // never skips waiting on its own, so a running study timer is never cut off.
+  if (event.data && event.data.type === 'SKIP_WAITING') self.skipWaiting();
+});
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k.startsWith('prostuti-hsc27-') && k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
