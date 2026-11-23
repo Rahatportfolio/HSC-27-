@@ -375,6 +375,7 @@ function AiAssistant() {
   const [modelState, setModelState] = useState<ModelState>('idle');
   const [choice, setChoice] = useState<AiModelChoice>('standard');
   const [previousAttempt, setPreviousAttempt] = useState(previousAiAttempt);
+  const [gpuSupport, setGpuSupport] = useState<'unknown' | 'supported' | 'unavailable'>('unknown');
   const [progress, setProgress] = useState<AiProgress | null>(null);
   const [error, setError] = useState('');
   const [pendingAction, setPendingAction] = useState<{ action: ChapterAction; text: string } | null>(null);
@@ -430,6 +431,11 @@ function AiAssistant() {
     setError('');
     setPendingAction(null); setPendingRoutine(null);
     if (next === 'model') { setQuiz(null); setPicked(null); }
+  };
+
+  const checkGpu = async () => {
+    try { setGpuSupport(navigator.gpu && await navigator.gpu.requestAdapter() ? 'supported' : 'unavailable'); }
+    catch { setGpuSupport('unavailable'); }
   };
 
   const downloadModel = async () => {
@@ -618,6 +624,11 @@ function AiAssistant() {
         <label><input type="radio" name="ai-model-choice" value="optimized" checked={choice === 'optimized'} onChange={() => setChoice('optimized')} /> {t('পরীক্ষামূলক কম্প্যাক্ট ১.৫B — প্রায় ১.২৫ GB; উত্তর ছোট বা ভিন্ন হতে পারে', 'Experimental compact 1.5B — about 1.25 GB; replies may be shorter or different')}</label>
         <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('শক্তিশালী মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Stronger model — about 1.6 GB (Qwen 1.5B)')}</label>
       </fieldset>
+      {choice === 'gpu' && <div>
+        <button type="button" className="button secondary" onClick={() => void checkGpu()}>{t('ডাউনলোডের আগে GPU পরীক্ষা করো', 'Check GPU before downloading')}</button>
+        {gpuSupport === 'supported' && <p role="status">{t('ব্রাউজারে WebGPU পাওয়া গেছে। মডেল চলবে কি না বা যথেষ্ট মেমোরি আছে কি না এতে নিশ্চিত হয় না।', 'WebGPU is available in the browser. This does not guarantee enough memory or that the model will run.')}</p>}
+        {gpuSupport === 'unavailable' && <p role="status">{t('এই ব্রাউজারে WebGPU পাওয়া যায়নি। GPU মডেল ডাউনলোডের আগে Chrome আপডেট করে আবার পরীক্ষা করো।', 'WebGPU is unavailable in this browser. Update Chrome and check again before downloading the GPU model.')}</p>}
+      </div>}
       <p>{t(`প্রায় ${bn(AI_MODELS[choice].sizeMB)} MB মডেলের পাশাপাশি চালানোর ফাইলও লাগবে। ক্যাশের ওপর নির্ভর করে পরে আবার ইন্টারনেট লাগতে পারে।`, `The approximately ${AI_MODELS[choice].sizeMB} MB model also needs runtime files. Depending on your browser cache, internet may be needed again.`)}</p>
       <p>{t('মডেল চালাতে ডাউনলোডের আকারের চেয়ে অনেক বেশি RAM লাগে; কম মেমোরিতে অ্যাপ বন্ধ হতে পারে। স্থিতিশীল Wi-Fi ব্যবহার করো। ডাউনলোড চলার সময় পেজ বন্ধ বা রিলোড কোরো না; আড়ালে গেলে ব্রাউজার থামাতে পারে। মডেল চালু হলে আড়ালে গেলে মেমোরি ছাড়া হয়। পড়ার তথ্য মুছো না।', 'The model requires much more RAM than the download size; the app may close on devices with insufficient memory. Use a stable connection and keep the page open; your browser may suspend background downloads. Once loaded, backgrounding releases the model from memory. Do not clear your study data.')}</p>
       <button type="button" className="button primary" onClick={() => void downloadModel()}><Download size={16} aria-hidden="true" />{t('AI মডেল ডাউনলোড করো', 'Download AI model')}</button>

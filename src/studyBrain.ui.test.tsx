@@ -257,6 +257,19 @@ describe('AI assistant regression checks', () => {
     expect(within(panel()).queryByText('Model reply')).toBeNull();
   });
 
+  it('checks GPU support without downloading a model or changing study data', async () => {
+    const load = vi.spyOn(aiModel, 'loadAiModel');
+    vi.stubGlobal('navigator', { gpu: { requestAdapter: vi.fn().mockResolvedValue({}) } });
+    const h = setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    fireEvent.click(within(panel()).getByRole('radio', { name: /Experimental GPU/ }));
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Check GPU before downloading' })); });
+    expect(within(panel()).getByText(/WebGPU is available in the browser/)).toBeTruthy();
+    expect(load).not.toHaveBeenCalled();
+    expect(h.setData).not.toHaveBeenCalled();
+    vi.unstubAllGlobals();
+  });
+
   it('shows streamed model output without duplicating it and preserves the prompt on failure', async () => {
     vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
     let emit!: (text: string) => void;
