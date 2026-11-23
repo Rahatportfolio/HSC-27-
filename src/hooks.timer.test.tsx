@@ -91,3 +91,62 @@ it('completes a countdown instead of losing it when paused just after its deadli
   expect(onComplete.mock.calls[0][0].taskId).toBe('task');
   expect(result.current.running).toBe(false);
 });
+
+describe('adjusting the duration mid-session', () => {
+  it('keeps elapsed progress and pauses instead of wiping the session', () => {
+    const { result } = renderHook(() => useStudyTimer({ settings: DEFAULT_SETTINGS, onComplete: vi.fn(), notify: vi.fn() }));
+    act(() => result.current.startPreset({ subject: 'physics', durationMin: 30 }));
+    act(() => vi.advanceTimersByTime(5 * 60_000));
+    act(() => result.current.pause());
+    act(() => result.current.adjustDuration(10));
+    expect(result.current).toMatchObject({ durationMin: 10, running: false, accumulatedMs: 5 * 60_000 });
+    expect(result.current.remainingSec).toBe(5 * 60);
+  });
+
+  it('clamps elapsed time when the new length is shorter than the elapsed time', () => {
+    const onComplete = vi.fn();
+    const { result } = renderHook(() => useStudyTimer({ settings: DEFAULT_SETTINGS, onComplete, notify: vi.fn() }));
+    act(() => result.current.startPreset({ subject: 'physics', durationMin: 30 }));
+    act(() => vi.advanceTimersByTime(5 * 60_000));
+    act(() => result.current.pause());
+    act(() => result.current.adjustDuration(3));
+    expect(result.current).toMatchObject({ durationMin: 3, running: false, accumulatedMs: 3 * 60_000 });
+    expect(result.current.remainingSec).toBe(0);
+    expect(onComplete).not.toHaveBeenCalled();
+  });
+
+  it('detaches the planned task when the length really changes, like setDuration', () => {
+    const onComplete = vi.fn();
+    const { result } = renderHook(() => useStudyTimer({ settings: DEFAULT_SETTINGS, onComplete, notify: vi.fn() }));
+    act(() => result.current.startPreset({ subject: 'physics', durationMin: 30, taskId: 'planned' }));
+    act(() => vi.advanceTimersByTime(60_000));
+    act(() => result.current.pause());
+    act(() => result.current.adjustDuration(1));
+    expect(result.current.taskId).toBe('');
+    act(() => result.current.start());
+    act(() => vi.advanceTimersByTime(60_000));
+    expect(onComplete).toHaveBeenCalledTimes(1);
+    expect(onComplete.mock.calls[0][0].taskId).toBe('');
+  });
+
+  it('keeps the task link when the chosen length is unchanged', () => {
+    const { result } = renderHook(() => useStudyTimer({ settings: DEFAULT_SETTINGS, onComplete: vi.fn(), notify: vi.fn() }));
+    act(() => result.current.startPreset({ subject: 'physics', durationMin: 30, taskId: 'planned' }));
+    act(() => vi.advanceTimersByTime(60_000));
+    act(() => result.current.pause());
+    act(() => result.current.adjustDuration(30));
+    expect(result.current.taskId).toBe('planned');
+    expect(result.current.accumulatedMs).toBe(60_000);
+  });
+
+  it('clamps to 1..720 minutes and ignores stopwatch mode', () => {
+    const { result } = renderHook(() => useStudyTimer({ settings: DEFAULT_SETTINGS, onComplete: vi.fn(), notify: vi.fn() }));
+    act(() => result.current.adjustDuration(9999));
+    expect(result.current.durationMin).toBe(720);
+    act(() => result.current.adjustDuration(-5));
+    expect(result.current.durationMin).toBe(1);
+    act(() => result.current.setMode('stopwatch'));
+    act(() => result.current.adjustDuration(25));
+    expect(result.current.durationMin).toBe(0);
+  });
+});
