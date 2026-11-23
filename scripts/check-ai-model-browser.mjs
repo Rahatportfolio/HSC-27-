@@ -23,6 +23,9 @@ async function openAndAsk(page) {
   await page.locator('#ai-input').fill('What is water made of? Answer briefly.');
   await page.locator('.ai-input button[type=submit]').click();
   await page.locator('.ai-message.assistant, .ai-panel .field-error').first().waitFor({ timeout: choice === 'gpu' ? 600000 : 300000 });
+  // The GPU path streams tokens; a first token alone is not a completed answer.
+  await page.locator('.ai-input button[type=submit]').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => !document.querySelector('.ai-input button[type=submit] svg.ai-spin'), { timeout: choice === 'gpu' ? 600000 : 300000 });
   const answer = await page.locator('.ai-message.assistant').first().textContent().catch(() => '');
   if (!answer || answer.includes('মডেল কোনো উত্তর দিতে পারেনি')) throw new Error('No model response: ' + await page.locator('.ai-panel').innerText());
   console.log(stage + ' model response:', answer.slice(0, 300));

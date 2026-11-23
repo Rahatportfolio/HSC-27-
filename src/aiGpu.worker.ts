@@ -32,8 +32,13 @@ worker.onmessage = event => {
       const model = await getEngine(request.id);
       if (request.kind === 'load') worker.postMessage({ id: request.id, kind: 'result' });
       else {
-        const result = await model.chat.completions.create({ messages: request.messages ?? [], max_tokens: 128, temperature: 0.7 });
-        worker.postMessage({ id: request.id, kind: 'result', text: result.choices[0]?.message?.content?.trim() || '' });
+        const stream = await model.chat.completions.create({ messages: request.messages ?? [], max_tokens: 128, temperature: 0.7, stream: true });
+        let text = '';
+        for await (const chunk of stream) {
+          text += chunk.choices[0]?.delta?.content || '';
+          if (text.trim()) worker.postMessage({ id: request.id, kind: 'partial', text });
+        }
+        worker.postMessage({ id: request.id, kind: 'result', text: text.trim() });
       }
     } catch (error) {
       worker.postMessage({ id: request.id, kind: 'error', message: error instanceof Error ? error.message : String(error) });

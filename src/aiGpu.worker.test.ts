@@ -20,7 +20,7 @@ describe('optional local GPU worker', () => {
 
   it('loads one local engine, reports overall progress and sends chat only to the engine', async () => {
     const sent = vi.fn();
-    const createAnswer = vi.fn().mockResolvedValue({ choices: [{ message: { content: 'Water.' } }] });
+    const createAnswer = vi.fn().mockImplementation(async () => (async function* () { yield { choices: [{ delta: { content: 'Water' } }] }; yield { choices: [{ delta: { content: '.' } }] }; })());
     vi.stubGlobal('navigator', { gpu: { requestAdapter: vi.fn().mockResolvedValue({}) } });
     vi.stubGlobal('postMessage', sent); vi.stubGlobal('onmessage', null);
     fake.create.mockImplementation(async (_id, config) => {
@@ -36,6 +36,7 @@ describe('optional local GPU worker', () => {
     scope.onmessage({ data: { id: 2, kind: 'chat', messages } });
     await vi.waitFor(() => expect(sent).toHaveBeenCalledWith({ id: 2, kind: 'result', text: 'Water.' }));
     expect(fake.create).toHaveBeenCalledOnce();
-    expect(createAnswer).toHaveBeenCalledWith(expect.objectContaining({ messages, max_tokens: 128 }));
+    expect(sent).toHaveBeenCalledWith({ id: 2, kind: 'partial', text: 'Water' });
+    expect(createAnswer).toHaveBeenCalledWith(expect.objectContaining({ messages, max_tokens: 128, stream: true }));
   });
 });

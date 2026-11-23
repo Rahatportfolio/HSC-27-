@@ -257,6 +257,24 @@ describe('AI assistant regression checks', () => {
     expect(within(panel()).queryByText('Model reply')).toBeNull();
   });
 
+  it('shows streamed model output without duplicating it and preserves the prompt on failure', async () => {
+    vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();
+    let emit!: (text: string) => void;
+    let fail!: (error: Error) => void;
+    vi.spyOn(aiModel, 'chatWithAi').mockImplementation((_history, _progress, _choice, partial) => new Promise<string>((_, reject) => { emit = partial!; fail = reject; }));
+    setup(enabled());
+    fireEvent.click(within(panel()).getByRole('button', { name: /AI model/ }));
+    fireEvent.click(within(panel()).getByRole('radio', { name: /Experimental GPU/ }));
+    await act(async () => { fireEvent.click(within(panel()).getByRole('button', { name: 'Download AI model' })); });
+    ask('Explain water');
+    act(() => { emit('Water'); emit('Water is'); });
+    expect(within(panel()).getByText('Water is')).toBeTruthy();
+    await act(async () => fail(new Error('network')));
+    expect(within(panel()).queryByText('Water is')).toBeNull();
+    expect(within(panel()).queryByText('Explain water')).toBeNull();
+    expect((within(panel()).getByRole('textbox') as HTMLInputElement).value).toBe('Explain water');
+  });
+
   it('warns about RAM and releases the optional model when switching back to smart brain', async () => {
     const unload = vi.spyOn(aiModel, 'unloadAiModel');
     vi.spyOn(aiModel, 'loadAiModel').mockResolvedValue();

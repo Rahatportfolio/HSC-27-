@@ -39,6 +39,9 @@ export const AI_SYSTEM_PROMPT = [
 /** Map any engine/network failure to a clear Bengali message. Never leaks internals. */
 export function aiErrorMessage(error: unknown): string {
   const message = error instanceof Error ? error.message : String(error ?? '');
+  if (/context.*(?:length|window|limit)|prompt.*too long|exceed.*tokens/i.test(message)) {
+    return 'প্রশ্ন বা আগের কথোপকথন এই মডেলের জন্য বেশি বড়। নতুন করে ছোট প্রশ্ন করে চেষ্টা করো।';
+  }
   if (/quota|insufficient storage|not enough (?:disk|storage)|disk full/i.test(message)) {
     return 'ব্রাউজারে AI মডেলের জন্য জায়গা পর্যাপ্ত নয়। ডিভাইসে জায়গা খালি করে আবার চেষ্টা করো; পড়ার তথ্য মুছো না।';
   }
@@ -59,12 +62,12 @@ export function aiErrorMessage(error: unknown): string {
 
 interface WorkerReply {
   id: number;
-  kind: 'progress' | 'result' | 'error';
+  kind: 'progress' | 'partial' | 'result' | 'error';
   progress?: AiProgress;
   text?: string;
   message?: string;
 }
-type Pending = { resolve: (text: string) => void; reject: (error: Error) => void; onProgress?: (progress: AiProgress) => void };
+type Pending = { resolve: (text: string) => void; reject: (error: Error) => void; onProgress?: (progress: AiProgress) => void; onPartial?: (text: string) => void };
 let worker: Worker | null = null;
 let workerChoice: AiModelChoice | null = null;
 let nextId = 0;
@@ -82,6 +85,7 @@ function getWorker(choice: AiModelChoice): Worker {
       const reply = event.data, task = pending.get(reply.id);
       if (!task) return;
       if (reply.kind === 'progress') { if (reply.progress) task.onProgress?.(reply.progress); return; }
+      if (reply.kind === 'partial') { if (reply.text) task.onPartial?.(reply.text); return; }
       pending.delete(reply.id);
       if (reply.kind === 'error') task.reject(new Error(reply.message || 'AI worker failed'));
       else task.resolve(reply.text || '');
@@ -101,11 +105,11 @@ function getWorker(choice: AiModelChoice): Worker {
   return worker;
 }
 
-function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard'): Promise<string> {
+function request(kind: 'load' | 'chat', messages?: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard', onPartial?: (text: string) => void): Promise<string> {
   return new Promise((resolve, reject) => {
     try {
       const instance = getWorker(choice), id = ++nextId;
-      pending.set(id, { resolve, reject, onProgress });
+      pending.set(id, { resolve, reject, onProgress, onPartial });
       try { instance.postMessage({ id, kind, messages, model: AI_MODELS[choice].id, dtype: AI_MODELS[choice].dtype }); }
       catch (error) { pending.delete(id); throw error; }
     } catch (error) { reject(error instanceof Error ? error : new Error(String(error))); }
@@ -127,7 +131,7 @@ export async function loadAiModel(onProgress?: (progress: AiProgress) => void, c
 }
 
 /** One chat turn against the on-device model; inference never blocks the UI thread. */
-export async function chatWithAi(history: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard'): Promise<string> {
-  const reply = await request('chat', [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history], onProgress, choice);
+export async function chatWithAi(history: AiChatMessage[], onProgress?: (progress: AiProgress) => void, choice: AiModelChoice = 'standard', onPartial?: (text: string) => void): Promise<string> {
+  const reply = await request('chat', [{ role: 'system', content: AI_SYSTEM_PROMPT }, ...history], onProgress, choice, onPartial);
   return reply || 'মডেল কোনো উত্তর দিতে পারেনি। আবার চেষ্টা করো, অথবা স্মার্ট ব্রেইন মোড ব্যবহার করো।';
 }

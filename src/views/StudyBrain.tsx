@@ -531,6 +531,7 @@ function AiAssistant() {
     setMessages(history);
     setBusy(true);
     recordAiAttempt('answering');
+    let streamed = false;
     try {
       // A successful conversation alternates user/assistant and ends in a user
       // turn. Keep an odd number so a truncated context still starts with user.
@@ -540,11 +541,16 @@ function AiAssistant() {
         else turns.push(message);
         return turns;
       }, []);
-      const reply = await chatWithAi(modelHistory.slice(-11), undefined, choice);
+      const reply = await chatWithAi(modelHistory.slice(choice === 'gpu' ? -3 : -11), undefined, choice, partial => {
+        if (modelEpoch.current !== epoch) return;
+        const first = !streamed;
+        streamed = true;
+        setMessages(current => first ? [...current, { role: 'assistant', content: partial }] : [...current.slice(0, -1), { role: 'assistant', content: partial }]);
+      });
       if (modelEpoch.current !== epoch) throw new Error('AI worker stopped');
-      setMessages(current => [...current, { role: 'assistant', content: reply }]);
+      setMessages(current => streamed ? [...current.slice(0, -1), { role: 'assistant', content: reply }] : [...current, { role: 'assistant', content: reply }]);
     } catch (cause) {
-      setMessages(current => current.slice(0, -1));
+      setMessages(current => current.slice(0, streamed ? -2 : -1));
       setInput(text);
       if (modelEpoch.current === epoch) setError(aiErrorMessage(cause));
     } finally {
@@ -607,7 +613,7 @@ function AiAssistant() {
     {mode === 'model' && !modelReady && modelState !== 'loading' && <div className="ai-download">
       <fieldset className="ai-model-choice">
         <legend>{t('মডেল বেছে নাও', 'Choose a model')}</legend>
-        <label><input type="radio" name="ai-model-choice" value="gpu" checked={choice === 'gpu'} onChange={() => setChoice('gpu')} /> {t('পরীক্ষামূলক GPU ১.৫B — প্রায় ১ GB; WebGPU সমর্থন ও যথেষ্ট ফ্রি মেমোরি দরকার', 'Experimental GPU 1.5B — about 1 GB; requires WebGPU and sufficient free memory')}</label>
+        <label><input type="radio" name="ai-model-choice" value="gpu" checked={choice === 'gpu'} onChange={() => setChoice('gpu')} /> {t('পরীক্ষামূলক GPU ১.৫B — প্রায় ১ GB; WebGPU সমর্থন ও যথেষ্ট ফ্রি মেমোরি দরকার; শুধু সাম্প্রতিক কথোপকথন মনে রাখে', 'Experimental GPU 1.5B — about 1 GB; requires WebGPU and sufficient free memory; keeps only recent chat context')}</label>
         <label><input type="radio" name="ai-model-choice" value="light" checked={choice === 'light'} onChange={() => setChoice('light')} /> {t('ছোট — প্রায় ৫৫০ MB (Qwen 0.5B); কম ডেটা, তবে উত্তর দুর্বল হতে পারে', 'Small — about 550 MB (Qwen 0.5B); less data, but answers may be weaker')}</label>
         <label><input type="radio" name="ai-model-choice" value="optimized" checked={choice === 'optimized'} onChange={() => setChoice('optimized')} /> {t('পরীক্ষামূলক কম্প্যাক্ট ১.৫B — প্রায় ১.২৫ GB; উত্তর ছোট বা ভিন্ন হতে পারে', 'Experimental compact 1.5B — about 1.25 GB; replies may be shorter or different')}</label>
         <label><input type="radio" name="ai-model-choice" value="standard" checked={choice === 'standard'} onChange={() => setChoice('standard')} /> {t('শক্তিশালী মডেল — প্রায় ১.৬ GB (Qwen 1.5B)', 'Stronger model — about 1.6 GB (Qwen 1.5B)')}</label>
