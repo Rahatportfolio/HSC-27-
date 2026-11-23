@@ -21,6 +21,7 @@ import { usePlanner } from '../context';
 import { chapterById, subjectById, SUBJECTS } from '../data';
 import type { Chapter, SubjectId } from '../data';
 import { BANGLA_LESSONS, CHAPTER_CLASSES } from '../classLinks';
+import { timerMinutesForTask } from '../personalRoutine';
 import { buildDailyNotificationDigest } from '../notifications';
 import {
   addDays, bn, chapterStudyTasks, dhakaMinutes, diffDays, dailyTargetMinutes, formatDate,
@@ -236,7 +237,7 @@ function LegacyTodayView() {
   };
 
   const runPreset = (tk: Task, chapter?: Chapter, customMinutes?: number) => {
-    const mins = customMinutes ?? Math.max(15, tk.endMinute - tk.startMinute);
+    const mins = customMinutes ?? timerMinutesForTask(tk, data);
     if (timer.taskId === tk.id && (timer.running || timer.accumulatedMs > 0)) {
       if (timer.running) timer.pause();
       else timer.start();
@@ -308,7 +309,7 @@ function LegacyTodayView() {
                     {activeChapterTimer && timer.running ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" />}
                     {activeChapterTimer
                       ? `${timer.running ? t('চলছে', 'Live') : t('বিরতি', 'Paused')} · ${timerText}`
-                      : `${t('টাইমার', 'Timer')} · ${formatDurationBn(Math.max(15, nextPendingTask.endMinute - nextPendingTask.startMinute))}`}
+                      : `${t('টাইমার', 'Timer')} · ${formatDurationBn(timerMinutesForTask(nextPendingTask, data))}`}
                   </button>
                 )}
                 <button
@@ -330,6 +331,7 @@ function LegacyTodayView() {
               {chTasks.map(tk => {
                 const tkDone = !!data.completed[tk.id];
                 const tkMin = Math.max(15, tk.endMinute - tk.startMinute);
+                const tkTimerMin = timerMinutesForTask(tk, data);
                 const tkRunning = timer.taskId === tk.id && (timer.running || timer.accumulatedMs > 0);
                 return (
                   <div key={tk.id} className={`chapter-step-row ${tkDone ? 'done' : ''} ${tkRunning ? 'running' : ''}`}>
@@ -350,10 +352,10 @@ function LegacyTodayView() {
                       <button
                         type="button"
                         className={`step-timer-pill ${tkRunning && timer.running ? 'live' : ''}`}
-                        onClick={() => runPreset(tk, chapter, tkMin)}
+                        onClick={() => runPreset(tk, chapter, tkTimerMin)}
                       >
                         {tkRunning && timer.running ? <Pause size={12} fill="currentColor" /> : <Play size={12} fill="currentColor" />}
-                        <span>{tkRunning ? timerText : t(`${formatDurationBn(tkMin)} টাইমার`, `${formatDurationBn(tkMin)} timer`)}</span>
+                        <span>{tkRunning ? timerText : t(`${formatDurationBn(tkTimerMin)} টাইমার`, `${formatDurationBn(tkTimerMin)} timer`)}</span>
                       </button>
                     )}
                   </div>
