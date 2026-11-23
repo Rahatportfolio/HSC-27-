@@ -90,7 +90,8 @@ describe('replacing a profile is durable and clears unrelated transient state', 
     await waitFor(() => expect(stored().settings.name).toBe('Restored profile'));
     expect(localStorage.getItem(clockKey)).toBeNull();
     expect(stored().activeExam).toBeUndefined();
-    expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(0);
+    // Timer state is persisted by a React effect after the profile write.
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(0));
     expect(stored().notes).toEqual(restored.notes);
   }, 30000);
   it('replaces a dirty JSON Settings draft and its start-date anchor together', async () => {
@@ -108,7 +109,8 @@ describe('replacing a profile is durable and clears unrelated transient state', 
     await waitFor(() => expect(stored().settings.name).toBe('Restored profile'));
     expect(localStorage.getItem(clockKey)).toBeNull();
     expect(stored().activeExam).toBeUndefined();
-    expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(0);
+    // Timer state is persisted by a React effect after the profile write.
+    await waitFor(() => expect(JSON.parse(localStorage.getItem(TIMER_KEY)!).accumulatedMs).toBe(0));
   }, 30000);
   it('replaces a dirty Settings draft and selects the restored routine rather than saving old form values over it', async () => {
     await open();
