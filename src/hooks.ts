@@ -182,6 +182,19 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     return { ...current, mode, phase: mode === 'pomodoro' ? 'focus' : 'none', durationMin: minutes, accumulatedMs: 0, running: false, startedAt: null, logging: true, label: '', taskId: '' };
   });
   const setDuration = (minutes: number) => setState(current => ({ ...current, durationMin: Math.max(1, Math.min(720, Math.round(minutes))), accumulatedMs: 0, running: false, startedAt: null, taskId: '' }));
+  // The student can change a countdown/pomodoro length mid-session: elapsed
+  // progress is kept (clamped to the new target) and the timer pauses so the
+  // completion effect can never fire with a lowered target while running. Like
+  // setDuration, a real change detaches the planned task, so shortening a
+  // preset can never mark unfinished work complete. Tapping the active length
+  // is a no-op and keeps the task link.
+  const adjustDuration = (minutes: number) => setState(current => {
+    if (current.mode === 'stopwatch' || !Number.isFinite(minutes)) return current;
+    const durationMin = Math.max(1, Math.min(720, Math.round(minutes)));
+    if (durationMin === current.durationMin) return current;
+    const elapsed = current.accumulatedMs + (current.running && current.startedAt ? Math.max(0, Date.now() - current.startedAt) : 0);
+    return { ...current, durationMin, accumulatedMs: Math.min(elapsed, durationMin * 60_000), running: false, startedAt: null, taskId: '' };
+  });
   const setSubject = (subject: SubjectId) => setState(current => subject === current.subject ? current : ({ ...current, subject, chapterId: '', taskId: '' }));
   const setChapter = (chapterId: string) => setState(current => chapterId === current.chapterId ? current : ({ ...current, chapterId, taskId: '' }));
   const setLabel = (label: string) => setState(current => ({ ...current, label: label.slice(0, 120) }));
@@ -228,7 +241,7 @@ export function useStudyTimer({ settings, onComplete, notify }: StudyTimerOption
     return minutes;
   };
   return {
-    ...state, elapsedSec, remainingSec, progress, start, pause, reset, setMode, setDuration,
+    ...state, elapsedSec, remainingSec, progress, start, pause, reset, setMode, setDuration, adjustDuration,
     setSubject, setChapter, setLabel, startPreset, finishNow, startBreak, saveStopwatch,
   };
 }
