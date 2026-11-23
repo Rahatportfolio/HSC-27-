@@ -694,7 +694,7 @@ public class MobileShellInstrumentedTest {
       }
       assertTrue("Restored backup did not reach the native database", durable);
       scenario.recreate(); scenario.onActivity(a -> ref.set(a.getBridge().getWebView()));
-      waitFor(ref.get(), "!!document.querySelector('.settings-view') && JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).notes['2026-11-20']==='Website backup imported by Android test'");
+      waitFor(ref.get(), "!!document.querySelector('.topbar') && JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).notes['2026-11-20']==='Website backup imported by Android test'");
       assertEquals("Selected chapters must survive restore", "true", evaluate(ref.get(), "JSON.parse(localStorage.getItem('hsc27-prostuti-v1')).personalRoutine.chapterIds.includes('physics-1-3')"));
     }
   }
